@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 12 - MLOps : industrialiser un modèle - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m12-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 12</div>
+    <h1>MLOps : industrialiser un modèle</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Un modèle en production n'est pas un artefact figé : c'est un système vivant, dont les entrées dérivent, dont les performances se dégradent en silence, et qui doit rester reproductible et réversible. Ce dernier module traite de tout ce qui commence après le notebook — et qui détermine si le projet produit de la valeur ou de la dette.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#dette">La dette technique du ML</a></li>
+        <li><a href="#repro">Reproductibilité</a></li>
+        <li><a href="#versioning">Versionner code, données et modèles</a></li>
+        <li><a href="#tracking">Tracking d'expériences</a></li>
+        <li><a href="#serving">Packaging et servage</a></li>
+        <li><a href="#tests">Tester un système de ML</a></li>
+        <li><a href="#deploiement">Déploiement progressif</a></li>
+        <li><a href="#monitoring">Monitoring et dérive</a></li>
+        <li><a href="#orchestration">Orchestration et ré-entraînement</a></li>
+        <li><a href="#gouvernance">Gouvernance et checklist</a></li>
+      </ol>
+    </div>
+
+    <h2 id="dette">1. La dette technique du ML</h2>
+    <p>L'article de Sculley et al. (Google, 2015), <em>Hidden Technical Debt in Machine Learning Systems</em>, reste la meilleure entrée en matière. Son constat : le code du modèle représente une fraction minuscule d'un système de ML en production ; tout le reste — collecte, vérification des données, infrastructure de servage, gestion de configuration, monitoring — l'entoure et le dépasse largement en volume comme en coût de maintenance.</p>
+
+    <p>Deux formes de dette y sont propres au ML. Les <strong>frontières floues</strong> d'abord : un modèle crée des dépendances non déclarées entre toutes ses entrées — modifier une source de données change le comportement du modèle sans qu'aucune interface ne le signale (les auteurs parlent de <em>CACE</em>, <em>Changing Anything Changes Everything</em>). Les <strong>boucles de rétroaction</strong> ensuite : un modèle de recommandation influence ce que les utilisateurs voient, donc ce qu'ils cliquent, donc les données de son prochain entraînement. Le système apprend alors de ses propres sorties, et la dérive devient auto-entretenue.</p>
+
+    <h2 id="repro">2. Reproductibilité</h2>
+    <p>Reproductible signifie : à partir du dépôt, on peut régénérer <em>exactement</em> le même modèle. Cela demande de figer quatre choses.</p>
+    <div class="code-label">les quatre niveaux</div>
+    <div class="code-block"><pre>Code          commit Git précis (et non "la branche main")
+Environnement uv.lock + image Docker taguée par digest (modules 1 et 2)
+Données       version ou empreinte du jeu utilisé (hash, snapshot, requête figée)
+Aléa          graines fixées : Python, NumPy, framework, et ordre de chargement</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import os, random, numpy as np, torch
+
+def figer_alea(seed: int = 42) -&gt; None:
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed); np.random.seed(seed)
+    torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True    # au prix d'un peu de vitesse
+    torch.backends.cudnn.benchmark = False</pre></div>
+
+    <p>Le déterminisme complet sur GPU reste hors d'atteinte pour certaines opérations (réductions atomiques dont l'ordre varie). L'objectif réaliste est donc un modèle <em>équivalent</em> aux fluctuations numériques près, et une traçabilité complète : à partir d'une prédiction, pouvoir remonter au modèle, à son entraînement, à ses données et à son code.</p>
+
+    <h2 id="versioning">3. Versionner code, données et modèles</h2>
+    <p>Git gère le code, mais pas des fichiers de plusieurs gigaoctets (module 1). <strong>DVC</strong> résout cela élégamment : le fichier de données part sur un stockage distant (S3, disque réseau, NAS) et Git ne conserve qu'un petit fichier <code>.dvc</code> contenant son empreinte. Revenir à un commit d'il y a six mois restaure le code <em>et</em> permet de récupérer exactement les données correspondantes.</p>
+
+    <div class="code-label">bash</div>
+    <div class="code-block"><pre>dvc add data/raw/transactions.parquet   # crée le .dvc versionné dans Git
+dvc remote add -d stockage s3://mon-bucket/dvc
+dvc push                                # envoie les données sur le stockage distant
+
+git checkout v1.2 &amp;&amp; dvc checkout       # code ET données d'il y a six mois</pre></div>
+
+    <p>Pour les <strong>modèles</strong>, un <em>registry</em> (MLflow Model Registry, ou un simple bucket versionné avec convention de nommage) associe à chaque version : l'artefact, ses métriques de validation, le commit qui l'a produit, les données utilisées et un état (<em>staging</em>, <em>production</em>, <em>archivé</em>). C'est ce qui rend un retour arrière possible en quelques minutes — la capacité opérationnelle la plus précieuse quand un déploiement se passe mal.</p>
+
+    <h2 id="tracking">4. Tracking d'expériences</h2>
+    <p>Après deux semaines d'itérations, personne ne se souvient de la configuration qui a produit le meilleur score. Un outil de tracking (<strong>MLflow</strong> en auto-hébergé, <strong>Weights &amp; Biases</strong> en service) enregistre automatiquement chaque exécution.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import mlflow
+
+mlflow.set_experiment("prevision-prix")
+
+with mlflow.start_run(run_name="gbm-features-v3"):
+    mlflow.log_params({"max_depth": 6, "learning_rate": 0.05, "n_features": X.shape[1]})
+    mlflow.log_param("git_sha", sha_courant())
+    mlflow.log_param("data_version", "dvc:8f3a91c")
+
+    modele.fit(X_train, y_train)
+
+    mlflow.log_metrics({"rmse_cv": rmse_cv, "rmse_test": rmse_test, "mae_test": mae_test})
+    mlflow.log_artifact("figures/residus.png")
+    mlflow.sklearn.log_model(modele, "modele", registered_model_name="prix-immo")</pre></div>
+
+    <p>Ce qu'il faut consigner systématiquement : hyperparamètres, <em>version du code et des données</em>, métriques de validation <em>et</em> de test, durée et coût d'entraînement, et les quelques graphiques d'analyse d'erreurs. Le pire scénario — un excellent score dont on ne sait plus le reproduire — disparaît pour quelques lignes de code.</p>
+
+    <h2 id="serving">5. Packaging et servage</h2>
+    <div class="code-label">modes de servage</div>
+    <div class="code-block"><pre>Batch          scoring périodique, résultats écrits en base. Le plus simple, le plus robuste.
+               Suffit dans une large majorité des cas : personne n'a besoin d'un score
+               de churn à la milliseconde.
+Online         API synchrone (FastAPI, module 2). Contrainte de latence, mise à l'échelle,
+               disponibilité. À ne choisir que si la fraîcheur l'exige vraiment.
+Streaming      scoring sur flux (Kafka), pour la détection de fraude en temps réel.
+Embarqué       ONNX, TFLite, CoreML : inférence sur l'appareil, sans réseau.</pre></div>
+
+    <p>Quelques points techniques qui font gagner du temps. <strong>ONNX</strong> est un format d'échange neutre : on exporte le modèle une fois, on l'exécute partout (C++, Java, navigateur) sans dépendre de Python — utile à la fois pour la performance et pour la longévité. La <strong>quantification</strong> (module 11) divise taille et latence. Le <strong>cache</strong> de prédictions est trivial et souvent très rentable quand les mêmes entrées reviennent. Et toute réponse doit porter la <strong>version du modèle</strong> qui l'a produite — sans cela, l'analyse d'un incident est impossible.</p>
+
+    <div class="warning-block">
+      <strong>Le décalage entraînement/servage.</strong> C'est le bug le plus fréquent et le plus coûteux en production : le prétraitement appliqué à l'inférence diffère légèrement de celui de l'entraînement (une moyenne recalculée, un encodage de catégorie inconnue traité autrement, un fuseau horaire). Le modèle reçoit alors des entrées qu'il n'a jamais vues sous cette forme. La parade : sérialiser le <em>pipeline complet</em> (module 3), jamais l'estimateur seul, et tester l'égalité des prédictions entre le code d'entraînement et le service sur un échantillon de référence.
+    </div>
+
+    <h2 id="tests">6. Tester un système de ML</h2>
+    <p>Aux tests logiciels classiques (module 1) s'ajoutent trois familles propres au ML :</p>
+    <ul>
+      <li><strong>Tests de données</strong> — schéma, types, bornes, taux de valeurs manquantes, cardinalités, distributions attendues. Des outils comme <em>Great Expectations</em> ou <em>pandera</em> déclarent ces attentes et cassent le pipeline quand elles sont violées. C'est la protection la plus rentable de tout le dispositif : l'immense majorité des incidents de production vient des données, pas du modèle.</li>
+      <li><strong>Tests de modèle</strong> — performance minimale sur un jeu de référence figé, comportement attendu sur des cas connus (tests de type <em>behavioral</em> : invariance à une reformulation, monotonie « à surface égale, plus de pièces ne baisse pas le prix »), absence de régression par rapport à la version en production, équité entre sous-groupes.</li>
+      <li><strong>Tests d'intégration</strong> — la chaîne complète, de la donnée brute à la réponse de l'API, sur un mini-jeu versionné dans le dépôt.</li>
+    </ul>
+
+    <div class="code-label">CI/CD pour le ML</div>
+    <div class="code-block"><pre>À chaque commit        lint, types, tests unitaires, tests d'intégration rapides
+Sur la branche main    entraînement complet, validation sur jeu figé,
+                       comparaison à la version en production
+Si validation OK       enregistrement dans le registry en "staging"
+Promotion              manuelle ou automatique selon le risque, puis déploiement progressif
+Toujours               possibilité de revenir en arrière en une commande</pre></div>
+
+    <h2 id="deploiement">7. Déploiement progressif</h2>
+    <p>Un modèle validé hors ligne peut échouer en ligne. On ne bascule donc jamais 100 % du trafic d'un coup.</p>
+    <ul>
+      <li><strong>Shadow</strong> — le nouveau modèle reçoit le trafic réel et ses prédictions sont enregistrées, mais non utilisées. Aucun risque, et l'on vérifie latence, taux d'erreur et cohérence sur les vraies données. C'est l'étape que l'on saute le plus souvent à tort.</li>
+      <li><strong>Canary</strong> — 1 %, puis 5 %, puis 25 % du trafic, avec surveillance des métriques techniques et métier à chaque palier.</li>
+      <li><strong>A/B test</strong> — la seule façon de mesurer l'effet <em>causal</em> du nouveau modèle sur l'indicateur métier (module 5). Un meilleur RMSE hors ligne ne garantit en rien un meilleur résultat en ligne.</li>
+      <li><strong>Retour arrière</strong> — préparé, testé, exécutable en une commande. Si le retour arrière n'a jamais été essayé, il ne fonctionne pas.</li>
+    </ul>
+
+    <h2 id="monitoring">8. Monitoring et dérive</h2>
+    <p>La performance d'un modèle se dégrade avec le temps : c'est la règle, pas l'exception. On distingue trois phénomènes :</p>
+    <ul>
+      <li><strong>Dérive des données</strong> (<em>covariate shift</em>) — la distribution des entrées \(P(X)\) change : nouvelle clientèle, capteur remplacé, changement d'interface.</li>
+      <li><strong>Dérive du concept</strong> — la relation \(P(Y\mid X)\) elle-même change : les comportements évoluent, une réglementation modifie les règles du jeu. Plus grave, car même un réentraînement sur des données récentes ne rattrape le retard qu'après coup.</li>
+      <li><strong>Dérive des étiquettes</strong> — la distribution de la cible change (le taux de fraude double).</li>
+    </ul>
+
+    <p>Pour détecter une dérive sans attendre les étiquettes — qui arrivent souvent avec des semaines de retard —, on surveille les distributions d'entrée. L'indice de stabilité de population compare les proportions par intervalle entre référence et période courante :</p>
+    <div style="text-align:center">\[ \text{PSI} = \sum_{i=1}^{B} (p_i - q_i)\,\ln\!\frac{p_i}{q_i} \]</div>
+    <p>Lecture usuelle : PSI &lt; 0,1 stable ; 0,1 – 0,25 dérive modérée à surveiller ; &gt; 0,25 dérive significative. On complète par un test de Kolmogorov-Smirnov pour les variables continues et un chi² pour les catégorielles (module 5), en se rappelant que sur de gros volumes, ces tests détectent des écarts statistiquement significatifs mais opérationnellement négligeables : c'est l'<em>ampleur</em> qui doit déclencher l'alerte, pas la p-value.</p>
+
+    <div class="code-label">ce qu'il faut surveiller, par ordre de priorité</div>
+    <div class="code-block"><pre>1. Santé technique      latence (p50, p95, p99), taux d'erreur, disponibilité, coût
+2. Qualité des entrées  taux de manquants, valeurs hors domaine, catégories inconnues
+3. Distribution         PSI par feature, dérive des embeddings pour les données non tabulaires
+4. Sorties du modèle    distribution des scores, taux de prédictions positives, confiance
+5. Performance réelle   dès que les étiquettes arrivent : métriques par segment
+6. Impact métier        LA mesure qui compte : conversion, coût évité, satisfaction</pre></div>
+
+    <p>Les couches 1 à 4 sont disponibles immédiatement ; la 5 arrive en différé ; la 6 exige souvent une expérimentation. Un tableau de bord qui ne montre que la couche 1 donne une fausse impression de contrôle — un modèle peut répondre en 20 ms avec une disponibilité parfaite tout en étant devenu complètement faux.</p>
+
+    <h2 id="orchestration">9. Orchestration et ré-entraînement</h2>
+    <p>Les pipelines (extraction, features, entraînement, validation, déploiement) sont décrits comme des graphes de tâches et planifiés par un orchestrateur : <strong>Airflow</strong> (le standard historique, très répandu), <strong>Prefect</strong> ou <strong>Dagster</strong> (plus modernes, Dagster étant construit autour des <em>actifs de données</em>, ce qui correspond bien au ML), ou <strong>Kubeflow</strong> si l'on vit déjà dans Kubernetes (module 2).</p>
+
+    <div class="code-label">quand ré-entraîner</div>
+    <div class="code-block"><pre>Périodique         chaque semaine ou chaque mois. Simple, prévisible, souvent suffisant.
+Sur déclenchement  quand le monitoring détecte une dérive au-delà d'un seuil.
+Sur volume         quand N nouvelles observations étiquetées sont disponibles.
+En continu         apprentissage en ligne. Réservé aux cas qui l'exigent vraiment :
+                   difficile à déboguer, et très exposé aux boucles de rétroaction.</pre></div>
+
+    <p>Un ré-entraînement automatique n'est acceptable qu'avec des <strong>garde-fous</strong> : validation sur un jeu figé, comparaison obligatoire avec le modèle en place, et refus automatique de promotion si la performance recule. Sans cela, un pipeline automatisé propage en production un modèle entraîné sur des données corrompues — plus vite qu'un humain ne l'aurait fait.</p>
+
+    <h2 id="gouvernance">10. Gouvernance et checklist</h2>
+    <p>La <em>model card</em> documente, en une page : l'usage prévu et les usages exclus, les données d'entraînement et leurs biais connus, les performances globales <em>et par sous-groupe</em>, les limites, et le contact responsable. Ce n'est pas de la bureaucratie : c'est ce qui permet à quelqu'un d'autre — ou à soi-même dans un an — de savoir si le modèle peut être utilisé dans un contexte donné.</p>
+
+    <p>Le cadre réglementaire européen ajoute des obligations concrètes : le RGPD encadre les données personnelles et prévoit un droit à l'explication pour les décisions automatisées ; l'AI Act classe les systèmes par niveau de risque et impose documentation, traçabilité et supervision humaine pour les usages à haut risque (crédit, emploi, santé). Ces exigences se traitent en amont — journalisation des prédictions, explicabilité, tests d'équité — bien plus facilement qu'après coup.</p>
+
+    <div class="step-block">
+      <h4>Checklist avant mise en production</h4>
+      <ul>
+        <li>Le pipeline complet (prétraitement inclus) est sérialisé et versionné.</li>
+        <li>Le modèle est reproductible : commit, environnement, version des données, graines.</li>
+        <li>Les prédictions du service sont identiques à celles du code d'entraînement sur un échantillon de référence.</li>
+        <li>Les tests de données bloquent le pipeline en cas de schéma ou de distribution anormale.</li>
+        <li>Une baseline est déployée en parallèle pour comparaison.</li>
+        <li>La latence et le coût par prédiction sont mesurés sous charge réaliste.</li>
+        <li>Le monitoring couvre santé technique, qualité des entrées, dérive et sorties.</li>
+        <li>Les alertes ont un destinataire et un mode d'emploi, pas seulement un seuil.</li>
+        <li>Le retour arrière a été testé pour de vrai.</li>
+        <li>La model card existe, et les performances par sous-groupe ont été vérifiées.</li>
+      </ul>
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Le code du modèle est la petite partie ; le système autour est le vrai travail.</li>
+        <li>Reproductibilité = code + environnement + données + aléa, tous versionnés ensemble.</li>
+        <li>Tracker chaque expérience dès le premier jour : c'est rétroactivement impossible.</li>
+        <li>Sérialiser le pipeline entier, jamais l'estimateur seul.</li>
+        <li>Les tests de données sont la protection la plus rentable qui existe.</li>
+        <li>Shadow, puis canary, puis A/B ; retour arrière testé.</li>
+        <li>Surveiller la dérive sans attendre les étiquettes ; alerter sur l'ampleur, pas sur la p-value.</li>
+        <li>Le ré-entraînement automatique exige des garde-fous, sinon il automatise l'erreur.</li>
+      </ul>
+    </div>
+
+    <hr class="divider">
+
+    <h2 id="fin">Fin du parcours</h2>
+    <p>Douze modules plus tard, la boucle est complète : de l'environnement Python au modèle surveillé en production. Si je devais résumer ce que ce cours m'a fait comprendre en une idée, ce serait celle-ci : <em>la difficulté du machine learning n'est presque jamais l'algorithme</em>. Elle est dans la formulation du problème, dans la qualité des données, dans la rigueur du protocole d'évaluation, et dans l'honnêteté avec laquelle on regarde ce que le modèle ne sait pas faire.</p>
+    <p>Ce cours continuera d'évoluer au fil de ce que j'apprends et de ce que je mets réellement en pratique.</p>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m11.html" class="btn btn-secondary">← Module 11 : LLM, embeddings et RAG</a>
+  <a href="project7.html" class="btn btn-primary">Retour au sommaire du cours</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">MLflow</span><span class="tag">DVC</span><span class="tag">CI/CD</span><span class="tag">Monitoring</span><span class="tag">Drift</span><span class="tag">Gouvernance</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m12-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 12</div>
+    <h1>MLOps: taking a model to production</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Hidden technical debt in ML systems: entanglement (CACE) and feedback loops.</li>
+      <li>Reproducibility across four levels: code, environment, data and randomness — and why full GPU determinism is out of reach.</li>
+      <li>Versioning data with DVC and models with a registry, so a rollback takes minutes.</li>
+      <li>Experiment tracking with MLflow, and what must always be logged.</li>
+      <li>Serving modes (batch, online, streaming, embedded), ONNX, and the training/serving skew that causes most production bugs.</li>
+      <li>Testing an ML system: data tests (the highest-return safeguard there is), behavioural model tests, integration tests, and what a CI/CD pipeline for ML runs at each stage.</li>
+      <li>Progressive rollout: shadow deployment, canary releases, online A/B tests, and a rollback that has actually been tested.</li>
+      <li>Monitoring: data drift vs concept drift vs label drift, the population stability index, and the six layers worth watching in priority order.</li>
+      <li>Orchestration, retraining policies and the guardrails automated retraining requires.</li>
+      <li>Governance: model cards, GDPR and the AI Act, and a pre-production checklist.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><strong>MLOps: taking a model to production</strong></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
