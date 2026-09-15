@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 19 - Recherche, ranking et recommandation - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m19-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 19</div>
+    <h1>Recherche, ranking et recommandation</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Trouver un document, ordonner des résultats, suggérer un article : ces trois problèmes partagent la même architecture — réduire des millions de candidats à quelques dizaines, puis les ordonner finement. C'est l'un des domaines applicatifs les plus répandus de la data science, et celui où l'écart entre l'évaluation hors ligne et la réalité est le plus grand.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#architecture">L'architecture commune</a></li>
+        <li><a href="#recherche">Recherche : lexical, sémantique, hybride</a></li>
+        <li><a href="#ltr">Learning to rank</a></li>
+        <li><a href="#biais-clics">Données de clics et biais de position</a></li>
+        <li><a href="#collaboratif">Filtrage collaboratif et factorisation</a></li>
+        <li><a href="#neuronal">Two-tower et recommandation séquentielle</a></li>
+        <li><a href="#evaluation">Évaluer : hors ligne et en ligne</a></li>
+        <li><a href="#problemes">Démarrage à froid, popularité, boucles</a></li>
+      </ol>
+    </div>
+
+    <h2 id="architecture">1. L'architecture commune</h2>
+    <div class="code-label">le pipeline en trois étages</div>
+    <div class="code-block"><pre>1. RÉCUPÉRATION (retrieval)     millions → quelques centaines de candidats
+   contraintes : quelques millisecondes, modèles simples et indexables
+   moyens : BM25, index vectoriel ANN (module 11), filtres métier, règles
+
+2. CLASSEMENT (ranking)          centaines → dizaines, ordonnées finement
+   contraintes : dizaines de millisecondes, modèle riche autorisé
+   moyens : gradient boosting de ranking, cross-encoder, réseau profond
+
+3. RE-CLASSEMENT MÉTIER          ce qui est réellement affiché
+   diversité, fraîcheur, stocks, marges, équité entre fournisseurs,
+   exclusions réglementaires, dé-duplication</pre></div>
+
+    <p>Cette séparation est imposée par la latence : on ne peut pas évaluer un modèle coûteux sur un million d'items en 50 ms. Elle a une conséquence souvent négligée : <strong>la qualité du système est plafonnée par l'étage de récupération</strong>. Un bon modèle de classement ne peut pas remonter un item que la récupération n'a pas proposé. Quand un système déçoit, c'est donc le rappel de l'étage 1 qu'il faut mesurer en premier.</p>
+
+    <h2 id="recherche">2. Recherche : lexical, sémantique, hybride</h2>
+    <p>Le module 11 présente la recherche dans le cadre du RAG ; les mêmes briques valent pour une recherche destinée à des humains. <strong>BM25</strong> reste une référence redoutable : il trouve immédiatement les références exactes, les codes produit et les termes rares. La recherche <strong>vectorielle</strong> gère les reformulations et les synonymes mais échoue sur ces mêmes termes rares, qu'elle n'a souvent jamais vus à l'entraînement.</p>
+    <p>La combinaison par <strong>fusion de rangs réciproques</strong> est robuste et sans paramètre à régler :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{RRF}(d) = \sum_{s \in \text{systèmes}} \frac{1}{k + \text{rang}_s(d)}, \qquad k \approx 60 \]</div>
+    <p>Elle n'exige aucune normalisation des scores entre systèmes — leur simple rang suffit — ce qui explique sa popularité.</p>
+    <p>Le reste du travail se joue sur la requête et les métadonnées : analyse de la requête (correction orthographique, expansion par synonymes, détection d'intention), filtres (catégorie, date, disponibilité) et gestion des requêtes sans résultat, qui sont le principal motif d'abandon. Sur un corpus technique, un simple dictionnaire de synonymes métier rapporte souvent plus qu'un changement de modèle d'embedding.</p>
+
+    <h2 id="ltr">3. Learning to rank</h2>
+    <p>Classer n'est pas prédire une valeur : seul l'<em>ordre</em> compte, et les premières positions comptent bien plus que les suivantes. Trois formulations :</p>
+    <ul>
+      <li><strong>Pointwise</strong> — prédire un score de pertinence par item, indépendamment des autres. Simple, mais optimise la mauvaise chose : une erreur en position 1 et une erreur en position 50 pèsent pareil.</li>
+      <li><strong>Pairwise</strong> — apprendre, pour chaque paire, lequel doit passer devant (RankNet, LambdaRank). Beaucoup plus proche de l'objectif réel.</li>
+      <li><strong>Listwise</strong> — optimiser directement une métrique de liste comme le NDCG. <strong>LambdaMART</strong> — gradient boosting avec des gradients pondérés par le gain de NDCG qu'échangerait une permutation — reste l'état de l'art pratique, et est disponible directement dans LightGBM et XGBoost (<code>objective="lambdarank"</code>).</li>
+    </ul>
+
+    <p>La métrique de référence est le <strong>NDCG</strong>, qui pondère la pertinence par une remise logarithmique sur le rang :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{DCG}@k = \sum_{i=1}^{k}\frac{2^{\text{rel}_i}-1}{\log_2(i+1)}, \qquad \text{NDCG}@k = \frac{\text{DCG}@k}{\text{IDCG}@k} \]</div>
+    <p>La normalisation par le classement idéal rend les requêtes comparables entre elles, ce que ne permettent ni la précision@k ni le MRR.</p>
+
+    <p>Les features d'un modèle de ranking se rangent en trois familles : caractéristiques de la <em>requête</em> (longueur, intention, langue), de l'<em>item</em> (popularité, fraîcheur, qualité, prix) et surtout de l'<em>appariement</em> requête-item (scores BM25 par champ, similarité d'embedding, correspondances exactes, historique de clics sur cette paire). Ce sont ces dernières qui portent l'essentiel du signal.</p>
+
+    <h2 id="biais-clics">4. Données de clics et biais de position</h2>
+    <p>Les clics sont la source d'étiquettes la plus abondante — et la plus traîtresse. Un item est cliqué parce qu'il est pertinent, mais surtout parce qu'il était <em>affiché en première position</em>. Entraîner naïvement sur les clics revient donc à apprendre le classement actuel, et à le figer.</p>
+
+    <div class="code-label">les biais des journaux de clics</div>
+    <div class="code-block"><pre>Biais de position    les premiers résultats sont bien plus cliqués, à pertinence égale
+Biais de sélection   on n'observe QUE ce qui a été affiché par la politique en place
+Biais de confiance   les utilisateurs font confiance au système et cliquent "par défaut"
+Absence de négatif   un non-clic ne signifie pas non pertinent : peut-être non vu
+                     (d'où la distinction entre items VUS et items affichés)</pre></div>
+
+    <p>Les remèdes : pondération inverse de propension (chaque clic est pondéré par l'inverse de la probabilité d'examen à cette position — c'est le <em>counterfactual learning to rank</em>) ; estimation de la courbe de propension par permutations aléatoires contrôlées d'une petite fraction du trafic ; et l'utilisation de signaux moins biaisés que le clic brut — temps de lecture, achat, retour en arrière rapide (qui est un signal <em>négatif</em> fort). Sans cette correction, un système de ranking entraîné sur ses propres journaux se renforce dans ses erreurs.</p>
+
+    <h2 id="collaboratif">5. Filtrage collaboratif et factorisation</h2>
+    <p>L'intuition fondatrice : des utilisateurs qui ont aimé les mêmes choses aimeront les mêmes choses ensuite. Aucune connaissance du contenu n'est nécessaire — seule la matrice d'interactions compte.</p>
+
+    <p>La <strong>factorisation matricielle</strong> approche cette matrice très creuse \(R\) par un produit de faible rang \(R \approx P Q^\top\), où chaque utilisateur et chaque item sont représentés par un vecteur latent de dimension \(k\) (typiquement 32 à 256) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat r_{ui} = \mu + b_u + b_i + p_u^\top q_i, \qquad \min \sum_{(u,i)\in\mathcal{K}} \big(r_{ui}-\hat r_{ui}\big)^2 + \lambda\big(\|p_u\|^2+\|q_i\|^2\big) \]</div>
+    <p>C'est l'idée d'approximation de rang faible du module 4, adaptée au cas où la plupart des entrées sont manquantes : on n'ajuste que sur les interactions observées, d'où l'usage de la descente de gradient stochastique ou des moindres carrés alternés (ALS) plutôt que d'une SVD classique. Les termes de biais \(b_u, b_i\) capturent la sévérité d'un utilisateur et la popularité d'un item — ils expliquent à eux seuls une part importante du signal.</p>
+
+    <div class="warning-block">
+      <strong>Retour implicite : l'absence n'est pas un rejet.</strong> Dans la plupart des systèmes réels, on n'a pas de notes mais des vues, clics et achats — uniquement des signaux positifs. Traiter tout le reste comme des zéros est faux : l'utilisateur n'a probablement jamais vu l'item. Les méthodes adaptées traitent ces non-interactions comme des négatifs <em>pondérés par une confiance faible</em> (ALS implicite) ou apprennent un ordre plutôt qu'une valeur — c'est <strong>BPR</strong> (<em>Bayesian Personalised Ranking</em>), qui maximise la probabilité qu'un item vu passe devant un item tiré au hasard. L'échantillonnage de ces négatifs est le détail d'implémentation qui décide de la qualité du résultat.
+    </div>
+
+    <h2 id="neuronal">6. Two-tower et recommandation séquentielle</h2>
+    <p>L'architecture <strong>à deux tours</strong> est devenue le standard industriel de l'étage de récupération : un réseau encode l'utilisateur et son contexte, un autre encode l'item, et la pertinence est le produit scalaire des deux vecteurs. L'intérêt est architectural : les embeddings d'items se calculent <em>hors ligne</em> et s'indexent dans une base vectorielle (module 11), si bien qu'une requête en ligne ne demande qu'un encodage utilisateur et une recherche des plus proches voisins. On retrouve ainsi la souplesse d'un réseau de neurones avec la latence d'un index.</p>
+    <p>La <strong>recommandation séquentielle</strong> (GRU4Rec, SASRec, BERT4Rec) modélise l'historique comme une séquence et prédit l'action suivante — c'est un transformer appliqué à des identifiants d'items (module 8). Elle capture l'intention du moment, ce que la factorisation matricielle, purement statique, ignore complètement : quelqu'un qui vient de consulter trois perceuses n'est pas dans le même état que sa moyenne historique.</p>
+    <p>Un point à connaître : au-delà du prototype, les gains viennent moins de l'architecture que des <em>features</em> et de la fraîcheur des données. Un modèle simple réentraîné toutes les heures bat souvent un modèle sophistiqué réentraîné chaque semaine.</p>
+
+    <h2 id="evaluation">7. Évaluer : hors ligne et en ligne</h2>
+    <div class="code-label">métriques hors ligne</div>
+    <div class="code-block"><pre>Précision@k / Rappel@k   les basiques, faciles à interpréter
+MAP, MRR                 position du premier élément pertinent
+NDCG@k                   pertinence graduée avec remise logarithmique : la référence
+Couverture (catalogue)   quelle part du catalogue est réellement recommandée ?
+Diversité intra-liste    les k items proposés se ressemblent-ils trop ?
+Nouveauté / sérendipité  recommande-t-on autre chose que les best-sellers ?
+Équité                   entre fournisseurs, auteurs, catégories (module 20)</pre></div>
+
+    <p>Le découpage des données mérite une attention particulière : un découpage aléatoire est une fuite (module 6), puisqu'il permet d'entraîner sur le futur d'un utilisateur pour prédire son passé. Il faut découper <strong>par date</strong>, et évaluer sur la période suivante — ou, à défaut, exclure les dernières interactions de chaque utilisateur.</p>
+
+    <div class="step-block">
+      <h4>Le décalage hors ligne / en ligne</h4>
+      <p>C'est la caractéristique la plus déroutante du domaine : les gains mesurés hors ligne se traduisent mal en gains réels. Trois raisons. Les données historiques ont été produites par l'<em>ancien</em> système, donc un nouveau modèle proposant des items jamais affichés est évalué comme s'il se trompait. Les métriques hors ligne mesurent la reproduction du passé, pas la satisfaction. Et l'effet d'un changement de recommandation met parfois des semaines à se manifester (fidélité, lassitude). La conclusion pratique : l'évaluation hors ligne sert à <em>filtrer</em> les candidats et à éviter les régressions, mais seule une expérience en ligne (module 5) tranche — avec des métriques de garde-fou pour détecter les effets pervers, et une attention aux effets de long terme que l'A/B test court mesure mal.</p>
+    </div>
+
+    <h2 id="problemes">8. Démarrage à froid, popularité, boucles</h2>
+    <ul>
+      <li><strong>Démarrage à froid</strong> — un nouvel utilisateur ou un nouvel item n'a pas d'historique. Solutions : s'appuyer sur le contenu (attributs, embedding du texte ou de l'image, module 15), recommander par popularité contextualisée, poser deux ou trois questions d'amorçage, ou exploiter un bandit pour explorer rapidement (module 18).</li>
+      <li><strong>Biais de popularité</strong> — les modèles entraînés sur des interactions amplifient les items déjà populaires, ce qui pénalise la longue traîne et appauvrit le catalogue utile. Correctifs : échantillonnage négatif pondéré par la popularité, pénalisation explicite, ou contrainte de couverture au re-classement.</li>
+      <li><strong>Boucle de rétroaction</strong> — le système ne voit que les conséquences de ses propres recommandations, ce qui rétrécit progressivement l'exposition (modules 12 et 18). Les parades : conserver une part d'exploration aléatoire, maintenir un groupe témoin permanent, et surveiller la diversité dans le temps comme métrique de santé.</li>
+      <li><strong>Contraintes système</strong> — latence, coût d'indexation, fraîcheur des embeddings, cohérence entre features d'entraînement et features servies (module 12). C'est là, plus que dans le modèle, que se situent les vraies difficultés d'ingénierie.</li>
+    </ul>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Architecture en trois étages ; la qualité est plafonnée par le rappel de la récupération.</li>
+        <li>Hybride lexical + vectoriel par fusion de rangs : robuste et sans réglage.</li>
+        <li>LambdaMART reste l'état de l'art pratique du ranking ; le NDCG est la métrique de référence.</li>
+        <li>Les clics sont biaisés par la position : corriger par propension, sinon le système fige son propre classement.</li>
+        <li>La factorisation matricielle est une approximation de rang faible sur données manquantes ; en retour implicite, apprendre un ordre (BPR) plutôt qu'une valeur.</li>
+        <li>Two-tower pour la récupération, transformer séquentiel pour l'intention du moment.</li>
+        <li>Découper par date, et ne conclure qu'en ligne : le décalage hors ligne/en ligne est structurel.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m18.html" class="btn btn-secondary">← Module 18 : Du score à la décision</a>
+  <a href="project7-m20.html" class="btn btn-primary">Module 20 : Équité et robustesse →</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">BM25</span><span class="tag">NDCG</span><span class="tag">LambdaMART</span><span class="tag">Factorisation</span><span class="tag">Two-tower</span><span class="tag">Cold start</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m19-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 19</div>
+    <h1>Search, ranking and recommendation</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>The shared three-stage architecture (retrieval, ranking, business re-ranking) and why system quality is capped by retrieval recall.</li>
+      <li>Search: BM25 versus vector search, reciprocal rank fusion, and the query-side work that often matters more than the model.</li>
+      <li>Learning to rank: pointwise, pairwise and listwise formulations, LambdaMART, NDCG derived, and the three families of ranking features.</li>
+      <li>Click logs and their biases (position, selection, trust, missing negatives), and counterfactual learning to rank with propensity weighting.</li>
+      <li>Collaborative filtering and matrix factorisation as low-rank approximation with missing entries, bias terms, ALS and SGD.</li>
+      <li>Implicit feedback: why absence is not rejection, weighted confidence and Bayesian Personalised Ranking, and the importance of negative sampling.</li>
+      <li>Two-tower retrieval architectures with offline item embeddings, and sequential recommenders that capture present intent.</li>
+      <li>Offline metrics beyond accuracy (coverage, diversity, novelty, fairness), date-based splitting, and the structural offline/online gap.</li>
+      <li>Cold start, popularity bias, feedback loops and the system constraints that dominate real deployments.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m17.html">Learning with few labels</a></li>
+        <li><a href="project7-m18.html">From scores to decisions</a></li>
+        <li><strong>Search, ranking and recommendation</strong></li>
+        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
