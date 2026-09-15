@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 2 - Données et déploiement : SQL, NoSQL, Docker, Kubernetes, FastAPI - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m02-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 2</div>
+    <h1>Données et déploiement : SQL, NoSQL, Docker, Kubernetes, FastAPI</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Un modèle n'existe vraiment que s'il est alimenté par des données stockées quelque part et s'il répond à quelqu'un. Ce module couvre les deux extrémités de la chaîne : d'où viennent les données (SQL, NoSQL, bases vectorielles) et comment le modèle sort du portable (conteneur, orchestration, API).</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#sql">SQL : ce qu'il faut vraiment maîtriser</a></li>
+        <li><a href="#perf-sql">Index, plans d'exécution, OLTP vs OLAP</a></li>
+        <li><a href="#nosql">NoSQL : quatre familles, un compromis</a></li>
+        <li><a href="#vectoriel">Bases vectorielles : premier contact</a></li>
+        <li><a href="#docker">Docker : rendre un projet exécutable ailleurs</a></li>
+        <li><a href="#k8s">Kubernetes : ce qu'il faut en savoir</a></li>
+        <li><a href="#fastapi">FastAPI : exposer un modèle</a></li>
+      </ol>
+    </div>
+
+    <h2 id="sql">1. SQL : ce qu'il faut vraiment maîtriser</h2>
+    <p>SQL est <em>déclaratif</em> : on décrit le résultat voulu, le moteur choisit l'algorithme. C'est un changement de posture par rapport à Python, où l'on décrit la marche à suivre. Au-delà du <code>SELECT ... WHERE</code>, quatre constructions couvrent l'essentiel du travail d'analyse.</p>
+
+    <h3>Jointures</h3>
+    <p>Une jointure associe les lignes de deux tables selon une condition. Les quatre types usuels :</p>
+    <ul>
+      <li><code>INNER JOIN</code> — seulement les lignes appariées des deux côtés ;</li>
+      <li><code>LEFT JOIN</code> — toutes les lignes de gauche, complétées par <code>NULL</code> à droite si pas d'appariement ;</li>
+      <li><code>FULL OUTER JOIN</code> — l'union des deux ;</li>
+      <li><code>CROSS JOIN</code> — le produit cartésien, rarement voulu (et souvent le symptôme d'une condition oubliée).</li>
+    </ul>
+
+    <div class="warning-block">
+      <strong>Le piège n° 1 : l'explosion de cardinalité.</strong> Joindre sur une clé qui n'est unique d'aucun côté multiplie les lignes. Une jointure entre 1 000 commandes et 1 000 lignes de facturation partageant le même <code>client_id</code> peut produire un million de lignes — et fausser silencieusement toutes les agrégations qui suivent. Réflexe : vérifier <code>COUNT(*)</code> avant et après chaque jointure.
+    </div>
+
+    <h3>Agrégations et fonctions de fenêtre</h3>
+    <p>Un <code>GROUP BY</code> écrase les lignes : une ligne par groupe. Une <strong>fonction de fenêtre</strong> calcule une agrégation <em>sans</em> écraser — chaque ligne conserve son identité tout en voyant son groupe. C'est l'outil décisif pour le feature engineering temporel (module 6), parce qu'il permet de calculer moyennes mobiles, rangs et décalages directement dans la base.</p>
+
+    <div class="code-label">SQL</div>
+    <div class="code-block"><pre>SELECT
+    client_id,
+    date_commande,
+    montant,
+    -- rang de la commande dans l'historique du client
+    ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_commande) AS n_commande,
+    -- montant de la commande précédente : feature de récence
+    LAG(montant) OVER (PARTITION BY client_id ORDER BY date_commande) AS montant_precedent,
+    -- moyenne glissante sur les 3 dernières commandes, celle-ci incluse
+    AVG(montant) OVER (
+        PARTITION BY client_id ORDER BY date_commande
+        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+    ) AS moyenne_3
+FROM commandes
+WHERE date_commande &gt;= DATE '2025-01-01';</pre></div>
+
+    <p>Le <code>ROWS BETWEEN ... AND CURRENT ROW</code> n'est pas cosmétique : il garantit qu'aucune information future n'entre dans la feature. C'est la version SQL de la protection contre la fuite temporelle (module 6).</p>
+
+    <h3>CTE : structurer une requête</h3>
+    <p>Les <em>Common Table Expressions</em> (<code>WITH</code>) découpent une requête en étapes nommées. Une requête de 80 lignes avec quatre sous-requêtes imbriquées devient quatre blocs lisibles, testables séparément.</p>
+
+    <div class="code-label">SQL</div>
+    <div class="code-block"><pre>WITH commandes_2025 AS (
+    SELECT * FROM commandes WHERE date_commande &gt;= DATE '2025-01-01'
+),
+agregats_client AS (
+    SELECT client_id,
+           COUNT(*)                AS n_commandes,
+           SUM(montant)            AS ca_total,
+           MAX(date_commande)      AS derniere_commande
+    FROM commandes_2025
+    GROUP BY client_id
+)
+SELECT c.nom, a.n_commandes, a.ca_total,
+       CURRENT_DATE - a.derniere_commande AS jours_depuis_achat
+FROM agregats_client a
+JOIN clients c USING (client_id)
+WHERE a.ca_total &gt; 1000
+ORDER BY a.ca_total DESC;</pre></div>
+
+    <div class="step-block">
+      <h4>Le piège des NULL</h4>
+      <p><code>NULL</code> signifie « inconnu », pas « zéro » ni « vide ». Toute comparaison avec <code>NULL</code> vaut <code>NULL</code> (donc faux) : <code>montant != 100</code> exclut les lignes où <code>montant</code> est <code>NULL</code>, ce qui n'est presque jamais l'intention. De même <code>SUM</code> et <code>AVG</code> ignorent les <code>NULL</code> alors que <code>COUNT(*)</code> les compte : <code>AVG(x)</code> et <code>SUM(x)/COUNT(*)</code> donnent des résultats différents. On teste avec <code>IS NULL</code>, on remplace avec <code>COALESCE(x, 0)</code>.</p>
+    </div>
+
+    <h2 id="perf-sql">2. Index, plans d'exécution, OLTP vs OLAP</h2>
+    <p>Un <strong>index</strong> est une structure annexe (le plus souvent un B-tree) qui évite de parcourir toute la table : il transforme un balayage en <em>O(n)</em> en une recherche en <em>O(log n)</em>. Le prix : de l'espace disque et un ralentissement des écritures, puisque chaque insertion doit mettre l'index à jour. On indexe les colonnes de jointure, celles des <code>WHERE</code> sélectifs, et celles des <code>ORDER BY</code> fréquents — pas tout le reste.</p>
+
+    <p>Pour savoir ce que fait réellement le moteur, on lui demande :</p>
+
+    <div class="code-label">SQL</div>
+    <div class="code-block"><pre>EXPLAIN ANALYZE
+SELECT * FROM commandes WHERE client_id = 42;
+
+-- Seq Scan on commandes  (cost=0.00..18334.00 rows=1 width=44)
+--   → balayage complet : 18 000 pages lues pour 1 ligne
+-- après CREATE INDEX idx_cmd_client ON commandes(client_id);
+-- Index Scan using idx_cmd_client  (cost=0.42..8.44 rows=1 width=44)</pre></div>
+
+    <p>Un <code>Seq Scan</code> sur une grande table filtrée finement signale un index manquant. Attention : appliquer une fonction à la colonne (<code>WHERE YEAR(date) = 2025</code>) rend l'index inutilisable — il faut réécrire en <code>WHERE date &gt;= '2025-01-01' AND date &lt; '2026-01-01'</code>.</p>
+
+    <h3>Deux mondes : transactionnel et analytique</h3>
+    <div class="code-label">OLTP vs OLAP</div>
+    <div class="code-block"><pre>                 OLTP (transactionnel)        OLAP (analytique)
+Exemples         PostgreSQL, MySQL            DuckDB, ClickHouse, BigQuery, Snowflake
+Requêtes         beaucoup, très courtes       peu, très lourdes
+Accès            quelques lignes entières     quelques colonnes, millions de lignes
+Stockage         par lignes                   par colonnes
+Optimisé pour    écriture, cohérence (ACID)   lecture, compression, agrégation
+Usage data       la source de vérité          l'analyse et l'entraînement</pre></div>
+
+    <p>Le stockage en colonnes est la raison pour laquelle un <code>SELECT AVG(montant)</code> sur 100 millions de lignes est instantané en OLAP : seule la colonne <code>montant</code> est lue, et elle se compresse très bien puisque des valeurs voisines se ressemblent. Pour un usage data science local, <strong>DuckDB</strong> est le meilleur rapport puissance/simplicité : pas de serveur, il interroge directement des fichiers Parquet ou des DataFrames.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import duckdb
+
+# SQL directement sur des fichiers Parquet, sans import préalable
+df = duckdb.sql("""
+    SELECT client_id, SUM(montant) AS ca
+    FROM 'data/commandes_*.parquet'
+    WHERE date_commande &gt;= '2025-01-01'
+    GROUP BY client_id
+    ORDER BY ca DESC
+    LIMIT 10
+""").df()                      # renvoie un DataFrame pandas</pre></div>
+
+    <h2 id="nosql">3. NoSQL : quatre familles, un compromis</h2>
+    <p>NoSQL ne veut pas dire « sans SQL » mais « pas seulement relationnel ». Chaque famille abandonne quelque chose (le plus souvent les jointures et la cohérence forte) pour gagner autre chose (débit, souplesse de schéma, distribution).</p>
+
+    <div class="code-label">familles et usages</div>
+    <div class="code-block"><pre>Clé-valeur    Redis, DynamoDB     cache, sessions, features en ligne. Accès O(1) par clé.
+Document      MongoDB, Firestore  JSON imbriqué, schéma mouvant. Requêtes riches, jointures pauvres.
+Colonnes      Cassandra, HBase    écriture massive distribuée, séries temporelles, IoT.
+Graphe        Neo4j               relations comme objet premier : fraude, réseaux, recommandation.</pre></div>
+
+    <p>Le cadre théorique est le <strong>théorème CAP</strong> : en cas de partition réseau (P, inévitable dans un système distribué), il faut choisir entre cohérence (C — tout le monde voit la même valeur) et disponibilité (A — le système répond quand même). PostgreSQL privilégie C, Cassandra privilégie A avec une cohérence « à terme ». Pour un projet de data science, la position par défaut raisonnable est : <em>commencer en PostgreSQL</em>, et ne migrer une brique en NoSQL que lorsqu'un besoin précis le justifie (latence de cache, volumétrie d'écriture, schéma réellement instable).</p>
+
+    <h2 id="vectoriel">4. Bases vectorielles : premier contact</h2>
+    <p>Une base vectorielle indexe des <em>embeddings</em> — des vecteurs de quelques centaines de dimensions représentant un texte, une image ou un utilisateur — et répond à la question « quels sont les <em>k</em> vecteurs les plus proches de celui-ci ? ». La recherche exacte coûte <em>O(n·d)</em>, prohibitive à grande échelle ; on utilise donc des index approchés (ANN) qui échangent un peu de rappel contre un facteur 100 ou 1000 en latence.</p>
+
+    <p>Les options : <strong>pgvector</strong> (extension PostgreSQL — garder une seule base tant que c'est possible), <strong>FAISS</strong> (bibliothèque locale, sans serveur), <strong>Qdrant</strong> ou <strong>Milvus</strong> (services dédiés, filtrage par métadonnées, montée en charge). Le fonctionnement interne des index HNSW et IVF-PQ, ainsi que le pipeline RAG complet, sont traités au <a href="project7-m11.html">module 11</a>.</p>
+
+    <h2 id="docker">5. Docker : rendre un projet exécutable ailleurs</h2>
+    <p>Le problème que Docker résout est banal et coûteux : « ça marche chez moi ». Une <strong>image</strong> est un système de fichiers figé contenant l'application, ses dépendances système et son interpréteur ; un <strong>conteneur</strong> est une instance en cours d'exécution de cette image, isolée par les <em>namespaces</em> et <em>cgroups</em> du noyau Linux. Contrairement à une machine virtuelle, il n'y a pas de noyau invité : le coût est celui d'un processus ordinaire.</p>
+
+    <p>L'image est faite de <strong>couches</strong> empilées, une par instruction du Dockerfile, mises en cache individuellement. D'où la règle d'or : <em>du plus stable au plus volatil</em>. Les dépendances changent rarement, le code change à chaque commit — les installer avant de copier le code évite de réinstaller tout l'environnement à chaque build.</p>
+
+    <div class="code-label">Dockerfile (projet Python + UV, multi-étapes)</div>
+    <div class="code-block"><pre># ── étape 1 : construire l'environnement ──
+FROM python:3.12-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+# dépendances d'abord : cette couche est réutilisée tant que le lock ne bouge pas
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+
+# puis le code, qui change à chaque commit
+COPY src/ src/
+RUN uv sync --frozen --no-dev
+
+# ── étape 2 : image finale, sans outils de build ──
+FROM python:3.12-slim
+WORKDIR /app
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+ENV PATH="/app/.venv/bin:$PATH"
+
+RUN useradd -m app &amp;&amp; chown -R app /app
+USER app                                   # ne jamais tourner en root
+
+EXPOSE 8000
+HEALTHCHECK CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"
+CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000"]</pre></div>
+
+    <p>La construction en deux étapes (<em>multi-stage</em>) laisse les compilateurs et caches dans l'étape jetable : l'image finale passe typiquement de 1,2 Go à 200 Mo. Un <code>.dockerignore</code> excluant <code>data/</code>, <code>.git/</code>, <code>.venv/</code> et <code>notebooks/</code> est indispensable — sans lui, le contexte de build envoie tout le répertoire au démon.</p>
+
+    <div class="warning-block">
+      <strong>Conteneur et état.</strong> Un conteneur est éphémère : tout ce qu'il écrit dans son système de fichiers disparaît à sa destruction. Les données vivent dans des <em>volumes</em> montés, les secrets passent par des variables d'environnement ou un gestionnaire dédié — jamais en dur dans l'image, d'où ils seraient extractibles par quiconque la télécharge.
+    </div>
+
+    <p><strong>docker compose</strong> décrit une pile complète (API + base + cache) dans un fichier, exactement comme pour la stack Ollama + OpenWebUI de mon <a href="project6.html">projet NAS</a>. Pour le GPU, l'accès passe par le <em>NVIDIA Container Toolkit</em> et l'option <code>--gpus all</code> : le pilote reste sur l'hôte, seules les bibliothèques CUDA sont dans l'image.</p>
+
+    <h2 id="k8s">6. Kubernetes : ce qu'il faut en savoir</h2>
+    <p>Docker fait tourner des conteneurs sur une machine. Kubernetes (K8s) les fait tourner sur une <em>flotte</em> de machines, en maintenant en permanence l'état réel égal à l'état déclaré. On lui décrit « je veux trois répliques de cette image, avec un GPU chacune », et il s'occupe du placement, des redémarrages, du remplacement des nœuds morts.</p>
+
+    <div class="code-label">objets essentiels</div>
+    <div class="code-block"><pre>Pod          la plus petite unité déployable : un ou plusieurs conteneurs colocalisés
+Deployment   maintient N répliques d'un Pod, gère les mises à jour progressives
+Service      une IP et un nom stables devant des Pods éphémères ; répartit la charge
+Ingress      l'entrée HTTP depuis l'extérieur (routage, TLS)
+ConfigMap    configuration non sensible          Secret   identifiants, clés d'API
+Job          tâche ponctuelle (entraînement)     CronJob  tâche récurrente (ré-entraînement)
+HPA          autoscaling selon CPU ou métrique personnalisée</pre></div>
+
+    <div class="code-label">deployment.yaml (service d'inférence)</div>
+    <div class="code-block"><pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: model-api }
+  template:
+    metadata:
+      labels: { app: model-api }
+    spec:
+      containers:
+        - name: api
+          image: registry.exemple.fr/model-api:1.4.2   # jamais :latest en production
+          ports: [{ containerPort: 8000 }]
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }   # réservé pour le placement
+            limits:   { cpu: "2",    memory: "4Gi",  nvidia.com/gpu: 1 }
+          readinessProbe:                              # ne reçoit du trafic qu'une fois le modèle chargé
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 20</pre></div>
+
+    <p>Le point non évident pour le ML : <code>requests</code> sert au placement, <code>limits</code> au bridage. Un modèle qui charge 3 Go de poids doit le déclarer, sinon il sera tué (<em>OOMKilled</em>) dès le premier pic. Et la <code>readinessProbe</code> est vitale : sans elle, K8s route du trafic vers un pod dont le modèle n'est pas encore en mémoire.</p>
+
+    <div class="step-block">
+      <h4>Kubernetes, en avez-vous besoin ?</h4>
+      <p>Honnêtement, rarement pour un projet personnel ou un prototype : la complexité opérationnelle est réelle. Un conteneur derrière un reverse proxy couvre la grande majorité des besoins. K8s devient pertinent lorsqu'il faut plusieurs machines, de l'autoscaling, des déploiements sans coupure, ou le partage d'un parc de GPU entre plusieurs équipes. La valeur immédiate est de savoir <em>lire</em> un manifeste : c'est la langue commune des équipes plateforme.</p>
+    </div>
+
+    <h2 id="fastapi">7. FastAPI : exposer un modèle</h2>
+    <p>FastAPI combine trois choses utiles : validation des entrées par pydantic (typage vérifié à l'exécution), documentation OpenAPI générée automatiquement, et support natif de l'asynchrone (module 1).</p>
+
+    <div class="code-label">src/mon_projet/api.py</div>
+    <div class="code-block"><pre>from contextlib import asynccontextmanager
+import anyio, joblib, numpy as np
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+etat: dict = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # chargé UNE fois au démarrage, pas à chaque requête
+    etat["model"] = joblib.load("models/gbm-1.4.2.joblib")
+    yield
+    etat.clear()
+
+app = FastAPI(title="API de scoring", version="1.4.2", lifespan=lifespan)
+
+class Requete(BaseModel):
+    surface: float = Field(gt=0, lt=10_000, description="surface en m²")
+    n_pieces: int  = Field(ge=1, le=20)
+    code_postal: str = Field(pattern=r"^\d{5}$")
+
+class Reponse(BaseModel):
+    prix_estime: float
+    version_modele: str
+
+@app.get("/health")                      # sonde de vivacité pour K8s / le load balancer
+def health() -&gt; dict:
+    return {"status": "ok", "model_loaded": "model" in etat}
+
+@app.post("/predict", response_model=Reponse)
+async def predict(req: Requete) -&gt; Reponse:
+    X = np.array([[req.surface, req.n_pieces, int(req.code_postal)]])
+    try:
+        # prédiction = calcul bloquant : on le sort de la boucle d'événements
+        y = await anyio.to_thread.run_sync(etat["model"].predict, X)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="échec de l'inférence") from exc
+    return Reponse(prix_estime=float(y[0]), version_modele="1.4.2")</pre></div>
+
+    <p>Quatre points méritent d'être soulignés, parce qu'ils reviennent systématiquement en production :</p>
+    <ul>
+      <li><strong>Charger le modèle au démarrage</strong> via <code>lifespan</code>. Le charger dans la fonction de prédiction ajoute des centaines de millisecondes à chaque appel.</li>
+      <li><strong>Sortir le calcul de la boucle d'événements.</strong> Un <code>predict</code> scikit-learn est bloquant ; appelé directement dans une coroutine, il gèle tout le serveur pendant son exécution (module 1, section 7.5).</li>
+      <li><strong>Valider strictement les entrées.</strong> Les contraintes pydantic rejettent en 422 les valeurs aberrantes avant qu'elles n'atteignent le modèle — première ligne de défense contre les prédictions absurdes sur données hors domaine.</li>
+      <li><strong>Versionner le modèle dans la réponse.</strong> Sans cela, impossible de relier a posteriori une prédiction contestée à l'artefact qui l'a produite (module 12).</li>
+    </ul>
+
+    <p>Pour la montée en charge : <code>uvicorn --workers 4</code> lance quatre processus (contournant le GIL), chacun chargeant sa copie du modèle — attention à la mémoire. Au-delà, on regroupe les requêtes par lots côté serveur (<em>dynamic batching</em>), ce que font Triton ou vLLM (modules 11 et 12).</p>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>SQL : jointures maîtrisées (vérifier la cardinalité), fonctions de fenêtre pour les features temporelles, CTE pour la lisibilité, vigilance sur les <code>NULL</code>.</li>
+        <li>Index sur les colonnes de jointure et de filtre ; <code>EXPLAIN ANALYZE</code> pour vérifier plutôt que supposer.</li>
+        <li>OLTP pour la source de vérité, OLAP (DuckDB en local) pour l'analyse.</li>
+        <li>NoSQL seulement quand un besoin précis le justifie ; PostgreSQL couvre beaucoup de cas, y compris vectoriels via pgvector.</li>
+        <li>Docker : couches du stable au volatil, multi-étapes, utilisateur non-root, pas de secret dans l'image.</li>
+        <li>Kubernetes : savoir lire un manifeste et déclarer ses ressources ; ce n'est pas nécessaire pour un prototype.</li>
+        <li>FastAPI : modèle chargé au démarrage, inférence déportée dans un thread, entrées validées, version renvoyée.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m01.html" class="btn btn-secondary">← Module 1 : Fondations Python</a>
+  <a href="project7-m03.html" class="btn btn-primary">Module 3 : Boîte à outils numérique →</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">SQL</span><span class="tag">DuckDB</span><span class="tag">NoSQL</span><span class="tag">Docker</span><span class="tag">Kubernetes</span><span class="tag">FastAPI</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m02-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 2</div>
+    <h1>Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>SQL that matters for analysis: joins and cardinality blow-ups, window functions for leak-free temporal features, CTEs, NULL semantics.</li>
+      <li>Indexes and execution plans (<code>EXPLAIN ANALYZE</code>), and why a function applied to a column kills an index.</li>
+      <li>OLTP vs OLAP, columnar storage, and DuckDB as the local analytical engine.</li>
+      <li>The four NoSQL families, the CAP trade-off, and when relational is still the right default.</li>
+      <li>Vector databases: first contact (pgvector, FAISS, Qdrant) — detailed in module 11.</li>
+      <li>Docker: layer caching, multi-stage builds with UV, non-root users, volumes and secrets, GPU access.</li>
+      <li>Kubernetes: the objects worth knowing, a deployment manifest for model serving, resource requests vs limits, and an honest take on when it is overkill.</li>
+      <li>FastAPI: loading the model once, keeping blocking inference off the event loop, strict input validation, versioned responses.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><strong>Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</strong></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
