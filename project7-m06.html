@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 6 - Data science en pratique : du problème au dataset - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m06-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 6</div>
+    <h1>Data science en pratique : du problème au dataset</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#cycle">Cycle de vie d'un projet</a></li>
+        <li><a href="#cadrage">Cadrage : la cible et la baseline</a></li>
+        <li><a href="#eda">Exploration : une checklist</a></li>
+        <li><a href="#viz">Visualisation utile</a></li>
+        <li><a href="#manquantes">Données manquantes</a></li>
+        <li><a href="#features">Feature engineering</a></li>
+        <li><a href="#desequilibre">Classes déséquilibrées</a></li>
+        <li><a href="#validation">Validation croisée : choisir le bon schéma</a></li>
+        <li><a href="#leakage">Fuites de données : le catalogue</a></li>
+      </ol>
+    </div>
+
+    <h2 id="cycle">1. Cycle de vie d'un projet</h2>
+    <div class="code-label">les étapes, et leur poids réel en temps</div>
+    <div class="code-block"><pre>1. Cadrage métier          définir la question, la métrique, ce qu'on fera du résultat   ~10 %
+2. Collecte / accès        trouver, extraire, joindre les données                        ~20 %
+3. Exploration            comprendre les données, détecter les anomalies                 ~15 %
+4. Préparation            nettoyage, features, encodages                                 ~25 %
+5. Modélisation           baseline, puis itérations                                      ~10 %
+6. Évaluation             protocole, métriques, analyse d'erreurs                        ~10 %
+7. Déploiement / suivi    mise en production, monitoring, ré-entraînement                ~10 %</pre></div>
+
+    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique.</p>
+
+    <div class="step-block">
+      <h4>La question à poser avant tout le reste</h4>
+      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout le reste : la métrique (un coût d'erreur asymétrique change le seuil), la latence acceptable (temps réel ou lot nocturne), le besoin d'explicabilité (un refus de crédit doit être motivé), et même la faisabilité — certaines décisions ont besoin de causalité, pas de prédiction (module 5).</p>
+    </div>
+
+    <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
+    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif est-il parti ?). Deux définitions raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables.</p>
+
+    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8).</p>
+
+    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle : la moyenne pour une régression, la classe majoritaire pour une classification, la valeur de la veille pour une série temporelle, ou la règle métier existante. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème. La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, le modèle ne vaut peut-être pas sa complexité opérationnelle.</p>
+
+    <h2 id="eda">3. Exploration : une checklist</h2>
+    <div class="code-label">ce que je regarde systématiquement</div>
+    <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
+Cible          distribution, taux de positifs, valeurs extrêmes, évolution dans le temps
+Manquants      taux par colonne, structure des manquants (voir section 5)
+Doublons       lignes identiques ET doublons sur la clé métier
+Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
+Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix négatif)
+Temps          couverture, trous, saisonnalité, ruptures (changement de collecte ?)
+Relations      corrélations entre features, lien de chaque feature avec la cible
+Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import polars as pl
+
+df = pl.read_parquet("data/clients.parquet")
+
+print(df.describe())                                    # stats de base par colonne
+print(df.null_count())                                  # manquants par colonne
+print(df.select(pl.all().n_unique()))                   # cardinalités
+print(df.filter(pl.struct(df.columns).is_duplicated())) # doublons exacts
+
+# valeurs impossibles : toujours confronter aux bornes métier
+print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))</pre></div>
+
+    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou qu'une valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
+
+    <div class="warning-block">
+      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une feature semble trop belle, c'est généralement qu'elle contient une information qui n'existera pas au moment de la prédiction (section 9).
+    </div>
+
+    <h2 id="viz">4. Visualisation utile</h2>
+    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellent par défaut), <strong>plotly</strong> (interactif, précieux pour explorer un nuage de points dense). Quelques principes qui changent réellement la lisibilité :</p>
+    <ul>
+      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure. Doubler avec un <em>violin plot</em> ou un <em>strip plot</em> quand l'échantillon est petit.</li>
+      <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
+      <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
+      <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 12).</li>
+      <li><strong>Se méfier des moyennes</strong> : le quartet d'Anscombe et le « datasaurus » rappellent que des jeux de données de statistiques identiques peuvent être radicalement différents. Regarder les distributions, pas les résumés.</li>
+    </ul>
+
+    <h2 id="manquantes">5. Données manquantes</h2>
+    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin :</p>
+    <ul>
+      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
+      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est légitime.</li>
+      <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
+    </ul>
+
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
+Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
+Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase les corrélations.
+KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux mais bien meilleur.
+Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres.
+Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement les NaN,
+                          et apprennent la meilleure direction pour les valeurs absentes.
+Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est souvent
+                          lui-même informatif (un client qui ne renseigne pas son revenu...).</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
+from sklearn.impute import IterativeImputer, SimpleImputer
+
+# imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
+imp = IterativeImputer(max_iter=10, random_state=0)
+
+# conserver l'information "cette valeur manquait"
+imp_simple = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
+
+    <div class="warning-block">
+      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3).
+    </div>
+
+    <h2 id="features">6. Feature engineering</h2>
+    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne feature bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter.</p>
+
+    <h3>Variables catégorielles</h3>
+    <div class="code-label">encodages</div>
+    <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
+Ordinal          entier par modalité. Uniquement si un ORDRE existe réellement
+                 (S &lt; M &lt; L), ou pour des modèles à base d'arbres qui savent découper.
+Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
+                 forte cardinalité (code postal, produit) — et très exposé à la fuite.
+Hashing          projette dans un espace fixe. Utile en streaming, perd l'interprétabilité.
+Embeddings       représentation apprise, dense. Pour les réseaux de neurones (module 8).</pre></div>
+
+    <p>Le <strong>target encoding</strong> mérite un mot, car il est à la fois redoutable et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute mais une moyenne lissée vers la moyenne globale :</p>
+    <div style="text-align:center">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
+    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> (chaque pli encodé avec les statistiques des autres plis), faute de quoi chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
+
+    <h3>Variables numériques et temporelles</h3>
+    <ul>
+      <li><strong>Transformations</strong> — log sur les variables à queue lourde (prix, revenus, durées), Yeo-Johnson si des valeurs négatives ou nulles existent. Cela rend les distributions plus symétriques, ce qui aide les modèles linéaires et les réseaux (pas les arbres, insensibles aux transformations monotones).</li>
+      <li><strong>Discrétisation</strong> — transformer l'âge en tranches capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information.</li>
+      <li><strong>Interactions et ratios</strong> — souvent l'apport décisif : prix au m², revenu par personne du foyer, nombre de connexions par jour d'ancienneté. Les arbres approchent mal les ratios, il faut les fournir explicitement.</li>
+      <li><strong>Features temporelles</strong> — heure, jour de la semaine, mois, jour férié, ancienneté. Les variables cycliques se codent par \(\sin(2\pi t/T)\) et \(\cos(2\pi t/T)\) pour que 23 h soit proche de 0 h.</li>
+      <li><strong>Agrégats à fenêtre</strong> — moyennes, écarts types et comptages sur les 7, 30, 90 derniers jours. C'est le cœur du feature engineering en données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 2). Impérativement calculés avec une fenêtre <em>strictement passée</em>.</li>
+    </ul>
+
+    <h3>Sélection de features</h3>
+    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 7) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées à l'intérieur de la validation croisée.</p>
+
+    <h2 id="desequilibre">7. Classes déséquilibrées</h2>
+    <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
+    <ol>
+      <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 4).</li>
+      <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
+      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, pas à 0,5 par défaut.</li>
+      <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
+    </ol>
+
+    <div class="warning-block">
+      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test, lui, doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
+    </div>
+
+    <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
+    <p>Un découpage unique train/test est bruité : le score dépend du tirage. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
+
+    <div class="code-label">quel schéma pour quelle structure de données</div>
+    <div class="code-block"><pre>KFold                  données i.i.d., régression                        K = 5 ou 10
+StratifiedKFold        classification : conserve les proportions         le défaut en classif
+GroupKFold             plusieurs lignes par entité (patient, client)     un groupe = un seul pli
+StratifiedGroupKFold   les deux contraintes à la fois
+TimeSeriesSplit        séries temporelles : entraîner sur le passé,      jamais de mélange
+                       tester sur le futur (fenêtre glissante)
+LeaveOneOut            très peu de données                               coûteux, variance élevée
+Nested CV              quand on optimise DES hyperparamètres ET qu'on    boucle interne = réglage
+                       veut une estimation non biaisée de performance    boucle externe = évaluation</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.model_selection import (GroupKFold, StratifiedKFold,
+                                     TimeSeriesSplit, cross_validate)
+
+# données transactionnelles : plusieurs lignes par client → GroupKFold
+cv = GroupKFold(n_splits=5)
+res = cross_validate(pipeline, X, y, groups=df["client_id"],
+                     cv=cv, scoring=["roc_auc", "average_precision"],
+                     return_train_score=True)
+
+# l'écart train/validation mesure directement le surapprentissage
+print(res["train_roc_auc"].mean(), res["test_roc_auc"].mean())</pre></div>
+
+    <div class="step-block">
+      <h4>Le protocole que je considère comme correct</h4>
+      <ol>
+        <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
+        <li>Travailler en validation croisée sur le reste : exploration, features, réglages.</li>
+        <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
+        <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
+        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation.</li>
+      </ol>
+    </div>
+
+    <h2 id="leakage">9. Fuites de données : le catalogue</h2>
+    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production. Les formes les plus fréquentes :</p>
+
+    <div class="code-label">formes de fuite</div>
+    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de features ajustés sur TOUT
+                         le jeu avant le découpage.        → tout mettre dans un Pipeline
+
+Fuite temporelle         une feature utilise de l'information postérieure à la date de
+                         prédiction (moyenne calculée sur toute la période, statut final
+                         du dossier).                      → figer une date de référence
+
+Duplication              la même observation (ou quasi) des deux côtés du découpage :
+                         doublons, utilisateur présent plusieurs fois.  → GroupKFold
+
+Cible déguisée           une colonne qui n'existe que parce que l'événement a eu lieu :
+                         "date de résiliation", "montant remboursé", "motif de panne".
+
+Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
+                         → encodage en validation croisée interne
+
+Fuite par le seuil       choisir le seuil de décision sur le jeu de test.
+
+Sélection répétée        essayer 200 modèles et garder le meilleur score de test :
+                         le test devient un jeu d'entraînement déguisé.</pre></div>
+
+    <div class="step-block">
+      <h4>Comment la détecter</h4>
+      <p>Un score anormalement élevé (AUC de 0,99 sur un problème réputé difficile) doit déclencher une suspicion, pas une satisfaction. Deux gestes efficaces : regarder les <em>importances de features</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; et rejouer la chaîne complète sur une période postérieure (validation temporelle) — une fuite y disparaît, et le score s'effondre. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
+        <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
+        <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
+        <li>Le feature engineering paie plus que le choix d'algorithme ; ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
+        <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
+        <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
+        <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m05.html" class="btn btn-secondary">← Module 5 : Statistique inférentielle</a>
+  <a href="project7-m07.html" class="btn btn-primary">Module 7 : Machine learning classique →</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">EDA</span><span class="tag">Feature engineering</span><span class="tag">Imputation</span><span class="tag">Validation croisée</span><span class="tag">Data leakage</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m06-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 6</div>
+    <h1>Data science in practice: from problem to dataset</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>The real shape of a data project, and the one question to answer first: which decision will change because of this model?</li>
+      <li>Framing: defining the target, the observation unit, and a baseline worth beating.</li>
+      <li>An exploration checklist, automated profiling, and the "disguised identifier" trap.</li>
+      <li>Visualisation rules that actually improve readability.</li>
+      <li>Missing data: Rubin's MCAR / MAR / MNAR typology, imputation strategies, and why imputation belongs inside the pipeline.</li>
+      <li>Feature engineering: categorical encodings (including smoothed, cross-fitted target encoding), transformations, cyclical time features, windowed aggregates, feature selection.</li>
+      <li>Imbalanced classes: metrics first, class weights, threshold tuning, and an honest assessment of SMOTE.</li>
+      <li>Cross-validation schemes matched to data structure (groups, time series, stratification), nested CV, and a protocol that keeps the test set honest.</li>
+      <li>A catalogue of data leakage patterns and how to detect them.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><strong>Data science in practice: from problem to dataset</strong></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
