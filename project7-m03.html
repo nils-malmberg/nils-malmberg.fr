@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 3 - Boîte à outils numérique : NumPy, pandas, polars, Dask, frameworks - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m03-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 3</div>
+    <h1>Boîte à outils numérique : NumPy, pandas, polars, Dask, frameworks</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Ces bibliothèques ne sont pas interchangeables : chacune répond à une contrainte précise de volume, de latence ou de type de calcul. Ce module explique ce qu'elles font réellement sous le capot, parce que c'est ce qui permet de choisir la bonne — et d'écrire du code dix à cent fois plus rapide sans rien changer d'algorithmique.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#numpy">NumPy : le socle</a></li>
+        <li><a href="#pandas">pandas : forces et pièges</a></li>
+        <li><a href="#polars">polars : expressions et évaluation paresseuse</a></li>
+        <li><a href="#dask">Dask, Spark, Ray : passer à l'échelle</a></li>
+        <li><a href="#choisir">Quel outil pour quelle taille de données</a></li>
+        <li><a href="#sklearn">scikit-learn : l'API qui structure tout</a></li>
+        <li><a href="#torch">PyTorch, TensorFlow, BoTorch</a></li>
+      </ol>
+    </div>
+
+    <h2 id="numpy">1. NumPy : le socle</h2>
+    <p>Tout le reste repose dessus. Un <code>ndarray</code>, c'est un <strong>bloc de mémoire contigu et homogène</strong> plus une description de la façon de le lire : une forme (<code>shape</code>), un type (<code>dtype</code>) et des pas (<code>strides</code>, le nombre d'octets à sauter pour avancer d'un cran sur chaque axe). Cette séparation entre données et interprétation explique presque tous les comportements de NumPy.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import numpy as np
+
+a = np.arange(12, dtype=np.float64).reshape(3, 4)
+a.shape        # (3, 4)
+a.strides      # (32, 8) : 32 octets pour changer de ligne, 8 pour changer de colonne
+a.nbytes       # 96
+
+b = a.T        # transposée : AUCUNE donnée copiée, seuls les strides sont inversés
+b.strides      # (8, 32)
+b.base is a    # True → b est une vue sur a</pre></div>
+
+    <h3>Vues et copies : la source d'erreurs n° 1</h3>
+    <p>Le découpage (<em>slicing</em>) renvoie une <strong>vue</strong> : modifier la vue modifie l'original. L'indexation « fantaisiste » (par tableau d'indices ou par masque booléen) renvoie une <strong>copie</strong>.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>x = np.arange(10)
+
+v = x[2:5]          # vue
+v[0] = 999
+x[2]                # 999  → x a été modifié
+
+c = x[[2, 3, 4]]    # copie (fancy indexing)
+c[0] = -1
+x[2]                # 999  → x est intact
+
+# vérifier en cas de doute
+np.shares_memory(x, v)   # True
+np.shares_memory(x, c)   # False</pre></div>
+
+    <h3>Broadcasting</h3>
+    <p>Le broadcasting permet d'opérer sur des tableaux de formes différentes sans les dupliquer en mémoire. Les formes sont alignées <em>par la droite</em> ; deux dimensions sont compatibles si elles sont égales ou si l'une vaut 1, auquel cas elle est « étirée » virtuellement (stride mis à 0, donc aucune allocation).</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>X = np.random.randn(1000, 50)      # (1000, 50)
+mu = X.mean(axis=0)                # (50,)      → alignée sur les colonnes
+Xc = X - mu                        # (1000, 50) : broadcasting, pas de duplication de mu
+
+# matrice de distances deux à deux, sans boucle ni copie explicite
+d = np.linalg.norm(X[:, None, :] - X[None, :, :], axis=-1)   # (1000, 1000)</pre></div>
+
+    <div class="warning-block">
+      <strong>Attention à la mémoire du broadcasting.</strong> La dernière ligne crée un tableau intermédiaire de forme (1000, 1000, 50), soit 400 Mo en float64. Avec 20 000 points au lieu de 1 000, c'est 160 To : le calcul échoue. Pour ce cas précis, <code>scipy.spatial.distance.cdist</code> ou <code>sklearn.metrics.pairwise_distances</code> font le travail par blocs. Règle : quand une expression vectorisée crée un axe supplémentaire, calculer sa taille avant de l'exécuter.
+    </div>
+
+    <h3>Vectoriser, vraiment</h3>
+    <p>Une boucle Python sur un tableau NumPy paie l'interpréteur à chaque itération. L'opération vectorisée équivalente descend dans une boucle C compilée, souvent parallélisée et vectorisée SIMD.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>x = np.random.randn(1_000_000)
+
+# ≈ 400 ms — l'interpréteur gère un million d'itérations
+out = np.array([v ** 2 + 3 * v if v &gt; 0 else 0.0 for v in x])
+
+# ≈ 4 ms — une seule descente dans le code natif
+out = np.where(x &gt; 0, x ** 2 + 3 * x, 0.0)</pre></div>
+
+    <p>Deux compléments utiles : <code>np.einsum</code> exprime produits et contractions de tenseurs de façon compacte et souvent plus efficace qu'une suite de <code>reshape</code> / <code>matmul</code> ; et <strong>Numba</strong> (<code>@njit</code>) compile à la volée une boucle Python en code machine, ce qui reste la meilleure option pour les algorithmes séquentiels non vectorisables (une récurrence, un automate).</p>
+
+    <div class="step-block">
+      <h4>Types : choisir, pas subir</h4>
+      <p>Le <code>dtype</code> par défaut est <code>float64</code>. Passer en <code>float32</code> divise la mémoire par deux et accélère souvent les calculs — c'est d'ailleurs le type natif de la plupart des GPU. Attention toutefois : en float32, la somme de plusieurs millions de termes accumule une erreur d'arrondi notable (utiliser <code>dtype=np.float64</code> dans <code>np.sum</code> si la précision compte). Pour les entiers, un <code>int8</code> silencieusement débordé donne des résultats faux sans aucun avertissement.</p>
+    </div>
+
+    <h2 id="pandas">2. pandas : forces et pièges</h2>
+    <p>pandas ajoute à NumPy ce qui manque pour des données réelles : des colonnes hétérogènes, un index, des étiquettes, et la gestion des valeurs manquantes. C'est l'outil le plus répandu, avec une ergonomie datée et quelques chausse-trappes bien connues.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import pandas as pd
+
+df = (
+    pd.read_parquet("data/commandes.parquet")
+      .assign(
+          date=lambda d: pd.to_datetime(d["date"]),
+          marge=lambda d: d["prix"] - d["cout"],
+      )
+      .query("marge &gt; 0")
+      .astype({"categorie": "category"})        # mémoire divisée par 10 sur du texte répété
+)
+
+# split-apply-combine
+stats = (
+    df.groupby(["categorie", pd.Grouper(key="date", freq="ME")])
+      .agg(ca=("prix", "sum"), n=("prix", "size"), marge_moy=("marge", "mean"))
+      .reset_index()
+)</pre></div>
+
+    <p>L'écriture chaînée n'est pas qu'une question de style : chaque étape produit un nouvel objet, ce qui évite les mutations en place et donc les états intermédiaires impossibles à reproduire dans un notebook.</p>
+
+    <div class="warning-block">
+      <strong>Les trois pièges classiques.</strong><br>
+      <strong>1. <code>SettingWithCopyWarning</code></strong> — <code>df[df.a &gt; 0]["b"] = 1</code> écrit dans un objet temporaire, pas dans <code>df</code>. La forme correcte est <code>df.loc[df.a &gt; 0, "b"] = 1</code>.<br>
+      <strong>2. <code>apply</code> ligne par ligne</strong> — <code>df.apply(f, axis=1)</code> repasse par l'interpréteur pour chaque ligne : cent fois plus lent qu'une expression vectorisée équivalente.<br>
+      <strong>3. La mémoire</strong> — un DataFrame occupe typiquement 3 à 10 fois la taille du CSV d'origine. Les colonnes textuelles répétées passent en <code>category</code>, les entiers en <code>int32</code>, et <code>df.info(memory_usage="deep")</code> donne le vrai coût.
+    </div>
+
+    <h2 id="polars">3. polars : expressions et évaluation paresseuse</h2>
+    <p><a href="https://pola.rs" target="_blank">polars</a> est écrit en Rust sur le format mémoire Apache Arrow. Deux différences de fond avec pandas : il est multi-thread par défaut (pas de GIL dans le moteur, cf. module 1), et il propose un mode <strong>paresseux</strong> où la requête est d'abord construite, puis optimisée, puis exécutée — comme un moteur SQL.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import polars as pl
+
+q = (
+    pl.scan_parquet("data/commandes_*.parquet")       # scan_ = paresseux, rien n'est lu
+      .filter(pl.col("date") &gt;= pl.date(2025, 1, 1))
+      .with_columns(marge=pl.col("prix") - pl.col("cout"))
+      .group_by("categorie")
+      .agg(
+          ca=pl.col("prix").sum(),
+          marge_moy=pl.col("marge").mean(),
+          n=pl.len(),
+      )
+      .sort("ca", descending=True)
+)
+
+print(q.explain())      # le plan optimisé, comme un EXPLAIN SQL
+df = q.collect()        # exécution effective</pre></div>
+
+    <p>L'optimiseur fait deux choses décisives : la <em>projection pushdown</em> (seules les colonnes réellement utilisées sont lues sur le disque) et la <em>predicate pushdown</em> (les filtres descendent au plus près de la lecture, parfois jusqu'au niveau des fichiers Parquet, dont les métadonnées permettent de sauter des blocs entiers). Sur un jeu de 50 colonnes dont on n'en utilise que 4, le gain est d'un ordre de grandeur avant même le moindre calcul.</p>
+
+    <p>En pratique : facteur 5 à 20 sur les agrégations et jointures par rapport à pandas, et surtout un modèle mental plus propre — le concept d'<em>expression</em> (<code>pl.col("x").sum()</code>) est un objet réutilisable et composable, contrairement aux chaînes de caractères magiques de pandas. Le coût de migration est réel (API différente, index absent) mais les deux cohabitent : <code>df.to_pandas()</code> et <code>pl.from_pandas()</code> sont peu coûteux grâce à Arrow.</p>
+
+    <h2 id="dask">4. Dask, Spark, Ray : passer à l'échelle</h2>
+    <p><strong>Dask</strong> découpe un grand DataFrame en partitions (des DataFrames pandas), construit un graphe de tâches, puis l'exécute en parallèle — sur plusieurs cœurs ou plusieurs machines, en traitant les partitions au fur et à mesure (<em>out-of-core</em>) plutôt qu'en chargeant tout en mémoire.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import dask.dataframe as dd
+
+ddf = dd.read_parquet("s3://bucket/annee=2025/*.parquet")   # graphe, rien n'est chargé
+resultat = (
+    ddf[ddf.montant &gt; 0]
+       .groupby("client_id")
+       .montant.sum()
+)
+out = resultat.compute()      # déclenche le calcul, renvoie une Series pandas</pre></div>
+
+    <p>Le point délicat est le <em>shuffle</em> : toute opération qui redistribue les données entre partitions (<code>groupby</code> sur une clé non triée, jointure sur une colonne quelconque, <code>sort_values</code>) impose de tout faire transiter par le réseau ou le disque. C'est là que passe l'essentiel du temps, et la raison pour laquelle un pipeline distribué mal conçu est plus lent qu'un pipeline local.</p>
+
+    <ul>
+      <li><strong>Dask</strong> — même API que pandas/NumPy, idéal pour passer d'un poste de travail à un cluster sans réécrire ;</li>
+      <li><strong>Spark</strong> (PySpark) — l'écosystème d'entreprise, très mature, adapté aux vrais téraoctets, avec un coût opérationnel élevé ;</li>
+      <li><strong>Ray</strong> — orienté calcul distribué générique (entraînement, tuning, RL, servage) plutôt que DataFrames.</li>
+    </ul>
+
+    <h2 id="choisir">5. Quel outil pour quelle taille de données</h2>
+    <div class="code-label">arbre de décision</div>
+    <div class="code-block"><pre>Volume            Outil recommandé                    Remarque
+──────────────────────────────────────────────────────────────────────────────
+&lt; 1 Go            pandas ou polars                    tout tient en RAM, choisir par goût
+1 – 50 Go         polars (lazy) ou DuckDB             la RAM d'une machine moderne suffit
+                                                       encore : ne pas distribuer trop tôt
+50 – 500 Go       polars streaming, DuckDB, Dask      une grosse machine coûte souvent moins
+                                                       cher qu'un cluster mal exploité
+&gt; 500 Go          Spark, Dask sur cluster             la complexité devient justifiée
+Tableaux denses   NumPy (+ Numba)                     calcul numérique pur
+GPU               PyTorch, CuPy, cuDF                 si le calcul est massivement parallèle</pre></div>
+
+    <div class="step-block">
+      <h4>Le conseil qui fait gagner le plus de temps</h4>
+      <p>La plupart des jeux de données présentés comme « trop gros » tiennent en mémoire une fois convertis en Parquet, les colonnes inutiles supprimées et les types réduits. Avant de monter un cluster : convertir le CSV en Parquet (compression 5 à 10×, lecture par colonnes), garder les colonnes utiles, échantillonner pour l'exploration. Un cluster mal utilisé est plus lent, plus cher et beaucoup plus difficile à déboguer qu'un ordinateur portable bien utilisé.</p>
+    </div>
+
+    <h2 id="sklearn">6. scikit-learn : l'API qui structure tout</h2>
+    <p>La vraie valeur de scikit-learn n'est pas sa collection d'algorithmes, c'est la régularité de son interface. Trois verbes, et tout objet de l'écosystème s'y conforme :</p>
+    <ul>
+      <li><code>fit(X, y)</code> — apprend des paramètres <em>et les stocke dans l'objet</em> (attributs suffixés par un tiret bas : <code>mean_</code>, <code>coef_</code>) ;</li>
+      <li><code>transform(X)</code> — applique la transformation apprise ;</li>
+      <li><code>predict(X)</code> / <code>predict_proba(X)</code> — produit la prédiction.</li>
+    </ul>
+
+    <p>La conséquence pratique est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur, donc la validation croisée réajuste <em>toute</em> la chaîne à chaque pli. C'est la protection la plus efficace contre la fuite de données (module 6) : un <code>StandardScaler</code> ajusté hors du pipeline apprendrait la moyenne du jeu de validation.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+num = ["surface", "n_pieces", "age"]
+cat = ["ville", "type_bien"]
+
+pre = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), num),
+    ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=20), cat),
+])
+
+modele = Pipeline([
+    ("pre", pre),
+    ("gbm", HistGradientBoostingRegressor(max_iter=400, learning_rate=0.05)),
+])
+
+# tout le prétraitement est réappris à chaque pli : aucune fuite possible
+scores = cross_val_score(modele, X, y, cv=5, scoring="neg_root_mean_squared_error")
+print(f"RMSE = {-scores.mean():.3f} ± {scores.std():.3f}")</pre></div>
+
+    <p>Pour une transformation maison, il suffit d'hériter de <code>BaseEstimator</code> et <code>TransformerMixin</code> pour qu'elle s'intègre partout (pipelines, recherche d'hyperparamètres, sérialisation) :</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.base import BaseEstimator, TransformerMixin
+
+class ClipOutliers(BaseEstimator, TransformerMixin):
+    """Écrête aux quantiles appris sur le train uniquement."""
+    def __init__(self, q=0.01):
+        self.q = q                       # les hyperparamètres sont des attributs simples
+
+    def fit(self, X, y=None):
+        self.lo_ = np.quantile(X, self.q, axis=0)
+        self.hi_ = np.quantile(X, 1 - self.q, axis=0)
+        return self                       # fit renvoie toujours self
+
+    def transform(self, X):
+        return np.clip(X, self.lo_, self.hi_)</pre></div>
+
+    <h2 id="torch">7. PyTorch, TensorFlow, BoTorch</h2>
+    <p>Un framework de deep learning apporte trois choses : des tenseurs qui vivent sur GPU, la différentiation automatique, et une bibliothèque de couches et d'optimiseurs. La différentiation automatique est le cœur : pendant le calcul, le framework enregistre le graphe des opérations, puis le remonte en appliquant la règle de dérivation composée pour obtenir les gradients — sans que l'on ait à dériver quoi que ce soit à la main (module 4).</p>
+
+    <div class="code-label">Python — PyTorch</div>
+    <div class="code-block"><pre>import torch
+
+x = torch.randn(64, 10, device="cuda")
+w = torch.randn(10, 1, device="cuda", requires_grad=True)
+b = torch.zeros(1, device="cuda", requires_grad=True)
+
+y_pred = x @ w + b
+perte = ((y_pred - y) ** 2).mean()
+
+perte.backward()          # remonte le graphe : remplit w.grad et b.grad
+print(w.grad.shape)       # (10, 1)
+
+with torch.no_grad():     # mise à jour manuelle : pas de graphe à construire ici
+    w -= 0.01 * w.grad
+    w.grad.zero_()        # les gradients s'ACCUMULENT : oublier ce reset est un bug classique</pre></div>
+
+    <div class="code-label">PyTorch vs TensorFlow en 2026</div>
+    <div class="code-block"><pre>                    PyTorch                      TensorFlow / Keras
+Style               impératif ("eager")          graphe, ou Keras de haut niveau
+Débogage            pdb, print : du Python       plus indirect
+Recherche           domine très largement        minoritaire
+Production          TorchServe, vLLM, ONNX       TF Serving, TFLite, écosystème mobile mûr
+Compilation         torch.compile                XLA / jit_compile
+À apprendre         oui, par défaut              si l'existant de l'équipe l'impose</pre></div>
+
+    <p>Pour un apprentissage aujourd'hui, PyTorch est le choix par défaut : c'est la langue de la recherche, donc celle dans laquelle les nouveautés arrivent en premier. <code>torch.compile</code> réconcilie confort et performance en compilant le graphe à la volée. JAX est un troisième acteur, élégant (fonctions pures, <code>grad</code>, <code>vmap</code>, <code>jit</code>) et très utilisé en recherche scientifique.</p>
+
+    <p><strong>BoTorch</strong> est une bibliothèque construite sur PyTorch pour l'optimisation bayésienne : modèles de substitution par processus gaussiens, fonctions d'acquisition différentiables, optimisation multi-objectif. Son intérêt pour un profil ingénieur est direct — optimiser un système dont chaque évaluation coûte cher (une simulation, un essai physique). C'est l'objet du <a href="project7-m09.html">module 9</a>.</p>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>NumPy : vue contre copie, broadcasting (en surveillant la taille des intermédiaires), vectorisation plutôt que boucle, dtypes choisis.</li>
+        <li>pandas pour l'ergonomie et l'écosystème ; polars pour la vitesse, le multi-threading et l'optimisation de requêtes.</li>
+        <li>Ne pas distribuer trop tôt : Parquet, colonnes utiles et types réduits règlent la majorité des problèmes de volume.</li>
+        <li>scikit-learn : tout passer par des <code>Pipeline</code>, c'est la meilleure assurance contre la fuite de données.</li>
+        <li>PyTorch comme framework par défaut ; les gradients s'accumulent, il faut les remettre à zéro.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m02.html" class="btn btn-secondary">← Module 2 : Données et déploiement</a>
+  <a href="project7-m04.html" class="btn btn-primary">Module 4 : Mathématiques du ML →</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">NumPy</span><span class="tag">pandas</span><span class="tag">polars</span><span class="tag">Dask</span><span class="tag">scikit-learn</span><span class="tag">PyTorch</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m03-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 3</div>
+    <h1>Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>NumPy internals: shape, dtype and strides; views vs copies; broadcasting and the memory blow-ups it hides; real vectorisation and when Numba beats it.</li>
+      <li>pandas: method chaining, split-apply-combine, and the three classic traps (<code>SettingWithCopyWarning</code>, row-wise <code>apply</code>, memory footprint).</li>
+      <li>polars: Arrow-backed, multi-threaded, lazy execution with projection and predicate pushdown.</li>
+      <li>Dask, Spark and Ray: partitions, task graphs, and why shuffles dominate distributed runtimes.</li>
+      <li>A decision table for picking a tool by data size — and why most "too big" datasets are not.</li>
+      <li>scikit-learn: the estimator API, pipelines and <code>ColumnTransformer</code> as leakage protection, writing a custom transformer.</li>
+      <li>PyTorch vs TensorFlow, automatic differentiation in practice, and a first look at BoTorch.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
+        <li><strong>Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</strong></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
