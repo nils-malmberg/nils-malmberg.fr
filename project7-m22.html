@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 22 - Théorie de l'apprentissage : pourquoi ça généralise - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m22-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 22</div>
+    <h1>Théorie de l'apprentissage : pourquoi ça généralise</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Tout le cours repose sur un pari implicite : un modèle ajusté sur \(n\) exemples fonctionnera sur des données jamais vues. Rien ne le garantit a priori — un modèle peut parfaitement mémoriser son jeu d'entraînement sans rien avoir appris. Ce module expose ce que la théorie sait démontrer, ce qu'elle ne sait pas expliquer (notamment le succès des réseaux profonds), et ce qu'un praticien doit en retenir.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#pac">Le cadre PAC</a></li>
+        <li><a href="#vc">Dimension VC et complexité de Rademacher</a></li>
+        <li><a href="#nfl">Pas de repas gratuit : le biais inductif</a></li>
+        <li><a href="#double">Double descente et sur-paramétrisation</a></li>
+        <li><a href="#implicite">La régularisation implicite de SGD</a></li>
+        <li><a href="#autres">Stabilité, PAC-Bayes, compression</a></li>
+        <li><a href="#limites">Ce que la théorie n'explique pas</a></li>
+        <li><a href="#pratique">Ce qu'on en retient en pratique</a></li>
+      </ol>
+    </div>
+
+    <h2 id="pac">1. Le cadre PAC</h2>
+    <p>Le cadre <em>probablement approximativement correct</em> (Valiant, 1984) formalise l'objectif : avec une probabilité d'au moins \(1-\delta\) sur le tirage de l'échantillon, l'erreur réelle doit être proche de l'erreur empirique. On veut borner l'écart de généralisation :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(h) - \hat{R}_n(h), \qquad R(h)=\mathbb{E}_{(x,y)\sim\mathcal D}\big[\ell(h(x),y)\big], \quad \hat R_n(h)=\frac1n\sum_{i=1}^n \ell(h(x_i),y_i) \]</div>
+
+    <p>Pour une hypothèse <em>fixée à l'avance</em>, l'inégalité de Hoeffding suffit : l'écart est en \(O(1/\sqrt{n})\). Mais on choisit \(h\) <em>après</em> avoir vu les données, parmi toute une classe \(\mathcal{H}\) — et le maximum d'un grand nombre d'écarts est bien plus grand que chacun d'eux. D'où une borne uniforme, qui pour une classe finie s'écrit :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(h) \;\leq\; \hat R_n(h) + \sqrt{\frac{\log|\mathcal{H}| + \log(1/\delta)}{2n}} \qquad \text{pour tout } h \in \mathcal{H} \]</div>
+
+    <p>La structure de ce résultat est l'essentiel : l'erreur réelle est majorée par l'erreur observée plus un terme de <strong>complexité</strong> divisé par \(\sqrt{n}\). Plus la classe de modèles est riche, plus il faut de données pour que l'erreur empirique reste informative. C'est la formalisation exacte du surapprentissage, et la justification théorique de la régularisation (module 4).</p>
+
+    <h2 id="vc">2. Dimension VC et complexité de Rademacher</h2>
+    <p>Pour une classe infinie — tous les hyperplans, tous les réseaux d'une architecture donnée —, \(\log|\mathcal H|\) n'a plus de sens. La <strong>dimension de Vapnik-Chervonenkis</strong> le remplace : c'est le plus grand nombre de points que la classe peut <em>pulvériser</em>, c'est-à-dire séparer selon les \(2^d\) étiquetages possibles. Un hyperplan en dimension \(p\) a une dimension VC de \(p+1\). La borne devient :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(h) \leq \hat R_n(h) + O\!\left(\sqrt{\frac{d_{VC}\log(n/d_{VC}) + \log(1/\delta)}{n}}\right) \]</div>
+    <p>La lecture pratique : il faut environ autant d'exemples que de « degrés de liberté effectifs » pour espérer généraliser. La <strong>complexité de Rademacher</strong> raffine en mesurant la capacité de la classe à s'ajuster à du <em>bruit pur</em> (des étiquettes tirées au hasard) — une définition plus fine, dépendante des données et de leur distribution, donc souvent bien moins pessimiste.</p>
+
+    <div class="step-block">
+      <h4>Ce que ces bornes valent réellement</h4>
+      <p>Elles sont <em>pire cas</em>, valables pour toute distribution, et uniformes sur toute la classe. Cela les rend correctes mais très lâches : appliquées à un réseau moderne, dont le nombre de paramètres dépasse largement le nombre d'exemples, elles donnent des bornes supérieures à 1 — donc vides, puisqu'une probabilité d'erreur est déjà inférieure à 1. Leur valeur est <strong>conceptuelle</strong> : elles disent <em>quelles quantités</em> gouvernent la généralisation (complexité effective, taille d'échantillon, marge), pas <em>combien</em> vaut l'erreur. Confondre les deux mène à des conclusions fausses dans les deux sens.</p>
+    </div>
+
+    <h2 id="nfl">3. Pas de repas gratuit : le biais inductif</h2>
+    <p>Le théorème du <em>no free lunch</em> (Wolpert) énonce que, moyenné sur <strong>toutes</strong> les fonctions cibles possibles, tous les algorithmes d'apprentissage ont la même performance. Aucun n'est universellement supérieur. Ce résultat, souvent cité comme une curiosité, dit quelque chose de fondamental : <strong>apprendre est impossible sans hypothèse préalable</strong>. Ce qui fonctionne en pratique fonctionne parce que le monde réel n'est pas un tirage uniforme parmi toutes les fonctions : il est structuré — régularité, localité, hiérarchie, invariances, parcimonie.</p>
+    <p>D'où la notion centrale de <strong>biais inductif</strong> : l'ensemble des hypothèses qu'un modèle incorpore avant de voir les données. Une convolution suppose la localité et l'invariance par translation ; un arbre suppose des effets de seuil ; un noyau RBF suppose une régularité ; un modèle linéaire suppose l'additivité ; une attention suppose des dépendances à longue portée. Choisir un modèle, c'est parier sur la structure du problème — et le module 8 le formulait déjà ainsi. La conséquence pratique est nette : <em>la connaissance du domaine est un gain de performance</em>, pas un supplément d'âme. Imposer une symétrie connue ou une loi de conservation (module 16) vaut souvent mieux que dix fois plus de données.</p>
+
+    <h2 id="double">4. Double descente et sur-paramétrisation</h2>
+    <p>La théorie classique prédit une courbe en U : l'erreur de test décroît puis remonte quand la capacité augmente. Les réseaux profonds contredisent apparemment ce tableau — un modèle à des milliards de paramètres ajusté à erreur d'entraînement nulle généralise très bien. La <strong>double descente</strong> réconcilie les observations :</p>
+
+    <div class="code-label">l'allure réelle de la courbe</div>
+    <div class="code-block"><pre>Régime SOUS-paramétré    capacité ↑ → erreur de test ↓ puis ↑   (le U classique)
+Seuil d'interpolation    capacité ≈ nombre d'exemples : PIC d'erreur. Le modèle atteint
+                         tout juste l'erreur nulle et n'a AUCUNE marge de manœuvre :
+                         la solution est unique et très instable.
+Régime SUR-paramétré     capacité ≫ n : l'erreur de test REDESCEND, souvent en dessous
+                         du meilleur point du premier régime.</pre></div>
+
+    <p>L'explication tient à l'existence de multiples solutions. Au-delà du seuil d'interpolation, une infinité de paramétrages atteignent une erreur d'entraînement nulle ; l'algorithme d'optimisation en choisit un, et il se trouve qu'il choisit systématiquement une solution « simple » au sens d'une norme. Autrement dit, ce n'est plus la <em>taille</em> de la classe qui gouverne la généralisation, mais la solution que l'optimiseur sélectionne à l'intérieur de cette classe. La complexité pertinente n'est pas le nombre de paramètres.</p>
+
+    <h2 id="implicite">5. La régularisation implicite de SGD</h2>
+    <p>Cette sélection a un nom : la régularisation implicite. Dans le cas linéaire séparable, la descente de gradient sur une perte logistique converge vers le <strong>séparateur à marge maximale</strong> — le même que celui du SVM (module 7) — sans qu'aucune régularisation n'ait été écrite. Sur un système sous-déterminé avec perte quadratique, elle converge vers la solution de <strong>norme minimale</strong>, exactement celle que donne la pseudo-inverse (module 4).</p>
+    <p>À cela s'ajoutent des effets bien documentés empiriquement : le bruit stochastique des mini-lots favorise les minima « plats », dont on observe qu'ils généralisent mieux que les minima « pointus » ; un grand taux d'apprentissage empêche de s'installer trop tôt dans une vallée étroite, ce qui explique pourquoi le <em>warmup</em> puis la décroissance (module 4) ne sont pas que des recettes ; et l'arrêt anticipé est lui-même une régularisation, équivalente dans le cas linéaire à une pénalité de type ridge. La conclusion théorique importante : <strong>l'algorithme d'optimisation fait partie du modèle</strong>. On n'entraîne pas « une classe de fonctions », on entraîne un couple architecture-optimiseur, et ce couple porte le biais inductif.</p>
+
+    <h2 id="autres">6. Stabilité, PAC-Bayes, compression</h2>
+    <p>Trois approches modernes donnent des bornes plus informatives que la dimension VC :</p>
+    <ul>
+      <li><strong>Stabilité algorithmique</strong> — si changer un seul exemple d'entraînement modifie peu la fonction apprise, l'algorithme généralise. Le résultat est élégant car il porte sur l'<em>algorithme</em> et non sur la classe : SGD avec un pas décroissant est stable, ce qui donne directement une borne.</li>
+      <li><strong>PAC-Bayes</strong> — borne l'erreur d'une distribution de prédicteurs par son erreur empirique plus une divergence KL à une distribution a priori. C'est le cadre qui produit aujourd'hui les bornes <em>non vides</em> les plus serrées pour des réseaux de neurones, et il éclaire au passage le lien avec la platitude des minima (un minimum plat tolère du bruit sur les poids, donc une distribution large, donc une faible divergence).</li>
+      <li><strong>Bornes par compression</strong> — si un réseau entraîné peut être fortement compressé (élagage, quantification) sans perte, sa complexité effective est faible, et cela se traduit en borne. Ce point de vue relie généralisation et compressibilité, avec un écho direct aux pratiques du module 21.</li>
+    </ul>
+
+    <h2 id="limites">7. Ce que la théorie n'explique pas</h2>
+    <div class="warning-block">
+      <strong>L'état honnête de la question.</strong> Aucune théorie ne prédit aujourd'hui, avant entraînement, la performance de généralisation d'un réseau profond donné sur un problème donné. L'expérience de Zhang et ses coauteurs (2017) l'a montré de façon frappante : les mêmes réseaux qui généralisent parfaitement sur des images réelles peuvent aussi apprendre par cœur les mêmes images avec des <em>étiquettes aléatoires</em>. Leur capacité est donc largement suffisante pour mémoriser ; ce qui les fait généraliser n'est pas une limitation de capacité, mais l'interaction entre la structure des données, l'architecture et l'optimiseur. Ce que la théorie ne couvre pas non plus : les capacités émergentes des grands modèles, l'efficacité du transfert, la robustesse hors distribution, et la raison pour laquelle certaines architectures surpassent les autres. La pratique a plusieurs années d'avance sur la théorie dans ce domaine — et il vaut mieux le dire que de le masquer.
+    </div>
+
+    <h2 id="pratique">8. Ce qu'on en retient en pratique</h2>
+    <ul>
+      <li><strong>La complexité effective compte, pas le nombre de paramètres.</strong> Un grand modèle bien régularisé peut généraliser mieux qu'un petit modèle mal contraint.</li>
+      <li><strong>Le biais inductif est une ressource.</strong> Encoder une invariance connue, une contrainte physique ou une structure du domaine vaut souvent mieux que davantage de données.</li>
+      <li><strong>L'optimiseur fait partie du modèle.</strong> Taille de lot, taux d'apprentissage et arrêt anticipé changent la solution atteinte, pas seulement la vitesse pour y arriver.</li>
+      <li><strong>Les garanties sont rarement des nombres utilisables.</strong> Pour une estimation chiffrée de la performance, la validation croisée (module 6) et un jeu de test intouché restent les seuls outils fiables ; pour une garantie utilisable en production, la prédiction conforme (module 13) donne une couverture démontrable.</li>
+      <li><strong>Le no free lunch a une conséquence méthodologique.</strong> Comparer des modèles sans tenir compte du domaine n'a pas de sens universel : un benchmark ne transfère pas automatiquement à votre problème.</li>
+    </ul>
+
+    <hr class="divider">
+
+    <h2 id="fin">Fin des approfondissements</h2>
+    <p>Ce module referme le second cycle du cours. Les douze premiers modules forment le tronc commun, de l'environnement Python au modèle surveillé en production ; les dix suivants traitent ce que ce tronc laissait de côté — l'incertitude, le temps, les données non tabulaires, la simulation, le budget d'annotation, la décision, la responsabilité, le matériel, et enfin la théorie.</p>
+    <p>S'il fallait retenir une seule idée de l'ensemble : <em>presque tout ce qui décide du succès d'un projet se trouve en dehors de l'algorithme</em> — dans la formulation du problème, la qualité des données, le protocole d'évaluation, la traduction en décision, et la lucidité sur ce que le modèle ne sait pas. Les algorithmes, eux, sont la partie documentée.</p>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Les bornes PAC/VC donnent la bonne <em>structure</em> — erreur empirique plus terme de complexité en \(1/\sqrt{n}\) — mais des valeurs numériques inutilisables en deep learning.</li>
+        <li>Sans biais inductif, pas d'apprentissage : le no free lunch en fait une nécessité mathématique.</li>
+        <li>La double descente montre que le nombre de paramètres n'est pas la bonne mesure de complexité.</li>
+        <li>SGD régularise implicitement : marge maximale, norme minimale, minima plats.</li>
+        <li>Stabilité, PAC-Bayes et compression expliquent mieux le deep learning que la dimension VC.</li>
+        <li>Pour un chiffre fiable, mesurer ; pour une garantie utilisable, conformaliser.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m21.html" class="btn btn-secondary">← Module 21 : Passer à l'échelle</a>
+  <a href="project7.html" class="btn btn-primary">Retour au sommaire du cours</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">PAC</span><span class="tag">Dimension VC</span><span class="tag">No free lunch</span><span class="tag">Double descente</span><span class="tag">PAC-Bayes</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m22-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 22</div>
+    <h1>Learning theory: why generalisation happens</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>The PAC framework: bounding the generalisation gap, and why choosing a hypothesis after seeing the data requires uniform bounds.</li>
+      <li>VC dimension and Rademacher complexity, with an honest account of how loose these bounds are for modern networks — and why they are still conceptually valuable.</li>
+      <li>The no free lunch theorem and inductive bias: learning is impossible without prior assumptions, which makes domain knowledge a performance lever rather than a nicety.</li>
+      <li>Double descent and over-parameterisation: the interpolation threshold, and why parameter count is not the right complexity measure.</li>
+      <li>Implicit regularisation of gradient descent: maximum-margin and minimum-norm solutions, flat minima, early stopping as regularisation — and the conclusion that the optimiser is part of the model.</li>
+      <li>Modern approaches that explain deep learning better: algorithmic stability, PAC-Bayes (the source of today's tightest non-vacuous bounds) and compression bounds.</li>
+      <li>What theory still cannot explain, including the random-label experiment that shows capacity is not what limits memorisation.</li>
+      <li>Practical takeaways, and the closing note of the whole course.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m17.html">Learning with few labels</a></li>
+        <li><a href="project7-m18.html">From scores to decisions</a></li>
+        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><strong>Learning theory: why generalisation happens</strong></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
