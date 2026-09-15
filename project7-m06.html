@@ -174,7 +174,7 @@ Hashing          projette dans un espace fixe. Utile en streaming, perd l'interp
 Embeddings       représentation apprise, dense. Pour les réseaux de neurones (module 8).</pre></div>
 
     <p>Le <strong>target encoding</strong> mérite un mot, car il est à la fois redoutable et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute mais une moyenne lissée vers la moyenne globale :</p>
-    <div style="text-align:center">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
     <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> (chaque pli encodé avec les statistiques des autres plis), faute de quoi chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
 
     <h3>Variables numériques et temporelles</h3>

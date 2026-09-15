@@ -71,7 +71,7 @@
 
     <h2 id="embeddings">2. Embeddings et similarité sémantique</h2>
     <p>Un embedding projette un texte dans \(\mathbb{R}^d\) (typiquement \(d\) de 384 à 3072) de sorte que la proximité géométrique traduise la proximité de sens. La mesure usuelle est le cosinus :</p>
-    <div style="text-align:center">\[ \operatorname{sim}(u,v) = \frac{u^\top v}{\|u\|\,\|v\|} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \operatorname{sim}(u,v) = \frac{u^\top v}{\|u\|\,\|v\|} \]</div>
     <p>On compare des <em>directions</em>, pas des amplitudes — c'est ce qu'on veut, car la norme d'un embedding dépend surtout de la longueur du texte. Si les vecteurs sont normalisés, cosinus et produit scalaire coïncident, et maximiser le cosinus revient à minimiser la distance euclidienne : d'où les optimisations des bases vectorielles, qui normalisent systématiquement.</p>
 
     <p>Ces représentations sont apprises de façon <strong>contrastive</strong> : on rapproche les paires de textes liés (une question et son passage de réponse) et on éloigne les paires non liées. C'est la raison pour laquelle un modèle d'embedding pour la recherche est entraîné différemment d'un modèle de similarité entre phrases — et pourquoi le choix du modèle doit correspondre à l'usage. Le classement <em>MTEB</em> compare ces modèles tâche par tâche ; en pratique, un modèle multilingue de taille moyenne suffit largement pour un corpus francophone, et il tourne sur CPU.</p>
@@ -170,7 +170,7 @@ def repondre(question: str, k_dense: int = 50, k_final: int = 5) -&gt; str:
 
     <h2 id="finetuning">7. Fine-tuning : LoRA, QLoRA, DPO</h2>
     <p>Réentraîner tous les poids d'un modèle de 7 milliards de paramètres demande des dizaines de gigaoctets de VRAM (poids, gradients, états de l'optimiseur). L'<strong>ajustement à faible rang</strong> contourne le problème : on gèle les poids \(W\) et on n'apprend qu'une correction de rang faible.</p>
-    <div style="text-align:center">\[ W' = W + \Delta W = W + BA, \qquad B \in \mathbb{R}^{d\times r},\; A \in \mathbb{R}^{r\times d},\; r \ll d \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ W' = W + \Delta W = W + BA, \qquad B \in \mathbb{R}^{d\times r},\; A \in \mathbb{R}^{r\times d},\; r \ll d \]</div>
     <p>Avec \(r\) de 8 à 64, on entraîne moins de 1 % des paramètres, pour une qualité très proche du fine-tuning complet. C'est exactement l'hypothèse de rang faible du module 4 : l'adaptation à une tâche vit dans un sous-espace de petite dimension. <strong>QLoRA</strong> ajoute la quantification du modèle de base en 4 bits, ce qui permet d'ajuster un modèle de 7 milliards de paramètres sur une seule carte grand public.</p>
 
     <div class="code-label">quelle méthode pour quel besoin</div>

@@ -171,7 +171,7 @@ Toujours               possibilité de revenir en arrière en une commande</pre>
     </ul>
 
     <p>Pour détecter une dérive sans attendre les étiquettes — qui arrivent souvent avec des semaines de retard —, on surveille les distributions d'entrée. L'indice de stabilité de population compare les proportions par intervalle entre référence et période courante :</p>
-    <div style="text-align:center">\[ \text{PSI} = \sum_{i=1}^{B} (p_i - q_i)\,\ln\!\frac{p_i}{q_i} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \text{PSI} = \sum_{i=1}^{B} (p_i - q_i)\,\ln\!\frac{p_i}{q_i} \]</div>
     <p>Lecture usuelle : PSI &lt; 0,1 stable ; 0,1 – 0,25 dérive modérée à surveiller ; &gt; 0,25 dérive significative. On complète par un test de Kolmogorov-Smirnov pour les variables continues et un chi² pour les catégorielles (module 5), en se rappelant que sur de gros volumes, ces tests détectent des écarts statistiquement significatifs mais opérationnellement négligeables : c'est l'<em>ampleur</em> qui doit déclencher l'alerte, pas la p-value.</p>
 
     <div class="code-label">ce qu'il faut surveiller, par ordre de priorité</div>

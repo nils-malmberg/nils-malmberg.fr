@@ -66,7 +66,7 @@
 
     <h2 id="biais-variance">1. Biais, variance et capacité</h2>
     <p>Pour une prédiction en un point \(x\), l'erreur quadratique attendue se décompose en trois termes :</p>
-    <div style="text-align:center">\[ \mathbb{E}\big[(y - \hat{f}(x))^2\big] = \underbrace{\big(\mathbb{E}[\hat f(x)] - f(x)\big)^2}_{\text{biais}^2} + \underbrace{\operatorname{Var}\big(\hat f(x)\big)}_{\text{variance}} + \underbrace{\sigma^2}_{\text{bruit irréductible}} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \mathbb{E}\big[(y - \hat{f}(x))^2\big] = \underbrace{\big(\mathbb{E}[\hat f(x)] - f(x)\big)^2}_{\text{biais}^2} + \underbrace{\operatorname{Var}\big(\hat f(x)\big)}_{\text{variance}} + \underbrace{\sigma^2}_{\text{bruit irréductible}} \]</div>
 
     <p>Le <strong>biais</strong> mesure l'erreur systématique due à l'hypothèse de modèle (une droite ne peut pas épouser une parabole) ; la <strong>variance</strong>, la sensibilité au jeu d'entraînement particulier ; le <strong>bruit</strong> est la part qu'aucun modèle ne peut expliquer. Augmenter la capacité du modèle baisse le biais et monte la variance. Le surapprentissage, c'est le régime où la seconde l'emporte.</p>
 
@@ -89,7 +89,7 @@ Elastic-Net       combinaison des 2  compromis : sélection ET stabilité sur gr
     <p>L'intuition géométrique de la différence : on minimise l'erreur sous la contrainte que \(\beta\) reste dans une boule. La boule \(L^2\) est ronde, donc la solution optimale la touche presque toujours en un point où aucune coordonnée n'est nulle. La boule \(L^1\) est un losange à coins pointus <em>sur les axes</em> : le contact se fait fréquemment sur un coin, c'est-à-dire avec des coefficients exactement nuls. Le module 4 en donne la lecture spectrale pour ridge — un filtrage qui écrase les directions de faible variance.</p>
 
     <p>La <strong>régression logistique</strong> transpose cela à la classification en modélisant le logarithme de la cote :</p>
-    <div style="text-align:center">\[ \log\frac{p(x)}{1-p(x)} = \beta_0 + \beta^\top x \qquad \Longleftrightarrow \qquad p(x) = \frac{1}{1+e^{-(\beta_0+\beta^\top x)}} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \log\frac{p(x)}{1-p(x)} = \beta_0 + \beta^\top x \qquad \Longleftrightarrow \qquad p(x) = \frac{1}{1+e^{-(\beta_0+\beta^\top x)}} \]</div>
     <p>Elle s'estime par maximum de vraisemblance (donc minimisation de l'entropie croisée), et ses coefficients s'interprètent en <em>odds ratios</em> : \(e^{\beta_j}\) est le facteur multiplicatif sur la cote quand \(x_j\) augmente d'une unité. C'est le modèle de référence quand l'explication compte autant que la performance — scoring de crédit, épidémiologie — et il produit des probabilités naturellement bien calibrées.</p>
 
     <div class="warning-block">
@@ -98,7 +98,7 @@ Elastic-Net       combinaison des 2  compromis : sélection ET stabilité sur gr
 
     <h2 id="svm">3. SVM et astuce du noyau</h2>
     <p>Une machine à vecteurs de support cherche l'hyperplan séparateur qui maximise la <strong>marge</strong>, c'est-à-dire la distance aux points les plus proches. La formulation à marge souple autorise des violations contrôlées par \(C\) :</p>
-    <div style="text-align:center">\[ \min_{w,b}\; \tfrac{1}{2}\|w\|^2 + C\sum_i \max\big(0,\, 1 - y_i(w^\top x_i + b)\big) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \min_{w,b}\; \tfrac{1}{2}\|w\|^2 + C\sum_i \max\big(0,\, 1 - y_i(w^\top x_i + b)\big) \]</div>
     <p>Seuls les points sur ou à l'intérieur de la marge — les <em>vecteurs de support</em> — déterminent la solution : le modèle est insensible aux points éloignés de la frontière, ce qui le rend robuste.</p>
 
     <p>L'<strong>astuce du noyau</strong> est l'idée élégante : la solution ne dépend des données qu'à travers des produits scalaires \(x_i^\top x_j\). En les remplaçant par une fonction noyau \(k(x_i,x_j)\), on travaille implicitement dans un espace de dimension bien plus grande — voire infinie pour le noyau RBF \(k(x,x') = \exp(-\gamma\|x-x'\|^2)\) — <em>sans jamais calculer les coordonnées dans cet espace</em>. Une frontière non linéaire dans l'espace d'origine devient linéaire dans l'espace induit. On retrouvera exactement ce mécanisme dans les processus gaussiens (module 9).</p>
@@ -137,7 +137,7 @@ print(rf.oob_score_)</pre></div>
     <p>Là où le bagging construit des modèles en parallèle pour réduire la variance, le boosting les construit <em>en séquence</em> pour réduire le biais : chaque nouveau modèle corrige les erreurs résiduelles des précédents.</p>
 
     <p>Le <strong>gradient boosting</strong> formalise cela comme une descente de gradient dans l'espace des fonctions. À l'étape \(m\), on calcule les pseudo-résidus — l'opposé du gradient de la perte par rapport à la prédiction courante — et on ajuste un arbre \(h_m\) dessus :</p>
-    <div style="text-align:center">\[ r_i^{(m)} = -\left[\frac{\partial\, \ell(y_i, F(x_i))}{\partial F(x_i)}\right]_{F = F_{m-1}}, \qquad F_m(x) = F_{m-1}(x) + \nu\, h_m(x) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ r_i^{(m)} = -\left[\frac{\partial\, \ell(y_i, F(x_i))}{\partial F(x_i)}\right]_{F = F_{m-1}}, \qquad F_m(x) = F_{m-1}(x) + \nu\, h_m(x) \]</div>
     <p>Le taux d'apprentissage \(\nu\) (<em>shrinkage</em>) amortit chaque correction. Avec la perte quadratique, les pseudo-résidus sont exactement les résidus ordinaires — d'où le nom. XGBoost raffine en utilisant aussi la dérivée seconde (approximation de Newton) et en intégrant la régularisation directement dans le critère de coupe.</p>
 
     <div class="code-label">Python — les hyperparamètres qui comptent vraiment</div>

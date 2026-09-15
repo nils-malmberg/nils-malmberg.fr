@@ -65,7 +65,7 @@
     <p>On veut connaître une quantité \(\theta\) d'une population (une moyenne, une proportion, un écart) mais on n'observe qu'un échantillon de taille \(n\). On calcule alors un <strong>estimateur</strong> \(\hat\theta\), qui est une variable aléatoire : un autre échantillon aurait donné une autre valeur. Toute la statistique inférentielle consiste à quantifier cette variabilité.</p>
 
     <p>Deux résultats suffisent à presque tout. La <strong>loi des grands nombres</strong> garantit que \(\bar X_n \to \mu\). Le <strong>théorème central limite</strong> précise <em>à quelle vitesse</em> et <em>sous quelle forme</em> :</p>
-    <div style="text-align:center">\[ \sqrt{n}\,\frac{\bar X_n - \mu}{\sigma} \xrightarrow[n\to\infty]{\mathcal{L}} \mathcal{N}(0,1) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \sqrt{n}\,\frac{\bar X_n - \mu}{\sigma} \xrightarrow[n\to\infty]{\mathcal{L}} \mathcal{N}(0,1) \]</div>
     <p>L'<strong>erreur type</strong> \(\sigma/\sqrt{n}\) décroît en \(1/\sqrt{n}\) : diviser l'incertitude par deux demande <em>quatre</em> fois plus de données. C'est la contrainte économique de fond de toute expérimentation.</p>
 
     <div class="step-block">
@@ -75,14 +75,14 @@
 
     <h2 id="ic">2. Intervalles de confiance et bootstrap</h2>
     <p>Pour une moyenne, l'intervalle de confiance à \(1-\alpha\) s'écrit :</p>
-    <div style="text-align:center">\[ \bar{x} \;\pm\; t_{n-1,\,1-\alpha/2}\,\frac{s}{\sqrt{n}} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \bar{x} \;\pm\; t_{n-1,\,1-\alpha/2}\,\frac{s}{\sqrt{n}} \]</div>
     <p>La loi de Student remplace la loi normale parce que \(\sigma\) est estimé par \(s\) ; l'écart n'est appréciable qu'en dessous de \(n \approx 30\).</p>
 
     <div class="warning-block">
       <strong>L'interprétation correcte.</strong> Un IC à 95 % ne signifie <em>pas</em> « il y a 95 % de chances que \(\mu\) soit dans cet intervalle ». Dans le cadre fréquentiste, \(\mu\) est une constante : elle y est ou elle n'y est pas. La bonne formulation porte sur la <em>procédure</em> : si on répétait l'expérience un grand nombre de fois, 95 % des intervalles ainsi construits contiendraient \(\mu\). L'énoncé probabiliste direct sur \(\mu\) existe bel et bien, mais il s'appelle un intervalle <em>crédible</em> et relève de l'approche bayésienne.
     </div>
 
-    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 (il peut sortir de [0,1] et sa couverture réelle chute bien en dessous de 95 %). L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut — c'est celui de <code>statsmodels.stats.proportion.proportion_confint(..., method="wilson")</code>.</p>
+    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 (il peut sortir de [0,1] et sa couverture réelle chute bien en dessous de 95 %). L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut — c'est celui que renvoie <code>proportion_confint</code> de statsmodels avec <code>method="wilson"</code>.</p>
 
     <h3>Le bootstrap : quand on ne sait pas calculer</h3>
     <p>Pour une médiane, un coefficient de Gini, un R², un ratio de métriques — bref dès que la loi de l'estimateur n'a pas de forme analytique commode — on rééchantillonne. L'idée, remarquablement simple : l'échantillon est notre meilleure approximation de la population, alors tirons dedans avec remise et regardons varier la statistique.</p>
@@ -116,7 +116,7 @@ print(ic_percentile, res.confidence_interval)</pre></div>
     </ol>
 
     <p>Cette dernière quantité est la <strong>p-value</strong> :</p>
-    <div style="text-align:center">\[ p = \mathbb{P}\big(|T| \geq |t_{\text{obs}}| \;\big|\; H_0 \text{ vraie}\big) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ p = \mathbb{P}\big(|T| \geq |t_{\text{obs}}| \;\big|\; H_0 \text{ vraie}\big) \]</div>
 
     <div class="warning-block">
       <strong>Ce que la p-value n'est pas.</strong><br>
@@ -137,7 +137,7 @@ Ne pas rejeter H0       décision correcte        erreur de type II (β)</pre></
     <p>\(\alpha\) est choisi (5 % par convention) : c'est le taux de faux positifs qu'on accepte. \(\beta\) se subit, sauf si on dimensionne l'expérience. La <strong>puissance</strong> \(1-\beta\) est la probabilité de détecter un effet qui existe réellement ; on la vise à 80 % ou 90 %.</p>
 
     <p>Pour comparer deux moyennes, en notant \(d = |\mu_1-\mu_2|/\sigma\) la taille d'effet de Cohen, la taille par groupe nécessaire pour \(\alpha=5\%\) et une puissance de 80 % est bien approchée par :</p>
-    <div style="text-align:center">\[ n \approx \frac{16}{d^{2}} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ n \approx \frac{16}{d^{2}} \]</div>
     <p>Un effet « moyen » (\(d=0{,}5\)) demande donc environ 64 observations par groupe ; un petit effet (\(d=0{,}2\)) en demande 400. Cette formule, faite de tête, évite de lancer des expériences qui n'avaient aucune chance de conclure.</p>
 
     <div class="code-label">Python — dimensionnement et vérification par simulation</div>

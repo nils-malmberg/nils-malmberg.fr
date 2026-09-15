@@ -94,7 +94,7 @@ softmax                          sortie multiclasse : produit une distribution.<
 
     <h2 id="backprop">3. Rétropropagation</h2>
     <p>La rétropropagation n'est rien d'autre que la règle de dérivation des fonctions composées, appliquée efficacement. Pour une perte \(L\) et une couche \(z^{(l)} = W^{(l)}a^{(l-1)}+b^{(l)}\), on définit l'erreur locale \(\delta^{(l)} = \partial L/\partial z^{(l)}\) et on la propage vers l'arrière :</p>
-    <div style="text-align:center">\[ \delta^{(l)} = \big(W^{(l+1)\top}\delta^{(l+1)}\big)\odot \sigma'\!\big(z^{(l)}\big), \qquad \frac{\partial L}{\partial W^{(l)}} = \delta^{(l)}\,a^{(l-1)\top} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \delta^{(l)} = \big(W^{(l+1)\top}\delta^{(l+1)}\big)\odot \sigma'\!\big(z^{(l)}\big), \qquad \frac{\partial L}{\partial W^{(l)}} = \delta^{(l)}\,a^{(l-1)\top} \]</div>
     <p>L'astuce algorithmique tient en une phrase : en réutilisant les \(\delta\) déjà calculés, le coût du gradient complet est du même ordre que celui d'une passe avant — et non proportionnel au nombre de paramètres, comme le serait une différentiation numérique.</p>
 
     <p>Le produit de matrices sur toute la profondeur explique aussi les pathologies classiques : si les termes sont systématiquement inférieurs à 1, le gradient <strong>s'évanouit</strong> et les premières couches n'apprennent plus ; s'ils dépassent 1, il <strong>explose</strong>. Les trois remèdes structurels sont les connexions résiduelles (section 5), la normalisation (section 4) et l'écrêtage du gradient (module 4).</p>
@@ -146,7 +146,7 @@ for p in modele.layer4.parameters():
 
     <h2 id="transformers">7. Transformers et attention</h2>
     <p>Le mécanisme d'attention répond à une question simple : pour produire la représentation du mot \(i\), quels autres mots faut-il regarder, et avec quel poids ? Chaque position projette son vecteur en trois rôles — <em>requête</em> \(Q\), <em>clé</em> \(K\), <em>valeur</em> \(V\) — et l'on calcule :</p>
-    <div style="text-align:center">\[ \operatorname{Attention}(Q,K,V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \operatorname{Attention}(Q,K,V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V \]</div>
 
     <p>Le produit \(QK^\top\) mesure la compatibilité entre chaque requête et chaque clé ; le softmax en fait des poids sommant à 1 ; on en tire une moyenne pondérée des valeurs. La division par \(\sqrt{d_k}\) est indispensable : sans elle, les produits scalaires en grande dimension ont une variance proportionnelle à \(d_k\), le softmax sature et le gradient disparaît.</p>
 
@@ -173,7 +173,7 @@ Encodeur-décodeur T5, traduction — l'architecture d'origine</pre></div>
     <p>Les <em>Physics-Informed Neural Networks</em> répondent à une situation fréquente en ingénierie : on connaît les équations qui régissent le système, mais on a peu de données — ou l'inverse, on a des mesures et un paramètre physique inconnu à identifier. L'idée est d'ajouter le résidu de l'équation dans la fonction de perte.</p>
 
     <p>Pour une EDP \(\mathcal{N}[u](x,t) = 0\), on approche la solution par un réseau \(u_\theta(x,t)\) et on minimise :</p>
-    <div style="text-align:center">\[ \mathcal{L} = \underbrace{\frac{1}{N_d}\sum_i \big|u_\theta(x_i,t_i) - u_i\big|^2}_{\text{données}} + \lambda_b \underbrace{\mathcal{L}_{\text{bord/initial}}}_{\text{conditions}} + \lambda_f \underbrace{\frac{1}{N_f}\sum_j \big|\mathcal{N}[u_\theta](x_j,t_j)\big|^2}_{\text{résidu physique}} \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \mathcal{L} = \underbrace{\frac{1}{N_d}\sum_i \big|u_\theta(x_i,t_i) - u_i\big|^2}_{\text{données}} + \lambda_b \underbrace{\mathcal{L}_{\text{bord/initial}}}_{\text{conditions}} + \lambda_f \underbrace{\frac{1}{N_f}\sum_j \big|\mathcal{N}[u_\theta](x_j,t_j)\big|^2}_{\text{résidu physique}} \]</div>
 
     <p>Le point élégant : les dérivées de l'EDP sont obtenues par <strong>différentiation automatique</strong> du réseau lui-même, exactement et en tout point — pas de maillage, pas de schéma aux différences finies. Les points de collocation où l'on évalue le résidu peuvent être tirés au hasard dans le domaine, et ils ne coûtent aucune donnée expérimentale.</p>
 

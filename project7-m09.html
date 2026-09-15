@@ -72,12 +72,12 @@
 
     <h2 id="gp">2. Processus gaussiens : distribution sur des fonctions</h2>
     <p>Un processus gaussien est une loi de probabilité <em>sur des fonctions</em> : toute collection finie de valeurs \(\big(f(x_1),\dots,f(x_n)\big)\) suit une loi normale multivariée. Il est entièrement déterminé par une fonction moyenne (souvent prise nulle après centrage) et une fonction de covariance, le <strong>noyau</strong> :</p>
-    <div style="text-align:center">\[ f \sim \mathcal{GP}\big(m(x),\, k(x,x')\big) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ f \sim \mathcal{GP}\big(m(x),\, k(x,x')\big) \]</div>
 
     <p>L'intuition est celle de l'interpolation avec mémoire de la confiance : le noyau encode l'idée que deux points proches ont des valeurs proches. Avant toute observation, le GP est une nuée de fonctions plausibles ; chaque observation élimine celles qui ne passent pas par le point mesuré, et l'incertitude se resserre localement.</p>
 
     <p>Conditionner une loi normale par une partie de ses coordonnées donne encore une loi normale, dont moyenne et covariance sont explicites. Avec \(K = k(X,X) + \sigma_n^2 I\) et \(k_* = k(X,x_*)\) :</p>
-    <div style="text-align:center">\[ \mu_*(x_*) = k_*^\top K^{-1} y, \qquad \sigma_*^2(x_*) = k(x_*,x_*) - k_*^\top K^{-1} k_* \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \mu_*(x_*) = k_*^\top K^{-1} y, \qquad \sigma_*^2(x_*) = k(x_*,x_*) - k_*^\top K^{-1} k_* \]</div>
 
     <p>Deux lectures importantes. D'abord, la moyenne prédictive est une <em>combinaison linéaire des observations</em> pondérée par la similarité — c'est exactement une interpolation par fonctions de base radiales (le sujet de mon <a href="project5.html">projet mdisd</a>), mais assortie d'une variance. Ensuite, la variance prédictive <strong>ne dépend pas des valeurs observées</strong>, seulement de la position des points : l'incertitude est grande loin des données et petite près d'elles, ce qui est la propriété dont l'optimisation bayésienne a besoin.</p>
 
@@ -101,7 +101,7 @@ Somme / produit     k₁+k₂, k₁·k₂                   combiner : tendance 
     <p>La <strong>longueur caractéristique</strong> \(\ell\) est l'hyperparamètre décisif : elle dit à quelle distance deux points cessent de s'informer mutuellement. Petite, le GP devient nerveux et l'incertitude explose entre les points ; grande, il lisse tout. Avec une longueur par dimension (<em>Automatic Relevance Determination</em>), le modèle apprend lui-même quelles variables comptent — une grande longueur signifie que la sortie est insensible à cette entrée, ce qui constitue au passage une analyse de sensibilité gratuite.</p>
 
     <p>Les hyperparamètres (\(\ell\), \(\sigma^2\), \(\sigma_n^2\)) s'ajustent en maximisant la <strong>vraisemblance marginale</strong> :</p>
-    <div style="text-align:center">\[ \log p(y\mid X,\theta) = -\tfrac{1}{2}y^\top K^{-1}y \;-\; \tfrac{1}{2}\log|K| \;-\; \tfrac{n}{2}\log 2\pi \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \log p(y\mid X,\theta) = -\tfrac{1}{2}y^\top K^{-1}y \;-\; \tfrac{1}{2}\log|K| \;-\; \tfrac{n}{2}\log 2\pi \]</div>
     <p>Le premier terme récompense l'ajustement aux données, le second pénalise la complexité du modèle (une matrice de covariance « permissive » a un grand déterminant). Le rasoir d'Occam est ici <em>automatique</em>, sans validation croisée — c'est un des grands attraits du cadre bayésien.</p>
 
     <div class="code-label">Python — régression GP avec scikit-learn</div>
@@ -136,7 +136,7 @@ print(gp.kernel_)                               # longueurs apprises = sensibili
     <h2 id="acquisition">5. Fonctions d'acquisition</h2>
     <p>L'acquisition traduit le compromis <strong>exploitation</strong> (aller là où le modèle prédit une bonne valeur) / <strong>exploration</strong> (aller là où il ne sait rien). En notant \(f^+\) le meilleur résultat observé, \(Z = (\mu(x)-f^+-\xi)/\sigma(x)\), \(\Phi\) et \(\varphi\) les fonctions de répartition et de densité normales :</p>
 
-    <div style="text-align:center">\[ \text{EI}(x) = \big(\mu(x)-f^+-\xi\big)\Phi(Z) + \sigma(x)\,\varphi(Z) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \text{EI}(x) = \big(\mu(x)-f^+-\xi\big)\Phi(Z) + \sigma(x)\,\varphi(Z) \]</div>
 
     <p>L'<strong>amélioration espérée</strong> (EI) est l'espérance du gain par rapport au meilleur point connu. Sa structure est parlante : le premier terme récompense une moyenne élevée, le second une forte incertitude. C'est le choix par défaut — pas de paramètre à régler (\(\xi\) vaut typiquement 0,01), et un bon équilibre empirique.</p>
 

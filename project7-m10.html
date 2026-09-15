@@ -65,7 +65,7 @@
     <p>Un agent observe un état \(s_t\), choisit une action \(a_t\), reçoit une récompense \(r_{t+1}\) et se retrouve dans un nouvel état \(s_{t+1}\). Le formalisme est le <strong>processus de décision markovien</strong> \((\mathcal{S}, \mathcal{A}, P, R, \gamma)\), dont l'hypothèse centrale est la propriété de Markov : l'état contient toute l'information utile pour prédire la suite — le passé n'apporte rien de plus.</p>
 
     <p>L'agent maximise le <strong>retour</strong>, somme actualisée des récompenses futures :</p>
-    <div style="text-align:center">\[ G_t = \sum_{k=0}^{\infty}\gamma^k r_{t+k+1}, \qquad \gamma \in [0,1) \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ G_t = \sum_{k=0}^{\infty}\gamma^k r_{t+k+1}, \qquad \gamma \in [0,1) \]</div>
     <p>Le facteur \(\gamma\) joue deux rôles : il garantit la convergence de la somme, et il encode l'horizon temporel — \(\gamma = 0{,}99\) donne un horizon effectif d'environ \(1/(1-\gamma) = 100\) pas. C'est un paramètre bien plus structurant qu'il n'y paraît : le régler trop bas produit un agent myope, trop haut rend l'apprentissage instable.</p>
 
     <div class="step-block">
@@ -80,9 +80,9 @@
 
     <h2 id="valeurs">2. Fonctions de valeur et équations de Bellman</h2>
     <p>Une <strong>politique</strong> \(\pi(a\mid s)\) donne la probabilité de choisir \(a\) dans \(s\). On lui associe deux fonctions de valeur :</p>
-    <div style="text-align:center">\[ V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q^\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t=s,\, a_t=a] \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q^\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t=s,\, a_t=a] \]</div>
     <p>\(V\) évalue un état, \(Q\) évalue un couple état-action — donc \(Q\) permet de <em>choisir</em> directement, sans connaître le modèle de transition. La récursivité du retour donne l'équation de Bellman, et sa version optimale :</p>
-    <div style="text-align:center">\[ Q^\star(s,a) = \mathbb{E}\Big[r + \gamma \max_{a'} Q^\star(s',a')\Big] \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ Q^\star(s,a) = \mathbb{E}\Big[r + \gamma \max_{a'} Q^\star(s',a')\Big] \]</div>
     <p>C'est un point fixe d'un opérateur contractant (de facteur \(\gamma\)) : itérer l'opérateur converge vers \(Q^\star\), et la politique optimale s'en déduit par \(\pi^\star(s) = \arg\max_a Q^\star(s,a)\). Tout le RL par valeurs consiste à approcher ce point fixe à partir d'échantillons.</p>
 
     <h2 id="exploration">3. Exploration et exploitation</h2>
@@ -105,7 +105,7 @@ Bonus intrinsèque  récompense de curiosité (erreur de prédiction, nouveauté
       <li><strong>Différences temporelles (TD)</strong> — la grande idée : mettre à jour <em>immédiatement</em> à partir de l'estimation courante de l'état suivant, sans attendre la fin. C'est du <em>bootstrapping</em> : on apprend une estimation à partir d'une autre estimation.</li>
     </ul>
 
-    <div style="text-align:center">\[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\underbrace{r + \gamma \max_{a'}Q(s',a') - Q(s,a)}_{\text{erreur TD}}\Big] \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\underbrace{r + \gamma \max_{a'}Q(s',a') - Q(s,a)}_{\text{erreur TD}}\Big] \]</div>
 
     <p>C'est le <strong>Q-learning</strong>. Sa particularité : il apprend la valeur de la politique <em>optimale</em> (à cause du \(\max\)) tout en se comportant selon une politique exploratrice — c'est un algorithme <em>off-policy</em>, ce qui permet de réutiliser des données anciennes ou produites par un autre agent. <strong>SARSA</strong> remplace \(\max_{a'}Q(s',a')\) par \(Q(s',a')\) où \(a'\) est l'action réellement choisie : il apprend la valeur de la politique suivie, exploration comprise (<em>on-policy</em>), ce qui le rend plus prudent près des états dangereux. L'exemple canonique est la falaise : Q-learning longe le bord (trajet optimal) et tombe régulièrement pendant l'apprentissage, SARSA prend un chemin plus sûr.</p>
 
@@ -120,13 +120,13 @@ Bonus intrinsèque  récompense de curiosité (erreur de prédiction, nouveauté
 
     <h2 id="pg">6. Gradient de politique : REINFORCE, A2C, PPO</h2>
     <p>Plutôt que d'estimer des valeurs pour en déduire une politique, on paramètre directement \(\pi_\theta(a\mid s)\) et on monte le gradient de la performance. Le théorème du gradient de politique donne une forme remarquablement simple :</p>
-    <div style="text-align:center">\[ \nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a\mid s)\, A^{\pi}(s,a)\big] \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a\mid s)\, A^{\pi}(s,a)\big] \]</div>
     <p>La lecture est intuitive : on augmente la probabilité des actions dont l'<strong>avantage</strong> \(A = Q - V\) est positif (elles font mieux que la moyenne de l'état) et on diminue celle des autres. La fonction \(V\) joue ici le rôle de <em>baseline</em> : la soustraire ne change pas l'espérance du gradient mais réduit fortement sa variance — c'est ce qui rend la méthode utilisable.</p>
 
     <p><strong>REINFORCE</strong> est la version brute (avantage estimé par le retour Monte-Carlo) : correcte mais très bruitée. Les méthodes <strong>acteur-critique</strong> ajoutent un second réseau, le critique, qui estime \(V\) et fournit un avantage à faible variance (A2C, A3C, puis GAE pour un compromis biais-variance réglable).</p>
 
     <p><strong>PPO</strong> est devenu le défaut pratique. Son idée : réutiliser plusieurs fois un même lot de trajectoires pour faire plusieurs pas de gradient, tout en empêchant la politique de trop s'éloigner de celle qui a produit les données. En notant \(\rho = \pi_\theta(a|s)/\pi_{\text{old}}(a|s)\) :</p>
-    <div style="text-align:center">\[ L^{\text{CLIP}} = \mathbb{E}\Big[\min\big(\rho A,\; \operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,A\big)\Big] \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ L^{\text{CLIP}} = \mathbb{E}\Big[\min\big(\rho A,\; \operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,A\big)\Big] \]</div>
     <p>L'écrêtage annule le gain marginal dès que le rapport sort de la bande \([1-\epsilon, 1+\epsilon]\) (typiquement \(\epsilon = 0{,}2\)) : le pas reste borné, sans le calcul coûteux d'une contrainte de divergence KL comme dans TRPO. C'est simple, robuste, et c'est l'algorithme utilisé pour l'alignement des LLM par retour humain.</p>
 
     <div class="code-label">panorama des algorithmes</div>
