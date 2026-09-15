@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 13 - Probabilités, inférence bayésienne et quantification d'incertitude - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m13-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 13</div>
+    <h1>Probabilités, inférence bayésienne et quantification d'incertitude</h1>
+  </div>
+
+  <div class="project-content">
+    <p>Le module 5 traite l'inférence fréquentiste : tests, intervalles de confiance, décisions binaires. Ce module prend l'autre point de vue — traiter les paramètres eux-mêmes comme des variables aléatoires — et aboutit à la question qui manque à la plupart des modèles de machine learning : <em>à quel point cette prédiction est-elle sûre, et pourquoi ?</em> Pour un ingénieur qui doit dimensionner une marge de sécurité, c'est souvent plus important que la précision moyenne.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#lois">Les lois usuelles comme briques de modélisation</a></li>
+        <li><a href="#vraisemblance">Vraisemblance, MLE, MAP</a></li>
+        <li><a href="#bayes">Bayes comme mise à jour, et la conjugaison</a></li>
+        <li><a href="#mcmc">MCMC : quand il n'y a pas de forme close</a></li>
+        <li><a href="#hierarchique">Modèles hiérarchiques et partial pooling</a></li>
+        <li><a href="#vi">Inférence variationnelle</a></li>
+        <li><a href="#incertitude">Aléatoire contre épistémique</a></li>
+        <li><a href="#uq-ml">Quantifier l'incertitude d'un modèle de ML</a></li>
+        <li><a href="#conformal">Prédiction conforme</a></li>
+      </ol>
+    </div>
+
+    <h2 id="lois">1. Les lois usuelles comme briques de modélisation</h2>
+    <p>Choisir une loi, c'est faire une hypothèse sur le mécanisme qui a engendré les données. L'essentiel du travail de modélisation probabiliste tient dans ce choix, et il se raisonne à partir du processus physique, pas à partir de l'allure de l'histogramme.</p>
+
+    <div class="code-label">quelle loi pour quel mécanisme</div>
+    <div class="code-block"><pre>Bernoulli / Binomiale   succès-échec, nombre de succès sur n essais indépendants
+Poisson                 comptage d'événements rares dans un intervalle fixe
+                        (désintégrations, pannes, arrivées). Var = espérance.
+Binomiale négative      comptage SURDISPERSÉ (Var &gt; espérance) : le cas réel le plus
+                        fréquent, quand le taux varie lui-même d'une unité à l'autre.
+Exponentielle           temps d'attente sans mémoire entre événements poissoniens
+Weibull                 durée de vie avec taux de défaillance variable : LA loi de la
+                        fiabilité mécanique (k &lt; 1 mortalité infantile, k &gt; 1 usure)
+Gamma                   somme d'exponentielles, temps de service, priors de précision
+Beta                    une proportion inconnue dans [0,1] : le prior naturel d'un taux
+Normale                 somme de nombreux effets indépendants (TCL)
+Log-normale             PRODUIT de nombreux effets : tailles, revenus, durées, prix
+Student                 normale à queues épaisses : régression robuste aux aberrants
+Dirichlet               une distribution sur des proportions qui somment à 1</pre></div>
+
+    <div class="step-block">
+      <h4>Le réflexe qui évite les erreurs</h4>
+      <p>Une variable strictement positive et très asymétrique est rarement normale : elle est souvent log-normale ou gamma. Modéliser un temps de réparation par une loi normale conduit à des probabilités non nulles de durées négatives — ce qui se voit immédiatement dans les prédictions absurdes. De même, un comptage modélisé par une Poisson alors que les données sont surdispersées produit des intervalles de prédiction beaucoup trop étroits, et donc une fausse confiance.</p>
+    </div>
+
+    <h2 id="vraisemblance">2. Vraisemblance, MLE, MAP</h2>
+    <p>La <strong>vraisemblance</strong> est la probabilité des données observées vue comme fonction du paramètre : \(\mathcal{L}(\theta) = p(y \mid \theta)\). L'estimation du maximum de vraisemblance consiste à prendre le \(\theta\) qui rend les données les plus probables.</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MLE}} = \arg\max_\theta \sum_{i=1}^{n} \log p(y_i \mid \theta) \]</div>
+    <p>Presque toutes les fonctions de perte du cours en découlent : la perte quadratique est la log-vraisemblance d'un bruit gaussien homoscédastique, l'entropie croisée celle d'une Bernoulli, la perte de Poisson celle d'un comptage. Choisir une perte, c'est donc choisir implicitement un modèle de bruit — et l'expliciter permet de le choisir correctement plutôt que par habitude.</p>
+
+    <p>En ajoutant un <em>a priori</em> \(p(\theta)\), on obtient l'estimateur du maximum a posteriori :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MAP}} = \arg\max_\theta \big[\log p(y\mid\theta) + \log p(\theta)\big] \]</div>
+
+    <div class="warning-block">
+      <strong>La régularisation est un a priori déguisé.</strong> Avec un prior gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un prior de Laplace, on retrouve exactement le lasso. Les modules 4 et 7 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
+    </div>
+
+    <h2 id="bayes">3. Bayes comme mise à jour, et la conjugaison</h2>
+    <p>Le MAP ne retient qu'un point. L'approche bayésienne complète conserve toute la distribution :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \underbrace{p(\theta\mid y)}_{\text{a posteriori}} = \frac{\overbrace{p(y\mid\theta)}^{\text{vraisemblance}}\;\overbrace{p(\theta)}^{\text{a priori}}}{\underbrace{p(y)}_{\text{évidence}}} \;\propto\; p(y\mid\theta)\,p(\theta) \]</div>
+
+    <p>L'interprétation est opérationnelle : l'a priori encode ce qu'on sait avant de regarder les données, la vraisemblance ce que les données disent, et l'a posteriori combine les deux en pondérant chacun par sa précision. Avec peu de données, l'a priori domine ; avec beaucoup, il s'efface — c'est un mécanisme de régularisation automatique qui s'adapte à la quantité d'information disponible.</p>
+
+    <p>Dans quelques cas heureux, l'a posteriori appartient à la même famille que l'a priori : on parle de <strong>conjugaison</strong>, et le calcul devient une simple mise à jour de paramètres. Le cas Beta-Binomial est le plus utile :</p>
+    <div style="text-align:center;overflow-x:auto">\[ p \sim \text{Beta}(\alpha,\beta), \quad k \mid p \sim \text{Bin}(n,p) \;\Longrightarrow\; p \mid k \sim \text{Beta}(\alpha + k,\; \beta + n - k) \]</div>
+
+    <div class="code-label">Python — A/B test bayésien, en dix lignes</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import stats
+
+# a priori faiblement informatif : Beta(1,1) = uniforme sur [0,1]
+a_post = stats.beta(1 + 1183, 1 + 20_143 - 1183)      # variante A
+b_post = stats.beta(1 + 1279, 1 + 20_089 - 1279)      # variante B
+
+rng = np.random.default_rng(0)
+ta, tb = a_post.rvs(200_000, random_state=rng), b_post.rvs(200_000, random_state=rng)
+
+print(f"P(B meilleure que A) = {(tb &gt; ta).mean():.3f}")
+print(f"gain relatif médian  = {np.median((tb - ta) / ta):+.2%}")
+print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")</pre></div>
+
+    <p>La dernière ligne est ce qui manque le plus à l'approche fréquentiste du module 5 : la <em>perte espérée</em> en cas de mauvais choix. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel.</p>
+
+    <h2 id="mcmc">4. MCMC : quand il n'y a pas de forme close</h2>
+    <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable en dimension élevée. La solution : ne pas calculer l'a posteriori, mais <strong>y échantillonner</strong>. On construit une chaîne de Markov dont la loi stationnaire est précisément \(p(\theta\mid y)\).</p>
+
+    <ul>
+      <li><strong>Metropolis-Hastings</strong> — proposer un déplacement, l'accepter avec la probabilité \(\min(1, \frac{p(\theta')q(\theta\mid\theta')}{p(\theta)q(\theta'\mid\theta)})\). Remarquable : le rapport élimine la constante de normalisation inconnue. Mais la marche aléatoire explore mal en grande dimension.</li>
+      <li><strong>Gibbs</strong> — mettre à jour chaque coordonnée selon sa conditionnelle. Efficace si ces conditionnelles sont connues, très lent si les paramètres sont fortement corrélés.</li>
+      <li><strong>Hamiltonien (HMC) et NUTS</strong> — la méthode moderne. On introduit une variable d'impulsion et on simule une dynamique hamiltonienne sur le paysage \(-\log p(\theta\mid y)\), intégrée par un schéma saute-mouton. Le gradient guide la trajectoire, ce qui permet de parcourir de longues distances avec un taux d'acceptation élevé. NUTS choisit automatiquement la longueur de trajectoire. C'est ce qui a rendu l'inférence bayésienne praticable sur des modèles à centaines de paramètres.</li>
+    </ul>
+
+    <div class="step-block">
+      <h4>Diagnostics : une chaîne qui a convergé, ça se vérifie</h4>
+      <ul>
+        <li><strong>\(\hat{R}\) (Gelman-Rubin)</strong> — compare la variance entre plusieurs chaînes à la variance intra-chaîne. Il faut \(\hat R \lt 1{,}01\) ; au-delà, les chaînes n'explorent pas la même région et <em>rien</em> ne doit être interprété.</li>
+        <li><strong>ESS</strong> (taille d'échantillon effective) — les tirages MCMC sont autocorrélés : 10 000 tirages peuvent n'en valoir que 200 d'indépendants. Viser un ESS d'au moins quelques centaines par quantité d'intérêt.</li>
+        <li><strong>Divergences</strong> (HMC) — signalent une géométrie trop courbée pour le pas d'intégration, typiquement l'« entonnoir » des modèles hiérarchiques. Le remède est presque toujours une reparamétrisation (forme non centrée), pas une augmentation du nombre d'itérations.</li>
+        <li><strong>Prédictif a posteriori</strong> — simuler des jeux de données depuis le modèle ajusté et les comparer aux vraies données. C'est le test le plus parlant : si les simulations ne ressemblent pas aux observations, le modèle est faux, quelle que soit la qualité de la convergence.</li>
+      </ul>
+    </div>
+
+    <h2 id="hierarchique">5. Modèles hiérarchiques et partial pooling</h2>
+    <p>C'est l'apport le plus utile du cadre bayésien en pratique. Situation typique : on veut estimer un taux par site, par machine ou par client, mais certains groupes n'ont que trois observations. Deux extrêmes également mauvais :</p>
+    <ul>
+      <li><strong>Aucun regroupement</strong> — un modèle par groupe : les petits groupes donnent des estimations absurdes (un groupe avec 1 succès sur 1 essai affiche 100 %).</li>
+      <li><strong>Regroupement total</strong> — une seule estimation globale : on efface toute différence réelle entre groupes.</li>
+    </ul>
+    <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés.</p>
+    <div style="text-align:center;overflow-x:auto">\[ y_{ij} \sim \mathcal{N}(\theta_j, \sigma^2), \qquad \theta_j \sim \mathcal{N}(\mu, \tau^2), \qquad \mu,\sigma,\tau \sim \text{a priori} \]</div>
+    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\). C'est exactement l'effet du lissage du <em>target encoding</em> (module 6), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
+
+    <div class="code-label">Python — PyMC, modèle hiérarchique non centré</div>
+    <div class="code-block"><pre>import pymc as pm
+
+with pm.Model() as modele:
+    mu    = pm.Normal("mu", 0, 5)                 # moyenne globale
+    tau   = pm.HalfNormal("tau", 2)               # dispersion entre groupes
+    sigma = pm.HalfNormal("sigma", 2)             # bruit intra-groupe
+
+    z      = pm.Normal("z", 0, 1, dims="groupe")  # paramétrage NON CENTRÉ :
+    theta  = pm.Deterministic("theta", mu + tau * z, dims="groupe")   # évite l'entonnoir
+
+    pm.Normal("obs", mu=theta[idx_groupe], sigma=sigma, observed=y)
+
+    trace = pm.sample(2000, tune=1000, chains=4, target_accept=0.9)
+
+import arviz as az
+print(az.summary(trace, var_names=["mu", "tau"]))   # r_hat, ess_bulk, intervalles crédibles</pre></div>
+
+    <h2 id="vi">6. Inférence variationnelle</h2>
+    <p>MCMC est asymptotiquement exact mais coûteux : chaque itération évalue la vraisemblance sur toutes les données, ce qui devient impraticable sur des millions d'observations ou des réseaux de neurones. L'<strong>inférence variationnelle</strong> transforme l'inférence en optimisation : on cherche, dans une famille paramétrée \(q_\phi\) (souvent des gaussiennes indépendantes), celle qui minimise la divergence de Kullback-Leibler à l'a posteriori. Cela revient à maximiser la borne inférieure de l'évidence :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{ELBO}(\phi) = \mathbb{E}_{q_\phi}\big[\log p(y\mid\theta)\big] - \operatorname{KL}\!\big(q_\phi(\theta)\,\|\,p(\theta)\big) \]</div>
+    <p>Le premier terme demande de bien expliquer les données, le second de ne pas trop s'écarter de l'a priori. Avantage : on retrouve un problème d'optimisation classique, compatible avec les mini-lots et le GPU (module 4). Inconvénient à connaître : une famille de gaussiennes indépendantes <em>sous-estime systématiquement</em> la variance a posteriori et ignore les corrélations entre paramètres. Les intervalles produits sont donc trop étroits — utilisables pour un ordre de grandeur, pas pour une marge de sécurité.</p>
+
+    <p>Les outils pratiques : <strong>PyMC</strong> (le plus accessible), <strong>NumPyro</strong> (sur JAX, très rapide, NUTS efficace), <strong>Stan</strong> (la référence historique, excellente documentation). Tous partagent la même logique : on écrit le <em>modèle génératif</em>, l'inférence est prise en charge.</p>
+
+    <h2 id="incertitude">7. Aléatoire contre épistémique</h2>
+    <p>Distinction fondamentale, et régulièrement ignorée :</p>
+    <div class="code-label">deux incertitudes de nature différente</div>
+    <div class="code-block"><pre>ALÉATOIRE (aleatoric)          ÉPISTÉMIQUE (epistemic)
+bruit intrinsèque du phénomène  ignorance du modèle
+deux essais identiques donnent  le modèle n'a pas vu de données dans cette région
+deux résultats différents
+NE diminue PAS avec plus de     DIMINUE avec plus de données
+données
+ex : dispersion d'une mesure,   ex : prédire hors du domaine d'entraînement,
+variabilité d'un matériau       extrapolation, régime jamais observé</pre></div>
+
+    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut dimensionner une marge : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est hors de son domaine de validité : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 17) — ou pour déclencher un repli sur une procédure classique. Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
+
+    <div class="warning-block">
+      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — c'est le comportement le plus dangereux pour un usage industriel. Les GP (module 9), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données.
+    </div>
+
+    <h2 id="uq-ml">8. Quantifier l'incertitude d'un modèle de ML</h2>
+    <div class="code-label">méthodes, du plus simple au plus coûteux</div>
+    <div class="code-block"><pre>Régression quantile         entraîner sur la perte pinball aux quantiles 5 % et 95 %.
+                            Capture l'incertitude ALÉATOIRE, y compris hétéroscédastique.
+                            Disponible dans LightGBM et HistGradientBoosting : très bon
+                            rapport effort/résultat sur données tabulaires.
+Ensembles profonds          entraîner 5 réseaux avec des graines différentes ; la
+                            dispersion des prédictions estime l'incertitude ÉPISTÉMIQUE.
+                            Simple, robuste, la référence empirique — coût ×5.
+MC dropout                  laisser le dropout actif à l'inférence et échantillonner.
+                            Bon marché, mais approximation grossière.
+Sortie probabiliste         faire prédire au réseau moyenne ET variance (perte de
+                            log-vraisemblance gaussienne) : sépare les deux incertitudes.
+Bayésien complet            poids traités comme des variables aléatoires (VI, SWAG).
+                            Élégant, coûteux, rarement meilleur qu'un ensemble profond.
+Processus gaussien          incertitude exacte par construction (module 9) — mais O(n³).
+Prédiction conforme         garantie de couverture distribution-free, sur n'importe quel
+                            modèle déjà entraîné (section suivante).</pre></div>
+
+    <h2 id="conformal">9. Prédiction conforme</h2>
+    <p>La prédiction conforme est, à mon sens, la technique la plus sous-utilisée du domaine. Elle fournit un intervalle de prédiction avec une <strong>garantie de couverture valable à échantillon fini</strong>, sans aucune hypothèse sur la distribution des données ni sur le modèle — seulement l'échangeabilité des observations.</p>
+
+    <p>La version par découpage tient en trois lignes. On met de côté un jeu de calibration disjoint de l'entraînement, on y calcule les scores de non-conformité \(s_i = |y_i - \hat f(x_i)|\), puis on prend le quantile empirique \(\hat q\) d'ordre \(\lceil (n+1)(1-\alpha)\rceil / n\). L'intervalle \(\hat f(x) \pm \hat q\) vérifie alors :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(y_{\text{nouveau}} \in \hat{C}(x_{\text{nouveau}})\big) \;\geq\; 1-\alpha \]</div>
+
+    <div class="code-label">Python — conformalisation d'un modèle quelconque</div>
+    <div class="code-block"><pre>import numpy as np
+
+modele.fit(X_train, y_train)                       # n'importe quel modèle : GBM, réseau...
+
+scores = np.abs(y_calib - modele.predict(X_calib))            # non-conformité
+n, alpha = len(scores), 0.1
+q = np.quantile(scores, np.ceil((n + 1) * (1 - alpha)) / n, method="higher")
+
+pred = modele.predict(X_test)
+bas, haut = pred - q, pred + q                                # couverture garantie à 90 %
+print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")</pre></div>
+
+    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise des quantiles prédits, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré.</p>
+
+    <div class="warning-block">
+      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe (d'où les variantes <em>Mondrian</em>, conditionnées par groupe). Et elle suppose l'échangeabilité : si la distribution dérive (module 12) ou si les données sont temporelles, la garantie tombe — il existe des versions adaptatives en ligne pour ce cas. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges, ce qui est déjà une information utile.
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Choisir une loi, c'est faire une hypothèse sur le mécanisme ; choisir une perte, c'est choisir un modèle de bruit.</li>
+        <li>Ridge et lasso sont des MAP avec a priori gaussien et laplacien : la régularisation est une croyance explicite.</li>
+        <li>L'a posteriori combine a priori et données en pondérant par la précision ; il s'efface quand les données abondent.</li>
+        <li>NUTS/HMC rend l'inférence praticable ; toujours vérifier \(\hat R\), l'ESS, les divergences et le prédictif a posteriori.</li>
+        <li>Les modèles hiérarchiques font du regroupement partiel : la meilleure réponse aux groupes à faibles effectifs.</li>
+        <li>Distinguer incertitude aléatoire (irréductible, à dimensionner) et épistémique (réductible, signal de hors-domaine).</li>
+        <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour quelques lignes de code.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <a href="project7-m05.html" class="btn btn-secondary">← Module 5 : Statistique inférentielle</a>
+  <a href="project7-m14.html" class="btn btn-primary">Module 14 : Séries temporelles →</a>
+  <br><br>
+  <div class="project-meta"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Hiérarchique</span><span class="tag">Incertitude</span><span class="tag">Conformal</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m13-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 13</div>
+    <h1>Probability, Bayesian inference and uncertainty quantification</h1>
+  </div>
+
+  <div class="project-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Common distributions as modelling primitives, chosen from the mechanism rather than from the histogram (Poisson vs negative binomial, Weibull for reliability, log-normal for multiplicative effects).</li>
+      <li>Likelihood, maximum likelihood and MAP — and the fact that every loss function in this course is a noise model in disguise.</li>
+      <li>Ridge and lasso derived as MAP estimates under Gaussian and Laplace priors: regularisation as an explicit belief.</li>
+      <li>Bayes' rule as an update, conjugate priors, and a ten-line Bayesian A/B test that reports expected loss rather than a p-value.</li>
+      <li>MCMC: Metropolis-Hastings, Gibbs, and Hamiltonian Monte Carlo / NUTS — plus the diagnostics that decide whether anything may be interpreted (R-hat, ESS, divergences, posterior predictive checks).</li>
+      <li>Hierarchical models and partial pooling: the principled answer to small groups, with a non-centred PyMC example.</li>
+      <li>Variational inference and the ELBO, and why mean-field posteriors are systematically too narrow.</li>
+      <li>Aleatoric vs epistemic uncertainty, and why confusing them leads either to over-engineering or to trusting extrapolation.</li>
+      <li>Practical UQ for ML models: quantile regression, deep ensembles, MC dropout, probabilistic outputs.</li>
+      <li>Conformal prediction: finite-sample, distribution-free coverage on top of any trained model, with CQR for adaptive intervals — and the precise limits of the guarantee.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
+        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
+        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m07.html">Classical machine learning</a></li>
+        <li><a href="project7-m08.html">Deep learning</a></li>
+        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m10.html">Reinforcement learning</a></li>
+        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
+        <li><strong>Probability, Bayesian inference and uncertainty quantification</strong></li>
+        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m17.html">Learning with few labels</a></li>
+        <li><a href="project7-m18.html">From scores to decisions</a></li>
+        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
