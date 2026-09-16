@@ -52,12 +52,13 @@
       <ol>
         <li><a href="#specificites">Ce que le temps change</a></li>
         <li><a href="#decomposition">Décomposition et stationnarité</a></li>
+        <li><a href="#acf">Lire une ACF et une PACF</a></li>
         <li><a href="#classiques">Modèles classiques : ETS et ARIMA</a></li>
-        <li><a href="#ml">Approche ML : features et gradient boosting</a></li>
+        <li><a href="#ml">Approche ML : variables et gradient boosting</a></li>
         <li><a href="#dl">Deep learning et modèles de fondation</a></li>
         <li><a href="#proba">Prévision probabiliste et évaluation</a></li>
-        <li><a href="#kalman">Modèles espace-état et filtre de Kalman</a></li>
-        <li><a href="#rupture">Ruptures et anomalies temporelles</a></li>
+        <li><a href="#kalman">Espace d'états et filtre de Kalman</a></li>
+        <li><a href="#rupture">Ruptures et anomalies</a></li>
         <li><a href="#spectral">Analyse spectrale et filtrage</a></li>
         <li><a href="#survie">Durées de vie, censure et fiabilité</a></li>
       </ol>
@@ -65,121 +66,181 @@
 
     <h2 id="specificites">1. Ce que le temps change</h2>
     <div class="code-label">quatre conséquences directes</div>
-    <div class="code-block"><pre>Autocorrélation      les observations voisines se ressemblent : la taille d'échantillon
-                     EFFECTIVE est bien inférieure à n. Un test qui ignore cela déclare
-                     significatif ce qui ne l'est pas (module 8).
-Non-stationnarité    moyenne, variance et saisonnalité évoluent. Le passé lointain peut
-                     être trompeur plutôt qu'informatif.
-Ordre imposé         entraîner sur le futur pour prédire le passé n'a aucun sens :
-                     la validation devient séquentielle (module 10).
-Horizon              prévoir à J+1 et à J+30 sont deux problèmes différents, avec des
-                     features et des performances différentes.</pre></div>
+    <div class="code-block"><pre>Autocorrélation   les observations voisines se ressemblent : la taille d'échantillon
+                  EFFECTIVE est bien inférieure à n. Un test qui l'ignore déclare
+                  significatif ce qui ne l'est pas (module 8).
+Non-stationnarité moyenne, variance et saisonnalité évoluent. Le passé lointain
+                  peut être trompeur plutôt qu'informatif.
+Ordre imposé      entraîner sur le futur pour prédire le passé n'a aucun sens :
+                  la validation devient séquentielle (module 10).
+Horizon           prévoir à J+1 et à J+30 sont deux problèmes différents, avec des
+                  variables et des performances différentes.</pre></div>
+
+    <div class="step-block">
+      <h4>L'autocorrélation, concrètement</h4>
+      <p>Si la température d'aujourd'hui ressemble fortement à celle d'hier, 365 mesures quotidiennes ne contiennent pas 365 informations indépendantes — peut-être l'équivalent de trente. Toutes les formules du module 8 en \(\sqrt{n}\) deviennent alors optimistes : un intervalle de confiance calculé naïvement sur des données autocorrélées est beaucoup trop étroit, et l'on conclut à des effets qui n'existent pas. C'est la raison pour laquelle on ne peut pas appliquer directement les outils des modules précédents à une série temporelle.</p>
+    </div>
 
     <div class="warning-block">
-      <strong>La première question à poser.</strong> S'agit-il vraiment d'une prévision ? Beaucoup de problèmes présentés comme temporels sont en réalité des régressions ordinaires où la date sert de variable explicative parmi d'autres. On ne fait de la prévision que lorsque l'on doit extrapoler <em>au-delà</em> de la dernière observation, sans connaître les variables explicatives futures. Si les régresseurs futurs sont connus (un calendrier, une météo prévue, un plan de production), le problème est plus simple et les outils du module 12 suffisent.
+      <strong>La première question à poser.</strong> S'agit-il vraiment d'une prévision ? Beaucoup de problèmes présentés comme temporels sont en réalité des régressions ordinaires où la date sert de variable explicative parmi d'autres. On ne fait de la prévision que lorsqu'il faut extrapoler <em>au-delà</em> de la dernière observation, sans connaître les variables explicatives futures. Si les régresseurs futurs sont connus (un calendrier, une météo prévue, un plan de production), le problème est plus simple et les outils du module 12 suffisent.
     </div>
 
     <h2 id="decomposition">2. Décomposition et stationnarité</h2>
-    <p>Une série se lit d'abord comme la somme (ou le produit) de trois composantes : tendance, saisonnalité, résidu. La décomposition <strong>STL</strong> (par lissage local) est l'outil de référence : robuste aux valeurs aberrantes, elle accepte une saisonnalité qui évolue lentement.</p>
+    <p>Une série se lit d'abord comme la somme (ou le produit) de trois composantes : <strong>tendance</strong> (l'évolution de fond), <strong>saisonnalité</strong> (le motif qui se répète à période fixe) et <strong>résidu</strong> (ce qui reste). La décomposition <strong>STL</strong>, par lissage local, est l'outil de référence : robuste aux valeurs aberrantes, elle accepte une saisonnalité qui évolue lentement.</p>
 
     <div class="code-label">Python</div>
-    <div class="code-block"><pre>import pandas as pd
+    <div class="code-block"><pre>import polars as pl, pandas as pd
 from statsmodels.tsa.seasonal import STL
-from statsmodels.tsa.stattools import adfuller, kpss, acf, pacf
+from statsmodels.tsa.stattools import adfuller, kpss
 
 serie = pd.read_csv("conso.csv", index_col="date", parse_dates=True)["valeur"].asfreq("D")
 
 res = STL(serie, period=7, robust=True).fit()
 res.plot()                                   # tendance, saison, résidu
 
-print(adfuller(serie)[1])                    # H0 = racine unitaire : p petit → stationnaire
-print(kpss(serie, regression="c")[1])        # H0 = stationnarité : p petit → NON stationnaire</pre></div>
+print("ADF  p =", adfuller(serie)[1])        # H0 = racine unitaire (NON stationnaire)
+print("KPSS p =", kpss(serie, regression="c")[1])   # H0 = stationnarité</pre></div>
 
-    <p>Une série est <strong>stationnaire</strong> si ses propriétés statistiques ne dépendent pas de la date. Les modèles classiques l'exigent, et on s'y ramène par différenciation (\(\nabla y_t = y_t - y_{t-1}\)), différenciation saisonnière (\(y_t - y_{t-s}\)) ou transformation stabilisante (log pour une variance proportionnelle au niveau, Box-Cox sinon). Utiliser les deux tests ADF et KPSS <em>ensemble</em> est plus sûr : leurs hypothèses nulles sont inversées, et un désaccord signale une situation ambiguë qu'il vaut mieux examiner graphiquement.</p>
+    <p>Une série est <strong>stationnaire</strong> si ses propriétés statistiques ne dépendent pas de la date : même moyenne, même variance, même structure de dépendance à tout moment. Les modèles classiques l'exigent, parce qu'ils estiment des coefficients supposés constants. On s'y ramène par différenciation (\(\nabla y_t = y_t - y_{t-1}\), qui élimine une tendance linéaire), différenciation saisonnière (\(y_t - y_{t-s}\)) ou transformation stabilisante (logarithme si la variance croît avec le niveau).</p>
+    <p>Utiliser ADF et KPSS <em>ensemble</em> est plus sûr : leurs hypothèses nulles sont inversées, donc un désaccord signale une situation ambiguë qu'il vaut mieux examiner graphiquement plutôt que trancher mécaniquement.</p>
 
-    <p>L'<strong>ACF</strong> (autocorrélation) et la <strong>PACF</strong> (autocorrélation partielle) restent les deux graphiques les plus informatifs : une décroissance lente de l'ACF signale une non-stationnarité, un pic à un multiple de la période révèle la saisonnalité, et la coupure de la PACF suggère l'ordre autorégressif.</p>
+    <h2 id="acf">3. Lire une ACF et une PACF</h2>
+    <p>L'<strong>autocorrélation</strong> (ACF) au décalage \(k\) mesure la corrélation entre la série et elle-même décalée de \(k\) pas. La <strong>PACF</strong> mesure la même chose en <em>retirant</em> l'effet des décalages intermédiaires — la corrélation directe entre \(y_t\) et \(y_{t-k}\), une fois les \(k-1\) précédents pris en compte.</p>
 
-    <h2 id="classiques">3. Modèles classiques : ETS et ARIMA</h2>
-    <p><strong>Lissage exponentiel (ETS)</strong> — l'idée tient en une ligne : une moyenne pondérée du passé dont les poids décroissent géométriquement. Holt-Winters ajoute une tendance et une saisonnalité, chacune avec son propre coefficient de lissage :</p>
+    <div class="code-label">ce que chaque forme signale</div>
+    <div class="code-block"><pre>ACF qui décroît TRÈS LENTEMENT        → série non stationnaire : différencier
+ACF avec un pic à 7, 14, 21…          → saisonnalité hebdomadaire
+ACF qui se coupe net après q          → processus MA(q)
+PACF qui se coupe net après p         → processus AR(p)
+ACF et PACF décroissant toutes deux   → ARMA mixte : laisser l'auto-sélection choisir
+
+  ACF │█                               PACF │█
+      │█ █                                  │█
+      │█ █ █ ▄                              │█ ▄
+      │█ █ █ █ ▄ ▂                          │─ ─ ─ ─ ─ ─  ← coupure après 2
+      └──────────────► décalage             └──────────────► décalage
+      décroissance lente = AR               → AR(2)</pre></div>
+
+    <div class="code-block"><pre>from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+plot_acf(serie.diff().dropna(), lags=40)     # sur la série DIFFÉRENCIÉE
+plot_pacf(serie.diff().dropna(), lags=40)</pre></div>
+
+    <h2 id="classiques">4. Modèles classiques : ETS et ARIMA</h2>
+    <p><strong>Lissage exponentiel (ETS)</strong> — l'idée tient en une ligne : une moyenne pondérée du passé dont les poids décroissent géométriquement, de sorte que le passé récent compte davantage. Holt-Winters ajoute une tendance et une saisonnalité, chacune avec son propre coefficient de lissage :</p>
     <div style="text-align:center;overflow-x:auto">\[ \ell_t = \alpha\,(y_t - s_{t-m}) + (1-\alpha)(\ell_{t-1}+b_{t-1}), \qquad \hat y_{t+h} = \ell_t + h\,b_t + s_{t+h-m} \]</div>
-    <p>Simple, rapide, étonnamment difficile à battre sur des séries métier courtes et régulières.</p>
+    <p>où \(\ell\) est le niveau, \(b\) la pente et \(s\) la composante saisonnière. Simple, rapide, et étonnamment difficile à battre sur des séries métier courtes et régulières.</p>
 
-    <p><strong>ARIMA(p,d,q)</strong> — \(d\) différenciations pour se ramener à la stationnarité, \(p\) termes autorégressifs (le passé de la série) et \(q\) termes de moyenne mobile (le passé des erreurs) :</p>
+    <p><strong>ARIMA(p,d,q)</strong> — \(d\) différenciations pour se ramener à la stationnarité, \(p\) termes autorégressifs (le passé de la série) et \(q\) termes de moyenne mobile (le passé des <em>erreurs</em>) :</p>
     <div style="text-align:center;overflow-x:auto">\[ \nabla^d y_t = c + \sum_{i=1}^{p}\phi_i \nabla^d y_{t-i} + \sum_{j=1}^{q}\theta_j \varepsilon_{t-j} + \varepsilon_t \]</div>
-    <p>SARIMA ajoute les mêmes termes à la fréquence saisonnière, SARIMAX ajoute des régresseurs externes. La sélection des ordres se fait par AIC/BIC — <code>statsforecast</code> (Nixtla) et <code>pmdarima</code> l'automatisent en quelques secondes.</p>
+    <p>La partie AR dit « la valeur d'aujourd'hui ressemble à celles d'hier » ; la partie MA dit « l'erreur d'aujourd'hui ressemble à celles d'hier », ce qui capte les chocs dont l'effet se dissipe. SARIMA ajoute les mêmes termes à la fréquence saisonnière, SARIMAX ajoute des régresseurs externes.</p>
+
+    <div class="code-label">Python — sélection automatique et prévision</div>
+    <div class="code-block"><pre>from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive
+
+sf = StatsForecast(
+    models=[AutoARIMA(season_length=7), AutoETS(season_length=7),
+            SeasonalNaive(season_length=7)],      # LA baseline à battre
+    freq="D", n_jobs=-1,
+)
+sf.fit(df)                                        # df : unique_id, ds, y
+prev = sf.forecast(h=28, level=[80, 95])          # avec intervalles de prédiction
+print(prev.head())</pre></div>
 
     <div class="step-block">
       <h4>Quand les modèles classiques battent le machine learning</h4>
-      <p>Systématiquement quand : la série est <em>courte</em> (moins de quelques centaines de points), il y en a <em>peu</em> (une ou dix, pas dix mille), la structure est régulière, et il faut des intervalles de prévision fiables. Les compétitions M4 et M5 l'ont confirmé : les méthodes statistiques simples, et surtout les <em>combinaisons</em> de méthodes simples, restent redoutables. Le ML prend l'avantage quand on doit prévoir des milliers de séries apparentées simultanément, avec beaucoup de régresseurs externes — une chaîne de magasins, un parc de capteurs.</p>
+      <p>Systématiquement quand : la série est <em>courte</em> (moins de quelques centaines de points), il y en a <em>peu</em> (une ou dix, pas dix mille), la structure est régulière, et il faut des intervalles de prévision fiables. Les compétitions M4 et M5 l'ont confirmé : les méthodes statistiques simples, et surtout les <em>combinaisons</em> de méthodes simples, restent redoutables. Le ML prend l'avantage quand on doit prévoir des milliers de séries apparentées simultanément, avec beaucoup de régresseurs externes — une chaîne de magasins, un parc de capteurs — parce qu'il apprend alors des motifs communs à toutes les séries.</p>
     </div>
 
-    <h2 id="ml">4. Approche ML : features et gradient boosting</h2>
-    <p>On transforme la prévision en régression tabulaire en construisant des features exclusivement passées, puis on applique le module 12.</p>
+    <h2 id="ml">5. Approche ML : variables et gradient boosting</h2>
+    <p>On transforme la prévision en régression tabulaire en construisant des variables exclusivement passées, puis on applique le module 12.</p>
 
     <div class="code-label">Python — polars, fenêtres strictement passées</div>
-    <div class="code-block"><pre>import polars as pl
+    <div class="code-block"><pre>import numpy as np, polars as pl
 
 df = (
     df.sort("date")
       .with_columns(
-          # décalages : la valeur d'il y a 1, 7 et 364 jours
+          # décalages : la valeur d'il y a 1, 7 et 364 jours (même jour de semaine)
           *[pl.col("y").shift(k).over("serie_id").alias(f"lag_{k}") for k in (1, 7, 364)],
-          # moyennes glissantes calculées sur le PASSÉ uniquement (d'où le shift(1))
+
+          # moyennes glissantes sur le PASSÉ uniquement — le shift(1) est ESSENTIEL
           pl.col("y").shift(1).rolling_mean(7).over("serie_id").alias("ma_7"),
+          pl.col("y").shift(1).rolling_mean(28).over("serie_id").alias("ma_28"),
           pl.col("y").shift(1).rolling_std(28).over("serie_id").alias("sd_28"),
+          # tendance courte : rapport des deux moyennes
+          (pl.col("y").shift(1).rolling_mean(7) /
+           pl.col("y").shift(1).rolling_mean(28)).over("serie_id").alias("ratio_7_28"),
+
           # calendrier et saisonnalité cyclique (module 10)
           pl.col("date").dt.weekday().alias("jour_semaine"),
           (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).sin().alias("an_sin"),
+          (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).cos().alias("an_cos"),
       )
 )</pre></div>
 
-    <p>Deux décisions structurent le reste. <strong>Stratégie d'horizon</strong> : la prévision <em>récursive</em> réinjecte ses propres prédictions (simple, mais les erreurs s'accumulent), la prévision <em>directe</em> entraîne un modèle par horizon (plus coûteux, plus stable au-delà de quelques pas). <strong>Validation</strong> : uniquement en avançant dans le temps, avec une fenêtre glissante ou extensible, en respectant un <em>écart</em> égal à l'horizon entre entraînement et test — sans quoi on évalue une situation impossible en production.</p>
+    <p>Deux décisions structurent ensuite le travail. <strong>Stratégie d'horizon</strong> : la prévision <em>récursive</em> réinjecte ses propres prédictions pour avancer pas à pas (simple, mais les erreurs s'accumulent) ; la prévision <em>directe</em> entraîne un modèle par horizon (plus coûteux, plus stable au-delà de quelques pas). <strong>Validation</strong> : uniquement en avançant dans le temps, avec une fenêtre glissante ou extensible, et en respectant un <em>écart</em> égal à l'horizon entre entraînement et test — sans quoi on évalue une situation impossible en production.</p>
 
     <div class="warning-block">
-      <strong>Le piège qui invalide silencieusement un projet de prévision.</strong> Une moyenne glissante calculée sans <code>shift(1)</code> inclut la valeur courante : le modèle « prédit » en lisant sa propre cible, et le score est spectaculaire jusqu'à la mise en production. Le second piège est la <em>disponibilité</em> : une feature peut être passée mais ne pas être encore <em>connue</em> au moment où la prévision doit être produite (un chiffre consolidé publié avec trois jours de retard). Toujours raisonner en « que sais-je à l'instant où je prédis ? », pas en « quelle est la date de cette ligne ? ».
+      <strong>Le piège qui invalide silencieusement un projet de prévision.</strong> Une moyenne glissante calculée sans <code>shift(1)</code> inclut la valeur courante : le modèle « prédit » en lisant sa propre cible, et le score est spectaculaire jusqu'à la mise en production. Le second piège est la <em>disponibilité</em> : une variable peut être passée mais ne pas être encore <em>connue</em> au moment où la prévision doit être produite — un chiffre consolidé publié avec trois jours de retard. Toujours raisonner en « que sais-je à l'instant où je prédis ? », pas en « quelle est la date de cette ligne ? ».
     </div>
 
-    <h2 id="dl">5. Deep learning et modèles de fondation</h2>
+    <h2 id="dl">6. Deep learning et modèles de fondation</h2>
     <ul>
       <li><strong>N-BEATS / N-HiTS</strong> — empilements de blocs résiduels, sans composante récurrente ; performances solides et entraînement rapide.</li>
       <li><strong>DeepAR</strong> — modèle autorégressif probabiliste entraîné sur un ensemble de séries apparentées : il apprend des motifs partagés, ce qui aide beaucoup les séries courtes.</li>
-      <li><strong>Temporal Fusion Transformer</strong> — attention sur les séquences avec gestion propre des covariables connues à l'avance (calendrier, promotions) et une part d'interprétabilité.</li>
-      <li><strong>Modèles de fondation</strong> (Chronos, TimesFM, Moirai, TimeGPT) — pré-entraînés sur d'énormes corpus de séries, utilisables en <em>zero-shot</em>. Intéressants pour obtenir une baseline sans entraînement ; pas systématiquement meilleurs qu'un bon modèle spécifique, et à manier avec précaution quand la série contient de l'information confidentielle.</li>
+      <li><strong>Temporal Fusion Transformer</strong> — attention sur les séquences (module 14) avec gestion propre des covariables connues à l'avance (calendrier, promotions) et une part d'interprétabilité.</li>
+      <li><strong>Modèles de fondation</strong> (Chronos, TimesFM, Moirai, TimeGPT) — pré-entraînés sur d'énormes corpus de séries, utilisables en <em>zero-shot</em>. Intéressants pour obtenir une baseline sans entraînement ; pas systématiquement meilleurs qu'un bon modèle spécifique, et à manier avec précaution quand la série contient de l'information confidentielle (module 25).</li>
     </ul>
     <p>La bibliothèque <code>nixtla</code> (statsforecast / mlforecast / neuralforecast) donne accès aux trois familles avec la même interface, ce qui permet de les comparer honnêtement — la seule façon de trancher.</p>
 
-    <h2 id="proba">6. Prévision probabiliste et évaluation</h2>
-    <p>Une prévision ponctuelle est rarement suffisante : dimensionner un stock ou une réserve d'énergie demande un quantile, pas une moyenne. On entraîne donc directement sur la <strong>perte pinball</strong>, qui pénalise asymétriquement selon le quantile visé :</p>
+    <h2 id="proba">7. Prévision probabiliste et évaluation</h2>
+    <p>Une prévision ponctuelle est rarement suffisante : dimensionner un stock ou une réserve d'énergie demande un quantile, pas une moyenne (module 22). On entraîne donc directement sur la <strong>perte pinball</strong>, qui pénalise asymétriquement selon le quantile visé :</p>
     <div style="text-align:center;overflow-x:auto">\[ L_\tau(y,\hat y) = \max\big(\tau(y-\hat y),\; (\tau-1)(y-\hat y)\big) \]</div>
-    <p>Le <strong>CRPS</strong> évalue une distribution prédictive complète et se réduit à la MAE pour une prévision ponctuelle, ce qui en fait la métrique de référence en prévision probabiliste. La prédiction conforme du module 9 s'applique aussi, dans ses variantes adaptées à la dérive temporelle.</p>
+    <p>Pour \(\tau = 0{,}9\), sous-estimer coûte neuf fois plus cher que surestimer : le modèle apprend donc à viser haut, et sa prédiction converge vers le quantile 90 %.</p>
 
     <div class="code-label">métriques de prévision</div>
     <div class="code-block"><pre>MAE / RMSE   interprétables, mais non comparables entre séries d'échelles différentes
-MAPE         en pourcentage ; explose près de zéro et pénalise asymétriquement
+MAPE         en pourcentage ; explose si y proche de 0 et pénalise asymétriquement
+             (surestimer de 100 % est borné, sous-estimer ne l'est pas)
 sMAPE        version symétrique, un peu moins instable
-MASE         erreur rapportée à celle de la prévision naïve : &lt; 1 = mieux que naïf.
+MASE         erreur rapportée à celle de la prévision NAÏVE : &lt; 1 = mieux que naïf.
              LA métrique à préférer pour comparer des séries hétérogènes.
 Pinball      évalue un quantile donné
-CRPS         évalue toute la distribution prédictive</pre></div>
+CRPS         évalue toute la distribution prédictive ; se réduit à la MAE pour une
+             prévision ponctuelle. La référence en prévision probabiliste.</pre></div>
 
-    <p>Et la règle d'or : toujours comparer à la <strong>prévision naïve</strong> (la dernière valeur, ou la valeur de la même période l'an dernier). Un modèle qui ne bat pas la naïve saisonnière ne sert à rien, et c'est plus fréquent qu'on ne le croit.</p>
+    <p>Et la règle d'or : toujours comparer à la <strong>prévision naïve</strong> — la dernière valeur, ou la valeur de la même période l'an dernier. Un modèle qui ne bat pas la naïve saisonnière ne sert à rien, et c'est plus fréquent qu'on ne le croit.</p>
 
-    <h2 id="kalman">7. Modèles espace-état et filtre de Kalman</h2>
-    <p>Un modèle espace-état sépare ce qu'on cherche à connaître (un état caché \(x_t\), qui évolue) de ce qu'on observe (\(z_t\), bruité) :</p>
+    <h2 id="kalman">8. Espace d'états et filtre de Kalman</h2>
+    <p>Un modèle espace-état sépare ce qu'on cherche à connaître — un <em>état caché</em> \(x_t\) qui évolue selon une dynamique — de ce qu'on observe — \(z_t\), bruité et parfois indirect :</p>
     <div style="text-align:center;overflow-x:auto">\[ x_t = F x_{t-1} + B u_t + w_t, \qquad z_t = H x_t + v_t, \qquad w_t\sim\mathcal{N}(0,Q),\; v_t\sim\mathcal{N}(0,R) \]</div>
-    <p>Le <strong>filtre de Kalman</strong> alterne deux étapes — <em>prédiction</em> par le modèle dynamique, puis <em>correction</em> par la mesure, pondérée par le gain \(K\) qui arbitre entre confiance dans le modèle (\(Q\)) et confiance dans le capteur (\(R\)). C'est l'estimateur optimal au sens de la variance minimale dans le cas linéaire-gaussien, et il est <em>récursif</em> : coût constant par pas, mémoire constante. D'où son omniprésence en navigation, en poursuite de cible et en fusion de capteurs.</p>
-    <p>Les extensions traitent le cas non linéaire : EKF (linéarisation), UKF (propagation de points sigma, plus stable), et filtres particulaires (Monte-Carlo séquentiel, sans hypothèse gaussienne). Pour un ingénieur, l'intérêt est double : lisser un signal bruité en temps réel, et estimer des grandeurs non mesurables directement à partir de mesures indirectes — ce qui relie ce module à l'assimilation de données du <a href="project7-m19.html">module 19</a>.</p>
 
-    <h2 id="rupture">8. Ruptures et anomalies temporelles</h2>
+    <p>Le <strong>filtre de Kalman</strong> alterne deux étapes à chaque instant :</p>
+    <div class="code-label">prédiction puis correction</div>
+    <div class="code-block"><pre>PRÉDICTION   x̂ = F·x̂      "d'après mon modèle de dynamique, voilà où je devrais être"
+             P  = F·P·Fᵀ + Q   l'incertitude AUGMENTE (le modèle n'est pas parfait)
+
+CORRECTION   K  = P·Hᵀ(H·P·Hᵀ + R)⁻¹     le GAIN : combien croire la mesure ?
+             x̂ = x̂ + K(z - H·x̂)          on corrige avec l'écart à la mesure
+             P  = (I - K·H)·P             l'incertitude DIMINUE
+
+Si R est grand (capteur bruité) → K petit → on fait confiance au modèle
+Si Q est grand (modèle grossier) → K grand → on fait confiance à la mesure</pre></div>
+
+    <p>C'est l'estimateur optimal au sens de la variance minimale dans le cas linéaire-gaussien, et il est <em>récursif</em> : coût constant par pas, mémoire constante, quelle que soit la longueur de l'historique. D'où son omniprésence en navigation, en poursuite de cible et en fusion de capteurs. Les extensions traitent le cas non linéaire : EKF (linéarisation locale), UKF (propagation de points sigma, plus stable), et filtres particulaires (Monte-Carlo séquentiel, sans hypothèse gaussienne).</p>
+    <p>Pour un ingénieur, l'intérêt est double : lisser un signal bruité en temps réel, et estimer des grandeurs <em>non mesurables directement</em> à partir de mesures indirectes — ce qui relie ce module à l'assimilation de données du <a href="project7-m19.html">module 19</a>.</p>
+
+    <h2 id="rupture">9. Ruptures et anomalies</h2>
     <ul>
-      <li><strong>Détection de rupture</strong> — identifier les dates où le régime change (changement de moyenne, de variance, de tendance). La bibliothèque <code>ruptures</code> implémente PELT et la segmentation binaire ; CUSUM reste la méthode de référence pour une surveillance en ligne. Utile pour savoir <em>à partir de quand</em> réentraîner un modèle.</li>
-      <li><strong>Anomalies ponctuelles</strong> — un point s'écarte fortement de la prévision : on compare le résidu à un intervalle de prédiction plutôt qu'à un seuil fixe, ce qui rend la détection insensible à la saisonnalité.</li>
+      <li><strong>Détection de rupture</strong> — identifier les dates où le régime change (changement de moyenne, de variance, de tendance). La bibliothèque <code>ruptures</code> implémente PELT et la segmentation binaire ; CUSUM reste la méthode de référence pour une surveillance en ligne. Usage concret : savoir <em>à partir de quand</em> les données sont encore représentatives, donc à partir de quand réentraîner (module 24).</li>
+      <li><strong>Anomalies ponctuelles</strong> — un point s'écarte fortement de la prévision : on compare le résidu à un intervalle de prédiction plutôt qu'à un seuil fixe, ce qui rend la détection insensible à la saisonnalité (un pic le samedi n'est pas une anomalie si tous les samedis font un pic).</li>
       <li><strong>Anomalies collectives</strong> — un motif anormal sur une fenêtre, détectable par distance entre sous-séquences (<em>matrix profile</em>) ou par erreur de reconstruction d'un autoencodeur (module 14).</li>
       <li><strong>Un rappel utile</strong> — sur un flux, tester en continu revient à faire des milliers de tests : sans contrôle du taux de fausses alertes (module 8), le système d'alerte devient du bruit et finit ignoré.</li>
     </ul>
 
-    <h2 id="spectral">9. Analyse spectrale et filtrage</h2>
-    <p>Sur un signal physique — vibration, acoustique, mesure de capteur —, le domaine fréquentiel révèle souvent ce que le domaine temporel cache. La FFT donne le périodogramme, la méthode de Welch le lisse en moyennant des segments, et la densité spectrale de puissance identifie les composantes périodiques (une fréquence de rotation, une résonance, un harmonique de défaut de roulement).</p>
+    <h2 id="spectral">10. Analyse spectrale et filtrage</h2>
+    <p>Sur un signal physique — vibration, acoustique, mesure de capteur —, le domaine fréquentiel révèle souvent ce que le domaine temporel cache. La FFT donne le périodogramme, la méthode de Welch le lisse en moyennant des segments (ce qui réduit la variance de l'estimation au prix de la résolution), et la densité spectrale de puissance identifie les composantes périodiques : une fréquence de rotation, une résonance, un harmonique de défaut de roulement.</p>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>import numpy as np
@@ -187,64 +248,86 @@ from scipy import signal
 
 f, Pxx = signal.welch(x, fs=25_600, nperseg=4096)        # densité spectrale de puissance
 pic = f[np.argmax(Pxx)]
+print(f"fréquence dominante : {pic:.1f} Hz")
 
-# spectrogramme : évolution du contenu fréquentiel dans le temps
+# spectrogramme : évolution du contenu fréquentiel DANS LE TEMPS
 f, t, Sxx = signal.spectrogram(x, fs=25_600, nperseg=1024)
 
-# filtrage passe-bande sans déphasage (filtrage aller-retour)
+# filtrage passe-bande SANS déphasage (filtrage aller-retour)
 sos = signal.butter(4, [50, 2000], btype="band", fs=25_600, output="sos")
-x_filtre = signal.sosfiltfilt(sos, x)</pre></div>
+x_filtre = signal.sosfiltfilt(sos, x)      # filtfilt : phase nulle, ordre doublé</pre></div>
 
-    <p>Deux usages en machine learning. D'abord, le spectre fournit d'excellentes <strong>features</strong> : énergie par bande, fréquence dominante, kurtosis spectral, coefficients cepstraux — c'est la base de la maintenance prédictive sur signaux vibratoires. Ensuite, le <strong>spectrogramme</strong> transforme un signal 1D en image 2D, ce qui permet d'appliquer directement un CNN (module 14) — l'approche standard en classification audio.</p>
-    <p>Deux pièges classiques du traitement du signal restent valables ici : le <em>repliement de spectre</em> (respecter Shannon, filtrer avant d'échantillonner) et les <em>fuites spectrales</em> (utiliser une fenêtre de Hann plutôt qu'une troncature brutale). Et pour les phénomènes non stationnaires, la transformée en ondelettes offre un meilleur compromis temps-fréquence que la FFT à fenêtre.</p>
+    <p>Deux usages en machine learning. D'abord, le spectre fournit d'excellentes <strong>variables</strong> : énergie par bande, fréquence dominante, kurtosis spectral, coefficients cepstraux — c'est la base de la maintenance prédictive sur signaux vibratoires. Ensuite, le <strong>spectrogramme</strong> transforme un signal unidimensionnel en image bidimensionnelle, ce qui permet d'appliquer directement un CNN (modules 14 et 16) — l'approche standard en classification audio.</p>
+    <p>Deux pièges classiques du traitement du signal restent valables ici : le <em>repliement de spectre</em> (respecter Shannon, filtrer avant d'échantillonner, sinon les hautes fréquences se déguisent en basses) et les <em>fuites spectrales</em> (utiliser une fenêtre de Hann plutôt qu'une troncature brutale, qui introduit des discontinuités artificielles). Et pour les phénomènes non stationnaires, la transformée en ondelettes offre un meilleur compromis temps-fréquence que la FFT à fenêtre.</p>
 
-    <h2 id="survie">10. Durées de vie, censure et fiabilité</h2>
-    <p>Troisième famille temporelle, et la plus mal traitée en pratique : on veut prédire le <em>temps avant un événement</em> — panne d'un composant, résiliation d'un client, rechute d'un patient. La difficulté s'appelle la <strong>censure</strong> : à la fin de l'étude, beaucoup d'unités n'ont pas encore connu l'événement. Les exclure biaise massivement vers le bas ; leur attribuer la durée observée aussi. L'analyse de survie est précisément l'appareil statistique qui exploite correctement ces observations incomplètes.</p>
+    <h2 id="survie">11. Durées de vie, censure et fiabilité</h2>
+    <p>Troisième famille temporelle, et la plus mal traitée en pratique : on veut prédire le <em>temps avant un événement</em> — panne d'un composant, résiliation d'un client, rechute d'un patient. La difficulté s'appelle la <strong>censure</strong> : à la fin de l'étude, beaucoup d'unités n'ont pas encore connu l'événement.</p>
+
+    <div class="code-label">pourquoi on ne peut pas ignorer la censure</div>
+    <div class="code-block"><pre>  unité 1  ├──────────✕                      ✕ = panne observée (durée connue : 8 mois)
+  unité 2  ├───────────────────────→         → = toujours en service à la fin
+  unité 3  ├────✕                                 (durée INCONNUE, mais ≥ 14 mois)
+  unité 4  ├──────────────────→
+           └──────────────────────────► temps
+
+  Les EXCLURE   → on ne garde que les pannes précoces → durée de vie SOUS-ESTIMÉE
+  Les compter   → on suppose qu'elles tombent en panne à la date de fin d'étude
+  comme pannes     → encore sous-estimée
+  → il faut une méthode qui utilise l'information "a survécu AU MOINS 14 mois"</pre></div>
 
     <p>Deux fonctions suffisent à tout exprimer — la survie et le taux de défaillance instantané :</p>
     <div style="text-align:center;overflow-x:auto">\[ S(t) = \mathbb{P}(T \gt t), \qquad h(t) = \lim_{dt\to 0}\frac{\mathbb{P}(t \leq T \lt t+dt \mid T \geq t)}{dt}, \qquad S(t) = e^{-\int_0^t h(u)\,du} \]</div>
+    <p>\(h(t)\) se lit « sachant que l'unité a tenu jusqu'à \(t\), quel est son risque de tomber maintenant ? » — c'est la quantité qui intéresse un ingénieur fiabiliste, et elle est directement reliée à la survie par l'exponentielle de son intégrale.</p>
 
     <div class="code-label">les outils, par ordre d'usage</div>
-    <div class="code-block"><pre>Kaplan-Meier      estimation non paramétrique de S(t), avec censure. Le point de départ.
+    <div class="code-block"><pre>Kaplan-Meier      estimation non paramétrique de S(t), gérant la censure.
+                  Le point de départ, toujours.
 Test du log-rank  comparer deux courbes de survie (deux lots, deux traitements).
-Cox (PH)          h(t|x) = h₀(t)·exp(βᵀx) : effet MULTIPLICATIF des covariables sur le
-                  risque, sans spécifier h₀. exp(β) se lit comme un hazard ratio.
+Cox (PH)          h(t|x) = h₀(t)·exp(βᵀx) : les covariables agissent de façon
+                  MULTIPLICATIVE sur le risque, sans qu'on spécifie h₀.
+                  exp(β) se lit comme un rapport de risques.
                   Hypothèse à vérifier : risques proportionnels (résidus de Schoenfeld).
-Weibull / AFT     modèle paramétrique : les covariables ACCÉLÈRENT le temps. Permet
-                  d'extrapoler au-delà de la fenêtre d'observation — ce que Cox ne fait pas.
+Weibull / AFT     modèle paramétrique : les covariables ACCÉLÈRENT le temps.
+                  Permet d'EXTRAPOLER au-delà de la fenêtre d'observation,
+                  ce que Cox ne fait pas.
 Survie par ML     Random Survival Forest, gradient boosting de Cox, DeepSurv :
-                  capturent les non-linéarités et les interactions.</pre></div>
+                  capturent non-linéarités et interactions.</pre></div>
 
-    <p>Le paramètre de forme de la <strong>loi de Weibull</strong> se lit directement comme un diagnostic de mode de défaillance : \(k \lt 1\) correspond à un taux décroissant (mortalité infantile, défauts de fabrication), \(k = 1\) à un taux constant (défaillances aléatoires, loi exponentielle sans mémoire), \(k \gt 1\) à un taux croissant (usure). C'est la lecture de la courbe en baignoire de la fiabilité, et c'est ce qui permet de distinguer un problème de qualité d'un problème de vieillissement.</p>
+    <p>Le paramètre de forme de la <strong>loi de Weibull</strong> se lit directement comme un diagnostic de mode de défaillance : \(k \lt 1\) correspond à un taux décroissant (mortalité infantile, défauts de fabrication), \(k = 1\) à un taux constant (défaillances aléatoires, loi exponentielle sans mémoire), \(k \gt 1\) à un taux croissant (usure). C'est la lecture de la courbe en baignoire de la fiabilité, et c'est ce qui permet de distinguer un problème de qualité d'un problème de vieillissement — deux situations qui appellent des actions opposées.</p>
 
     <div class="code-label">Python — lifelines</div>
     <div class="code-block"><pre>from lifelines import KaplanMeierFitter, CoxPHFitter, WeibullFitter
+from lifelines.statistics import logrank_test
 
-km = KaplanMeierFitter().fit(durees, evenement_observe)     # evenement=0 → censuré
+# evenement = 1 si la panne a été observée, 0 si l'unité était encore en service
+km = KaplanMeierFitter().fit(durees, evenement_observe)
 km.plot_survival_function()
-print(km.median_survival_time_)
+print("durée médiane de survie :", km.median_survival_time_)
+
+# comparer deux lots
+print(logrank_test(d_lotA, d_lotB, e_lotA, e_lotB).p_value)
 
 cox = CoxPHFitter().fit(df, duration_col="duree", event_col="panne")
-cox.print_summary()                      # hazard ratios et intervalles de confiance
+cox.print_summary()                      # rapports de risques et intervalles
 cox.check_assumptions(df)                # test des risques proportionnels
 
 wb = WeibullFitter().fit(durees, evenement_observe)
-print(wb.rho_)                           # paramètre de forme : &lt; 1 rodage, &gt; 1 usure</pre></div>
+print(f"paramètre de forme ρ = {wb.rho_:.2f}")   # &lt; 1 rodage, ≈ 1 aléatoire, &gt; 1 usure</pre></div>
 
     <div class="step-block">
       <h4>Le lien avec la maintenance prédictive</h4>
-      <p>Prédire la <em>durée de vie résiduelle</em> (RUL) d'un équipement combine tout ce module : features spectrales issues des capteurs (section 9), modèle de dégradation espace-état (section 7), et modèle de survie pour la probabilité de défaillance à un horizon donné (section 10). Deux exigences industrielles s'ajoutent : une <strong>prédiction probabiliste</strong>, parce qu'une décision de remplacement se prend sur un quantile bas et non sur une espérance, et une <strong>anticipation suffisante</strong> — un modèle qui prédit la panne deux heures avant est exact et inutile. La métrique doit donc incorporer le coût asymétrique entre une intervention inutile et une défaillance subie.</p>
+      <p>Prédire la <em>durée de vie résiduelle</em> (RUL) d'un équipement combine tout ce module : variables spectrales issues des capteurs (section 10), modèle de dégradation en espace d'états (section 8), et modèle de survie pour la probabilité de défaillance à un horizon donné (section 11). Deux exigences industrielles s'ajoutent : une <strong>prédiction probabiliste</strong>, parce qu'une décision de remplacement se prend sur un quantile bas et non sur une espérance (module 22), et une <strong>anticipation suffisante</strong> — un modèle qui prédit la panne deux heures avant est exact et inutile. La métrique doit donc incorporer le coût asymétrique entre une intervention inutile et une défaillance subie.</p>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
         <li>L'autocorrélation réduit l'information effective : les tests et la validation doivent en tenir compte.</li>
-        <li>Décomposer et stationnariser avant de modéliser ; ACF/PACF restent les graphiques les plus instructifs.</li>
+        <li>Décomposer et stationnariser avant de modéliser ; ACF et PACF restent les graphiques les plus instructifs.</li>
         <li>ETS et ARIMA battent souvent le ML sur peu de séries courtes ; le ML gagne sur beaucoup de séries avec covariables.</li>
-        <li>Toute feature doit être strictement passée <em>et</em> réellement disponible au moment de la prévision.</li>
+        <li>Toute variable doit être strictement passée <em>et</em> réellement disponible au moment de la prévision.</li>
         <li>Comparer systématiquement à la prévision naïve, et préférer MASE et CRPS.</li>
-        <li>Kalman estime un état caché en temps réel, avec un coût constant par pas.</li>
+        <li>Kalman estime un état caché en temps réel, avec un coût constant par pas ; le gain arbitre entre modèle et mesure.</li>
         <li>La censure ne s'ignore pas : Kaplan-Meier, Cox et Weibull existent pour ça, et le paramètre de forme de Weibull diagnostique le mode de défaillance.</li>
       </ul>
     </div>
