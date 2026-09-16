@@ -51,8 +51,9 @@
       <h4>📋 Au programme</h4>
       <ol>
         <li><a href="#cadre">Échantillon, estimateur, variabilité</a></li>
-        <li><a href="#ic">Intervalles de confiance et bootstrap</a></li>
-        <li><a href="#tests">Tests d'hypothèse : mécanique et p-value</a></li>
+        <li><a href="#ic">Intervalles de confiance</a></li>
+        <li><a href="#bootstrap">Le bootstrap</a></li>
+        <li><a href="#tests">Tests d'hypothèse et p-value</a></li>
         <li><a href="#puissance">Erreurs, puissance, taille d'échantillon</a></li>
         <li><a href="#catalogue">Catalogue des tests usuels</a></li>
         <li><a href="#multiple">Comparaisons multiples et p-hacking</a></li>
@@ -62,177 +63,245 @@
     </div>
 
     <h2 id="cadre">1. Échantillon, estimateur, variabilité</h2>
-    <p>On veut connaître une quantité \(\theta\) d'une population (une moyenne, une proportion, un écart) mais on n'observe qu'un échantillon de taille \(n\). On calcule alors un <strong>estimateur</strong> \(\hat\theta\), qui est une variable aléatoire : un autre échantillon aurait donné une autre valeur. Toute la statistique inférentielle consiste à quantifier cette variabilité.</p>
+    <p>On veut connaître une quantité \(\theta\) d'une population — une moyenne, une proportion, un écart — mais on n'observe qu'un échantillon de taille \(n\). On calcule alors un <strong>estimateur</strong> \(\hat\theta\), et voici le point central : <em>cet estimateur est lui-même une variable aléatoire</em>. Un autre échantillon aurait donné une autre valeur. Toute la statistique inférentielle consiste à quantifier cette variabilité, pour savoir ce que l'on peut affirmer malgré elle.</p>
+
+    <div class="code-label">Python — voir la variabilité d'échantillonnage</div>
+    <div class="code-block"><pre>import numpy as np
+rng = np.random.default_rng(0)
+
+# une population dont on connaît la vérité : moyenne 100, écart type 15
+population = rng.normal(100, 15, size=1_000_000)
+
+# on tire 10 000 échantillons de 30 individus et on regarde varier LA MOYENNE
+moyennes = np.array([rng.choice(population, 30).mean() for _ in range(10_000)])
+
+print(f"moyenne des moyennes : {moyennes.mean():.2f}")       # ≈ 100  → sans biais
+print(f"dispersion observée  : {moyennes.std():.2f}")        # ≈ 2.74
+print(f"prédiction théorique : {15 / np.sqrt(30):.2f}")      # ≈ 2.74  ✓
+print(f"étendue              : {moyennes.min():.1f} à {moyennes.max():.1f}")
+# ≈ 89 à 111 : avec 30 individus, une moyenne d'échantillon peut s'écarter
+# de 10 points de la vérité, sans que rien ne soit anormal.</pre></div>
 
     <p>Deux résultats suffisent à presque tout. La <strong>loi des grands nombres</strong> garantit que \(\bar X_n \to \mu\). Le <strong>théorème central limite</strong> précise <em>à quelle vitesse</em> et <em>sous quelle forme</em> :</p>
     <div style="text-align:center;overflow-x:auto">\[ \sqrt{n}\,\frac{\bar X_n - \mu}{\sigma} \xrightarrow[n\to\infty]{\mathcal{L}} \mathcal{N}(0,1) \]</div>
-    <p>L'<strong>erreur type</strong> \(\sigma/\sqrt{n}\) décroît en \(1/\sqrt{n}\) : diviser l'incertitude par deux demande <em>quatre</em> fois plus de données. C'est la contrainte économique de fond de toute expérimentation.</p>
+    <p>Sa portée est remarquable : quelle que soit la forme de la distribution d'origine — asymétrique, discrète, bimodale —, la moyenne d'un échantillon suffisamment grand suit approximativement une loi normale. C'est ce qui rend les outils qui suivent applicables sans connaître la loi des données.</p>
+    <p>L'<strong>erreur type</strong> \(\sigma/\sqrt{n}\) décroît en \(1/\sqrt{n}\) : diviser l'incertitude par deux demande <em>quatre</em> fois plus de données, par dix en demande cent fois plus. C'est la contrainte économique de fond de toute expérimentation, et elle explique pourquoi les gains de précision deviennent vite hors de prix.</p>
 
     <div class="step-block">
       <h4>Deux distinctions à ne pas confondre</h4>
-      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable — c'est exactement l'argument de la régularisation (module 12).</p>
+      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente — les gens ne se ressemblent pas davantage parce qu'on en observe plus —, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable. C'est exactement l'argument de la régularisation (module 12).</p>
     </div>
 
-    <h2 id="ic">2. Intervalles de confiance et bootstrap</h2>
-    <p>Pour une moyenne, l'intervalle de confiance à \(1-\alpha\) s'écrit :</p>
+    <h2 id="ic">2. Intervalles de confiance</h2>
+    <p>Plutôt qu'une valeur unique, on donne un intervalle qui reflète l'incertitude. Pour une moyenne :</p>
     <div style="text-align:center;overflow-x:auto">\[ \bar{x} \;\pm\; t_{n-1,\,1-\alpha/2}\,\frac{s}{\sqrt{n}} \]</div>
-    <p>La loi de Student remplace la loi normale parce que \(\sigma\) est estimé par \(s\) ; l'écart n'est appréciable qu'en dessous de \(n \approx 30\).</p>
+    <p>La loi de Student remplace la loi normale parce que \(\sigma\) est lui-même estimé par \(s\), ce qui ajoute de l'incertitude ; l'écart n'est appréciable qu'en dessous de \(n \approx 30\), au-delà les deux coïncident presque.</p>
 
     <div class="warning-block">
-      <strong>L'interprétation correcte.</strong> Un IC à 95 % ne signifie <em>pas</em> « il y a 95 % de chances que \(\mu\) soit dans cet intervalle ». Dans le cadre fréquentiste, \(\mu\) est une constante : elle y est ou elle n'y est pas. La bonne formulation porte sur la <em>procédure</em> : si on répétait l'expérience un grand nombre de fois, 95 % des intervalles ainsi construits contiendraient \(\mu\). L'énoncé probabiliste direct sur \(\mu\) existe bel et bien, mais il s'appelle un intervalle <em>crédible</em> et relève de l'approche bayésienne.
+      <strong>L'interprétation correcte, et la fausse.</strong> Un IC à 95 % ne signifie <em>pas</em> « il y a 95 % de chances que \(\mu\) soit dans cet intervalle ». Dans le cadre fréquentiste, \(\mu\) est une constante inconnue : elle y est ou elle n'y est pas, il n'y a pas de probabilité là-dedans. Ce qui est aléatoire, c'est l'<em>intervalle</em>, puisqu'il dépend de l'échantillon tiré. La formulation correcte porte donc sur la procédure : si l'on répétait l'expérience un grand nombre de fois, 95 % des intervalles ainsi construits contiendraient \(\mu\). L'énoncé probabiliste direct sur \(\mu\) existe bel et bien, mais il s'appelle un intervalle <em>crédible</em> et relève de l'approche bayésienne (module 9).
     </div>
 
-    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 (il peut sortir de [0,1] et sa couverture réelle chute bien en dessous de 95 %). L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut — c'est celui que renvoie <code>proportion_confint</code> de statsmodels avec <code>method="wilson"</code>.</p>
+    <div class="code-label">Python — vérifier la couverture par simulation</div>
+    <div class="code-block"><pre>from scipy import stats
 
-    <h3>Le bootstrap : quand on ne sait pas calculer</h3>
-    <p>Pour une médiane, un coefficient de Gini, un R², un ratio de métriques — bref dès que la loi de l'estimateur n'a pas de forme analytique commode — on rééchantillonne. L'idée, remarquablement simple : l'échantillon est notre meilleure approximation de la population, alors tirons dedans avec remise et regardons varier la statistique.</p>
+couverts = 0
+for _ in range(10_000):
+    ech = rng.normal(100, 15, size=30)
+    bas, haut = stats.t.interval(0.95, df=29, loc=ech.mean(),
+                                 scale=stats.sem(ech))
+    couverts += (bas &lt;= 100 &lt;= haut)          # la vraie valeur est-elle dedans ?
+
+print(f"couverture réelle : {couverts / 10_000:.1%}")    # ≈ 95,0 % ✓</pre></div>
+
+    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 : il peut sortir de l'intervalle [0, 1], et sa couverture réelle chute bien en dessous de 95 %. L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut :</p>
+    <div class="code-block"><pre>from statsmodels.stats.proportion import proportion_confint
+proportion_confint(count=7, nobs=100, method="wilson")    # (0.034, 0.139)
+proportion_confint(count=7, nobs=100, method="normal")    # (0.020, 0.120) — trop étroit</pre></div>
+
+    <h2 id="bootstrap">3. Le bootstrap</h2>
+    <p>Pour une médiane, un coefficient de Gini, un R², un ratio de métriques — bref dès que la loi de l'estimateur n'a pas de forme analytique commode — il n'existe pas de formule d'intervalle. Le <strong>bootstrap</strong> résout cela par une idée d'une simplicité déconcertante : l'échantillon est notre meilleure approximation de la population, alors tirons dedans <em>avec remise</em> et regardons varier la statistique. On simule ainsi la variabilité d'échantillonnage sans nouvelle collecte.</p>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>import numpy as np
 from scipy import stats
 
 rng = np.random.default_rng(0)
-x = rng.lognormal(mean=1.0, sigma=1.2, size=200)     # très asymétrique
+x = rng.lognormal(mean=1.0, sigma=1.2, size=200)     # distribution très asymétrique
 
-# bootstrap "à la main" : 10 000 rééchantillonnages de la médiane
-idx = rng.integers(0, len(x), size=(10_000, len(x)))
-medianes = np.median(x[idx], axis=1)
-ic_percentile = np.percentile(medianes, [2.5, 97.5])
+# ── bootstrap "à la main", pour voir le mécanisme ──
+idx = rng.integers(0, len(x), size=(10_000, len(x)))  # 10 000 rééchantillonnages
+medianes = np.median(x[idx], axis=1)                  # la statistique sur chacun
+ic_percentile = np.percentile(medianes, [2.5, 97.5])  # l'intervalle empirique
 
-# version scipy, avec correction BCa (biais + asymétrie) : plus fiable
+# ── version scipy, avec correction BCa (biais + asymétrie) : plus fiable ──
 res = stats.bootstrap((x,), np.median, confidence_level=0.95,
                       n_resamples=10_000, method="BCa", random_state=0)
 print(ic_percentile, res.confidence_interval)</pre></div>
 
-    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien), et il ne crée pas d'information — sur 12 observations, il reste 12 observations.</p>
+    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs — module 15), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien, puisqu'aucun tirage ne peut dépasser la valeur observée), et il ne crée pas d'information : sur douze observations, il reste douze observations.</p>
 
-    <h2 id="tests">3. Tests d'hypothèse : mécanique et p-value</h2>
+    <h2 id="tests">4. Tests d'hypothèse et p-value</h2>
     <p>La démarche est celle d'un raisonnement par l'absurde probabiliste :</p>
     <ol>
       <li>poser une hypothèse nulle \(H_0\) — « aucun effet », « les deux moyennes sont égales » ;</li>
       <li>choisir une statistique de test \(T\) dont on connaît la loi <em>sous \(H_0\)</em> ;</li>
-      <li>calculer \(t_{\text{obs}}\) sur les données ;</li>
+      <li>calculer sa valeur \(t_{\text{obs}}\) sur les données observées ;</li>
       <li>évaluer à quel point cette valeur serait surprenante si \(H_0\) était vraie.</li>
     </ol>
-
     <p>Cette dernière quantité est la <strong>p-value</strong> :</p>
     <div style="text-align:center;overflow-x:auto">\[ p = \mathbb{P}\big(|T| \geq |t_{\text{obs}}| \;\big|\; H_0 \text{ vraie}\big) \]</div>
 
+    <div class="code-label">Python — fabriquer une p-value soi-même, par simulation</div>
+    <div class="code-block"><pre># Situation : groupe A (n=40) et groupe B (n=40), on observe un écart de moyennes.
+ecart_observe = b.mean() - a.mean()          # par exemple 1,8
+
+# Sous H0, l'appartenance au groupe n'a AUCUN effet : les étiquettes sont
+# interchangeables. On les mélange 100 000 fois pour voir quels écarts
+# le hasard seul produit.
+ensemble = np.concatenate([a, b])
+ecarts_h0 = np.empty(100_000)
+for i in range(100_000):
+    melange = rng.permutation(ensemble)
+    ecarts_h0[i] = melange[40:].mean() - melange[:40].mean()
+
+p = np.mean(np.abs(ecarts_h0) &gt;= abs(ecart_observe))
+print(f"p-value (test de permutation) = {p:.4f}")
+# La p-value est LITTÉRALEMENT la proportion de mondes "sans effet" dans lesquels
+# le hasard produirait un écart au moins aussi grand que celui observé.</pre></div>
+
+    <p>Ce test de permutation est intéressant à double titre : il ne suppose aucune loi particulière, et il rend la définition de la p-value concrète — c'est une fréquence, comptée dans un monde où l'hypothèse nulle serait vraie.</p>
+
     <div class="warning-block">
       <strong>Ce que la p-value n'est pas.</strong><br>
-      • Ce n'est <strong>pas</strong> la probabilité que \(H_0\) soit vraie. Elle est calculée <em>en supposant</em> \(H_0\) vraie — c'est \(P(\text{données}\mid H_0)\), jamais \(P(H_0\mid\text{données})\).<br>
+      • Ce n'est <strong>pas</strong> la probabilité que \(H_0\) soit vraie. Elle est calculée <em>en supposant</em> \(H_0\) vraie : c'est \(P(\text{données}\mid H_0)\), jamais \(P(H_0\mid\text{données})\). Confondre les deux, c'est confondre « la probabilité d'avoir de la fièvre quand on a la grippe » et « la probabilité d'avoir la grippe quand on a de la fièvre ».<br>
       • Ce n'est <strong>pas</strong> une mesure de la taille de l'effet. Avec \(n = 10^6\), une différence de 0,01 % devient « hautement significative » sans avoir le moindre intérêt pratique.<br>
-      • \(p \gt 0{,}05\) ne <strong>prouve pas</strong> \(H_0\). Absence de preuve n'est pas preuve d'absence : c'est souvent un simple manque de puissance.<br>
+      • \(p \gt 0{,}05\) ne <strong>prouve pas</strong> \(H_0\). Absence de preuve n'est pas preuve d'absence : c'est très souvent un simple manque de puissance.<br>
       • Le seuil de 0,05 est une <strong>convention</strong> de Fisher, pas une loi de la nature. Rien ne distingue \(p = 0{,}049\) de \(p = 0{,}051\).
     </div>
 
-    <p>Le réflexe sain consiste à toujours rapporter <em>trois</em> choses ensemble : la taille d'effet (l'écart observé, dans son unité métier), son intervalle de confiance, et la p-value. L'intervalle contient à lui seul presque toute l'information utile — et un IC qui exclut zéro dit exactement la même chose qu'un test significatif, en plus informatif.</p>
+    <p>Le réflexe sain consiste à toujours rapporter <em>trois</em> choses ensemble : la taille d'effet (l'écart observé, dans son unité métier), son intervalle de confiance, et la p-value. L'intervalle contient à lui seul presque toute l'information utile — un IC qui exclut zéro dit exactement la même chose qu'un test significatif, en plus informatif, puisqu'il indique aussi l'ordre de grandeur de l'effet.</p>
 
-    <h2 id="puissance">4. Erreurs, puissance, taille d'échantillon</h2>
-    <div class="code-label">les deux erreurs</div>
-    <div class="code-block"><pre>                        H0 vraie en réalité      H0 fausse en réalité
-Rejeter H0              erreur de type I (α)     décision correcte (puissance = 1-β)
-Ne pas rejeter H0       décision correcte        erreur de type II (β)</pre></div>
+    <h2 id="puissance">5. Erreurs, puissance, taille d'échantillon</h2>
+    <div class="code-label">les deux erreurs possibles</div>
+    <div class="code-block"><pre>                        H0 vraie en réalité       H0 fausse en réalité
+Rejeter H0              ERREUR DE TYPE I (α)      décision correcte
+                        "fausse découverte"       (puissance = 1 - β)
+Ne pas rejeter H0       décision correcte         ERREUR DE TYPE II (β)
+                                                  "on est passé à côté"</pre></div>
 
-    <p>\(\alpha\) est choisi (5 % par convention) : c'est le taux de faux positifs qu'on accepte. \(\beta\) se subit, sauf si on dimensionne l'expérience. La <strong>puissance</strong> \(1-\beta\) est la probabilité de détecter un effet qui existe réellement ; on la vise à 80 % ou 90 %.</p>
+    <p>\(\alpha\) est <em>choisi</em> (5 % par convention) : c'est le taux de faux positifs qu'on accepte. \(\beta\) se subit, sauf si l'on dimensionne l'expérience à l'avance. La <strong>puissance</strong> \(1-\beta\) est la probabilité de détecter un effet qui existe réellement ; on la vise à 80 % ou 90 %.</p>
 
-    <p>Pour comparer deux moyennes, en notant \(d = |\mu_1-\mu_2|/\sigma\) la taille d'effet de Cohen, la taille par groupe nécessaire pour \(\alpha=5\%\) et une puissance de 80 % est bien approchée par :</p>
+    <p>Pour comparer deux moyennes, en notant \(d = |\mu_1-\mu_2|/\sigma\) la taille d'effet de Cohen (un écart exprimé en nombre d'écarts types), la taille par groupe nécessaire pour \(\alpha=5\%\) et une puissance de 80 % est bien approchée par :</p>
     <div style="text-align:center;overflow-x:auto">\[ n \approx \frac{16}{d^{2}} \]</div>
-    <p>Un effet « moyen » (\(d=0{,}5\)) demande donc environ 64 observations par groupe ; un petit effet (\(d=0{,}2\)) en demande 400. Cette formule, faite de tête, évite de lancer des expériences qui n'avaient aucune chance de conclure.</p>
+    <p>Un effet « moyen » (\(d=0{,}5\)) demande donc environ 64 observations par groupe ; un petit effet (\(d=0{,}2\)) en demande 400 ; un très petit effet (\(d=0{,}05\)) en demande 6 400. Cette formule, faite de tête avant de lancer une expérience, évite de collecter des données qui n'avaient aucune chance de conclure.</p>
 
-    <div class="code-label">Python — dimensionnement et vérification par simulation</div>
-    <div class="code-block"><pre>import numpy as np
-from statsmodels.stats.power import TTestIndPower
-from scipy import stats
+    <div class="code-label">Python — dimensionner, puis vérifier par simulation</div>
+    <div class="code-block"><pre>from statsmodels.stats.power import TTestIndPower
 
-# combien d'observations pour détecter d = 0.3 avec 80 % de puissance ?
 n = TTestIndPower().solve_power(effect_size=0.3, alpha=0.05, power=0.8)
 print(f"n = {np.ceil(n):.0f} par groupe")          # 176
 
-# vérification empirique : on simule 10 000 expériences
-rng = np.random.default_rng(0)
+# vérification empirique : on simule 10 000 expériences de cette taille
 n = 176
 rejets = sum(
     stats.ttest_ind(rng.normal(0, 1, n), rng.normal(0.3, 1, n)).pvalue &lt; 0.05
     for _ in range(10_000)
 )
-print(f"puissance simulée = {rejets / 10_000:.2%}")   # ≈ 80 %</pre></div>
+print(f"puissance simulée = {rejets / 10_000:.1%}")   # ≈ 80 % ✓</pre></div>
 
     <div class="step-block">
       <h4>Le piège des études sous-dimensionnées</h4>
-      <p>Une expérience à faible puissance ne se contente pas de « rater » des effets. Quand elle atteint quand même la significativité, c'est nécessairement parce que le hasard a gonflé l'estimation : les effets publiés à partir de petits échantillons sont <em>systématiquement surestimés</em> (on parle d'erreur de type M, pour magnitude). C'est un des moteurs de la crise de reproductibilité.</p>
+      <p>Une expérience à faible puissance ne se contente pas de « rater » des effets. Quand elle atteint quand même la significativité, c'est nécessairement parce que le hasard a gonflé l'estimation — sans quoi elle n'aurait pas franchi le seuil. Les effets publiés à partir de petits échantillons sont donc <em>systématiquement surestimés</em> (on parle d'erreur de type M, pour magnitude), et parfois même de signe inverse (type S). C'est l'un des moteurs de la crise de reproductibilité, et cela explique pourquoi tant de résultats spectaculaires ne se confirment pas à plus grande échelle.</p>
     </div>
 
-    <h2 id="catalogue">5. Catalogue des tests usuels</h2>
+    <h2 id="catalogue">6. Catalogue des tests usuels</h2>
     <div class="code-label">quel test pour quelle question</div>
-    <div class="code-block"><pre>Question                              Test                        Fonction scipy/statsmodels
-─────────────────────────────────────────────────────────────────────────────────────────
-Moyenne = valeur de référence ?       t à un échantillon          stats.ttest_1samp
-Deux groupes indépendants ?           t de Welch (défaut !)       stats.ttest_ind(equal_var=False)
-Avant/après sur les mêmes sujets ?    t apparié                   stats.ttest_rel
-Idem, sans hypothèse de normalité ?   Mann-Whitney / Wilcoxon     stats.mannwhitneyu / wilcoxon
-Plus de deux groupes ?                ANOVA / Kruskal-Wallis      stats.f_oneway / kruskal
-Deux variables catégorielles liées ?  chi² d'indépendance         stats.chi2_contingency
-Idem, petits effectifs (&lt; 5) ?        test exact de Fisher        stats.fisher_exact
-Deux proportions (A/B test) ?         test z de proportions       proportions_ztest
-Même distribution ?                   Kolmogorov-Smirnov          stats.ks_2samp
-Distribution normale ?                Shapiro-Wilk                stats.shapiro
-Corrélation linéaire ? monotone ?     Pearson / Spearman          stats.pearsonr / spearmanr</pre></div>
+    <div class="code-block"><pre>Question                              Test                     Fonction
+────────────────────────────────────────────────────────────────────────────────────
+Moyenne = valeur de référence ?       t à un échantillon       stats.ttest_1samp
+Deux groupes indépendants ?           t de WELCH (défaut !)    stats.ttest_ind(
+                                                                 equal_var=False)
+Avant/après sur les mêmes sujets ?    t apparié                stats.ttest_rel
+Idem, sans hypothèse de normalité ?   Mann-Whitney / Wilcoxon  stats.mannwhitneyu
+Plus de deux groupes ?                ANOVA / Kruskal-Wallis   stats.f_oneway, kruskal
+Deux variables catégorielles liées ?  chi² d'indépendance      stats.chi2_contingency
+Idem, petits effectifs (&lt; 5) ?        test exact de Fisher     stats.fisher_exact
+Deux proportions (A/B test) ?         test z de proportions    proportions_ztest
+Même distribution ?                   Kolmogorov-Smirnov       stats.ks_2samp
+Distribution normale ?                Shapiro-Wilk             stats.shapiro
+Corrélation linéaire ? monotone ?     Pearson / Spearman       stats.pearsonr, spearmanr</pre></div>
 
-    <p>Trois remarques valent mieux qu'un long tableau. <strong>Le test de Welch doit être le défaut</strong> pour comparer deux groupes : il ne suppose pas l'égalité des variances, et il ne perd presque rien quand celles-ci sont effectivement égales. <strong>Les tests de normalité sont contre-productifs</strong> sur de grands échantillons : ils rejettent systématiquement pour des écarts sans conséquence, alors que le TCL rend justement le test de Student robuste à la non-normalité dès que \(n\) dépasse quelques dizaines. Un histogramme et un QQ-plot informent mieux. Enfin, les <strong>tests non paramétriques</strong> (Mann-Whitney) ne comparent pas des moyennes mais des rangs : ils répondent à « une valeur tirée de A a-t-elle tendance à dépasser une valeur tirée de B ? », ce qui n'est pas la même question.</p>
+    <p>Trois remarques valent mieux qu'un long tableau.</p>
+    <p><strong>Le test de Welch doit être le défaut</strong> pour comparer deux groupes : il ne suppose pas l'égalité des variances, et il ne perd presque rien en puissance quand celles-ci sont effectivement égales. Le test de Student classique, lui, donne des résultats faux quand les variances diffèrent et que les groupes sont de tailles inégales — situation courante.</p>
+    <p><strong>Les tests de normalité sont contre-productifs</strong> sur de grands échantillons : ils rejettent systématiquement pour des écarts sans conséquence pratique, alors que le TCL rend justement le test de Student robuste à la non-normalité dès que \(n\) dépasse quelques dizaines. Un histogramme et un QQ-plot informent mieux qu'une p-value de Shapiro.</p>
+    <p>Enfin, les <strong>tests non paramétriques</strong> ne comparent pas des moyennes mais des rangs. Mann-Whitney répond à « une valeur tirée de A a-t-elle tendance à dépasser une valeur tirée de B ? », ce qui n'est pas la même question qu'une différence de moyennes — deux distributions de moyennes identiques mais de formes différentes peuvent donner un résultat significatif.</p>
 
-    <h2 id="multiple">6. Comparaisons multiples et p-hacking</h2>
-    <p>Tester 20 hypothèses au seuil de 5 % alors qu'aucune n'est vraie donne une probabilité \(1 - 0{,}95^{20} \approx 64\%\) d'obtenir au moins un « résultat significatif ». C'est mécanique, et c'est la raison pour laquelle explorer librement un jeu de données produit toujours quelque chose.</p>
+    <h2 id="multiple">7. Comparaisons multiples et p-hacking</h2>
+    <p>Tester 20 hypothèses au seuil de 5 % alors qu'<em>aucune</em> n'est vraie donne une probabilité \(1 - 0{,}95^{20} \approx 64\%\) d'obtenir au moins un « résultat significatif ». C'est mécanique, et c'est la raison pour laquelle explorer librement un jeu de données produit toujours quelque chose.</p>
 
-    <div class="code-label">corrections</div>
-    <div class="code-block"><pre>Bonferroni        seuil α/m            contrôle le FWER. Simple, très conservateur.
-Holm-Bonferroni   séquentiel           même garantie, uniformément plus puissant.
-Benjamini-Hochberg contrôle le FDR     accepte une proportion q de faux parmi les rejets.
-                                        Le bon choix quand on teste des centaines
-                                        d'hypothèses (génomique, sélection de features).</pre></div>
+    <div class="code-label">les corrections</div>
+    <div class="code-block"><pre>Bonferroni         seuil α/m           contrôle le FWER (probabilité d'AU MOINS
+                                       une fausse découverte). Simple, très conservateur.
+Holm-Bonferroni    séquentiel          même garantie, uniformément plus puissant :
+                                       à préférer systématiquement à Bonferroni.
+Benjamini-Hochberg contrôle le FDR     accepte une PROPORTION q de faux parmi les
+                                       rejets. Le bon choix quand on teste des
+                                       centaines d'hypothèses (génomique, sélection
+                                       de variables).</pre></div>
 
-    <div class="code-label">Python</div>
     <div class="code-block"><pre>from statsmodels.stats.multitest import multipletests
-
+rejets, p_corriges, _, _ = multipletests(p_values, alpha=0.05, method="holm")
 rejets, p_corriges, _, _ = multipletests(p_values, alpha=0.05, method="fdr_bh")</pre></div>
 
-    <p>La distinction est importante : Bonferroni et Holm contrôlent la probabilité de commettre <em>ne serait-ce qu'une</em> fausse découverte (FWER), ce qui est adapté quand une erreur coûte cher. Benjamini-Hochberg contrôle la <em>proportion</em> de fausses découvertes parmi les résultats déclarés positifs (FDR) : sur 10 000 gènes testés, on accepte que 5 % des gènes retenus soient des faux positifs, ce qui est infiniment plus puissant et parfaitement raisonnable en phase exploratoire.</p>
+    <p>La distinction entre les deux familles est importante. Bonferroni et Holm contrôlent la probabilité de commettre <em>ne serait-ce qu'une</em> fausse découverte : c'est adapté quand une erreur coûte cher (un essai clinique confirmatoire). Benjamini-Hochberg contrôle la <em>proportion</em> de fausses découvertes parmi les résultats déclarés positifs : sur 10 000 gènes testés, on accepte que 5 % des gènes retenus soient des faux positifs, ce qui est infiniment plus puissant et parfaitement raisonnable en phase exploratoire.</p>
 
     <div class="warning-block">
-      <strong>Le p-hacking n'est pas toujours conscient.</strong> Essayer plusieurs définitions de la variable cible, retirer « les valeurs manifestement aberrantes », tester plusieurs sous-groupes, arrêter la collecte quand le résultat devient significatif, choisir la transformation qui « marche le mieux » : chacune de ces décisions, prise après avoir vu les données, multiplie les tests implicites. Le remède est procédural : <em>écrire l'analyse avant de regarder les résultats</em>, séparer un jeu d'exploration d'un jeu de confirmation, et rapporter tout ce qui a été essayé.
+      <strong>Le p-hacking n'est pas toujours conscient.</strong> Essayer plusieurs définitions de la variable cible, retirer « les valeurs manifestement aberrantes », tester plusieurs sous-groupes, arrêter la collecte quand le résultat devient significatif, choisir la transformation qui « marche le mieux » : chacune de ces décisions, prise <em>après</em> avoir vu les données, multiplie les tests implicites sans qu'aucun ne soit compté. Le remède est procédural : écrire l'analyse avant de regarder les résultats, séparer un jeu d'exploration d'un jeu de confirmation, et rapporter tout ce qui a été essayé — pas seulement ce qui a marché.
     </div>
 
-    <h2 id="causalite">7. Corrélation, causalité, confondants</h2>
-    <p>Une corrélation entre \(X\) et \(Y\) admet cinq explications : \(X\) cause \(Y\) ; \(Y\) cause \(X\) ; une variable \(Z\) cause les deux (<strong>confondant</strong>) ; l'échantillon a été sélectionné d'une façon qui crée l'association (<strong>biais de sélection</strong>) ; ou c'est le hasard. Rien dans les données seules ne permet de trancher — il faut une hypothèse sur le mécanisme.</p>
+    <h2 id="causalite">8. Corrélation, causalité, confondants</h2>
+    <p>Une corrélation entre \(X\) et \(Y\) admet cinq explications : \(X\) cause \(Y\) ; \(Y\) cause \(X\) ; une variable \(Z\) cause les deux (<strong>confondant</strong>) ; l'échantillon a été sélectionné d'une façon qui crée l'association (<strong>biais de sélection</strong>) ; ou c'est le hasard. <em>Rien dans les données seules</em> ne permet de trancher — il faut une hypothèse sur le mécanisme, qui vient de la connaissance du domaine.</p>
 
     <div class="step-block">
       <h4>Le paradoxe de Simpson</h4>
-      <p>Un traitement peut être meilleur dans <em>chaque</em> sous-groupe et pire globalement. Exemple classique : un hôpital de pointe affiche une mortalité supérieure à une clinique de quartier, parce qu'il reçoit les cas graves. La gravité est un confondant ; l'agrégation inverse la conclusion. La leçon n'est pas « il faut toujours stratifier » — conditionner sur la mauvaise variable peut <em>créer</em> un biais — mais « il faut un modèle causal explicite pour savoir sur quoi conditionner ».</p>
+      <p>Un traitement peut être meilleur dans <em>chaque</em> sous-groupe et pire globalement. L'exemple classique : un hôpital de pointe affiche une mortalité supérieure à celle d'une clinique de quartier, parce qu'il reçoit les cas graves. La gravité est un confondant, et l'agrégation inverse la conclusion. La leçon n'est pas « il faut toujours stratifier » — conditionner sur la mauvaise variable peut <em>créer</em> un biais, voir plus bas — mais « il faut un modèle causal explicite pour savoir sur quoi conditionner ».</p>
     </div>
 
-    <p>L'outil formel est le <strong>graphe causal</strong> (DAG) : on y dessine les relations supposées, et des règles graphiques disent quelles variables ajuster. Trois structures suffisent à comprendre l'essentiel :</p>
-    <ul>
-      <li><strong>Chaîne</strong> \(X \to M \to Y\) : \(M\) est un médiateur. Conditionner dessus <em>supprime</em> l'effet qu'on cherche à mesurer.</li>
-      <li><strong>Fourche</strong> \(X \leftarrow Z \to Y\) : \(Z\) est un confondant. Il <em>faut</em> conditionner dessus (critère de la porte dérobée).</li>
-      <li><strong>Collisionneur</strong> \(X \to C \leftarrow Y\) : \(C\) est un effet commun. Conditionner dessus <strong>crée</strong> une corrélation artificielle entre \(X\) et \(Y\). C'est la source de biais la plus contre-intuitive — et la plus fréquente quand on « contrôle par tout ce qu'on a ».</li>
-    </ul>
+    <p>L'outil formel est le <strong>graphe causal</strong> (DAG) : on y dessine les relations supposées, et des règles graphiques disent quelles variables ajuster. Trois structures élémentaires suffisent à comprendre l'essentiel.</p>
 
-    <p>La seule méthode qui élimine tous les confondants d'un coup, connus comme inconnus, est la <strong>randomisation</strong> : en tirant l'affectation au hasard, on rend le traitement indépendant de tout le reste. C'est pour cette raison que l'essai contrôlé randomisé — l'A/B test — est l'étalon-or. Quand on ne peut pas randomiser, on s'appuie sur des méthodes quasi-expérimentales : différence-en-différences (deux groupes suivis avant/après), variables instrumentales, régression sur discontinuité, ou appariement sur score de propension. Toutes reposent sur des hypothèses <em>non vérifiables à partir des données seules</em> : elles doivent être argumentées, pas supposées.</p>
+    <div class="code-label">les trois structures, et ce qu'il faut en faire</div>
+    <div class="code-block"><pre>CHAÎNE        X ──► M ──► Y        M est un MÉDIATEUR (l'effet passe par lui)
+              exemple : traitement → tension → infarctus
+              → conditionner sur M SUPPRIME l'effet qu'on cherche à mesurer
+
+FOURCHE       X ◄── Z ──► Y        Z est un CONFONDANT (cause commune)
+              exemple : ventes de glaces ◄ chaleur ► noyades
+              → il FAUT conditionner sur Z (critère de la porte dérobée)
+
+COLLISIONNEUR X ──► C ◄── Y        C est un EFFET COMMUN
+              exemple : talent ► être recruté ◄ apparence
+              → conditionner sur C CRÉE une corrélation artificielle entre X et Y
+              (parmi les recrutés, les moins talentueux sont les plus beaux :
+               c'est un artefact de sélection, pas une réalité)</pre></div>
+
+    <p>Le collisionneur est la source de biais la plus contre-intuitive, et la plus fréquente quand on « contrôle par tout ce qu'on a » : ajouter des variables à un modèle n'est pas neutre, cela peut fabriquer des associations qui n'existent pas.</p>
+
+    <p>La seule méthode qui élimine tous les confondants d'un coup, connus <em>comme inconnus</em>, est la <strong>randomisation</strong> : en tirant l'affectation au hasard, on rend le traitement indépendant de tout le reste, y compris de ce qu'on n'a pas mesuré. C'est pour cette raison que l'essai contrôlé randomisé — l'A/B test — est l'étalon-or.</p>
+    <p>Quand on ne peut pas randomiser, on s'appuie sur des méthodes quasi-expérimentales : différence-en-différences (deux groupes suivis avant et après), variables instrumentales, régression sur discontinuité, appariement sur score de propension. Toutes reposent sur des hypothèses <em>non vérifiables à partir des données seules</em> : elles doivent être argumentées explicitement, pas supposées silencieusement.</p>
 
     <div class="warning-block">
-      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention. L'importance d'une variable dans un modèle (module 12) n'est pas un effet causal.
+      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention — peut-être que ceux qui appellent sont simplement ceux qui étaient déjà attachés au service. L'importance d'une variable dans un modèle (module 12) n'est pas un effet causal, et le module 22 montre comment poser correctement la question de l'effet d'une action.
     </div>
 
-    <h2 id="abtest">8. Un A/B test de bout en bout</h2>
+    <h2 id="abtest">9. Un A/B test de bout en bout</h2>
     <p>C'est l'exercice qui mobilise tout ce module. La séquence, dans l'ordre :</p>
-
     <ol>
       <li><strong>Définir la métrique principale</strong> — une seule, décidée à l'avance. Les autres sont des garde-fous (métriques de non-régression) ou de l'exploration.</li>
       <li><strong>Fixer l'effet minimal détectable</strong> — quel gain justifierait le changement ? Cette valeur vient du métier, pas des données.</li>
       <li><strong>Dimensionner</strong> — en déduire \(n\) et la durée. Couvrir des semaines entières : le comportement du lundi n'est pas celui du samedi.</li>
       <li><strong>Randomiser au bon niveau</strong> — par utilisateur, pas par session, sinon le même individu voit les deux variantes et les observations ne sont plus indépendantes.</li>
-      <li><strong>Vérifier l'équilibre</strong> — un test A/A et un contrôle du ratio de répartition (<em>sample ratio mismatch</em>) détectent les bugs d'assignation, cause n° 1 des résultats invraisemblables.</li>
-      <li><strong>Attendre la fin</strong> — regarder les résultats en continu et s'arrêter dès que \(p \lt 0{,}05\) fait exploser le taux de faux positifs bien au-delà de 5 %. Si l'arrêt anticipé est nécessaire, il faut des méthodes conçues pour cela (tests séquentiels, bornes de O'Brien-Fleming).</li>
+      <li><strong>Vérifier l'équilibre</strong> — un test A/A (deux groupes identiques, qui ne doivent rien montrer) et un contrôle du ratio de répartition (<em>sample ratio mismatch</em>) détectent les bugs d'assignation, cause numéro un des résultats invraisemblables.</li>
+      <li><strong>Attendre la fin</strong> — regarder les résultats en continu et s'arrêter dès que \(p \lt 0{,}05\) fait exploser le taux de faux positifs bien au-delà de 5 %, parce qu'on multiplie les tests sans les compter. Si l'arrêt anticipé est nécessaire, il faut des méthodes conçues pour cela (tests séquentiels, bornes d'O'Brien-Fleming).</li>
       <li><strong>Analyser</strong> — effet, intervalle de confiance, puis p-value.</li>
     </ol>
 
@@ -252,23 +321,23 @@ print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p
 # A = 5.873%, B = 6.367%
 # écart absolu = +0.494%  IC95 = [+0.031%, +0.957%]  p = 0.0366</pre></div>
 
-    <p>La lecture correcte de ce résultat : l'écart estimé est de +0,49 point, et les données sont compatibles avec un gain compris entre +0,03 et +0,96 point. C'est significatif au seuil de 5 %, mais l'intervalle frôle zéro — la décision dépend donc du coût de mise en œuvre et du gain minimal jugé pertinent, pas du seul verdict binaire du test.</p>
+    <p>La lecture correcte de ce résultat : l'écart estimé est de +0,49 point, et les données sont compatibles avec un gain compris entre +0,03 et +0,96 point. C'est significatif au seuil de 5 %, mais l'intervalle frôle zéro — autrement dit, il reste possible que le vrai gain soit négligeable. La décision dépend donc du coût de mise en œuvre et du gain minimal jugé pertinent (fixé à l'étape 2), pas du seul verdict binaire du test.</p>
 
     <div class="step-block">
       <h4>Et l'approche bayésienne ?</h4>
-      <p>Elle répond à la question qu'on se pose réellement : « quelle est la probabilité que B soit meilleure que A ? ». On pose une loi a priori sur les taux, on la met à jour par les données, on obtient une loi a posteriori d'où se lisent directement \(P(p_B \gt p_A)\) et l'espérance de perte en cas de mauvais choix. Avantages : interprétation naturelle, arrêt anticipé sans pénalité formelle, intégration d'une connaissance préalable. Coûts : il faut assumer un a priori, et la communication d'un résultat bayésien exige un peu de pédagogie. Pour deux proportions, l'implémentation tient en quelques lignes avec des lois Beta conjuguées.</p>
+      <p>Elle répond à la question qu'on se pose réellement : « quelle est la probabilité que B soit meilleure que A ? ». On pose une loi a priori sur les taux, on la met à jour par les données, et l'on obtient une loi a posteriori d'où se lisent directement \(P(p_B \gt p_A)\) et l'espérance de perte en cas de mauvais choix. Avantages : interprétation naturelle, arrêt anticipé sans pénalité formelle, intégration d'une connaissance préalable. Coûts : il faut assumer un a priori, et la communication d'un résultat bayésien exige un peu de pédagogie. Le module 9 le détaille, avec une implémentation en dix lignes.</p>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>L'erreur type décroît en \(1/\sqrt{n}\) : la précision coûte quadratiquement cher.</li>
+        <li>Un estimateur est une variable aléatoire ; l'erreur type décroît en \(1/\sqrt{n}\), donc la précision coûte quadratiquement cher.</li>
         <li>Un IC porte sur la procédure, pas sur le paramètre ; Wilson pour les proportions, bootstrap quand il n'y a pas de formule.</li>
         <li>La p-value est \(P(\text{données}\mid H_0)\), rien d'autre. Rapporter effet + IC + p, dans cet ordre.</li>
         <li>Dimensionner avant de collecter : \(n \approx 16/d^2\). Une étude sous-puissante surestime les effets qu'elle détecte.</li>
         <li>Welch par défaut ; les tests de normalité sont inutiles sur grand échantillon.</li>
         <li>Corriger les comparaisons multiples : Holm pour quelques tests, Benjamini-Hochberg pour des centaines.</li>
-        <li>Pas de causalité sans hypothèse causale : confondants, collisionneurs, randomisation.</li>
+        <li>Pas de causalité sans hypothèse causale : confondants à contrôler, collisionneurs à ne surtout pas contrôler, randomisation quand c'est possible.</li>
         <li>Dans un A/B test : une métrique, une durée fixée à l'avance, une randomisation par utilisateur, pas de coup d'œil anticipé.</li>
       </ul>
     </div>
