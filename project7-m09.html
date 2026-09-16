@@ -52,192 +52,236 @@
       <ol>
         <li><a href="#lois">Les lois usuelles comme briques de modélisation</a></li>
         <li><a href="#vraisemblance">Vraisemblance, MLE, MAP</a></li>
-        <li><a href="#bayes">Bayes comme mise à jour, et la conjugaison</a></li>
-        <li><a href="#mcmc">MCMC : quand il n'y a pas de forme close</a></li>
-        <li><a href="#hierarchique">Modèles hiérarchiques et partial pooling</a></li>
+        <li><a href="#bayes">Bayes, avec un exemple chiffré</a></li>
+        <li><a href="#conjugaison">Conjugaison et A/B test bayésien</a></li>
+        <li><a href="#mcmc">MCMC : échantillonner un a posteriori</a></li>
+        <li><a href="#hierarchique">Modèles hiérarchiques</a></li>
         <li><a href="#vi">Inférence variationnelle</a></li>
         <li><a href="#incertitude">Aléatoire contre épistémique</a></li>
-        <li><a href="#uq-ml">Quantifier l'incertitude d'un modèle de ML</a></li>
+        <li><a href="#uq-ml">Quantifier l'incertitude d'un modèle</a></li>
         <li><a href="#conformal">Prédiction conforme</a></li>
       </ol>
     </div>
 
     <h2 id="lois">1. Les lois usuelles comme briques de modélisation</h2>
-    <p>Choisir une loi, c'est faire une hypothèse sur le mécanisme qui a engendré les données. L'essentiel du travail de modélisation probabiliste tient dans ce choix, et il se raisonne à partir du processus physique, pas à partir de l'allure de l'histogramme.</p>
+    <p>Choisir une loi, c'est faire une hypothèse sur le <em>mécanisme</em> qui a engendré les données. L'essentiel du travail de modélisation probabiliste tient dans ce choix, et il se raisonne à partir du phénomène physique, pas à partir de l'allure de l'histogramme.</p>
 
     <div class="code-label">quelle loi pour quel mécanisme</div>
-    <div class="code-block"><pre>Bernoulli / Binomiale   succès-échec, nombre de succès sur n essais indépendants
-Poisson                 comptage d'événements rares dans un intervalle fixe
-                        (désintégrations, pannes, arrivées). Var = espérance.
-Binomiale négative      comptage SURDISPERSÉ (Var &gt; espérance) : le cas réel le plus
-                        fréquent, quand le taux varie lui-même d'une unité à l'autre.
-Exponentielle           temps d'attente sans mémoire entre événements poissoniens
-Weibull                 durée de vie avec taux de défaillance variable : LA loi de la
-                        fiabilité mécanique (k &lt; 1 mortalité infantile, k &gt; 1 usure)
-Gamma                   somme d'exponentielles, temps de service, priors de précision
-Beta                    une proportion inconnue dans [0,1] : le prior naturel d'un taux
-Normale                 somme de nombreux effets indépendants (TCL)
+    <div class="code-block"><pre>Bernoulli / Binomiale   succès-échec ; nombre de succès sur n essais indépendants
+Poisson                 comptage d'événements RARES et INDÉPENDANTS dans un
+                        intervalle fixe (désintégrations, pannes, arrivées).
+                        Propriété : variance = espérance.
+Binomiale négative      comptage SURDISPERSÉ (variance &gt; espérance) : le cas réel
+                        le plus fréquent, quand le taux varie d'une unité à l'autre.
+Exponentielle           temps d'attente entre événements poissoniens. SANS MÉMOIRE :
+                        avoir attendu 10 min ne change pas l'attente restante.
+Weibull                 durée de vie à taux de défaillance variable : LA loi de la
+                        fiabilité (k &lt; 1 mortalité infantile, k &gt; 1 usure) — module 15
+Gamma                   somme d'exponentielles ; temps de service ; a priori de précision
+Beta                    une proportion inconnue dans [0,1] : l'a priori naturel d'un taux
+Normale                 SOMME de nombreux effets indépendants (TCL, module 8)
 Log-normale             PRODUIT de nombreux effets : tailles, revenus, durées, prix
 Student                 normale à queues épaisses : régression robuste aux aberrants
 Dirichlet               une distribution sur des proportions qui somment à 1</pre></div>
 
     <div class="step-block">
       <h4>Le réflexe qui évite les erreurs</h4>
-      <p>Une variable strictement positive et très asymétrique est rarement normale : elle est souvent log-normale ou gamma. Modéliser un temps de réparation par une loi normale conduit à des probabilités non nulles de durées négatives — ce qui se voit immédiatement dans les prédictions absurdes. De même, un comptage modélisé par une Poisson alors que les données sont surdispersées produit des intervalles de prédiction beaucoup trop étroits, et donc une fausse confiance.</p>
+      <p>Une variable strictement positive et très asymétrique n'est presque jamais normale : elle est souvent log-normale ou gamma. Modéliser un temps de réparation par une loi normale attribue une probabilité non nulle à des durées <em>négatives</em>, ce qui se voit immédiatement dans les prédictions absurdes. De même, un comptage modélisé par une loi de Poisson alors que les données sont surdispersées produit des intervalles beaucoup trop étroits, donc une fausse confiance — et c'est le cas dès que le taux d'événements varie entre individus, ce qui est la règle plutôt que l'exception.</p>
     </div>
 
     <h2 id="vraisemblance">2. Vraisemblance, MLE, MAP</h2>
-    <p>La <strong>vraisemblance</strong> est la probabilité des données observées vue comme fonction du paramètre : \(\mathcal{L}(\theta) = p(y \mid \theta)\). L'estimation du maximum de vraisemblance consiste à prendre le \(\theta\) qui rend les données les plus probables.</p>
+    <p>La <strong>vraisemblance</strong> est la probabilité des données observées, vue comme une fonction du paramètre : \(\mathcal{L}(\theta) = p(y \mid \theta)\). Attention au renversement de perspective — ce n'est pas une densité de probabilité en \(\theta\), c'est la même formule lue « à l'envers » : les données sont fixées, le paramètre varie.</p>
+    <p>L'estimation du maximum de vraisemblance consiste à prendre le \(\theta\) qui rend les données observées les plus probables :</p>
     <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MLE}} = \arg\max_\theta \sum_{i=1}^{n} \log p(y_i \mid \theta) \]</div>
-    <p>Presque toutes les fonctions de perte du cours en découlent : la perte quadratique est la log-vraisemblance d'un bruit gaussien homoscédastique, l'entropie croisée celle d'une Bernoulli, la perte de Poisson celle d'un comptage. Choisir une perte, c'est donc choisir implicitement un modèle de bruit — et l'expliciter permet de le choisir correctement plutôt que par habitude.</p>
+    <p>On travaille sur le logarithme pour deux raisons : il transforme un produit en somme (plus stable numériquement, un produit de milliers de probabilités valant zéro en virgule flottante), et il ne change pas l'argmax puisque le logarithme est croissant.</p>
+
+    <div class="code-label">toutes les pertes du cours sont des log-vraisemblances</div>
+    <div class="code-block"><pre>Bruit gaussien homoscédastique   → -log p ∝ (y - ŷ)²        = perte quadratique
+Bernoulli                        → -log p = entropie croisée
+Poisson                          → -log p = perte de Poisson (comptages)
+Student                          → -log p ≈ perte robuste (queues épaisses)
+Laplace                          → -log p ∝ |y - ŷ|         = MAE</pre></div>
+    <p>Autrement dit : <strong>choisir une perte, c'est choisir un modèle de bruit</strong>. L'expliciter permet de le choisir correctement plutôt que par habitude — si les erreurs de mesure ont des queues épaisses, minimiser un MSE revient à supposer un bruit gaussien qu'on sait faux, et le modèle sera tiré par les aberrants.</p>
 
     <p>En ajoutant un <em>a priori</em> \(p(\theta)\), on obtient l'estimateur du maximum a posteriori :</p>
     <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MAP}} = \arg\max_\theta \big[\log p(y\mid\theta) + \log p(\theta)\big] \]</div>
 
     <div class="warning-block">
-      <strong>La régularisation est un a priori déguisé.</strong> Avec un prior gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un prior de Laplace, on retrouve exactement le lasso. Les modules 12 et 7 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
+      <strong>La régularisation est un a priori déguisé.</strong> Avec un a priori gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un a priori de Laplace (pic en zéro, queues lourdes), on retrouve exactement le lasso. Les modules 7 et 12 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
     </div>
 
-    <h2 id="bayes">3. Bayes comme mise à jour, et la conjugaison</h2>
+    <h2 id="bayes">3. Bayes, avec un exemple chiffré</h2>
     <p>Le MAP ne retient qu'un point. L'approche bayésienne complète conserve toute la distribution :</p>
     <div style="text-align:center;overflow-x:auto">\[ \underbrace{p(\theta\mid y)}_{\text{a posteriori}} = \frac{\overbrace{p(y\mid\theta)}^{\text{vraisemblance}}\;\overbrace{p(\theta)}^{\text{a priori}}}{\underbrace{p(y)}_{\text{évidence}}} \;\propto\; p(y\mid\theta)\,p(\theta) \]</div>
 
-    <p>L'interprétation est opérationnelle : l'a priori encode ce qu'on sait avant de regarder les données, la vraisemblance ce que les données disent, et l'a posteriori combine les deux en pondérant chacun par sa précision. Avec peu de données, l'a priori domine ; avec beaucoup, il s'efface — c'est un mécanisme de régularisation automatique qui s'adapte à la quantité d'information disponible.</p>
+    <p>L'interprétation est opérationnelle : l'a priori encode ce qu'on sait <em>avant</em> de regarder les données, la vraisemblance ce que les données disent, et l'a posteriori combine les deux en pondérant chacun par sa précision. Avec peu de données, l'a priori domine ; avec beaucoup, il s'efface. C'est un mécanisme de régularisation qui s'adapte automatiquement à la quantité d'information disponible.</p>
 
-    <p>Dans quelques cas heureux, l'a posteriori appartient à la même famille que l'a priori : on parle de <strong>conjugaison</strong>, et le calcul devient une simple mise à jour de paramètres. Le cas Beta-Binomial est le plus utile :</p>
+    <div class="step-block">
+      <h4>L'exemple qui rend le théorème concret</h4>
+      <p>Un test de dépistage détecte 99 % des malades (sensibilité) et se trompe dans 1 % des cas chez les sains (faux positifs). La maladie touche 0,1 % de la population. Votre test est positif : quelle est la probabilité que vous soyez malade ?</p>
+      <p>L'intuition répond « 99 % ». Le calcul répond autrement. Sur 100 000 personnes : 100 sont malades, dont 99 sont détectées ; 99 900 sont saines, dont 999 sont faussement positives. Parmi les 1 098 positifs, 99 sont réellement malades :</p>
+      <div style="text-align:center;overflow-x:auto">\[ P(\text{malade}\mid +) = \frac{0{,}99 \times 0{,}001}{0{,}99 \times 0{,}001 + 0{,}01 \times 0{,}999} = \frac{0{,}00099}{0{,}01098} \approx 9\,\% \]</div>
+      <p>Neuf pour cent, pas quatre-vingt-dix-neuf. L'a priori — la rareté de la maladie — écrase la qualité du test. C'est exactement le mécanisme qui explique pourquoi un détecteur de fraude à 99 % de précision apparente produit une majorité de fausses alertes quand la fraude est rare (module 7, PR-AUC), et pourquoi la question « quelle proportion de mes alertes sont justes ? » n'a pas la même réponse que « quelle proportion des fraudes est-ce que j'attrape ? ».</p>
+    </div>
+
+    <h2 id="conjugaison">4. Conjugaison et A/B test bayésien</h2>
+    <p>Dans quelques cas heureux, l'a posteriori appartient à la même famille que l'a priori : on parle de <strong>conjugaison</strong>, et le calcul se réduit à une mise à jour de paramètres. Le cas Beta-Binomial est le plus utile :</p>
     <div style="text-align:center;overflow-x:auto">\[ p \sim \text{Beta}(\alpha,\beta), \quad k \mid p \sim \text{Bin}(n,p) \;\Longrightarrow\; p \mid k \sim \text{Beta}(\alpha + k,\; \beta + n - k) \]</div>
+    <p>La lecture est intuitive : \(\alpha\) et \(\beta\) se comportent comme des succès et des échecs « virtuels » observés avant l'expérience. Un a priori Beta(1,1) est uniforme — aucune opinion ; un Beta(30,70) affirme qu'on croit le taux proche de 30 %, avec la force de 100 observations.</p>
 
     <div class="code-label">Python — A/B test bayésien, en dix lignes</div>
     <div class="code-block"><pre>import numpy as np
 from scipy import stats
 
-# a priori faiblement informatif : Beta(1,1) = uniforme sur [0,1]
+# mêmes données qu'au module 8, autre lecture
 a_post = stats.beta(1 + 1183, 1 + 20_143 - 1183)      # variante A
 b_post = stats.beta(1 + 1279, 1 + 20_089 - 1279)      # variante B
 
 rng = np.random.default_rng(0)
 ta, tb = a_post.rvs(200_000, random_state=rng), b_post.rvs(200_000, random_state=rng)
 
-print(f"P(B meilleure que A) = {(tb &gt; ta).mean():.3f}")
-print(f"gain relatif médian  = {np.median((tb - ta) / ta):+.2%}")
+print(f"P(B meilleure que A)         = {(tb &gt; ta).mean():.3f}")      # 0.982
+print(f"gain relatif médian          = {np.median((tb - ta) / ta):+.2%}")
+print(f"P(gain &gt; 5 %)                = {((tb - ta) / ta &gt; 0.05).mean():.3f}")
 print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")</pre></div>
 
-    <p>La dernière ligne est ce qui manque le plus à l'approche fréquentiste du module 8 : la <em>perte espérée</em> en cas de mauvais choix. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel.</p>
+    <p>La dernière ligne est ce qui manque à l'approche fréquentiste : la <em>perte espérée</em> en cas de mauvais choix, exprimée dans l'unité de la métrique. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel. C'est le pont naturel vers le module 22.</p>
 
-    <h2 id="mcmc">4. MCMC : quand il n'y a pas de forme close</h2>
-    <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable en dimension élevée. La solution : ne pas calculer l'a posteriori, mais <strong>y échantillonner</strong>. On construit une chaîne de Markov dont la loi stationnaire est précisément \(p(\theta\mid y)\).</p>
+    <h2 id="mcmc">5. MCMC : échantillonner un a posteriori</h2>
+    <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable : en dimension 50, aucune quadrature ne tient. La solution consiste à renoncer à <em>calculer</em> l'a posteriori pour se contenter d'y <strong>échantillonner</strong> — ce qui suffit, puisqu'avec des échantillons on obtient moyennes, quantiles, intervalles et probabilités par simple comptage.</p>
+    <p>Le procédé : construire une chaîne de Markov — une marche aléatoire dont chaque pas ne dépend que du précédent — conçue de sorte que, après une phase de chauffe, la fréquence de passage dans chaque région soit proportionnelle à la densité a posteriori. On laisse la chaîne courir, et les positions visitées <em>sont</em> l'échantillon recherché.</p>
 
     <ul>
-      <li><strong>Metropolis-Hastings</strong> — proposer un déplacement, l'accepter avec la probabilité \(\min(1, \frac{p(\theta')q(\theta\mid\theta')}{p(\theta)q(\theta'\mid\theta)})\). Remarquable : le rapport élimine la constante de normalisation inconnue. Mais la marche aléatoire explore mal en grande dimension.</li>
-      <li><strong>Gibbs</strong> — mettre à jour chaque coordonnée selon sa conditionnelle. Efficace si ces conditionnelles sont connues, très lent si les paramètres sont fortement corrélés.</li>
-      <li><strong>Hamiltonien (HMC) et NUTS</strong> — la méthode moderne. On introduit une variable d'impulsion et on simule une dynamique hamiltonienne sur le paysage \(-\log p(\theta\mid y)\), intégrée par un schéma saute-mouton. Le gradient guide la trajectoire, ce qui permet de parcourir de longues distances avec un taux d'acceptation élevé. NUTS choisit automatiquement la longueur de trajectoire. C'est ce qui a rendu l'inférence bayésienne praticable sur des modèles à centaines de paramètres.</li>
+      <li><strong>Metropolis-Hastings</strong> — proposer un déplacement, l'accepter avec une probabilité qui compare les densités du point proposé et du point courant. La beauté du procédé : le rapport élimine la constante de normalisation inconnue, celle-là même qu'on ne sait pas calculer. Mais la marche aléatoire explore mal en grande dimension, où presque toutes les directions mènent vers des zones de faible densité.</li>
+      <li><strong>Gibbs</strong> — mettre à jour chaque coordonnée selon sa loi conditionnelle aux autres. Efficace si ces conditionnelles sont connues, très lent si les paramètres sont fortement corrélés.</li>
+      <li><strong>Hamiltonien (HMC) et NUTS</strong> — la méthode moderne. On introduit une variable d'impulsion et l'on simule une dynamique physique sur le paysage \(-\log p(\theta\mid y)\), vu comme une énergie potentielle : la « bille » suit les vallées au lieu de tâtonner. Le gradient guide la trajectoire, ce qui permet de parcourir de longues distances avec un taux d'acceptation élevé. NUTS choisit automatiquement la longueur de trajectoire, supprimant le principal réglage manuel. C'est ce qui a rendu l'inférence bayésienne praticable sur des modèles à centaines de paramètres.</li>
     </ul>
 
     <div class="step-block">
       <h4>Diagnostics : une chaîne qui a convergé, ça se vérifie</h4>
       <ul>
-        <li><strong>\(\hat{R}\) (Gelman-Rubin)</strong> — compare la variance entre plusieurs chaînes à la variance intra-chaîne. Il faut \(\hat R \lt 1{,}01\) ; au-delà, les chaînes n'explorent pas la même région et <em>rien</em> ne doit être interprété.</li>
-        <li><strong>ESS</strong> (taille d'échantillon effective) — les tirages MCMC sont autocorrélés : 10 000 tirages peuvent n'en valoir que 200 d'indépendants. Viser un ESS d'au moins quelques centaines par quantité d'intérêt.</li>
-        <li><strong>Divergences</strong> (HMC) — signalent une géométrie trop courbée pour le pas d'intégration, typiquement l'« entonnoir » des modèles hiérarchiques. Le remède est presque toujours une reparamétrisation (forme non centrée), pas une augmentation du nombre d'itérations.</li>
+        <li><strong>\(\hat{R}\) (Gelman-Rubin)</strong> — compare la variance entre plusieurs chaînes lancées de points différents à la variance à l'intérieur de chacune. Il faut \(\hat R \lt 1{,}01\) ; au-delà, les chaînes n'explorent pas la même région et <em>rien</em> ne doit être interprété.</li>
+        <li><strong>ESS</strong> (taille d'échantillon effective) — les tirages MCMC sont autocorrélés : 10 000 tirages peuvent n'en valoir que 200 d'indépendants. Viser au moins quelques centaines par quantité d'intérêt.</li>
+        <li><strong>Divergences</strong> (HMC) — signalent une géométrie trop courbée pour le pas d'intégration, typiquement l'« entonnoir » des modèles hiérarchiques. Le remède est presque toujours une reparamétrisation (forme non centrée, section suivante), pas une augmentation du nombre d'itérations.</li>
         <li><strong>Prédictif a posteriori</strong> — simuler des jeux de données depuis le modèle ajusté et les comparer aux vraies données. C'est le test le plus parlant : si les simulations ne ressemblent pas aux observations, le modèle est faux, quelle que soit la qualité de la convergence.</li>
       </ul>
     </div>
 
-    <h2 id="hierarchique">5. Modèles hiérarchiques et partial pooling</h2>
-    <p>C'est l'apport le plus utile du cadre bayésien en pratique. Situation typique : on veut estimer un taux par site, par machine ou par client, mais certains groupes n'ont que trois observations. Deux extrêmes également mauvais :</p>
+    <h2 id="hierarchique">6. Modèles hiérarchiques</h2>
+    <p>C'est l'apport le plus utile du cadre bayésien en pratique. Situation typique : estimer un taux par site, par machine ou par client, alors que certains groupes n'ont que trois observations. Deux extrêmes également mauvais :</p>
     <ul>
-      <li><strong>Aucun regroupement</strong> — un modèle par groupe : les petits groupes donnent des estimations absurdes (un groupe avec 1 succès sur 1 essai affiche 100 %).</li>
+      <li><strong>Aucun regroupement</strong> — un modèle indépendant par groupe : un groupe avec 1 succès sur 1 essai affiche 100 %, ce qui est absurde.</li>
       <li><strong>Regroupement total</strong> — une seule estimation globale : on efface toute différence réelle entre groupes.</li>
     </ul>
-    <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés.</p>
+    <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés à partir des données.</p>
     <div style="text-align:center;overflow-x:auto">\[ y_{ij} \sim \mathcal{N}(\theta_j, \sigma^2), \qquad \theta_j \sim \mathcal{N}(\mu, \tau^2), \qquad \mu,\sigma,\tau \sim \text{a priori} \]</div>
-    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\). C'est exactement l'effet du lissage du <em>target encoding</em> (module 10), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
+    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité — un groupe de 3 observations sera presque ramené à la moyenne, un groupe de 3 000 gardera sa valeur propre. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\), qui mesure la dispersion réelle entre groupes. C'est exactement l'effet du lissage du <em>target encoding</em> (module 10), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
 
     <div class="code-label">Python — PyMC, modèle hiérarchique non centré</div>
-    <div class="code-block"><pre>import pymc as pm
+    <div class="code-block"><pre>import pymc as pm, arviz as az
 
-with pm.Model() as modele:
+with pm.Model(coords={"groupe": noms_groupes}) as modele:
     mu    = pm.Normal("mu", 0, 5)                 # moyenne globale
-    tau   = pm.HalfNormal("tau", 2)               # dispersion entre groupes
-    sigma = pm.HalfNormal("sigma", 2)             # bruit intra-groupe
+    tau   = pm.HalfNormal("tau", 2)               # dispersion ENTRE groupes
+    sigma = pm.HalfNormal("sigma", 2)             # bruit INTRA-groupe
 
-    z      = pm.Normal("z", 0, 1, dims="groupe")  # paramétrage NON CENTRÉ :
-    theta  = pm.Deterministic("theta", mu + tau * z, dims="groupe")   # évite l'entonnoir
+    # paramétrage NON CENTRÉ : on tire un z standard puis on le décale.
+    # Mathématiquement équivalent, mais la géométrie devient beaucoup plus
+    # facile à explorer pour NUTS (évite l'entonnoir et les divergences).
+    z     = pm.Normal("z", 0, 1, dims="groupe")
+    theta = pm.Deterministic("theta", mu + tau * z, dims="groupe")
 
     pm.Normal("obs", mu=theta[idx_groupe], sigma=sigma, observed=y)
 
     trace = pm.sample(2000, tune=1000, chains=4, target_accept=0.9)
 
-import arviz as az
-print(az.summary(trace, var_names=["mu", "tau"]))   # r_hat, ess_bulk, intervalles crédibles</pre></div>
+print(az.summary(trace, var_names=["mu", "tau"]))   # r_hat, ess_bulk, intervalles
+az.plot_forest(trace, var_names=["theta"])          # le rétrécissement, visible</pre></div>
 
-    <h2 id="vi">6. Inférence variationnelle</h2>
-    <p>MCMC est asymptotiquement exact mais coûteux : chaque itération évalue la vraisemblance sur toutes les données, ce qui devient impraticable sur des millions d'observations ou des réseaux de neurones. L'<strong>inférence variationnelle</strong> transforme l'inférence en optimisation : on cherche, dans une famille paramétrée \(q_\phi\) (souvent des gaussiennes indépendantes), celle qui minimise la divergence de Kullback-Leibler à l'a posteriori. Cela revient à maximiser la borne inférieure de l'évidence :</p>
+    <h2 id="vi">7. Inférence variationnelle</h2>
+    <p>MCMC est asymptotiquement exact mais coûteux : chaque itération évalue la vraisemblance sur toutes les données, ce qui devient impraticable sur des millions d'observations ou sur un réseau de neurones. L'<strong>inférence variationnelle</strong> transforme l'inférence en optimisation : on cherche, dans une famille paramétrée \(q_\phi\) (souvent des gaussiennes indépendantes), celle qui approche le mieux l'a posteriori au sens de la divergence de Kullback-Leibler. Cela revient à maximiser la borne inférieure de l'évidence :</p>
     <div style="text-align:center;overflow-x:auto">\[ \text{ELBO}(\phi) = \mathbb{E}_{q_\phi}\big[\log p(y\mid\theta)\big] - \operatorname{KL}\!\big(q_\phi(\theta)\,\|\,p(\theta)\big) \]</div>
-    <p>Le premier terme demande de bien expliquer les données, le second de ne pas trop s'écarter de l'a priori. Avantage : on retrouve un problème d'optimisation classique, compatible avec les mini-lots et le GPU (module 7). Inconvénient à connaître : une famille de gaussiennes indépendantes <em>sous-estime systématiquement</em> la variance a posteriori et ignore les corrélations entre paramètres. Les intervalles produits sont donc trop étroits — utilisables pour un ordre de grandeur, pas pour une marge de sécurité.</p>
+    <p>Le premier terme demande de bien expliquer les données, le second de ne pas trop s'écarter de l'a priori : on retrouve la structure « ajustement + régularisation » de tout le cours. Avantage : un problème d'optimisation classique, compatible avec les mini-lots et le GPU (module 7). Inconvénient à connaître : une famille de gaussiennes indépendantes <em>sous-estime systématiquement</em> la variance a posteriori et ignore les corrélations entre paramètres. Les intervalles produits sont donc trop étroits — utilisables pour un ordre de grandeur, pas pour une marge de sécurité.</p>
+    <p>Les outils : <strong>PyMC</strong> (le plus accessible), <strong>NumPyro</strong> (sur JAX, très rapide), <strong>Stan</strong> (la référence historique). Tous partagent la même logique : on écrit le <em>modèle génératif</em> — comment les données auraient pu être produites — et l'inférence est prise en charge.</p>
 
-    <p>Les outils pratiques : <strong>PyMC</strong> (le plus accessible), <strong>NumPyro</strong> (sur JAX, très rapide, NUTS efficace), <strong>Stan</strong> (la référence historique, excellente documentation). Tous partagent la même logique : on écrit le <em>modèle génératif</em>, l'inférence est prise en charge.</p>
-
-    <h2 id="incertitude">7. Aléatoire contre épistémique</h2>
+    <h2 id="incertitude">8. Aléatoire contre épistémique</h2>
     <p>Distinction fondamentale, et régulièrement ignorée :</p>
     <div class="code-label">deux incertitudes de nature différente</div>
-    <div class="code-block"><pre>ALÉATOIRE (aleatoric)          ÉPISTÉMIQUE (epistemic)
-bruit intrinsèque du phénomène  ignorance du modèle
-deux essais identiques donnent  le modèle n'a pas vu de données dans cette région
+    <div class="code-block"><pre>ALÉATOIRE (aleatoric)            ÉPISTÉMIQUE (epistemic)
+bruit intrinsèque du phénomène   ignorance du modèle
+deux essais identiques donnent   le modèle n'a pas vu de données dans cette région
 deux résultats différents
-NE diminue PAS avec plus de     DIMINUE avec plus de données
-données
-ex : dispersion d'une mesure,   ex : prédire hors du domaine d'entraînement,
-variabilité d'un matériau       extrapolation, régime jamais observé</pre></div>
+NE diminue PAS avec plus         DIMINUE avec plus de données
+de données
+ex : dispersion d'une mesure,    ex : prédire hors du domaine d'entraînement,
+variabilité d'un matériau        extrapolation, régime jamais observé</pre></div>
 
-    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut dimensionner une marge : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est hors de son domaine de validité : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 11) — ou pour déclencher un repli sur une procédure classique. Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
+    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut <em>dimensionner une marge</em> : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est <em>hors de son domaine de validité</em> : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 11) ou pour se replier sur une procédure de référence (module 22). Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
 
     <div class="warning-block">
-      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — c'est le comportement le plus dangereux pour un usage industriel. Les GP (module 17), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données.
+      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — un classificateur d'images entraîné sur des chiens et des chats attribue 99 % de confiance à une photo de voiture. C'est le comportement le plus dangereux pour un usage industriel. Les processus gaussiens (module 17), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données observées.
     </div>
 
-    <h2 id="uq-ml">8. Quantifier l'incertitude d'un modèle de ML</h2>
+    <h2 id="uq-ml">9. Quantifier l'incertitude d'un modèle</h2>
     <div class="code-label">méthodes, du plus simple au plus coûteux</div>
-    <div class="code-block"><pre>Régression quantile         entraîner sur la perte pinball aux quantiles 5 % et 95 %.
-                            Capture l'incertitude ALÉATOIRE, y compris hétéroscédastique.
-                            Disponible dans LightGBM et HistGradientBoosting : très bon
-                            rapport effort/résultat sur données tabulaires.
-Ensembles profonds          entraîner 5 réseaux avec des graines différentes ; la
-                            dispersion des prédictions estime l'incertitude ÉPISTÉMIQUE.
-                            Simple, robuste, la référence empirique — coût ×5.
-MC dropout                  laisser le dropout actif à l'inférence et échantillonner.
-                            Bon marché, mais approximation grossière.
-Sortie probabiliste         faire prédire au réseau moyenne ET variance (perte de
-                            log-vraisemblance gaussienne) : sépare les deux incertitudes.
-Bayésien complet            poids traités comme des variables aléatoires (VI, SWAG).
-                            Élégant, coûteux, rarement meilleur qu'un ensemble profond.
-Processus gaussien          incertitude exacte par construction (module 17) — mais O(n³).
-Prédiction conforme         garantie de couverture distribution-free, sur n'importe quel
-                            modèle déjà entraîné (section suivante).</pre></div>
+    <div class="code-block"><pre>Régression quantile      entraîner sur la perte pinball aux quantiles 5 % et 95 %.
+                         Capture l'incertitude ALÉATOIRE, y compris hétéroscédastique.
+                         Disponible dans LightGBM et HistGradientBoosting : le
+                         meilleur rapport effort/résultat sur données tabulaires.
+Ensembles profonds       entraîner 5 réseaux avec des graines différentes ; la
+                         dispersion des prédictions estime l'incertitude ÉPISTÉMIQUE.
+                         Simple, robuste, la référence empirique — coût ×5.
+MC dropout               laisser le dropout actif à l'inférence et échantillonner.
+                         Bon marché, mais approximation grossière.
+Sortie probabiliste      faire prédire au réseau moyenne ET variance (perte de
+                         log-vraisemblance gaussienne) : sépare les deux incertitudes.
+Bayésien complet         poids traités comme variables aléatoires (VI, SWAG).
+                         Élégant, coûteux, rarement meilleur qu'un ensemble profond.
+Processus gaussien       incertitude exacte par construction (module 17) — mais O(n³).
+Prédiction conforme      garantie de couverture sur n'importe quel modèle déjà
+                         entraîné (section suivante).</pre></div>
 
-    <h2 id="conformal">9. Prédiction conforme</h2>
-    <p>La prédiction conforme est, à mon sens, la technique la plus sous-utilisée du domaine. Elle fournit un intervalle de prédiction avec une <strong>garantie de couverture valable à échantillon fini</strong>, sans aucune hypothèse sur la distribution des données ni sur le modèle — seulement l'échangeabilité des observations.</p>
+    <div class="code-label">Python — régression quantile, immédiatement applicable</div>
+    <div class="code-block"><pre>from lightgbm import LGBMRegressor
 
-    <p>La version par découpage tient en trois lignes. On met de côté un jeu de calibration disjoint de l'entraînement, on y calcule les scores de non-conformité \(s_i = |y_i - \hat f(x_i)|\), puis on prend le quantile empirique \(\hat q\) d'ordre \(\lceil (n+1)(1-\alpha)\rceil / n\). L'intervalle \(\hat f(x) \pm \hat q\) vérifie alors :</p>
+modeles = {}
+for alpha in (0.05, 0.5, 0.95):
+    modeles[alpha] = LGBMRegressor(objective="quantile", alpha=alpha,
+                                   n_estimators=500).fit(X_tr, y_tr)
+
+bas  = modeles[0.05].predict(X_te)
+med  = modeles[0.50].predict(X_te)
+haut = modeles[0.95].predict(X_te)
+
+couverture = np.mean((y_te &gt;= bas) &amp; (y_te &lt;= haut))
+print(f"couverture empirique : {couverture:.1%}")   # visée : 90 %
+# largeur variable selon les points : c'est le signe d'un bruit hétéroscédastique</pre></div>
+
+    <h2 id="conformal">10. Prédiction conforme</h2>
+    <p>La prédiction conforme est, à mon sens, la technique la plus sous-utilisée du domaine. Elle fournit un intervalle de prédiction avec une <strong>garantie de couverture valable à échantillon fini</strong>, sans aucune hypothèse sur la distribution des données ni sur le modèle — seulement l'échangeabilité des observations, c'est-à-dire le fait que l'ordre n'a pas d'importance.</p>
+
+    <p>La version par découpage tient en trois étapes. On met de côté un jeu de calibration, disjoint de l'entraînement. On y calcule les scores de non-conformité \(s_i = |y_i - \hat f(x_i)|\) — à quel point le modèle s'est trompé sur chaque point. On prend le quantile empirique \(\hat q\) d'ordre \(\lceil (n+1)(1-\alpha)\rceil / n\). L'intervalle \(\hat f(x) \pm \hat q\) vérifie alors, pour un nouveau point :</p>
     <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(y_{\text{nouveau}} \in \hat{C}(x_{\text{nouveau}})\big) \;\geq\; 1-\alpha \]</div>
+    <p>L'intuition : si le modèle s'est trompé de moins de \(\hat q\) sur 90 % des points de calibration, et que le nouveau point est échangeable avec ceux-là, il a 90 % de chances de tomber dans la même marge.</p>
 
-    <div class="code-label">Python — conformalisation d'un modèle quelconque</div>
+    <div class="code-label">Python — conformaliser n'importe quel modèle</div>
     <div class="code-block"><pre>import numpy as np
 
-modele.fit(X_train, y_train)                       # n'importe quel modèle : GBM, réseau...
+modele.fit(X_train, y_train)                       # GBM, réseau, n'importe quoi
 
 scores = np.abs(y_calib - modele.predict(X_calib))            # non-conformité
 n, alpha = len(scores), 0.1
 q = np.quantile(scores, np.ceil((n + 1) * (1 - alpha)) / n, method="higher")
 
 pred = modele.predict(X_test)
-bas, haut = pred - q, pred + q                                # couverture garantie à 90 %
-print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")</pre></div>
+bas, haut = pred - q, pred + q
+print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")
+# ≈ 90 %, par construction — quelle que soit la qualité du modèle</pre></div>
 
-    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise des quantiles prédits, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré.</p>
+    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise les quantiles prédits par la section précédente, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré, et directement exploitable pour décider de transmettre le cas à un humain (module 22).</p>
 
     <div class="warning-block">
-      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe (d'où les variantes <em>Mondrian</em>, conditionnées par groupe). Et elle suppose l'échangeabilité : si la distribution dérive (module 24) ou si les données sont temporelles, la garantie tombe — il existe des versions adaptatives en ligne pour ce cas. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges, ce qui est déjà une information utile.
+      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe — d'où les variantes conditionnées par groupe. Elle suppose l'échangeabilité : si la distribution dérive (module 24) ou si les données sont temporelles, la garantie tombe, et il faut des versions adaptatives en ligne. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges — ce qui est déjà une information utile, et honnête.
     </div>
 
     <div class="step-block">
@@ -245,11 +289,12 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
       <ul>
         <li>Choisir une loi, c'est faire une hypothèse sur le mécanisme ; choisir une perte, c'est choisir un modèle de bruit.</li>
         <li>Ridge et lasso sont des MAP avec a priori gaussien et laplacien : la régularisation est une croyance explicite.</li>
+        <li>Bayes renverse la conditionnelle : avec un événement rare, un test très précis produit surtout des faux positifs.</li>
         <li>L'a posteriori combine a priori et données en pondérant par la précision ; il s'efface quand les données abondent.</li>
         <li>NUTS/HMC rend l'inférence praticable ; toujours vérifier \(\hat R\), l'ESS, les divergences et le prédictif a posteriori.</li>
         <li>Les modèles hiérarchiques font du regroupement partiel : la meilleure réponse aux groupes à faibles effectifs.</li>
         <li>Distinguer incertitude aléatoire (irréductible, à dimensionner) et épistémique (réductible, signal de hors-domaine).</li>
-        <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour quelques lignes de code.</li>
+        <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour cinq lignes de code.</li>
       </ul>
     </div>
   </div>
