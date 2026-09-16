@@ -55,6 +55,7 @@
         <li><a href="#ltr">Learning to rank</a></li>
         <li><a href="#biais-clics">Données de clics et biais de position</a></li>
         <li><a href="#collaboratif">Filtrage collaboratif et factorisation</a></li>
+        <li><a href="#implicite">Retour implicite</a></li>
         <li><a href="#neuronal">Two-tower et recommandation séquentielle</a></li>
         <li><a href="#evaluation">Évaluer : hors ligne et en ligne</a></li>
         <li><a href="#problemes">Démarrage à froid, popularité, boucles</a></li>
@@ -63,70 +64,119 @@
 
     <h2 id="architecture">1. L'architecture commune</h2>
     <div class="code-label">le pipeline en trois étages</div>
-    <div class="code-block"><pre>1. RÉCUPÉRATION (retrieval)     millions → quelques centaines de candidats
-   contraintes : quelques millisecondes, modèles simples et indexables
+    <div class="code-block"><pre>1. RÉCUPÉRATION (retrieval)      millions → quelques centaines de candidats
+   contrainte : quelques millisecondes → modèles simples et INDEXABLES
    moyens : BM25, index vectoriel ANN (module 20), filtres métier, règles
 
 2. CLASSEMENT (ranking)          centaines → dizaines, ordonnées finement
-   contraintes : dizaines de millisecondes, modèle riche autorisé
+   contrainte : dizaines de millisecondes → modèle riche autorisé
    moyens : gradient boosting de ranking, cross-encoder, réseau profond
 
 3. RE-CLASSEMENT MÉTIER          ce qui est réellement affiché
    diversité, fraîcheur, stocks, marges, équité entre fournisseurs,
    exclusions réglementaires, dé-duplication</pre></div>
 
-    <p>Cette séparation est imposée par la latence : on ne peut pas évaluer un modèle coûteux sur un million d'items en 50 ms. Elle a une conséquence souvent négligée : <strong>la qualité du système est plafonnée par l'étage de récupération</strong>. Un bon modèle de classement ne peut pas remonter un item que la récupération n'a pas proposé. Quand un système déçoit, c'est donc le rappel de l'étage 1 qu'il faut mesurer en premier.</p>
+    <p>Cette séparation est imposée par la latence : on ne peut pas évaluer un modèle coûteux sur un million d'items en 50 ms. Elle a une conséquence souvent négligée : <strong>la qualité du système est plafonnée par l'étage de récupération</strong>. Un excellent modèle de classement ne peut pas remonter un item que la récupération n'a pas proposé. Quand un système déçoit, c'est donc le rappel de l'étage 1 qu'il faut mesurer en premier — et c'est une mesure simple : sur un jeu de questions annotées, quelle proportion des bons items figure dans les 200 candidats ?</p>
 
     <h2 id="recherche">2. Recherche : lexical, sémantique, hybride</h2>
-    <p>Le module 20 présente la recherche dans le cadre du RAG ; les mêmes briques valent pour une recherche destinée à des humains. <strong>BM25</strong> reste une référence redoutable : il trouve immédiatement les références exactes, les codes produit et les termes rares. La recherche <strong>vectorielle</strong> gère les reformulations et les synonymes mais échoue sur ces mêmes termes rares, qu'elle n'a souvent jamais vus à l'entraînement.</p>
+    <p>Le module 20 présente la recherche dans le cadre du RAG ; les mêmes briques valent pour une recherche destinée à des humains. <strong>BM25</strong> (module 16) reste une référence redoutable : il trouve immédiatement les références exactes, les codes produit et les termes rares. La recherche <strong>vectorielle</strong> gère les reformulations et les synonymes mais échoue sur ces mêmes termes rares, qu'elle n'a souvent jamais vus à l'entraînement.</p>
     <p>La combinaison par <strong>fusion de rangs réciproques</strong> est robuste et sans paramètre à régler :</p>
     <div style="text-align:center;overflow-x:auto">\[ \text{RRF}(d) = \sum_{s \in \text{systèmes}} \frac{1}{k + \text{rang}_s(d)}, \qquad k \approx 60 \]</div>
-    <p>Elle n'exige aucune normalisation des scores entre systèmes — leur simple rang suffit — ce qui explique sa popularité.</p>
+
+    <div class="code-label">pourquoi fusionner les RANGS plutôt que les scores</div>
+    <div class="code-block"><pre>BM25 renvoie des scores de 0 à 30, le cosinus de -1 à 1 : les additionner
+n'a aucun sens, et les normaliser suppose de connaître leurs distributions.
+Les RANGS, eux, sont directement comparables.
+
+document A : rang 1 en BM25, rang 8 en vectoriel → 1/61 + 1/68 = 0,0311
+document B : rang 3 en BM25, rang 2 en vectoriel → 1/63 + 1/62 = 0,0320  ← devant
+Un document bien classé par LES DEUX systèmes remonte, même sans être premier.</pre></div>
+
     <p>Le reste du travail se joue sur la requête et les métadonnées : analyse de la requête (correction orthographique, expansion par synonymes, détection d'intention), filtres (catégorie, date, disponibilité) et gestion des requêtes sans résultat, qui sont le principal motif d'abandon. Sur un corpus technique, un simple dictionnaire de synonymes métier rapporte souvent plus qu'un changement de modèle d'embedding.</p>
 
     <h2 id="ltr">3. Learning to rank</h2>
-    <p>Classer n'est pas prédire une valeur : seul l'<em>ordre</em> compte, et les premières positions comptent bien plus que les suivantes. Trois formulations :</p>
+    <p>Classer n'est pas prédire une valeur : seul l'<em>ordre</em> compte, et les premières positions comptent bien plus que les suivantes — personne ne consulte la page 3. Trois formulations :</p>
     <ul>
       <li><strong>Pointwise</strong> — prédire un score de pertinence par item, indépendamment des autres. Simple, mais optimise la mauvaise chose : une erreur en position 1 et une erreur en position 50 pèsent pareil.</li>
       <li><strong>Pairwise</strong> — apprendre, pour chaque paire, lequel doit passer devant (RankNet, LambdaRank). Beaucoup plus proche de l'objectif réel.</li>
-      <li><strong>Listwise</strong> — optimiser directement une métrique de liste comme le NDCG. <strong>LambdaMART</strong> — gradient boosting avec des gradients pondérés par le gain de NDCG qu'échangerait une permutation — reste l'état de l'art pratique, et est disponible directement dans LightGBM et XGBoost (<code>objective="lambdarank"</code>).</li>
+      <li><strong>Listwise</strong> — optimiser directement une métrique de liste comme le NDCG. <strong>LambdaMART</strong> — gradient boosting (module 12) dont les gradients sont pondérés par le gain de NDCG qu'apporterait l'échange de deux documents — reste l'état de l'art pratique, et est disponible directement dans LightGBM et XGBoost (<code>objective="lambdarank"</code>).</li>
     </ul>
 
     <p>La métrique de référence est le <strong>NDCG</strong>, qui pondère la pertinence par une remise logarithmique sur le rang :</p>
     <div style="text-align:center;overflow-x:auto">\[ \text{DCG}@k = \sum_{i=1}^{k}\frac{2^{\text{rel}_i}-1}{\log_2(i+1)}, \qquad \text{NDCG}@k = \frac{\text{DCG}@k}{\text{IDCG}@k} \]</div>
-    <p>La normalisation par le classement idéal rend les requêtes comparables entre elles, ce que ne permettent ni la précision@k ni le MRR.</p>
 
-    <p>Les features d'un modèle de ranking se rangent en trois familles : caractéristiques de la <em>requête</em> (longueur, intention, langue), de l'<em>item</em> (popularité, fraîcheur, qualité, prix) et surtout de l'<em>appariement</em> requête-item (scores BM25 par champ, similarité d'embedding, correspondances exactes, historique de clics sur cette paire). Ce sont ces dernières qui portent l'essentiel du signal.</p>
+    <div class="code-label">NDCG, calculé à la main</div>
+    <div class="code-block"><pre>pertinences réelles des 5 résultats affichés : [3, 0, 2, 3, 1]   (0 = inutile, 3 = parfait)
+
+DCG = (2³-1)/log₂(2) + (2⁰-1)/log₂(3) + (2²-1)/log₂(4) + (2³-1)/log₂(5) + (2¹-1)/log₂(6)
+    =    7/1,00     +      0/1,58     +     3/2,00     +     7/2,32     +     1/2,58
+    = 7 + 0 + 1,5 + 3,02 + 0,39 = 11,91
+
+classement IDÉAL : [3, 3, 2, 1, 0] → IDCG = 7 + 4,42 + 1,5 + 0,43 + 0 = 13,35
+NDCG = 11,91 / 13,35 = 0,89
+
+La normalisation par le classement idéal rend les requêtes COMPARABLES entre elles,
+ce que ne permettent ni la précision@k ni le MRR.</pre></div>
+
+    <p>Les variables d'un modèle de ranking se rangent en trois familles : caractéristiques de la <em>requête</em> (longueur, intention, langue), de l'<em>item</em> (popularité, fraîcheur, qualité, prix) et surtout de l'<em>appariement</em> requête-item (scores BM25 par champ, similarité d'embedding, correspondances exactes, historique de clics sur cette paire). Ce sont ces dernières qui portent l'essentiel du signal.</p>
 
     <h2 id="biais-clics">4. Données de clics et biais de position</h2>
-    <p>Les clics sont la source d'étiquettes la plus abondante — et la plus traîtresse. Un item est cliqué parce qu'il est pertinent, mais surtout parce qu'il était <em>affiché en première position</em>. Entraîner naïvement sur les clics revient donc à apprendre le classement actuel, et à le figer.</p>
+    <p>Les clics sont la source d'étiquettes la plus abondante — et la plus traîtresse. Un item est cliqué parce qu'il est pertinent, mais surtout parce qu'il était <em>affiché en première position</em>. Les études d'oculométrie montrent un taux de clic en première position cinq à dix fois supérieur à celui de la cinquième, à pertinence égale.</p>
 
     <div class="code-label">les biais des journaux de clics</div>
     <div class="code-block"><pre>Biais de position    les premiers résultats sont bien plus cliqués, à pertinence égale
-Biais de sélection   on n'observe QUE ce qui a été affiché par la politique en place
+Biais de sélection   on n'observe QUE ce qui a été affiché par la politique en place :
+                     les bons items jamais montrés restent invisibles pour toujours
 Biais de confiance   les utilisateurs font confiance au système et cliquent "par défaut"
-Absence de négatif   un non-clic ne signifie pas non pertinent : peut-être non vu
-                     (d'où la distinction entre items VUS et items affichés)</pre></div>
+Absence de négatif   un non-clic ne signifie pas "non pertinent" : peut-être non VU
+                     (d'où l'importance de journaliser ce qui a été réellement affiché)</pre></div>
 
-    <p>Les remèdes : pondération inverse de propension (chaque clic est pondéré par l'inverse de la probabilité d'examen à cette position — c'est le <em>counterfactual learning to rank</em>) ; estimation de la courbe de propension par permutations aléatoires contrôlées d'une petite fraction du trafic ; et l'utilisation de signaux moins biaisés que le clic brut — temps de lecture, achat, retour en arrière rapide (qui est un signal <em>négatif</em> fort). Sans cette correction, un système de ranking entraîné sur ses propres journaux se renforce dans ses erreurs.</p>
+    <p>Entraîner naïvement sur les clics revient donc à apprendre le classement actuel et à le figer : le système se confirme lui-même indéfiniment. Les remèdes : la <strong>pondération inverse de propension</strong> — chaque clic est pondéré par l'inverse de la probabilité d'examen à cette position, ce qui rend son poids comparable quelle que soit la place occupée —, l'estimation de cette courbe de propension par permutations aléatoires contrôlées sur une petite fraction du trafic, et l'utilisation de signaux moins biaisés que le clic brut : temps de lecture, achat, ou retour en arrière rapide, qui est un signal <em>négatif</em> fort.</p>
 
     <h2 id="collaboratif">5. Filtrage collaboratif et factorisation</h2>
-    <p>L'intuition fondatrice : des utilisateurs qui ont aimé les mêmes choses aimeront les mêmes choses ensuite. Aucune connaissance du contenu n'est nécessaire — seule la matrice d'interactions compte.</p>
+    <p>L'intuition fondatrice : des utilisateurs qui ont aimé les mêmes choses aimeront les mêmes choses ensuite. Aucune connaissance du contenu n'est nécessaire — seule la matrice d'interactions compte, ce qui est à la fois la force (ça marche sur n'importe quel catalogue) et la faiblesse (ça ne marche pas sur un item neuf).</p>
 
     <p>La <strong>factorisation matricielle</strong> approche cette matrice très creuse \(R\) par un produit de faible rang \(R \approx P Q^\top\), où chaque utilisateur et chaque item sont représentés par un vecteur latent de dimension \(k\) (typiquement 32 à 256) :</p>
     <div style="text-align:center;overflow-x:auto">\[ \hat r_{ui} = \mu + b_u + b_i + p_u^\top q_i, \qquad \min \sum_{(u,i)\in\mathcal{K}} \big(r_{ui}-\hat r_{ui}\big)^2 + \lambda\big(\|p_u\|^2+\|q_i\|^2\big) \]</div>
-    <p>C'est l'idée d'approximation de rang faible du module 7, adaptée au cas où la plupart des entrées sont manquantes : on n'ajuste que sur les interactions observées, d'où l'usage de la descente de gradient stochastique ou des moindres carrés alternés (ALS) plutôt que d'une SVD classique. Les termes de biais \(b_u, b_i\) capturent la sévérité d'un utilisateur et la popularité d'un item — ils expliquent à eux seuls une part importante du signal.</p>
 
+    <div class="code-label">ce que chaque terme capture</div>
+    <div class="code-block"><pre>μ        la moyenne globale                    (tout le monde note autour de 3,5)
+b_u      le biais UTILISATEUR                  (cet utilisateur note systématiquement bas)
+b_i      le biais ITEM                          (ce film plaît à tout le monde)
+p_uᵀq_i  l'affinité SPÉCIFIQUE                 (cet utilisateur aime CE genre)
+
+Les seuls biais expliquent souvent la moitié du signal : les inclure avant toute
+sophistication est le meilleur premier pas.</pre></div>
+
+    <p>C'est l'idée d'approximation de rang faible du module 7, adaptée au cas où la plupart des entrées sont <em>manquantes</em> : on n'ajuste que sur les interactions observées, d'où l'usage de la descente de gradient stochastique ou des moindres carrés alternés (ALS) plutôt que d'une SVD classique, qui exigerait une matrice complète.</p>
+
+    <h2 id="implicite">6. Retour implicite</h2>
     <div class="warning-block">
-      <strong>Retour implicite : l'absence n'est pas un rejet.</strong> Dans la plupart des systèmes réels, on n'a pas de notes mais des vues, clics et achats — uniquement des signaux positifs. Traiter tout le reste comme des zéros est faux : l'utilisateur n'a probablement jamais vu l'item. Les méthodes adaptées traitent ces non-interactions comme des négatifs <em>pondérés par une confiance faible</em> (ALS implicite) ou apprennent un ordre plutôt qu'une valeur — c'est <strong>BPR</strong> (<em>Bayesian Personalised Ranking</em>), qui maximise la probabilité qu'un item vu passe devant un item tiré au hasard. L'échantillonnage de ces négatifs est le détail d'implémentation qui décide de la qualité du résultat.
+      <strong>L'absence n'est pas un rejet.</strong> Dans la plupart des systèmes réels, on n'a pas de notes mais des vues, clics et achats — uniquement des signaux positifs. Traiter tout le reste comme des zéros est faux : l'utilisateur n'a probablement jamais vu l'item. Sur un catalogue d'un million de références, un utilisateur en a vu quelques centaines ; les 999 000 autres ne sont pas des rejets.
     </div>
+    <p>Deux réponses. Les méthodes à <em>confiance pondérée</em> (ALS implicite) traitent les non-interactions comme des négatifs de faible poids, et les interactions répétées comme des positifs de poids croissant. Ou bien l'on change d'objectif : <strong>BPR</strong> (<em>Bayesian Personalised Ranking</em>) n'apprend pas une valeur mais un <em>ordre</em> — il maximise la probabilité qu'un item vu passe devant un item tiré au hasard. L'échantillonnage de ces négatifs est le détail d'implémentation qui décide de la qualité du résultat : tirer uniformément donne des négatifs trop faciles (l'item tiré est évidemment sans intérêt), tirer parmi les items populaires donne des négatifs informatifs.</p>
 
-    <h2 id="neuronal">6. Two-tower et recommandation séquentielle</h2>
-    <p>L'architecture <strong>à deux tours</strong> est devenue le standard industriel de l'étage de récupération : un réseau encode l'utilisateur et son contexte, un autre encode l'item, et la pertinence est le produit scalaire des deux vecteurs. L'intérêt est architectural : les embeddings d'items se calculent <em>hors ligne</em> et s'indexent dans une base vectorielle (module 20), si bien qu'une requête en ligne ne demande qu'un encodage utilisateur et une recherche des plus proches voisins. On retrouve ainsi la souplesse d'un réseau de neurones avec la latence d'un index.</p>
-    <p>La <strong>recommandation séquentielle</strong> (GRU4Rec, SASRec, BERT4Rec) modélise l'historique comme une séquence et prédit l'action suivante — c'est un transformer appliqué à des identifiants d'items (module 14). Elle capture l'intention du moment, ce que la factorisation matricielle, purement statique, ignore complètement : quelqu'un qui vient de consulter trois perceuses n'est pas dans le même état que sa moyenne historique.</p>
-    <p>Un point à connaître : au-delà du prototype, les gains viennent moins de l'architecture que des <em>features</em> et de la fraîcheur des données. Un modèle simple réentraîné toutes les heures bat souvent un modèle sophistiqué réentraîné chaque semaine.</p>
+    <h2 id="neuronal">7. Two-tower et recommandation séquentielle</h2>
+    <p>L'architecture <strong>à deux tours</strong> est devenue le standard industriel de l'étage de récupération : un réseau encode l'utilisateur et son contexte, un autre encode l'item, et la pertinence est le produit scalaire des deux vecteurs.</p>
 
-    <h2 id="evaluation">7. Évaluer : hors ligne et en ligne</h2>
+    <div class="code-label">pourquoi cette architecture précisément</div>
+    <div class="code-block"><pre>   utilisateur + contexte              item + métadonnées
+         │                                    │
+    [ tour user ]                        [ tour item ]
+         │                                    │
+      vecteur u  ─────── produit ────────  vecteur i
+                        scalaire
+
+  L'astuce : les vecteurs d'items se calculent HORS LIGNE et s'indexent dans une
+  base vectorielle (module 20). Une requête en ligne ne demande qu'un encodage
+  utilisateur + une recherche ANN. On obtient la souplesse d'un réseau avec la
+  latence d'un index — impossible avec un modèle qui croiserait user et item
+  dès la première couche.</pre></div>
+
+    <p>La <strong>recommandation séquentielle</strong> (GRU4Rec, SASRec, BERT4Rec) modélise l'historique comme une séquence et prédit l'action suivante — c'est un transformer appliqué à des identifiants d'items (module 14). Elle capture l'intention <em>du moment</em>, ce que la factorisation matricielle, purement statique, ignore complètement : quelqu'un qui vient de consulter trois perceuses n'est pas dans le même état que sa moyenne historique.</p>
+    <p>Un point à connaître : au-delà du prototype, les gains viennent moins de l'architecture que des <em>variables</em> et de la <em>fraîcheur</em> des données. Un modèle simple réentraîné toutes les heures bat souvent un modèle sophistiqué réentraîné chaque semaine.</p>
+
+    <h2 id="evaluation">8. Évaluer : hors ligne et en ligne</h2>
     <div class="code-label">métriques hors ligne</div>
     <div class="code-block"><pre>Précision@k / Rappel@k   les basiques, faciles à interpréter
 MAP, MRR                 position du premier élément pertinent
@@ -136,19 +186,19 @@ Diversité intra-liste    les k items proposés se ressemblent-ils trop ?
 Nouveauté / sérendipité  recommande-t-on autre chose que les best-sellers ?
 Équité                   entre fournisseurs, auteurs, catégories (module 25)</pre></div>
 
-    <p>Le découpage des données mérite une attention particulière : un découpage aléatoire est une fuite (module 10), puisqu'il permet d'entraîner sur le futur d'un utilisateur pour prédire son passé. Il faut découper <strong>par date</strong>, et évaluer sur la période suivante — ou, à défaut, exclure les dernières interactions de chaque utilisateur.</p>
+    <p>Le découpage des données mérite une attention particulière : un découpage aléatoire est une fuite (module 10), puisqu'il permet d'entraîner sur le futur d'un utilisateur pour prédire son passé. Il faut découper <strong>par date</strong> et évaluer sur la période suivante — ou, à défaut, exclure les dernières interactions de chaque utilisateur (<em>leave-last-out</em>).</p>
 
     <div class="step-block">
       <h4>Le décalage hors ligne / en ligne</h4>
-      <p>C'est la caractéristique la plus déroutante du domaine : les gains mesurés hors ligne se traduisent mal en gains réels. Trois raisons. Les données historiques ont été produites par l'<em>ancien</em> système, donc un nouveau modèle proposant des items jamais affichés est évalué comme s'il se trompait. Les métriques hors ligne mesurent la reproduction du passé, pas la satisfaction. Et l'effet d'un changement de recommandation met parfois des semaines à se manifester (fidélité, lassitude). La conclusion pratique : l'évaluation hors ligne sert à <em>filtrer</em> les candidats et à éviter les régressions, mais seule une expérience en ligne (module 8) tranche — avec des métriques de garde-fou pour détecter les effets pervers, et une attention aux effets de long terme que l'A/B test court mesure mal.</p>
+      <p>C'est la caractéristique la plus déroutante du domaine : les gains mesurés hors ligne se traduisent mal en gains réels. Trois raisons. Les données historiques ont été produites par l'<em>ancien</em> système, donc un nouveau modèle qui propose des items jamais affichés est évalué comme s'il se trompait — alors qu'on ne sait tout simplement pas. Les métriques hors ligne mesurent la reproduction du passé, pas la satisfaction. Et l'effet d'un changement met parfois des semaines à se manifester (fidélité, lassitude), bien au-delà de la durée d'un test. La conclusion pratique : l'évaluation hors ligne sert à <em>filtrer</em> les candidats et à éviter les régressions, mais seule une expérience en ligne (module 8) tranche — avec des métriques de garde-fou pour détecter les effets pervers.</p>
     </div>
 
-    <h2 id="problemes">8. Démarrage à froid, popularité, boucles</h2>
+    <h2 id="problemes">9. Démarrage à froid, popularité, boucles</h2>
     <ul>
-      <li><strong>Démarrage à froid</strong> — un nouvel utilisateur ou un nouvel item n'a pas d'historique. Solutions : s'appuyer sur le contenu (attributs, embedding du texte ou de l'image, module 16), recommander par popularité contextualisée, poser deux ou trois questions d'amorçage, ou exploiter un bandit pour explorer rapidement (module 22).</li>
-      <li><strong>Biais de popularité</strong> — les modèles entraînés sur des interactions amplifient les items déjà populaires, ce qui pénalise la longue traîne et appauvrit le catalogue utile. Correctifs : échantillonnage négatif pondéré par la popularité, pénalisation explicite, ou contrainte de couverture au re-classement.</li>
-      <li><strong>Boucle de rétroaction</strong> — le système ne voit que les conséquences de ses propres recommandations, ce qui rétrécit progressivement l'exposition (modules 24 et 22). Les parades : conserver une part d'exploration aléatoire, maintenir un groupe témoin permanent, et surveiller la diversité dans le temps comme métrique de santé.</li>
-      <li><strong>Contraintes système</strong> — latence, coût d'indexation, fraîcheur des embeddings, cohérence entre features d'entraînement et features servies (module 24). C'est là, plus que dans le modèle, que se situent les vraies difficultés d'ingénierie.</li>
+      <li><strong>Démarrage à froid</strong> — un nouvel utilisateur ou un nouvel item n'a pas d'historique, donc pas de vecteur latent. Solutions : s'appuyer sur le contenu (attributs, embedding du texte ou de l'image, module 16), recommander par popularité contextualisée, poser deux ou trois questions d'amorçage, ou exploiter un bandit pour explorer rapidement (module 22).</li>
+      <li><strong>Biais de popularité</strong> — les modèles entraînés sur des interactions amplifient les items déjà populaires, ce qui pénalise la longue traîne et appauvrit le catalogue utile. Correctifs : échantillonnage négatif pondéré par la popularité, pénalisation explicite dans la fonction de perte, ou contrainte de couverture au re-classement.</li>
+      <li><strong>Boucle de rétroaction</strong> — le système ne voit que les conséquences de ses propres recommandations, ce qui rétrécit progressivement l'exposition (modules 22 et 24). Les parades : conserver une part d'exploration aléatoire, maintenir un groupe témoin permanent, et surveiller la diversité dans le temps comme métrique de santé.</li>
+      <li><strong>Contraintes système</strong> — latence, coût d'indexation, fraîcheur des embeddings, cohérence entre les variables d'entraînement et celles servies en ligne (module 24). C'est là, plus que dans le modèle, que se situent les vraies difficultés d'ingénierie.</li>
     </ul>
 
     <div class="step-block">
@@ -156,9 +206,10 @@ Nouveauté / sérendipité  recommande-t-on autre chose que les best-sellers ?
       <ul>
         <li>Architecture en trois étages ; la qualité est plafonnée par le rappel de la récupération.</li>
         <li>Hybride lexical + vectoriel par fusion de rangs : robuste et sans réglage.</li>
-        <li>LambdaMART reste l'état de l'art pratique du ranking ; le NDCG est la métrique de référence.</li>
+        <li>LambdaMART reste l'état de l'art pratique du ranking ; le NDCG est la métrique de référence, et sa normalisation rend les requêtes comparables.</li>
         <li>Les clics sont biaisés par la position : corriger par propension, sinon le système fige son propre classement.</li>
-        <li>La factorisation matricielle est une approximation de rang faible sur données manquantes ; en retour implicite, apprendre un ordre (BPR) plutôt qu'une valeur.</li>
+        <li>La factorisation matricielle est une approximation de rang faible sur données manquantes ; les termes de biais portent la moitié du signal.</li>
+        <li>En retour implicite, apprendre un ordre (BPR) plutôt qu'une valeur, et soigner l'échantillonnage des négatifs.</li>
         <li>Two-tower pour la récupération, transformer séquentiel pour l'intention du moment.</li>
         <li>Découper par date, et ne conclure qu'en ligne : le décalage hors ligne/en ligne est structurel.</li>
       </ul>
