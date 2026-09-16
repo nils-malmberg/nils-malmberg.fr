@@ -44,128 +44,198 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Ces bibliothèques ne sont pas interchangeables : chacune répond à une contrainte précise de volume, de latence ou de type de calcul. Ce module explique ce qu'elles font réellement sous le capot, parce que c'est ce qui permet de choisir la bonne — et d'écrire du code dix à cent fois plus rapide sans rien changer d'algorithmique.</p>
+    <p>Ces bibliothèques ne sont pas interchangeables : chacune répond à une contrainte précise de volume, de latence ou de type de calcul. Ce module explique ce qu'elles font réellement sous le capot — parce que c'est ce qui permet de choisir la bonne, et d'écrire du code dix à cent fois plus rapide sans rien changer à l'algorithme.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#numpy">NumPy : le socle</a></li>
-        <li><a href="#pandas">pandas : forces et pièges</a></li>
+        <li><a href="#numpy">NumPy : pourquoi c'est rapide</a></li>
+        <li><a href="#vues">Vues et copies</a></li>
+        <li><a href="#broadcasting">Broadcasting</a></li>
+        <li><a href="#vectoriser">Vectoriser, vraiment</a></li>
+        <li><a href="#pandas">pandas : le modèle et ses pièges</a></li>
         <li><a href="#polars">polars : expressions et évaluation paresseuse</a></li>
         <li><a href="#dask">Dask, Spark, Ray : passer à l'échelle</a></li>
-        <li><a href="#choisir">Quel outil pour quelle taille de données</a></li>
+        <li><a href="#choisir">Quel outil pour quelle taille</a></li>
         <li><a href="#sklearn">scikit-learn : l'API qui structure tout</a></li>
-        <li><a href="#torch">PyTorch, TensorFlow, BoTorch</a></li>
+        <li><a href="#torch">PyTorch et la différentiation automatique</a></li>
       </ol>
     </div>
 
-    <h2 id="numpy">1. NumPy : le socle</h2>
-    <p>Tout le reste repose dessus. Un <code>ndarray</code>, c'est un <strong>bloc de mémoire contigu et homogène</strong> plus une description de la façon de le lire : une forme (<code>shape</code>), un type (<code>dtype</code>) et des pas (<code>strides</code>, le nombre d'octets à sauter pour avancer d'un cran sur chaque axe). Cette séparation entre données et interprétation explique presque tous les comportements de NumPy.</p>
+    <h2 id="numpy">1. NumPy : pourquoi c'est rapide</h2>
 
-    <div class="code-label">Python</div>
+    <h3>Le problème d'une liste Python</h3>
+    <p>Une liste Python de un million de nombres n'est pas un bloc de un million de nombres : c'est un tableau de un million de <em>pointeurs</em>, chacun désignant un objet <code>float</code> alloué ailleurs en mémoire, avec son en-tête, son compteur de références et son type. Additionner deux listes élément par élément oblige donc l'interpréteur, à chaque itération, à suivre deux pointeurs, vérifier les types, déballer les valeurs, additionner, allouer un nouvel objet résultat. Le calcul utile représente une fraction infime du travail.</p>
+    <p>Un <code>ndarray</code> NumPy est l'inverse : un <strong>bloc de mémoire contigu et homogène</strong>, plus une description de la façon de le lire. Les valeurs y sont stockées brutes, les unes derrière les autres, sans en-tête ni indirection. Additionner deux tableaux descend alors dans une boucle C compilée, qui traite les éléments à la chaîne en exploitant les instructions vectorielles du processeur.</p>
+
+    <div class="code-label">Python — la structure d'un ndarray</div>
     <div class="code-block"><pre>import numpy as np
 
 a = np.arange(12, dtype=np.float64).reshape(3, 4)
-a.shape        # (3, 4)
-a.strides      # (32, 8) : 32 octets pour changer de ligne, 8 pour changer de colonne
-a.nbytes       # 96
+a.shape        # (3, 4)     la forme logique
+a.dtype        # float64    le type, identique pour TOUS les éléments
+a.strides      # (32, 8)    combien d'octets sauter pour avancer d'un cran…
+               #            …sur l'axe 0 (une ligne = 4 × 8 octets) et sur l'axe 1
+a.nbytes       # 96         la mémoire réellement occupée
+a.flags        # C_CONTIGUOUS : les lignes sont contiguës en mémoire</pre></div>
 
-b = a.T        # transposée : AUCUNE donnée copiée, seuls les strides sont inversés
-b.strides      # (8, 32)
-b.base is a    # True → b est une vue sur a</pre></div>
+    <p>Les <strong>strides</strong> sont la notion qui explique presque tout le comportement de NumPy. Les données sont un ruban linéaire ; la forme et les strides disent comment le parcourir. Transposer une matrice, par exemple, ne déplace aucune donnée : il suffit d'inverser les strides.</p>
 
-    <h3>Vues et copies : la source d'erreurs n° 1</h3>
-    <p>Le découpage (<em>slicing</em>) renvoie une <strong>vue</strong> : modifier la vue modifie l'original. L'indexation « fantaisiste » (par tableau d'indices ou par masque booléen) renvoie une <strong>copie</strong>.</p>
+    <div class="code-block"><pre>b = a.T              # transposée
+b.strides            # (8, 32) — les strides sont inversés, les données inchangées
+b.base is a          # True : b n'est qu'une nouvelle VUE sur la mémoire de a
+np.shares_memory(a, b)   # True</pre></div>
 
-    <div class="code-label">Python</div>
+    <div class="step-block">
+      <h4>Choisir son dtype, plutôt que le subir</h4>
+      <p>Le type par défaut est <code>float64</code> (8 octets). Passer en <code>float32</code> divise la mémoire par deux et accélère souvent les calculs — c'est d'ailleurs le type natif des GPU. Deux précautions : en <code>float32</code>, sommer plusieurs millions de termes accumule une erreur d'arrondi visible (utiliser <code>np.sum(x, dtype=np.float64)</code> si la précision compte), et un entier trop petit déborde <em>en silence</em> :</p>
+      <div class="code-block"><pre>np.array([200], dtype=np.int8) + 100      # array([44]) — débordement, aucun avertissement
+np.array([200], dtype=np.int16) + 100     # array([300]) — correct</pre></div>
+    </div>
+
+    <h2 id="vues">2. Vues et copies</h2>
+    <p>C'est la source d'erreurs numéro un chez qui débute avec NumPy. Le découpage (<em>slicing</em>) renvoie une <strong>vue</strong> — une autre façon de lire la même mémoire — alors que l'indexation par tableau d'indices ou par masque booléen renvoie une <strong>copie</strong>.</p>
+
+    <div class="code-label">Python — la différence, en pratique</div>
     <div class="code-block"><pre>x = np.arange(10)
 
-v = x[2:5]          # vue
+v = x[2:5]          # VUE : aucune donnée copiée
 v[0] = 999
-x[2]                # 999  → x a été modifié
+x[2]                # 999  → x a été modifié sans qu'on l'ait touché
 
-c = x[[2, 3, 4]]    # copie (fancy indexing)
+c = x[[2, 3, 4]]    # COPIE (indexation par liste d'indices)
 c[0] = -1
 x[2]                # 999  → x est intact
 
-# vérifier en cas de doute
+m = x[x &gt; 5]        # COPIE (masque booléen)
+
 np.shares_memory(x, v)   # True
 np.shares_memory(x, c)   # False</pre></div>
 
-    <h3>Broadcasting</h3>
-    <p>Le broadcasting permet d'opérer sur des tableaux de formes différentes sans les dupliquer en mémoire. Les formes sont alignées <em>par la droite</em> ; deux dimensions sont compatibles si elles sont égales ou si l'une vaut 1, auquel cas elle est « étirée » virtuellement (stride mis à 0, donc aucune allocation).</p>
+    <p>Ce comportement est voulu : une vue est gratuite, alors qu'une copie d'un tableau de 4 Go coûte 4 Go. Mais il impose de savoir dans quel cas on se trouve. La règle pratique : si l'on veut modifier sans affecter l'original, écrire explicitement <code>x[2:5].copy()</code> ; et pour modifier <em>en place</em> une partie d'un tableau, utiliser l'affectation par découpage (<code>x[x &gt; 5] = 0</code>), qui, elle, écrit bien dans l'original.</p>
+
+    <h2 id="broadcasting">3. Broadcasting</h2>
+    <p>Le broadcasting permet d'opérer sur des tableaux de formes différentes sans les dupliquer. Les règles tiennent en trois lignes : les formes sont alignées <strong>par la droite</strong> ; deux dimensions sont compatibles si elles sont égales ou si l'une vaut 1 ; une dimension de taille 1 est « étirée » virtuellement, en mettant simplement son stride à zéro — aucune allocation n'a lieu.</p>
+
+    <div class="code-label">les règles, illustrées</div>
+    <div class="code-block"><pre>  X        (1000, 50)          X       (1000, 50)         X      (3, 1)
+  mu             (50,)   ✓     poids  (1000,)      ✗      Y         (4,)   ✓
+  ─────────────────────        ────────────────────       ──────────────────
+  résultat (1000, 50)          ERREUR : 50 ≠ 1000         résultat (3, 4)
+                               → il faut poids[:, None]        (produit externe)</pre></div>
 
     <div class="code-label">Python</div>
-    <div class="code-block"><pre>X = np.random.randn(1000, 50)      # (1000, 50)
-mu = X.mean(axis=0)                # (50,)      → alignée sur les colonnes
-Xc = X - mu                        # (1000, 50) : broadcasting, pas de duplication de mu
+    <div class="code-block"><pre>X = np.random.randn(1000, 50)
+mu = X.mean(axis=0)                # (50,)  une moyenne par colonne
+Xc = X - mu                        # broadcasting : mu n'est PAS dupliquée 1000 fois
 
-# matrice de distances deux à deux, sans boucle ni copie explicite
-d = np.linalg.norm(X[:, None, :] - X[None, :, :], axis=-1)   # (1000, 1000)</pre></div>
+# centrer par LIGNE demande d'ajouter explicitement l'axe manquant
+moy_ligne = X.mean(axis=1)         # (1000,)
+Xc = X - moy_ligne[:, None]        # (1000,1) contre (1000,50) → compatible
+# X - moy_ligne lèverait une erreur : (50,) et (1000,) ne s'alignent pas</pre></div>
 
     <div class="warning-block">
-      <strong>Attention à la mémoire du broadcasting.</strong> La dernière ligne crée un tableau intermédiaire de forme (1000, 1000, 50), soit 400 Mo en float64. Avec 20 000 points au lieu de 1 000, c'est 160 To : le calcul échoue. Pour ce cas précis, <code>scipy.spatial.distance.cdist</code> ou <code>sklearn.metrics.pairwise_distances</code> font le travail par blocs. Règle : quand une expression vectorisée crée un axe supplémentaire, calculer sa taille avant de l'exécuter.
+      <strong>Le piège mémoire du broadcasting.</strong> Une expression vectorisée élégante peut créer un tableau intermédiaire gigantesque. Le calcul de toutes les distances deux à deux, <code>np.linalg.norm(X[:, None, :] - X[None, :, :], axis=-1)</code>, construit un intermédiaire de forme (n, n, d) : pour n = 1000 et d = 50, cela fait 400 Mo ; pour n = 20 000, cela fait 160 To et le programme meurt. Réflexe : dès qu'une expression ajoute un axe, multiplier mentalement les dimensions avant d'exécuter. Pour ce cas précis, <code>scipy.spatial.distance.cdist</code> ou <code>sklearn.metrics.pairwise_distances</code> travaillent par blocs.
     </div>
 
-    <h3>Vectoriser, vraiment</h3>
-    <p>Une boucle Python sur un tableau NumPy paie l'interpréteur à chaque itération. L'opération vectorisée équivalente descend dans une boucle C compilée, souvent parallélisée et vectorisée SIMD.</p>
+    <h2 id="vectoriser">4. Vectoriser, vraiment</h2>
+    <p>Une boucle Python sur un tableau NumPy cumule les deux inconvénients : le coût de l'interpréteur <em>et</em> la conversion de chaque élément en objet Python. L'opération vectorisée équivalente reste entièrement dans le code natif.</p>
 
-    <div class="code-label">Python</div>
+    <div class="code-label">Python — le même calcul, deux ordres de grandeur d'écart</div>
     <div class="code-block"><pre>x = np.random.randn(1_000_000)
 
-# ≈ 400 ms — l'interpréteur gère un million d'itérations
+# ≈ 400 ms : un million de tours d'interpréteur
 out = np.array([v ** 2 + 3 * v if v &gt; 0 else 0.0 for v in x])
 
-# ≈ 4 ms — une seule descente dans le code natif
+# ≈ 4 ms : une seule descente dans le code compilé
 out = np.where(x &gt; 0, x ** 2 + 3 * x, 0.0)</pre></div>
 
-    <p>Deux compléments utiles : <code>np.einsum</code> exprime produits et contractions de tenseurs de façon compacte et souvent plus efficace qu'une suite de <code>reshape</code> / <code>matmul</code> ; et <strong>Numba</strong> (<code>@njit</code>) compile à la volée une boucle Python en code machine, ce qui reste la meilleure option pour les algorithmes séquentiels non vectorisables (une récurrence, un automate).</p>
+    <div class="code-label">Python — les outils de vectorisation à connaître</div>
+    <div class="code-block"><pre># agrégations par axe
+X.sum(axis=0)          # somme par colonne        X.mean(axis=1)   # moyenne par ligne
+X.argmax(axis=1)       # indice du maximum        np.percentile(X, 95, axis=0)
 
-    <div class="step-block">
-      <h4>Types : choisir, pas subir</h4>
-      <p>Le <code>dtype</code> par défaut est <code>float64</code>. Passer en <code>float32</code> divise la mémoire par deux et accélère souvent les calculs — c'est d'ailleurs le type natif de la plupart des GPU. Attention toutefois : en float32, la somme de plusieurs millions de termes accumule une erreur d'arrondi notable (utiliser <code>dtype=np.float64</code> dans <code>np.sum</code> si la précision compte). Pour les entiers, un <code>int8</code> silencieusement débordé donne des résultats faux sans aucun avertissement.</p>
-    </div>
+# sélection et conditions
+np.where(cond, a, b)   np.clip(x, 0, 1)   np.select([c1, c2], [v1, v2], defaut)
 
-    <h2 id="pandas">2. pandas : forces et pièges</h2>
-    <p>pandas ajoute à NumPy ce qui manque pour des données réelles : des colonnes hétérogènes, un index, des étiquettes, et la gestion des valeurs manquantes. C'est l'outil le plus répandu, avec une ergonomie datée et quelques chausse-trappes bien connues.</p>
+# einsum : produits et contractions, sans reshape acrobatique
+np.einsum("ij,jk-&gt;ik", A, B)        # produit matriciel classique
+np.einsum("ij,ij-&gt;i", A, B)         # produit scalaire ligne à ligne
+np.einsum("ii-&gt;", A)                # trace
 
-    <div class="code-label">Python</div>
+# opérations "sur place" : évitent une allocation (utile sur de gros tableaux)
+np.multiply(X, 2, out=X)            # équivalent de X *= 2
+
+# quand l'algorithme est SÉQUENTIEL et ne se vectorise pas : Numba compile la boucle
+from numba import njit
+@njit                                # décorateur (module 1) : compilation à la volée
+def recurrence(x, alpha):
+    y = np.empty_like(x)
+    y[0] = x[0]
+    for i in range(1, len(x)):       # boucle Python… compilée en code machine
+        y[i] = alpha * x[i] + (1 - alpha) * y[i - 1]
+    return y</pre></div>
+
+    <h2 id="pandas">5. pandas : le modèle et ses pièges</h2>
+
+    <h3>Le modèle</h3>
+    <p>pandas ajoute à NumPy ce qui manque pour des données réelles : des colonnes de types différents, des étiquettes, et la gestion des valeurs manquantes. Deux objets à connaître : la <strong>Series</strong> (une colonne : un tableau de valeurs plus un index) et le <strong>DataFrame</strong> (un dictionnaire ordonné de Series partageant le même index).</p>
+    <p>L'<strong>index</strong> est le concept le moins intuitif. Ce n'est pas un simple numéro de ligne : c'est une étiquette, utilisée pour l'alignement automatique. Additionner deux Series ne fait pas correspondre les positions mais les <em>étiquettes</em> — ce qui est puissant et surprenant la première fois :</p>
+
+    <div class="code-block"><pre>a = pd.Series([1, 2, 3], index=["x", "y", "z"])
+b = pd.Series([10, 20, 30], index=["z", "y", "x"])
+a + b        # x: 31, y: 22, z: 13  → aligné par étiquette, pas par position</pre></div>
+
+    <div class="code-label">Python — le style chaîné, à privilégier</div>
     <div class="code-block"><pre>import pandas as pd
 
 df = (
     pd.read_parquet("data/commandes.parquet")
-      .assign(
+      .assign(                                    # créer des colonnes
           date=lambda d: pd.to_datetime(d["date"]),
           marge=lambda d: d["prix"] - d["cout"],
       )
-      .query("marge &gt; 0")
-      .astype({"categorie": "category"})        # mémoire divisée par 10 sur du texte répété
-)
+      .query("marge &gt; 0")                         # filtrer
+      .astype({"categorie": "category"})          # mémoire ÷ 10 sur du texte répété
+      .sort_values("date")
+)</pre></div>
+    <p>L'écriture chaînée n'est pas qu'une question de style : chaque étape produit un nouvel objet, ce qui évite les mutations en place et donc les états intermédiaires impossibles à reproduire dans un notebook. Les <code>lambda</code> permettent de référencer le DataFrame <em>tel qu'il est à cette étape</em>, sans variable intermédiaire.</p>
 
-# split-apply-combine
-stats = (
-    df.groupby(["categorie", pd.Grouper(key="date", freq="ME")])
+    <h3>Split-apply-combine</h3>
+    <div class="code-label">le mécanisme du groupby</div>
+    <div class="code-block"><pre>  DataFrame          SPLIT               APPLY              COMBINE
+  cat  val      cat=A : [10, 30]      A : mean = 20      cat   val
+  A    10       cat=B : [20]          B : mean = 20      A     20
+  B    20       cat=C : [5, 15]       C : mean = 10      B     20
+  A    30                                                 C     10
+  C     5
+  C    15</pre></div>
+
+    <div class="code-block"><pre>stats = (
+    df.groupby(["categorie", pd.Grouper(key="date", freq="ME")])   # ME = fin de mois
       .agg(ca=("prix", "sum"), n=("prix", "size"), marge_moy=("marge", "mean"))
       .reset_index()
-)</pre></div>
+)
 
-    <p>L'écriture chaînée n'est pas qu'une question de style : chaque étape produit un nouvel objet, ce qui évite les mutations en place et donc les états intermédiaires impossibles à reproduire dans un notebook.</p>
+# transform : renvoie un résultat de MÊME TAILLE que l'entrée (comme une fonction
+# de fenêtre SQL, module 4) — indispensable pour normaliser par groupe
+df["ecart_a_la_moyenne"] = df["prix"] - df.groupby("categorie")["prix"].transform("mean")</pre></div>
 
     <div class="warning-block">
       <strong>Les trois pièges classiques.</strong><br>
-      <strong>1. <code>SettingWithCopyWarning</code></strong> — <code>df[df.a &gt; 0]["b"] = 1</code> écrit dans un objet temporaire, pas dans <code>df</code>. La forme correcte est <code>df.loc[df.a &gt; 0, "b"] = 1</code>.<br>
-      <strong>2. <code>apply</code> ligne par ligne</strong> — <code>df.apply(f, axis=1)</code> repasse par l'interpréteur pour chaque ligne : cent fois plus lent qu'une expression vectorisée équivalente.<br>
-      <strong>3. La mémoire</strong> — un DataFrame occupe typiquement 3 à 10 fois la taille du CSV d'origine. Les colonnes textuelles répétées passent en <code>category</code>, les entiers en <code>int32</code>, et <code>df.info(memory_usage="deep")</code> donne le vrai coût.
+      <strong>1. <code>SettingWithCopyWarning</code></strong> — <code>df[df.a &gt; 0]["b"] = 1</code> écrit dans un objet temporaire qui est aussitôt jeté : <code>df</code> n'est pas modifié, et aucune erreur n'est levée. La forme correcte est <code>df.loc[df.a &gt; 0, "b"] = 1</code>. Retenir la règle : une seule paire de crochets, avec <code>.loc</code>.<br>
+      <strong>2. <code>apply</code> ligne par ligne</strong> — <code>df.apply(f, axis=1)</code> repasse par l'interpréteur pour chaque ligne : cent fois plus lent qu'une expression vectorisée équivalente. On y recourt en dernier ressort, jamais par défaut.<br>
+      <strong>3. La mémoire</strong> — un DataFrame occupe typiquement 3 à 10 fois la taille du CSV d'origine, parce que chaque chaîne est un objet Python. Colonnes textuelles répétées en <code>category</code>, entiers en <code>int32</code>, et <code>df.info(memory_usage="deep")</code> pour connaître le vrai coût.
     </div>
 
-    <h2 id="polars">3. polars : expressions et évaluation paresseuse</h2>
-    <p><a href="https://pola.rs" target="_blank">polars</a> est écrit en Rust sur le format mémoire Apache Arrow. Deux différences de fond avec pandas : il est multi-thread par défaut (pas de GIL dans le moteur, cf. module 2), et il propose un mode <strong>paresseux</strong> où la requête est d'abord construite, puis optimisée, puis exécutée — comme un moteur SQL.</p>
+    <h2 id="polars">6. polars : expressions et évaluation paresseuse</h2>
+    <p><a href="https://pola.rs" target="_blank">polars</a> est écrit en Rust sur le format mémoire Apache Arrow. Deux différences de fond avec pandas : son moteur est multi-thread par défaut (pas de GIL à l'intérieur, module 2), et il propose un mode <strong>paresseux</strong> où la requête est d'abord construite, puis optimisée, puis exécutée — exactement comme un moteur SQL.</p>
 
-    <div class="code-label">Python</div>
+    <div class="code-label">Python — le même traitement, en mode paresseux</div>
     <div class="code-block"><pre>import polars as pl
 
 q = (
-    pl.scan_parquet("data/commandes_*.parquet")       # scan_ = paresseux, rien n'est lu
+    pl.scan_parquet("data/commandes_*.parquet")    # scan_ : rien n'est lu pour l'instant
       .filter(pl.col("date") &gt;= pl.date(2025, 1, 1))
       .with_columns(marge=pl.col("prix") - pl.col("cout"))
       .group_by("categorie")
@@ -177,64 +247,59 @@ q = (
       .sort("ca", descending=True)
 )
 
-print(q.explain())      # le plan optimisé, comme un EXPLAIN SQL
-df = q.collect()        # exécution effective</pre></div>
+print(q.explain())      # le plan optimisé, comme un EXPLAIN SQL (module 4)
+df = q.collect()        # ICI seulement, le calcul a lieu
+df = q.collect(streaming=True)    # par morceaux, pour un volume &gt; RAM</pre></div>
 
-    <p>L'optimiseur fait deux choses décisives : la <em>projection pushdown</em> (seules les colonnes réellement utilisées sont lues sur le disque) et la <em>predicate pushdown</em> (les filtres descendent au plus près de la lecture, parfois jusqu'au niveau des fichiers Parquet, dont les métadonnées permettent de sauter des blocs entiers). Sur un jeu de 50 colonnes dont on n'en utilise que 4, le gain est d'un ordre de grandeur avant même le moindre calcul.</p>
+    <p>L'optimiseur fait deux choses décisives. La <em>projection pushdown</em> : seules les colonnes réellement utilisées sont lues sur le disque — sur un fichier de 50 colonnes dont on en utilise 4, le gain est immédiat. La <em>predicate pushdown</em> : les filtres descendent au plus près de la lecture, parfois jusqu'aux métadonnées des fichiers Parquet, qui permettent de sauter des blocs entiers sans les décompresser.</p>
+    <p>Le second apport est conceptuel : une <strong>expression</strong> (<code>pl.col("x").sum()</code>) est un objet réutilisable et composable, qu'on peut nommer, stocker dans une variable et appliquer ailleurs — là où pandas manipule des chaînes de caractères magiques. En pratique : facteur 5 à 20 sur les agrégations et jointures. Le coût de migration est réel (API différente, pas d'index), mais les deux cohabitent, <code>df.to_pandas()</code> et <code>pl.from_pandas()</code> étant peu coûteux grâce à Arrow.</p>
 
-    <p>En pratique : facteur 5 à 20 sur les agrégations et jointures par rapport à pandas, et surtout un modèle mental plus propre — le concept d'<em>expression</em> (<code>pl.col("x").sum()</code>) est un objet réutilisable et composable, contrairement aux chaînes de caractères magiques de pandas. Le coût de migration est réel (API différente, index absent) mais les deux cohabitent : <code>df.to_pandas()</code> et <code>pl.from_pandas()</code> sont peu coûteux grâce à Arrow.</p>
-
-    <h2 id="dask">4. Dask, Spark, Ray : passer à l'échelle</h2>
-    <p><strong>Dask</strong> découpe un grand DataFrame en partitions (des DataFrames pandas), construit un graphe de tâches, puis l'exécute en parallèle — sur plusieurs cœurs ou plusieurs machines, en traitant les partitions au fur et à mesure (<em>out-of-core</em>) plutôt qu'en chargeant tout en mémoire.</p>
+    <h2 id="dask">7. Dask, Spark, Ray : passer à l'échelle</h2>
+    <p><strong>Dask</strong> découpe un grand DataFrame en <em>partitions</em> — chacune étant un DataFrame pandas ordinaire —, construit un graphe de tâches, puis l'exécute en parallèle sur plusieurs cœurs ou plusieurs machines, en traitant les partitions les unes après les autres (<em>out-of-core</em>) plutôt qu'en chargeant tout en mémoire.</p>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>import dask.dataframe as dd
 
 ddf = dd.read_parquet("s3://bucket/annee=2025/*.parquet")   # graphe, rien n'est chargé
-resultat = (
-    ddf[ddf.montant &gt; 0]
-       .groupby("client_id")
-       .montant.sum()
-)
-out = resultat.compute()      # déclenche le calcul, renvoie une Series pandas</pre></div>
+resultat = ddf[ddf.montant &gt; 0].groupby("client_id").montant.sum()
+out = resultat.compute()          # déclenche le calcul, renvoie une Series pandas</pre></div>
 
-    <p>Le point délicat est le <em>shuffle</em> : toute opération qui redistribue les données entre partitions (<code>groupby</code> sur une clé non triée, jointure sur une colonne quelconque, <code>sort_values</code>) impose de tout faire transiter par le réseau ou le disque. C'est là que passe l'essentiel du temps, et la raison pour laquelle un pipeline distribué mal conçu est plus lent qu'un pipeline local.</p>
-
+    <p>Le point délicat s'appelle le <strong>shuffle</strong> : toute opération qui redistribue les données entre partitions — un <code>groupby</code> sur une clé non triée, une jointure sur une colonne quelconque, un tri global — oblige à faire transiter les données par le réseau ou le disque. C'est là que passe l'essentiel du temps, et c'est la raison pour laquelle un pipeline distribué mal conçu est plus lent qu'un pipeline local.</p>
     <ul>
-      <li><strong>Dask</strong> — même API que pandas/NumPy, idéal pour passer d'un poste de travail à un cluster sans réécrire ;</li>
-      <li><strong>Spark</strong> (PySpark) — l'écosystème d'entreprise, très mature, adapté aux vrais téraoctets, avec un coût opérationnel élevé ;</li>
-      <li><strong>Ray</strong> — orienté calcul distribué générique (entraînement, tuning, RL, servage) plutôt que DataFrames.</li>
+      <li><strong>Dask</strong> — même API que pandas et NumPy : idéal pour passer d'un poste de travail à un cluster sans réécrire.</li>
+      <li><strong>Spark</strong> (PySpark) — l'écosystème d'entreprise, très mature, adapté aux vrais téraoctets, avec un coût opérationnel élevé.</li>
+      <li><strong>Ray</strong> — calcul distribué générique (entraînement, tuning, RL, servage) plutôt que DataFrames.</li>
     </ul>
 
-    <h2 id="choisir">5. Quel outil pour quelle taille de données</h2>
+    <h2 id="choisir">8. Quel outil pour quelle taille</h2>
     <div class="code-label">arbre de décision</div>
     <div class="code-block"><pre>Volume            Outil recommandé                    Remarque
 ──────────────────────────────────────────────────────────────────────────────
-&lt; 1 Go            pandas ou polars                    tout tient en RAM, choisir par goût
-1 – 50 Go         polars (lazy) ou DuckDB             la RAM d'une machine moderne suffit
-                                                       encore : ne pas distribuer trop tôt
-50 – 500 Go       polars streaming, DuckDB, Dask      une grosse machine coûte souvent moins
-                                                       cher qu'un cluster mal exploité
+&lt; 1 Go            pandas ou polars                    tout tient en RAM
+1 – 50 Go         polars (lazy) ou DuckDB             la RAM d'une machine moderne
+                                                       suffit encore largement
+50 – 500 Go       polars streaming, DuckDB, Dask      une grosse machine coûte souvent
+                                                       moins cher qu'un cluster mal utilisé
 &gt; 500 Go          Spark, Dask sur cluster             la complexité devient justifiée
 Tableaux denses   NumPy (+ Numba)                     calcul numérique pur
-GPU               PyTorch, CuPy, cuDF                 si le calcul est massivement parallèle</pre></div>
+GPU               PyTorch, CuPy, cuDF                 si le calcul est massivement
+                                                       parallèle</pre></div>
 
     <div class="step-block">
       <h4>Le conseil qui fait gagner le plus de temps</h4>
-      <p>La plupart des jeux de données présentés comme « trop gros » tiennent en mémoire une fois convertis en Parquet, les colonnes inutiles supprimées et les types réduits. Avant de monter un cluster : convertir le CSV en Parquet (compression 5 à 10×, lecture par colonnes), garder les colonnes utiles, échantillonner pour l'exploration. Un cluster mal utilisé est plus lent, plus cher et beaucoup plus difficile à déboguer qu'un ordinateur portable bien utilisé.</p>
+      <p>La plupart des jeux de données présentés comme « trop gros » tiennent en mémoire une fois convertis en Parquet, les colonnes inutiles supprimées et les types réduits. Avant de monter un cluster : convertir le CSV en Parquet (compression 5 à 10×, lecture par colonnes), ne garder que les colonnes utiles, échantillonner pour l'exploration. Un cluster mal exploité est plus lent, plus cher et beaucoup plus difficile à déboguer qu'un ordinateur portable bien utilisé.</p>
     </div>
 
-    <h2 id="sklearn">6. scikit-learn : l'API qui structure tout</h2>
+    <h2 id="sklearn">9. scikit-learn : l'API qui structure tout</h2>
     <p>La vraie valeur de scikit-learn n'est pas sa collection d'algorithmes, c'est la régularité de son interface. Trois verbes, et tout objet de l'écosystème s'y conforme :</p>
     <ul>
-      <li><code>fit(X, y)</code> — apprend des paramètres <em>et les stocke dans l'objet</em> (attributs suffixés par un tiret bas : <code>mean_</code>, <code>coef_</code>) ;</li>
+      <li><code>fit(X, y)</code> — apprend des paramètres <em>et les stocke dans l'objet</em>, dans des attributs suffixés par un tiret bas (<code>mean_</code>, <code>coef_</code>) ; c'est la convention qui distingue un paramètre appris d'un hyperparamètre fourni ;</li>
       <li><code>transform(X)</code> — applique la transformation apprise ;</li>
       <li><code>predict(X)</code> / <code>predict_proba(X)</code> — produit la prédiction.</li>
     </ul>
+    <p>La conséquence est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur. La validation croisée réajuste donc <em>toute</em> la chaîne à chaque pli, ce qui constitue la protection la plus efficace contre la fuite de données (module 10) — un <code>StandardScaler</code> ajusté hors du pipeline aurait appris la moyenne du jeu de validation.</p>
 
-    <p>La conséquence pratique est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur, donc la validation croisée réajuste <em>toute</em> la chaîne à chaque pli. C'est la protection la plus efficace contre la fuite de données (module 10) : un <code>StandardScaler</code> ajusté hors du pipeline apprendrait la moyenne du jeu de validation.</p>
-
-    <div class="code-label">Python</div>
+    <div class="code-label">Python — un pipeline complet</div>
     <div class="code-block"><pre>from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
@@ -246,6 +311,7 @@ num = ["surface", "n_pieces", "age"]
 cat = ["ville", "type_bien"]
 
 pre = ColumnTransformer([
+    # chaque groupe de colonnes reçoit son propre traitement
     ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), num),
     ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=20), cat),
 ])
@@ -255,69 +321,95 @@ modele = Pipeline([
     ("gbm", HistGradientBoostingRegressor(max_iter=400, learning_rate=0.05)),
 ])
 
-# tout le prétraitement est réappris à chaque pli : aucune fuite possible
 scores = cross_val_score(modele, X, y, cv=5, scoring="neg_root_mean_squared_error")
 print(f"RMSE = {-scores.mean():.3f} ± {scores.std():.3f}")</pre></div>
 
-    <p>Pour une transformation maison, il suffit d'hériter de <code>BaseEstimator</code> et <code>TransformerMixin</code> pour qu'elle s'intègre partout (pipelines, recherche d'hyperparamètres, sérialisation) :</p>
-
-    <div class="code-label">Python</div>
+    <div class="code-label">Python — écrire son propre transformateur</div>
     <div class="code-block"><pre>from sklearn.base import BaseEstimator, TransformerMixin
 
 class ClipOutliers(BaseEstimator, TransformerMixin):
-    """Écrête aux quantiles appris sur le train uniquement."""
+    """Écrête aux quantiles appris SUR LE TRAIN uniquement."""
+
     def __init__(self, q=0.01):
-        self.q = q                       # les hyperparamètres sont des attributs simples
+        self.q = q                        # hyperparamètre : attribut simple, même nom
 
     def fit(self, X, y=None):
-        self.lo_ = np.quantile(X, self.q, axis=0)
+        self.lo_ = np.quantile(X, self.q, axis=0)      # paramètres APPRIS : tiret bas
         self.hi_ = np.quantile(X, 1 - self.q, axis=0)
         return self                       # fit renvoie toujours self
 
     def transform(self, X):
         return np.clip(X, self.lo_, self.hi_)</pre></div>
+    <p>En respectant ces conventions, l'objet s'intègre partout : pipelines, recherche d'hyperparamètres, sérialisation. <code>TransformerMixin</code> fournit gratuitement <code>fit_transform</code>, et <code>BaseEstimator</code> fournit <code>get_params</code>/<code>set_params</code>, indispensables aux recherches sur grille.</p>
 
-    <h2 id="torch">7. PyTorch, TensorFlow, BoTorch</h2>
-    <p>Un framework de deep learning apporte trois choses : des tenseurs qui vivent sur GPU, la différentiation automatique, et une bibliothèque de couches et d'optimiseurs. La différentiation automatique est le cœur : pendant le calcul, le framework enregistre le graphe des opérations, puis le remonte en appliquant la règle de dérivation composée pour obtenir les gradients — sans que l'on ait à dériver quoi que ce soit à la main (module 7).</p>
+    <h2 id="torch">10. PyTorch et la différentiation automatique</h2>
+    <p>Un framework de deep learning apporte trois choses : des tenseurs qui vivent sur GPU, la différentiation automatique, et une bibliothèque de couches et d'optimiseurs. Un <strong>tenseur</strong> ressemble à un <code>ndarray</code>, avec deux attributs en plus : un <em>device</em> (processeur ou GPU) et la capacité d'enregistrer les opérations qu'il subit.</p>
 
-    <div class="code-label">Python — PyTorch</div>
+    <p>La <strong>différentiation automatique</strong> est le cœur du système. Pendant le calcul, PyTorch construit un graphe des opérations effectuées ; <code>backward()</code> le remonte en appliquant la règle de dérivation des fonctions composées, et dépose le gradient dans l'attribut <code>.grad</code> de chaque tenseur concerné. On n'écrit donc jamais de dérivée à la main (module 7).</p>
+
+    <div class="code-label">Python — autograd, pas à pas</div>
     <div class="code-block"><pre>import torch
 
-x = torch.randn(64, 10, device="cuda")
-w = torch.randn(10, 1, device="cuda", requires_grad=True)
-b = torch.zeros(1, device="cuda", requires_grad=True)
+x = torch.tensor([3.0], requires_grad=True)   # "je veux le gradient par rapport à x"
+y = x ** 2 + 5 * x                            # PyTorch enregistre : carré, produit, somme
 
-y_pred = x @ w + b
-perte = ((y_pred - y) ** 2).mean()
+y.backward()                                  # remonte le graphe
+print(x.grad)                                 # tensor([11.]) = 2x + 5 en x = 3  ✓</pre></div>
 
-perte.backward()          # remonte le graphe : remplit w.grad et b.grad
-print(w.grad.shape)       # (10, 1)
+    <div class="code-label">Python — une boucle d'entraînement minimale mais complète</div>
+    <div class="code-block"><pre>import torch, torch.nn as nn
 
-with torch.no_grad():     # mise à jour manuelle : pas de graphe à construire ici
-    w -= 0.01 * w.grad
-    w.grad.zero_()        # les gradients s'ACCUMULENT : oublier ce reset est un bug classique</pre></div>
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    <div class="code-label">PyTorch vs TensorFlow en 2026</div>
-    <div class="code-block"><pre>                    PyTorch                      TensorFlow / Keras
-Style               impératif ("eager")          graphe, ou Keras de haut niveau
-Débogage            pdb, print : du Python       plus indirect
-Recherche           domine très largement        minoritaire
-Production          TorchServe, vLLM, ONNX       TF Serving, TFLite, écosystème mobile mûr
-Compilation         torch.compile                XLA / jit_compile
-À apprendre         oui, par défaut              si l'existant de l'équipe l'impose</pre></div>
+modele = nn.Sequential(                       # un perceptron multicouche (module 14)
+    nn.Linear(10, 64), nn.ReLU(),
+    nn.Linear(64, 1),
+).to(device)
 
-    <p>Pour un apprentissage aujourd'hui, PyTorch est le choix par défaut : c'est la langue de la recherche, donc celle dans laquelle les nouveautés arrivent en premier. <code>torch.compile</code> réconcilie confort et performance en compilant le graphe à la volée. JAX est un troisième acteur, élégant (fonctions pures, <code>grad</code>, <code>vmap</code>, <code>jit</code>) et très utilisé en recherche scientifique.</p>
+perte_fn = nn.MSELoss()
+opt = torch.optim.AdamW(modele.parameters(), lr=1e-3)
 
-    <p><strong>BoTorch</strong> est une bibliothèque construite sur PyTorch pour l'optimisation bayésienne : modèles de substitution par processus gaussiens, fonctions d'acquisition différentiables, optimisation multi-objectif. Son intérêt pour un profil ingénieur est direct — optimiser un système dont chaque évaluation coûte cher (une simulation, un essai physique). C'est l'objet du <a href="project7-m17.html">module 17</a>.</p>
+for epoque in range(100):
+    for xb, yb in chargeur:                   # mini-lots (module 7)
+        xb, yb = xb.to(device), yb.to(device)
+
+        opt.zero_grad(set_to_none=True)       # 1. REMETTRE LES GRADIENTS À ZÉRO
+        pred = modele(xb)                     # 2. passe avant
+        perte = perte_fn(pred, yb)            # 3. calcul de la perte
+        perte.backward()                      # 4. passe arrière : remplit les .grad
+        opt.step()                            # 5. mise à jour des poids
+
+    modele.eval()                             # bascule en mode évaluation (dropout off)
+    with torch.no_grad():                     # pas de graphe : plus rapide, moins de mémoire
+        val = sum(perte_fn(modele(x.to(device)), y.to(device)) for x, y in val_loader)
+    modele.train()</pre></div>
+
+    <div class="warning-block">
+      <strong>Les gradients s'accumulent.</strong> C'est le bug numéro un des débutants : sans <code>opt.zero_grad()</code>, chaque <code>backward()</code> <em>ajoute</em> au gradient précédent au lieu de le remplacer, et l'entraînement diverge sans message d'erreur. Ce comportement n'est pas un défaut : il permet l'accumulation de gradient volontaire, qui simule un grand lot sur une petite carte (module 23). Deux autres réflexes : <code>torch.no_grad()</code> pour toute évaluation, et <code>modele.eval()</code> / <code>modele.train()</code> pour basculer le comportement du dropout et de la batch norm.
+    </div>
+
+    <div class="code-label">PyTorch, TensorFlow et les autres, en 2026</div>
+    <div class="code-block"><pre>PyTorch        impératif, déboguable au pdb, domine la recherche. Le défaut aujourd'hui.
+               torch.compile compile le graphe à la volée : confort ET performance.
+TensorFlow     encore présent en production, écosystème mobile mûr (TFLite). À apprendre
+               si l'existant de l'équipe l'impose.
+JAX            fonctions pures et transformations composables (grad, vmap, jit).
+               Très utilisé en recherche scientifique et en calcul différentiable.
+BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 17) :
+               optimiser un système dont chaque évaluation coûte cher.</pre></div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>NumPy : vue contre copie, broadcasting (en surveillant la taille des intermédiaires), vectorisation plutôt que boucle, dtypes choisis.</li>
-        <li>pandas pour l'ergonomie et l'écosystème ; polars pour la vitesse, le multi-threading et l'optimisation de requêtes.</li>
+        <li>Un <code>ndarray</code> est un bloc contigu homogène : c'est ce qui rend NumPy rapide, et ce qui explique vues, strides et broadcasting.</li>
+        <li>Découpage = vue, indexation fantaisiste = copie ; en cas de doute, <code>np.shares_memory</code>.</li>
+        <li>Le broadcasting évite les duplications mais peut créer des intermédiaires énormes : calculer leur taille avant.</li>
+        <li>Vectoriser plutôt que boucler ; Numba quand l'algorithme est intrinsèquement séquentiel.</li>
+        <li>pandas aligne par étiquette ; écriture chaînée, <code>.loc</code> pour écrire, types réduits pour la mémoire.</li>
+        <li>polars : multi-thread, expressions composables, mode paresseux avec optimisation de requête.</li>
         <li>Ne pas distribuer trop tôt : Parquet, colonnes utiles et types réduits règlent la majorité des problèmes de volume.</li>
-        <li>scikit-learn : tout passer par des <code>Pipeline</code>, c'est la meilleure assurance contre la fuite de données.</li>
-        <li>PyTorch comme framework par défaut ; les gradients s'accumulent, il faut les remettre à zéro.</li>
+        <li>Tout passer par un <code>Pipeline</code> scikit-learn : c'est la meilleure assurance contre la fuite de données.</li>
+        <li>PyTorch : les gradients s'accumulent, il faut les remettre à zéro à chaque itération.</li>
       </ul>
     </div>
   </div>
