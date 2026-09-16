@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 9 - Processus gaussiens et optimisation bayésienne - Nils Malmberg</title>
+  <title>Module 9 - Probabilités, inférence bayésienne et quantification d'incertitude - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,207 +41,226 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 9</div>
-    <h1>Processus gaussiens et optimisation bayésienne</h1>
+    <h1>Probabilités, inférence bayésienne et quantification d'incertitude</h1>
   </div>
 
-  <div class="project-content">
-    <p>Comment optimiser une fonction dont chaque évaluation prend six heures de simulation ou détruit une éprouvette ? La descente de gradient est inutilisable — pas de gradient, et un budget de quelques dizaines d'essais. C'est le domaine de l'optimisation bayésienne, qui construit un modèle probabiliste de la fonction et s'en sert pour décider où essayer ensuite. Pour un profil d'ingénieur, c'est probablement le module dont l'application est la plus immédiate.</p>
+  <div class="project-content course-content">
+    <p>Le module 8 traite l'inférence fréquentiste : tests, intervalles de confiance, décisions binaires. Ce module prend l'autre point de vue — traiter les paramètres eux-mêmes comme des variables aléatoires — et aboutit à la question qui manque à la plupart des modèles de machine learning : <em>à quel point cette prédiction est-elle sûre, et pourquoi ?</em> Pour un ingénieur qui doit dimensionner une marge de sécurité, c'est souvent plus important que la précision moyenne.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#probleme">Le problème : une boîte noire coûteuse</a></li>
-        <li><a href="#gp">Processus gaussiens : distribution sur des fonctions</a></li>
-        <li><a href="#noyaux">Noyaux et hyperparamètres</a></li>
-        <li><a href="#bo">La boucle d'optimisation bayésienne</a></li>
-        <li><a href="#acquisition">Fonctions d'acquisition</a></li>
-        <li><a href="#botorch">BoTorch en pratique</a></li>
-        <li><a href="#extensions">Contraintes, multi-objectif, multi-fidélité</a></li>
-        <li><a href="#usages">Cas d'usage et limites</a></li>
+        <li><a href="#lois">Les lois usuelles comme briques de modélisation</a></li>
+        <li><a href="#vraisemblance">Vraisemblance, MLE, MAP</a></li>
+        <li><a href="#bayes">Bayes comme mise à jour, et la conjugaison</a></li>
+        <li><a href="#mcmc">MCMC : quand il n'y a pas de forme close</a></li>
+        <li><a href="#hierarchique">Modèles hiérarchiques et partial pooling</a></li>
+        <li><a href="#vi">Inférence variationnelle</a></li>
+        <li><a href="#incertitude">Aléatoire contre épistémique</a></li>
+        <li><a href="#uq-ml">Quantifier l'incertitude d'un modèle de ML</a></li>
+        <li><a href="#conformal">Prédiction conforme</a></li>
       </ol>
     </div>
 
-    <h2 id="probleme">1. Le problème : une boîte noire coûteuse</h2>
-    <p>On cherche \(x^\star = \arg\max_{x\in\mathcal{X}} f(x)\) où \(f\) est :</p>
-    <ul>
-      <li><strong>coûteuse</strong> — une évaluation demande des heures de calcul, un essai physique, ou une campagne d'entraînement ;</li>
-      <li><strong>opaque</strong> — pas d'expression analytique, donc pas de gradient exploitable ;</li>
-      <li><strong>possiblement bruitée</strong> — deux mesures au même point diffèrent.</li>
-    </ul>
-    <p>Le budget se compte en dizaines d'évaluations, pas en millions. Une recherche aléatoire gaspille ; une descente de gradient numérique dépenserait tout son budget à estimer une seule direction. La stratégie gagnante consiste à <em>modéliser</em> \(f\) à partir des points déjà évalués, puis à choisir le prochain point en exploitant ce modèle. Ce modèle de substitution s'appelle un <em>surrogate</em>, et le choix naturel est un processus gaussien parce qu'il fournit, en plus d'une prédiction, une <strong>incertitude</strong> — exactement l'information nécessaire pour décider où explorer.</p>
+    <h2 id="lois">1. Les lois usuelles comme briques de modélisation</h2>
+    <p>Choisir une loi, c'est faire une hypothèse sur le mécanisme qui a engendré les données. L'essentiel du travail de modélisation probabiliste tient dans ce choix, et il se raisonne à partir du processus physique, pas à partir de l'allure de l'histogramme.</p>
 
-    <h2 id="gp">2. Processus gaussiens : distribution sur des fonctions</h2>
-    <p>Un processus gaussien est une loi de probabilité <em>sur des fonctions</em> : toute collection finie de valeurs \(\big(f(x_1),\dots,f(x_n)\big)\) suit une loi normale multivariée. Il est entièrement déterminé par une fonction moyenne (souvent prise nulle après centrage) et une fonction de covariance, le <strong>noyau</strong> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ f \sim \mathcal{GP}\big(m(x),\, k(x,x')\big) \]</div>
+    <div class="code-label">quelle loi pour quel mécanisme</div>
+    <div class="code-block"><pre>Bernoulli / Binomiale   succès-échec, nombre de succès sur n essais indépendants
+Poisson                 comptage d'événements rares dans un intervalle fixe
+                        (désintégrations, pannes, arrivées). Var = espérance.
+Binomiale négative      comptage SURDISPERSÉ (Var &gt; espérance) : le cas réel le plus
+                        fréquent, quand le taux varie lui-même d'une unité à l'autre.
+Exponentielle           temps d'attente sans mémoire entre événements poissoniens
+Weibull                 durée de vie avec taux de défaillance variable : LA loi de la
+                        fiabilité mécanique (k &lt; 1 mortalité infantile, k &gt; 1 usure)
+Gamma                   somme d'exponentielles, temps de service, priors de précision
+Beta                    une proportion inconnue dans [0,1] : le prior naturel d'un taux
+Normale                 somme de nombreux effets indépendants (TCL)
+Log-normale             PRODUIT de nombreux effets : tailles, revenus, durées, prix
+Student                 normale à queues épaisses : régression robuste aux aberrants
+Dirichlet               une distribution sur des proportions qui somment à 1</pre></div>
 
-    <p>L'intuition est celle de l'interpolation avec mémoire de la confiance : le noyau encode l'idée que deux points proches ont des valeurs proches. Avant toute observation, le GP est une nuée de fonctions plausibles ; chaque observation élimine celles qui ne passent pas par le point mesuré, et l'incertitude se resserre localement.</p>
-
-    <p>Conditionner une loi normale par une partie de ses coordonnées donne encore une loi normale, dont moyenne et covariance sont explicites. Avec \(K = k(X,X) + \sigma_n^2 I\) et \(k_* = k(X,x_*)\) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \mu_*(x_*) = k_*^\top K^{-1} y, \qquad \sigma_*^2(x_*) = k(x_*,x_*) - k_*^\top K^{-1} k_* \]</div>
-
-    <p>Deux lectures importantes. D'abord, la moyenne prédictive est une <em>combinaison linéaire des observations</em> pondérée par la similarité — c'est exactement une interpolation par fonctions de base radiales (le sujet de mon <a href="project5.html">projet mdisd</a>), mais assortie d'une variance. Ensuite, la variance prédictive <strong>ne dépend pas des valeurs observées</strong>, seulement de la position des points : l'incertitude est grande loin des données et petite près d'elles, ce qui est la propriété dont l'optimisation bayésienne a besoin.</p>
-
-    <div class="warning-block">
-      <strong>Sur l'implémentation.</strong> On n'inverse jamais \(K\) : on factorise par Cholesky \(K = LL^\top\) puis on résout (module 4). Le terme \(\sigma_n^2 I\) n'est pas seulement le bruit de mesure — c'est aussi ce qui rend \(K\) définie positive numériquement. Sans un <em>jitter</em> minimal (typiquement \(10^{-6}\)), la factorisation échoue dès que deux points d'apprentissage sont proches.
+    <div class="step-block">
+      <h4>Le réflexe qui évite les erreurs</h4>
+      <p>Une variable strictement positive et très asymétrique est rarement normale : elle est souvent log-normale ou gamma. Modéliser un temps de réparation par une loi normale conduit à des probabilités non nulles de durées négatives — ce qui se voit immédiatement dans les prédictions absurdes. De même, un comptage modélisé par une Poisson alors que les données sont surdispersées produit des intervalles de prédiction beaucoup trop étroits, et donc une fausse confiance.</p>
     </div>
 
-    <h2 id="noyaux">3. Noyaux et hyperparamètres</h2>
-    <div class="code-label">les noyaux usuels</div>
-    <div class="code-block"><pre>RBF / gaussien      k = σ²·exp(-‖x-x'‖²/2ℓ²)      fonctions infiniment dérivables :
-                                                   très (souvent trop) lisse.
-Matérn ν=5/2        polynôme·exp(-√5 r/ℓ)          deux fois dérivable. LE DÉFAUT en
-                                                   optimisation bayésienne : réaliste
-                                                   pour un système physique.
-Matérn ν=3/2                                       une fois dérivable : plus rugueux.
-Périodique          exp(-2sin²(π r/p)/ℓ²)          saisonnalité connue.
-Linéaire            x·x'                           tendance affine.
-Blanc               σ²·δ(x,x')                     bruit d'observation.
-Somme / produit     k₁+k₂, k₁·k₂                   combiner : tendance + saisonnalité + bruit.</pre></div>
+    <h2 id="vraisemblance">2. Vraisemblance, MLE, MAP</h2>
+    <p>La <strong>vraisemblance</strong> est la probabilité des données observées vue comme fonction du paramètre : \(\mathcal{L}(\theta) = p(y \mid \theta)\). L'estimation du maximum de vraisemblance consiste à prendre le \(\theta\) qui rend les données les plus probables.</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MLE}} = \arg\max_\theta \sum_{i=1}^{n} \log p(y_i \mid \theta) \]</div>
+    <p>Presque toutes les fonctions de perte du cours en découlent : la perte quadratique est la log-vraisemblance d'un bruit gaussien homoscédastique, l'entropie croisée celle d'une Bernoulli, la perte de Poisson celle d'un comptage. Choisir une perte, c'est donc choisir implicitement un modèle de bruit — et l'expliciter permet de le choisir correctement plutôt que par habitude.</p>
 
-    <p>La <strong>longueur caractéristique</strong> \(\ell\) est l'hyperparamètre décisif : elle dit à quelle distance deux points cessent de s'informer mutuellement. Petite, le GP devient nerveux et l'incertitude explose entre les points ; grande, il lisse tout. Avec une longueur par dimension (<em>Automatic Relevance Determination</em>), le modèle apprend lui-même quelles variables comptent — une grande longueur signifie que la sortie est insensible à cette entrée, ce qui constitue au passage une analyse de sensibilité gratuite.</p>
-
-    <p>Les hyperparamètres (\(\ell\), \(\sigma^2\), \(\sigma_n^2\)) s'ajustent en maximisant la <strong>vraisemblance marginale</strong> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \log p(y\mid X,\theta) = -\tfrac{1}{2}y^\top K^{-1}y \;-\; \tfrac{1}{2}\log|K| \;-\; \tfrac{n}{2}\log 2\pi \]</div>
-    <p>Le premier terme récompense l'ajustement aux données, le second pénalise la complexité du modèle (une matrice de covariance « permissive » a un grand déterminant). Le rasoir d'Occam est ici <em>automatique</em>, sans validation croisée — c'est un des grands attraits du cadre bayésien.</p>
-
-    <div class="code-label">Python — régression GP avec scikit-learn</div>
-    <div class="code-block"><pre>import numpy as np
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel
-
-noyau = ConstantKernel(1.0) * Matern(length_scale=np.ones(3), nu=2.5) \
-        + WhiteKernel(noise_level=1e-3)         # ARD : une longueur par dimension
-
-gp = GaussianProcessRegressor(kernel=noyau, normalize_y=True, n_restarts_optimizer=10)
-gp.fit(X, y)                                    # optimise les hyperparamètres par MLE
-
-mu, sigma = gp.predict(X_test, return_std=True)
-print(gp.kernel_)                               # longueurs apprises = sensibilité par variable</pre></div>
-
-    <p><strong>Le coût</strong> est la limite structurelle : la factorisation de \(K\) est en \(O(n^3)\) et la mémoire en \(O(n^2)\). Au-delà de quelques milliers de points, il faut des approximations creuses (points inducteurs, <em>variational GP</em> dans GPyTorch). Pour l'optimisation bayésienne, où \(n\) dépasse rarement quelques centaines, ce n'est pas un obstacle.</p>
-
-    <h2 id="bo">4. La boucle d'optimisation bayésienne</h2>
-    <div class="code-label">l'algorithme</div>
-    <div class="code-block"><pre>1. Évaluer f sur un plan initial (Latin Hypercube ou Sobol, 5 à 10 points par dimension)
-2. Répéter jusqu'à épuisement du budget :
-      a. ajuster le GP sur toutes les observations
-      b. maximiser la fonction d'acquisition α(x) sur le domaine
-         (α est peu coûteuse : on peut y lancer un optimiseur classique multi-départs)
-      c. évaluer f au point trouvé — LA seule opération coûteuse
-      d. ajouter (x, y) aux observations
-3. Renvoyer le meilleur point observé</pre></div>
-
-    <p>Le déplacement conceptuel est là : on remplace l'optimisation d'une fonction coûteuse par une suite d'optimisations d'une fonction bon marché (l'acquisition, calculée à partir du GP). Consommer quelques secondes de calcul pour choisir intelligemment un point vaut largement le coup quand ce point coûte six heures de simulation.</p>
-
-    <h2 id="acquisition">5. Fonctions d'acquisition</h2>
-    <p>L'acquisition traduit le compromis <strong>exploitation</strong> (aller là où le modèle prédit une bonne valeur) / <strong>exploration</strong> (aller là où il ne sait rien). En notant \(f^+\) le meilleur résultat observé, \(Z = (\mu(x)-f^+-\xi)/\sigma(x)\), \(\Phi\) et \(\varphi\) les fonctions de répartition et de densité normales :</p>
-
-    <div style="text-align:center;overflow-x:auto">\[ \text{EI}(x) = \big(\mu(x)-f^+-\xi\big)\Phi(Z) + \sigma(x)\,\varphi(Z) \]</div>
-
-    <p>L'<strong>amélioration espérée</strong> (EI) est l'espérance du gain par rapport au meilleur point connu. Sa structure est parlante : le premier terme récompense une moyenne élevée, le second une forte incertitude. C'est le choix par défaut — pas de paramètre à régler (\(\xi\) vaut typiquement 0,01), et un bon équilibre empirique.</p>
-
-    <div class="code-label">les alternatives</div>
-    <div class="code-block"><pre>UCB    μ(x) + β·σ(x)        exploration réglable explicitement par β. Garanties théoriques
-                            de regret (GP-UCB). β ≈ 2 en pratique.
-PI     P(f(x) &gt; f⁺)         probabilité d'amélioration : trop exploitante, converge
-                            souvent vers un optimum local.
-Thompson  tirer une fonction du postérieur et l'optimiser. Naturellement parallélisable :
-          k tirages donnent k points distincts à évaluer en batch.
-Entropy search  maximise l'information gagnée SUR LA POSITION de l'optimum plutôt que sur
-                la valeur. Plus coûteux, souvent plus efficace en nombre d'évaluations.
-Knowledge gradient  anticipe le gain sur la meilleure valeur atteignable après l'évaluation.</pre></div>
-
-    <h2 id="botorch">6. BoTorch en pratique</h2>
-    <p><a href="https://botorch.org" target="_blank">BoTorch</a> (Meta) est construit sur PyTorch et GPyTorch. Son atout : les acquisitions y sont <em>différentiables</em> et estimées par Monte-Carlo, ce qui permet de les maximiser par gradient et d'en construire des variantes (batch, contraintes, multi-objectif) sans dériver de nouvelles formules analytiques. <strong>Ax</strong> est la surcouche qui gère la campagne complète.</p>
-
-    <div class="code-label">Python — une boucle complète</div>
-    <div class="code-block"><pre>import torch
-from botorch.models import SingleTaskGP
-from botorch.fit import fit_gpytorch_mll
-from botorch.acquisition import qLogExpectedImprovement
-from botorch.optim import optimize_acqf
-from botorch.utils.sampling import draw_sobol_samples
-from gpytorch.mlls import ExactMarginalLogLikelihood
-
-bornes = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=torch.double)
-
-X = draw_sobol_samples(bounds=bornes, n=10, q=1).squeeze(1)   # plan initial
-Y = simulation_couteuse(X).unsqueeze(-1)                      # à maximiser
-
-for iteration in range(40):
-    gp  = SingleTaskGP(X, Y)                       # normalisation gérée en interne
-    mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-    fit_gpytorch_mll(mll)                          # hyperparamètres par vraisemblance
-
-    acq = qLogExpectedImprovement(model=gp, best_f=Y.max())
-    candidat, _ = optimize_acqf(
-        acq, bounds=bornes,
-        q=4,                                       # 4 points en parallèle : batch BO
-        num_restarts=20, raw_samples=512,
-    )
-
-    X = torch.cat([X, candidat])
-    Y = torch.cat([Y, simulation_couteuse(candidat).unsqueeze(-1)])
-
-print("meilleur point :", X[Y.argmax()], "valeur :", Y.max().item())</pre></div>
-
-    <p>Le paramètre <code>q=4</code> illustre un cas fréquent en ingénierie : si quatre simulations peuvent tourner en parallèle sur un cluster, on veut quatre points <em>complémentaires</em>, pas quatre fois le même. Les acquisitions « q » de BoTorch traitent cela correctement, en pénalisant la redondance à l'intérieur du lot.</p>
-
-    <h2 id="extensions">7. Contraintes, multi-objectif, multi-fidélité</h2>
-    <ul>
-      <li><strong>Contraintes coûteuses</strong> — quand la faisabilité elle-même doit être simulée (une contrainte mécanique, une température maximale), on modélise chaque contrainte par son propre GP et on pondère l'acquisition par la probabilité de faisabilité.</li>
-      <li><strong>Multi-objectif</strong> — rendement <em>et</em> coût, précision <em>et</em> latence. On ne cherche plus un optimum mais un <strong>front de Pareto</strong>. L'acquisition de référence est qEHVI (<em>expected hypervolume improvement</em>), qui mesure le gain de volume dominé par le front.</li>
-      <li><strong>Espaces mixtes</strong> — variables continues, entières et catégorielles mélangées (un choix de matériau, un nombre de couches). Traitées par des noyaux dédiés ou par relaxation continue.</li>
-      <li><strong>Multi-fidélité</strong> — souvent le gain le plus spectaculaire : on dispose d'un simulateur grossier rapide et d'un simulateur fin coûteux. Un GP multi-tâche apprend la corrélation entre les deux niveaux et n'appelle le coûteux que lorsque c'est décisif. Le même principe s'applique au réglage d'hyperparamètres, où « peu d'époques » est une fidélité basse — c'est l'idée de Hyperband, croisée avec la modélisation bayésienne dans BOHB.</li>
-    </ul>
-
-    <div class="code-label">comparaison des stratégies de réglage</div>
-    <div class="code-block"><pre>Méthode              Évaluations nécessaires   Parallélisme   Quand l'utiliser
-──────────────────────────────────────────────────────────────────────────────────
-Grid search          très nombreuses           parfait        2-3 paramètres, jamais au-delà
-Random search        nombreuses                parfait        baseline honnête, très robuste
-Hyperband / ASHA     moyennes                  bon            entraînements interruptibles
-TPE (Optuna)         peu                       bon            défaut pratique en ML
-GP + EI (BoTorch)    très peu                  bon (batch)    évaluations RÉELLEMENT coûteuses,
-                                                              dimension modérée (&lt; 20)</pre></div>
-
-    <p>Un repère honnête : en dessous de 20 ou 30 évaluations disponibles et en dimension modérée, l'optimisation bayésienne par GP domine nettement. Pour régler les hyperparamètres d'un gradient boosting qui s'entraîne en dix secondes, Optuna (TPE) est plus simple et suffisant. Et la recherche aléatoire reste une baseline étonnamment solide, qu'il faut toujours inclure dans la comparaison.</p>
-
-    <h2 id="usages">8. Cas d'usage et limites</h2>
-    <div class="code-label">où c'est réellement utile</div>
-    <div class="code-block"><pre>Plans d'expériences      choisir les essais physiques suivants (chimie, matériaux, procédés)
-Calibration de modèle    identifier les paramètres d'un modèle physique à partir de mesures
-Conception assistée      optimiser une géométrie évaluée par CFD ou éléments finis
-Réglage coûteux          hyperparamètres d'un gros réseau (des heures par entraînement)
-Contrôle / robotique     réglage de contrôleurs sur système réel, où chaque essai a un coût
-A/B testing adaptatif    allocation séquentielle, à la frontière des bandits</pre></div>
+    <p>En ajoutant un <em>a priori</em> \(p(\theta)\), on obtient l'estimateur du maximum a posteriori :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MAP}} = \arg\max_\theta \big[\log p(y\mid\theta) + \log p(\theta)\big] \]</div>
 
     <div class="warning-block">
-      <strong>Les limites, sans détour.</strong><br>
-      • <strong>Dimension</strong> — au-delà de 20 à 30 variables, le GP peine : le volume à explorer croît exponentiellement et l'incertitude ne se réduit plus nulle part. Remèdes : sous-espaces aléatoires (ALEBO, TuRBO), hypothèses d'additivité, réduction préalable.<br>
-      • <strong>Coût du surrogate</strong> — \(O(n^3)\) : au-delà de quelques milliers d'évaluations, l'ajustement du GP devient lui-même coûteux.<br>
-      • <strong>Hypothèse de régularité</strong> — le noyau suppose une certaine continuité. Sur une fonction discontinue ou fractale, le modèle est faux, donc les décisions le sont aussi.<br>
-      • <strong>Bruit hétéroscédastique</strong> — un bruit dont l'amplitude varie selon \(x\) demande un modèle dédié ; sinon le GP le confond avec du signal.<br>
-      • <strong>Sensibilité au noyau</strong> — c'est le vrai choix de modélisation. Un RBF sur un phénomène rugueux produit des prédictions trop lisses et une incertitude sous-estimée. Matérn 5/2 est le défaut raisonnable.
+      <strong>La régularisation est un a priori déguisé.</strong> Avec un prior gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un prior de Laplace, on retrouve exactement le lasso. Les modules 12 et 7 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
+    </div>
+
+    <h2 id="bayes">3. Bayes comme mise à jour, et la conjugaison</h2>
+    <p>Le MAP ne retient qu'un point. L'approche bayésienne complète conserve toute la distribution :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \underbrace{p(\theta\mid y)}_{\text{a posteriori}} = \frac{\overbrace{p(y\mid\theta)}^{\text{vraisemblance}}\;\overbrace{p(\theta)}^{\text{a priori}}}{\underbrace{p(y)}_{\text{évidence}}} \;\propto\; p(y\mid\theta)\,p(\theta) \]</div>
+
+    <p>L'interprétation est opérationnelle : l'a priori encode ce qu'on sait avant de regarder les données, la vraisemblance ce que les données disent, et l'a posteriori combine les deux en pondérant chacun par sa précision. Avec peu de données, l'a priori domine ; avec beaucoup, il s'efface — c'est un mécanisme de régularisation automatique qui s'adapte à la quantité d'information disponible.</p>
+
+    <p>Dans quelques cas heureux, l'a posteriori appartient à la même famille que l'a priori : on parle de <strong>conjugaison</strong>, et le calcul devient une simple mise à jour de paramètres. Le cas Beta-Binomial est le plus utile :</p>
+    <div style="text-align:center;overflow-x:auto">\[ p \sim \text{Beta}(\alpha,\beta), \quad k \mid p \sim \text{Bin}(n,p) \;\Longrightarrow\; p \mid k \sim \text{Beta}(\alpha + k,\; \beta + n - k) \]</div>
+
+    <div class="code-label">Python — A/B test bayésien, en dix lignes</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import stats
+
+# a priori faiblement informatif : Beta(1,1) = uniforme sur [0,1]
+a_post = stats.beta(1 + 1183, 1 + 20_143 - 1183)      # variante A
+b_post = stats.beta(1 + 1279, 1 + 20_089 - 1279)      # variante B
+
+rng = np.random.default_rng(0)
+ta, tb = a_post.rvs(200_000, random_state=rng), b_post.rvs(200_000, random_state=rng)
+
+print(f"P(B meilleure que A) = {(tb &gt; ta).mean():.3f}")
+print(f"gain relatif médian  = {np.median((tb - ta) / ta):+.2%}")
+print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")</pre></div>
+
+    <p>La dernière ligne est ce qui manque le plus à l'approche fréquentiste du module 8 : la <em>perte espérée</em> en cas de mauvais choix. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel.</p>
+
+    <h2 id="mcmc">4. MCMC : quand il n'y a pas de forme close</h2>
+    <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable en dimension élevée. La solution : ne pas calculer l'a posteriori, mais <strong>y échantillonner</strong>. On construit une chaîne de Markov dont la loi stationnaire est précisément \(p(\theta\mid y)\).</p>
+
+    <ul>
+      <li><strong>Metropolis-Hastings</strong> — proposer un déplacement, l'accepter avec la probabilité \(\min(1, \frac{p(\theta')q(\theta\mid\theta')}{p(\theta)q(\theta'\mid\theta)})\). Remarquable : le rapport élimine la constante de normalisation inconnue. Mais la marche aléatoire explore mal en grande dimension.</li>
+      <li><strong>Gibbs</strong> — mettre à jour chaque coordonnée selon sa conditionnelle. Efficace si ces conditionnelles sont connues, très lent si les paramètres sont fortement corrélés.</li>
+      <li><strong>Hamiltonien (HMC) et NUTS</strong> — la méthode moderne. On introduit une variable d'impulsion et on simule une dynamique hamiltonienne sur le paysage \(-\log p(\theta\mid y)\), intégrée par un schéma saute-mouton. Le gradient guide la trajectoire, ce qui permet de parcourir de longues distances avec un taux d'acceptation élevé. NUTS choisit automatiquement la longueur de trajectoire. C'est ce qui a rendu l'inférence bayésienne praticable sur des modèles à centaines de paramètres.</li>
+    </ul>
+
+    <div class="step-block">
+      <h4>Diagnostics : une chaîne qui a convergé, ça se vérifie</h4>
+      <ul>
+        <li><strong>\(\hat{R}\) (Gelman-Rubin)</strong> — compare la variance entre plusieurs chaînes à la variance intra-chaîne. Il faut \(\hat R \lt 1{,}01\) ; au-delà, les chaînes n'explorent pas la même région et <em>rien</em> ne doit être interprété.</li>
+        <li><strong>ESS</strong> (taille d'échantillon effective) — les tirages MCMC sont autocorrélés : 10 000 tirages peuvent n'en valoir que 200 d'indépendants. Viser un ESS d'au moins quelques centaines par quantité d'intérêt.</li>
+        <li><strong>Divergences</strong> (HMC) — signalent une géométrie trop courbée pour le pas d'intégration, typiquement l'« entonnoir » des modèles hiérarchiques. Le remède est presque toujours une reparamétrisation (forme non centrée), pas une augmentation du nombre d'itérations.</li>
+        <li><strong>Prédictif a posteriori</strong> — simuler des jeux de données depuis le modèle ajusté et les comparer aux vraies données. C'est le test le plus parlant : si les simulations ne ressemblent pas aux observations, le modèle est faux, quelle que soit la qualité de la convergence.</li>
+      </ul>
+    </div>
+
+    <h2 id="hierarchique">5. Modèles hiérarchiques et partial pooling</h2>
+    <p>C'est l'apport le plus utile du cadre bayésien en pratique. Situation typique : on veut estimer un taux par site, par machine ou par client, mais certains groupes n'ont que trois observations. Deux extrêmes également mauvais :</p>
+    <ul>
+      <li><strong>Aucun regroupement</strong> — un modèle par groupe : les petits groupes donnent des estimations absurdes (un groupe avec 1 succès sur 1 essai affiche 100 %).</li>
+      <li><strong>Regroupement total</strong> — une seule estimation globale : on efface toute différence réelle entre groupes.</li>
+    </ul>
+    <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés.</p>
+    <div style="text-align:center;overflow-x:auto">\[ y_{ij} \sim \mathcal{N}(\theta_j, \sigma^2), \qquad \theta_j \sim \mathcal{N}(\mu, \tau^2), \qquad \mu,\sigma,\tau \sim \text{a priori} \]</div>
+    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\). C'est exactement l'effet du lissage du <em>target encoding</em> (module 10), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
+
+    <div class="code-label">Python — PyMC, modèle hiérarchique non centré</div>
+    <div class="code-block"><pre>import pymc as pm
+
+with pm.Model() as modele:
+    mu    = pm.Normal("mu", 0, 5)                 # moyenne globale
+    tau   = pm.HalfNormal("tau", 2)               # dispersion entre groupes
+    sigma = pm.HalfNormal("sigma", 2)             # bruit intra-groupe
+
+    z      = pm.Normal("z", 0, 1, dims="groupe")  # paramétrage NON CENTRÉ :
+    theta  = pm.Deterministic("theta", mu + tau * z, dims="groupe")   # évite l'entonnoir
+
+    pm.Normal("obs", mu=theta[idx_groupe], sigma=sigma, observed=y)
+
+    trace = pm.sample(2000, tune=1000, chains=4, target_accept=0.9)
+
+import arviz as az
+print(az.summary(trace, var_names=["mu", "tau"]))   # r_hat, ess_bulk, intervalles crédibles</pre></div>
+
+    <h2 id="vi">6. Inférence variationnelle</h2>
+    <p>MCMC est asymptotiquement exact mais coûteux : chaque itération évalue la vraisemblance sur toutes les données, ce qui devient impraticable sur des millions d'observations ou des réseaux de neurones. L'<strong>inférence variationnelle</strong> transforme l'inférence en optimisation : on cherche, dans une famille paramétrée \(q_\phi\) (souvent des gaussiennes indépendantes), celle qui minimise la divergence de Kullback-Leibler à l'a posteriori. Cela revient à maximiser la borne inférieure de l'évidence :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{ELBO}(\phi) = \mathbb{E}_{q_\phi}\big[\log p(y\mid\theta)\big] - \operatorname{KL}\!\big(q_\phi(\theta)\,\|\,p(\theta)\big) \]</div>
+    <p>Le premier terme demande de bien expliquer les données, le second de ne pas trop s'écarter de l'a priori. Avantage : on retrouve un problème d'optimisation classique, compatible avec les mini-lots et le GPU (module 7). Inconvénient à connaître : une famille de gaussiennes indépendantes <em>sous-estime systématiquement</em> la variance a posteriori et ignore les corrélations entre paramètres. Les intervalles produits sont donc trop étroits — utilisables pour un ordre de grandeur, pas pour une marge de sécurité.</p>
+
+    <p>Les outils pratiques : <strong>PyMC</strong> (le plus accessible), <strong>NumPyro</strong> (sur JAX, très rapide, NUTS efficace), <strong>Stan</strong> (la référence historique, excellente documentation). Tous partagent la même logique : on écrit le <em>modèle génératif</em>, l'inférence est prise en charge.</p>
+
+    <h2 id="incertitude">7. Aléatoire contre épistémique</h2>
+    <p>Distinction fondamentale, et régulièrement ignorée :</p>
+    <div class="code-label">deux incertitudes de nature différente</div>
+    <div class="code-block"><pre>ALÉATOIRE (aleatoric)          ÉPISTÉMIQUE (epistemic)
+bruit intrinsèque du phénomène  ignorance du modèle
+deux essais identiques donnent  le modèle n'a pas vu de données dans cette région
+deux résultats différents
+NE diminue PAS avec plus de     DIMINUE avec plus de données
+données
+ex : dispersion d'une mesure,   ex : prédire hors du domaine d'entraînement,
+variabilité d'un matériau       extrapolation, régime jamais observé</pre></div>
+
+    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut dimensionner une marge : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est hors de son domaine de validité : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 11) — ou pour déclencher un repli sur une procédure classique. Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
+
+    <div class="warning-block">
+      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — c'est le comportement le plus dangereux pour un usage industriel. Les GP (module 17), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données.
+    </div>
+
+    <h2 id="uq-ml">8. Quantifier l'incertitude d'un modèle de ML</h2>
+    <div class="code-label">méthodes, du plus simple au plus coûteux</div>
+    <div class="code-block"><pre>Régression quantile         entraîner sur la perte pinball aux quantiles 5 % et 95 %.
+                            Capture l'incertitude ALÉATOIRE, y compris hétéroscédastique.
+                            Disponible dans LightGBM et HistGradientBoosting : très bon
+                            rapport effort/résultat sur données tabulaires.
+Ensembles profonds          entraîner 5 réseaux avec des graines différentes ; la
+                            dispersion des prédictions estime l'incertitude ÉPISTÉMIQUE.
+                            Simple, robuste, la référence empirique — coût ×5.
+MC dropout                  laisser le dropout actif à l'inférence et échantillonner.
+                            Bon marché, mais approximation grossière.
+Sortie probabiliste         faire prédire au réseau moyenne ET variance (perte de
+                            log-vraisemblance gaussienne) : sépare les deux incertitudes.
+Bayésien complet            poids traités comme des variables aléatoires (VI, SWAG).
+                            Élégant, coûteux, rarement meilleur qu'un ensemble profond.
+Processus gaussien          incertitude exacte par construction (module 17) — mais O(n³).
+Prédiction conforme         garantie de couverture distribution-free, sur n'importe quel
+                            modèle déjà entraîné (section suivante).</pre></div>
+
+    <h2 id="conformal">9. Prédiction conforme</h2>
+    <p>La prédiction conforme est, à mon sens, la technique la plus sous-utilisée du domaine. Elle fournit un intervalle de prédiction avec une <strong>garantie de couverture valable à échantillon fini</strong>, sans aucune hypothèse sur la distribution des données ni sur le modèle — seulement l'échangeabilité des observations.</p>
+
+    <p>La version par découpage tient en trois lignes. On met de côté un jeu de calibration disjoint de l'entraînement, on y calcule les scores de non-conformité \(s_i = |y_i - \hat f(x_i)|\), puis on prend le quantile empirique \(\hat q\) d'ordre \(\lceil (n+1)(1-\alpha)\rceil / n\). L'intervalle \(\hat f(x) \pm \hat q\) vérifie alors :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(y_{\text{nouveau}} \in \hat{C}(x_{\text{nouveau}})\big) \;\geq\; 1-\alpha \]</div>
+
+    <div class="code-label">Python — conformalisation d'un modèle quelconque</div>
+    <div class="code-block"><pre>import numpy as np
+
+modele.fit(X_train, y_train)                       # n'importe quel modèle : GBM, réseau...
+
+scores = np.abs(y_calib - modele.predict(X_calib))            # non-conformité
+n, alpha = len(scores), 0.1
+q = np.quantile(scores, np.ceil((n + 1) * (1 - alpha)) / n, method="higher")
+
+pred = modele.predict(X_test)
+bas, haut = pred - q, pred + q                                # couverture garantie à 90 %
+print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")</pre></div>
+
+    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise des quantiles prédits, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré.</p>
+
+    <div class="warning-block">
+      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe (d'où les variantes <em>Mondrian</em>, conditionnées par groupe). Et elle suppose l'échangeabilité : si la distribution dérive (module 24) ou si les données sont temporelles, la garantie tombe — il existe des versions adaptatives en ligne pour ce cas. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges, ce qui est déjà une information utile.
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Un GP est une loi sur des fonctions : il fournit une prédiction <em>et</em> une incertitude calibrée, ce que ne font ni les arbres ni les réseaux.</li>
-        <li>Le noyau encode l'hypothèse de régularité ; Matérn 5/2 avec ARD est le défaut ; la vraisemblance marginale règle les hyperparamètres avec une pénalité de complexité intégrée.</li>
-        <li>L'optimisation bayésienne remplace une fonction coûteuse par une suite d'optimisations bon marché de l'acquisition.</li>
-        <li>EI par défaut, UCB si l'on veut piloter l'exploration explicitement, Thompson ou acquisitions « q » pour le parallèle.</li>
-        <li>Le domaine d'excellence : évaluations réellement coûteuses, dimension modérée, budget de quelques dizaines de points. Ailleurs, random search ou TPE suffisent.</li>
+        <li>Choisir une loi, c'est faire une hypothèse sur le mécanisme ; choisir une perte, c'est choisir un modèle de bruit.</li>
+        <li>Ridge et lasso sont des MAP avec a priori gaussien et laplacien : la régularisation est une croyance explicite.</li>
+        <li>L'a posteriori combine a priori et données en pondérant par la précision ; il s'efface quand les données abondent.</li>
+        <li>NUTS/HMC rend l'inférence praticable ; toujours vérifier \(\hat R\), l'ESS, les divergences et le prédictif a posteriori.</li>
+        <li>Les modèles hiérarchiques font du regroupement partiel : la meilleure réponse aux groupes à faibles effectifs.</li>
+        <li>Distinguer incertitude aléatoire (irréductible, à dimensionner) et épistémique (réductible, signal de hors-domaine).</li>
+        <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour quelques lignes de code.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m08.html" class="btn btn-secondary">← Module 8 : Deep learning</a>
-  <a href="project7-m10.html" class="btn btn-primary">Module 10 : Apprentissage par renforcement →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">Gaussian Process</span><span class="tag">Noyaux</span><span class="tag">Bayesian Optimization</span><span class="tag">BoTorch</span><span class="tag">DoE</span></div>
+  <div class="course-nav">
+    <a href="project7-m08.html" class="btn btn-secondary">← Module 8 : Statistique inférentielle</a>
+    <a href="project7-m10.html" class="btn btn-primary">Module 10 : Data science en pratique →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Hiérarchique</span><span class="tag">Incertitude</span><span class="tag">Conformal</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -262,50 +281,56 @@ A/B testing adaptatif    allocation séquentielle, à la frontière des bandits<
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 9</div>
-    <h1>Gaussian processes and Bayesian optimisation</h1>
+    <h1>Probability, Bayesian inference and uncertainty quantification</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The expensive black-box optimisation problem, and why gradient methods do not apply.</li>
-      <li>Gaussian processes as distributions over functions: the posterior mean and variance derived from conditioning, why the predictive variance ignores observed values, and the Cholesky-based implementation.</li>
-      <li>Kernels (RBF, Matérn, periodic, composite), length scales and ARD as free sensitivity analysis, and hyperparameter fitting by marginal likelihood with its built-in Occam penalty.</li>
-      <li>The Bayesian optimisation loop: replacing one expensive optimisation with many cheap ones.</li>
-      <li>Acquisition functions: expected improvement derived and explained, UCB, probability of improvement, Thompson sampling, entropy search and knowledge gradient.</li>
-      <li>A complete BoTorch loop, including batch acquisition for parallel simulations.</li>
-      <li>Extensions: expensive constraints, multi-objective optimisation and Pareto fronts (qEHVI), mixed spaces, and multi-fidelity modelling.</li>
-      <li>A comparison of tuning strategies (grid, random, Hyperband, TPE, GP-based) and an honest account of where Bayesian optimisation breaks down.</li>
+      <li>Common distributions as modelling primitives, chosen from the mechanism rather than from the histogram (Poisson vs negative binomial, Weibull for reliability, log-normal for multiplicative effects).</li>
+      <li>Likelihood, maximum likelihood and MAP — and the fact that every loss function in this course is a noise model in disguise.</li>
+      <li>Ridge and lasso derived as MAP estimates under Gaussian and Laplace priors: regularisation as an explicit belief.</li>
+      <li>Bayes' rule as an update, conjugate priors, and a ten-line Bayesian A/B test that reports expected loss rather than a p-value.</li>
+      <li>MCMC: Metropolis-Hastings, Gibbs, and Hamiltonian Monte Carlo / NUTS — plus the diagnostics that decide whether anything may be interpreted (R-hat, ESS, divergences, posterior predictive checks).</li>
+      <li>Hierarchical models and partial pooling: the principled answer to small groups, with a non-centred PyMC example.</li>
+      <li>Variational inference and the ELBO, and why mean-field posteriors are systematically too narrow.</li>
+      <li>Aleatoric vs epistemic uncertainty, and why confusing them leads either to over-engineering or to trusting extrapolation.</li>
+      <li>Practical UQ for ML models: quantile regression, deep ensembles, MC dropout, probabilistic outputs.</li>
+      <li>Conformal prediction: finite-sample, distribution-free coverage on top of any trained model, with CQR for adaptive intervals — and the precise limits of the guarantee.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><strong>Gaussian processes and Bayesian optimisation</strong></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><strong>Probability, Bayesian inference and uncertainty quantification</strong></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

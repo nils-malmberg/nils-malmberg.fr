@@ -43,33 +43,39 @@
     <h1>Cours de data science &amp; machine learning</h1>
   </div>
 
-  <div class="project-content">
-    <p>J'écris ce cours pour me former sérieusement à la data science et au machine learning, et pour garder une trace structurée de ce que j'apprends. Le principe est simple : tant que je ne sais pas expliquer une notion clairement, c'est que je ne la maîtrise pas. Cette page est le sommaire du parcours ; chaque module est une page autonome.</p>
-    <p>Le cours compte <strong>22 modules</strong> : les douze premiers forment le tronc commun, de l'outillage Python au modèle surveillé en production ; les dix suivants traitent ce que ce tronc laissait de côté — incertitude, temps, données non tabulaires, simulation numérique, budget d'annotation, décision, responsabilité, matériel et théorie.</p>
+  <div class="project-content course-content">
+    <p>Ce cours est mon support de formation à la data science et au machine learning : un endroit unique où centraliser ce que j'apprends, plutôt qu'une collection de notes éparpillées entre des notebooks, des articles et des marque-pages.</p>
+
+    <div class="step-block">
+      <h4>Comment ce cours a été écrit</h4>
+      <p>Le contenu a été <strong>rédigé par Claude Code</strong> (l'assistant de programmation d'Anthropic) à ma demande, à partir d'un programme que j'ai défini et de mes lacunes identifiées — analyse en composantes principales, statistique inférentielle, concurrence en Python. Je préfère le dire clairement plutôt que de laisser croire à une rédaction manuelle : l'objectif est de disposer d'un parcours cohérent et complet, calibré sur mon niveau (prépa scientifique, Python et mathématiques solides), que je relis, corrige et complète au fil de mon apprentissage. Les erreurs qui subsistent restent les miennes — si vous en repérez une, elle m'intéresse.</p>
+    </div>
+
+    <p>Le cours compte <strong>26 modules</strong>, du premier environnement Python jusqu'à un projet complet mis en production. Chaque module est une page autonome.</p>
 
     <h2>Le format</h2>
-    <p>Le cours suppose des bases solides en mathématiques et en Python — je ne réexplique ni la syntaxe de base, ni l'algèbre linéaire élémentaire, ni le calcul différentiel. L'effort porte sur ce qui est spécifique à la data science et au ML. Chaque notion suit la même trame :</p>
+    <p>Le cours suppose des bases solides en mathématiques et en Python — je ne réexplique ni le calcul différentiel, ni l'algèbre linéaire élémentaire. En revanche, tout ce qui est spécifique à la data science est repris depuis le problème qu'il résout, avec des exemples de code exécutables. Chaque notion suit la même trame :</p>
     <div class="step-block">
       <h4>La trame de chaque notion</h4>
       <ol>
-        <li><strong>Intuition</strong> — ce que fait la méthode, en une idée, sans formule.</li>
-        <li><strong>Formalisme minimal</strong> — les équations nécessaires, pas une de plus.</li>
-        <li><strong>Cas d'usage</strong> — sur quel type de problème on la sort réellement.</li>
-        <li><strong>Avantages / limites</strong> — pourquoi la choisir, et quand elle casse.</li>
-        <li><strong>Code</strong> — un extrait minimal qui tourne, quand c'est pertinent.</li>
+        <li><strong>Le problème</strong> — à quoi ça répond, ce que ça évite, pourquoi ça existe.</li>
+        <li><strong>L'intuition</strong> — l'idée en une image, sans formule.</li>
+        <li><strong>Le formalisme minimal</strong> — les équations nécessaires, pas une de plus.</li>
+        <li><strong>Le code</strong> — des commandes et des extraits complets, commentés, qui tournent.</li>
+        <li><strong>Avantages et limites</strong> — pourquoi la choisir, et quand elle casse.</li>
       </ol>
     </div>
 
-    <p>Les modules sont progressifs mais pas strictement séquentiels. Leur <em>numéro</em> est un identifiant stable, dans l'ordre où je les ai écrits ; l'<em>ordre de lecture</em> conseillé est celui des six parties ci-dessous. Chaque module est autonome et renvoie explicitement aux autres quand une notion y a déjà été traitée.</p>
+    <p>Les modules sont progressifs mais pas strictement séquentiels. L'ordre de lecture conseillé est celui des sept parties ci-dessous ; chaque module renvoie explicitement aux autres quand une notion y a déjà été traitée. Le dernier module reprend l'ensemble sur un projet unique, du scraping à la mise en production.</p>
 
     <div class="warning-block">
-      <strong>Travail en cours.</strong> Ce cours est écrit au fil de mon apprentissage : certains modules seront enrichis, corrigés ou réorganisés. Les erreurs qui restent sont les miennes — si vous en repérez une, elle m'intéresse.
+      <strong>Travail en cours.</strong> Ce cours évolue au fil de mon apprentissage : certains modules seront enrichis, corrigés ou réorganisés.
     </div>
 
     <h2>Le parcours</h2>
 
     <h3>Partie I — Outillage</h3>
-    <p>De quoi travailler proprement : environnement, données, bibliothèques.</p>
+    <p>De quoi travailler proprement : le langage, ses mécanismes, les données et le déploiement.</p>
 
     <div class="projects-grid">
 
@@ -77,31 +83,31 @@
         <div class="project-card-header">
           <div class="project-num">1</div>
           <div>
-            <h3><a href="project7-m01.html">Fondations Python, outillage et concurrence</a></h3>
+            <h3><a href="project7-m01.html">Python moderne</a></h3>
             <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 1 · Outillage</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Python moderne (typage, dataclasses, générateurs), gestion d'environnements avec UV, qualité de code, Git pour un projet data, et un traitement approfondi de la concurrence : GIL, threads, processus, asyncio — quoi utiliser et quand.</p>
+          <p>Structure d'un projet, environnements et UV, puis quatre mécanismes expliqués de zéro : décorateurs, dataclasses (<code>frozen</code>, <code>slots</code>), annotations de type, itérateurs et générateurs. Qualité avec ruff, pytest et pre-commit.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Python</span><span class="tag">UV</span><span class="tag">Git</span><span class="tag">Concurrence</span><span class="tag">asyncio</span></div>
+          <div class="project-tags"><span class="tag">Python</span><span class="tag">Décorateurs</span><span class="tag">Générateurs</span><span class="tag">UV</span><span class="tag">pre-commit</span></div>
         </div>
       </div>
 
-      <div class="project-card">
+      <div class="project-card featured">
         <div class="project-card-header">
           <div class="project-num">2</div>
           <div>
-            <h3><a href="project7-m02.html">Données et déploiement</a></h3>
+            <h3><a href="project7-m02.html">Concurrence en Python</a></h3>
             <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 2 · Outillage</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>SQL sérieux (jointures, fenêtres, index, plans d'exécution), familles NoSQL et bases vectorielles, Docker pour un projet Python, ce qu'il faut savoir de Kubernetes, et FastAPI pour exposer un modèle.</p>
+          <p>Processus contre threads, le GIL expliqué et mesuré, comment diagnostiquer si un programme attend ou calcule, puis les trois outils en détail : <code>ThreadPoolExecutor</code>, <code>ProcessPoolExecutor</code> et asyncio.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">SQL</span><span class="tag">NoSQL</span><span class="tag">Docker</span><span class="tag">Kubernetes</span><span class="tag">FastAPI</span></div>
+          <div class="project-tags"><span class="tag">GIL</span><span class="tag">Threads</span><span class="tag">multiprocessing</span><span class="tag">asyncio</span></div>
         </div>
       </div>
 
@@ -114,10 +120,58 @@
           </div>
         </div>
         <div class="project-card-body">
-          <p>NumPy en profondeur (broadcasting, vues, mémoire), pandas vs polars vs Dask et comment choisir, l'API scikit-learn, PyTorch face à TensorFlow, et une première vue de BoTorch.</p>
+          <p>NumPy en profondeur (broadcasting, vues, mémoire), pandas contre polars contre Dask et comment choisir, l'API scikit-learn, PyTorch face à TensorFlow.</p>
         </div>
         <div class="project-card-footer">
           <div class="project-tags"><span class="tag">NumPy</span><span class="tag">pandas</span><span class="tag">polars</span><span class="tag">Dask</span><span class="tag">PyTorch</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">4</div>
+          <div>
+            <h3><a href="project7-m04.html">SQL et bases de données</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 4 · Outillage</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Modèle relationnel, jointures et cardinalité, fonctions de fenêtre, CTE, sémantique des <code>NULL</code>, index et plans d'exécution, transactions ACID, OLTP contre OLAP, NoSQL et DuckDB.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">SQL</span><span class="tag">PostgreSQL</span><span class="tag">Index</span><span class="tag">Fenêtres</span><span class="tag">DuckDB</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">5</div>
+          <div>
+            <h3><a href="project7-m05.html">Docker, Compose et Kubernetes</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 5 · Outillage</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Ce qui distingue un conteneur d'une VM, les commandes du quotidien, un Dockerfile multi-étapes commenté, volumes et réseaux, une pile Compose complète, et les objets Kubernetes expliqués un par un.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Docker</span><span class="tag">Compose</span><span class="tag">Kubernetes</span><span class="tag">Volumes</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">6</div>
+          <div>
+            <h3><a href="project7-m06.html">FastAPI, Pydantic et Jinja</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 6 · Outillage</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Le minimum vital sur HTTP, Pydantic pour valider ce qui entre, FastAPI pour exposer un modèle sans bloquer le serveur, Jinja pour une interface web, tests et mise en production.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">FastAPI</span><span class="tag">Pydantic</span><span class="tag">Jinja</span><span class="tag">HTTP</span></div>
         </div>
       </div>
 
@@ -130,14 +184,14 @@
 
       <div class="project-card featured">
         <div class="project-card-header">
-          <div class="project-num">4</div>
+          <div class="project-num">7</div>
           <div>
-            <h3><a href="project7-m04.html">Mathématiques du ML</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 4 · Socle mathématique et statistique</p>
+            <h3><a href="project7-m07.html">Mathématiques du ML</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 7 · Socle mathématique et statistique</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Descente de gradient et ses variantes (momentum, Adam), algèbre linéaire numérique (QR, Cholesky, conditionnement), SVD et PCA traitées en détail, et le choix des métriques d'évaluation.</p>
+          <p>Descente de gradient et ses variantes jusqu'à AdamW, algèbre linéaire numérique, SVD et PCA traitées en détail, et le choix des métriques d'évaluation.</p>
         </div>
         <div class="project-card-footer">
           <div class="project-tags"><span class="tag">Optimisation</span><span class="tag">SVD</span><span class="tag">PCA</span><span class="tag">Métriques</span></div>
@@ -146,49 +200,33 @@
 
       <div class="project-card featured">
         <div class="project-card-header">
-          <div class="project-num">5</div>
+          <div class="project-num">8</div>
           <div>
-            <h3><a href="project7-m05.html">Statistique inférentielle</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 5 · Socle mathématique et statistique</p>
+            <h3><a href="project7-m08.html">Statistique inférentielle</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 8 · Socle mathématique et statistique</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Ce qu'est vraiment une p-value, tests d'hypothèse et puissance, intervalles de confiance et bootstrap, comparaisons multiples, corrélation contre causalité, et un A/B test mené de bout en bout.</p>
+          <p>Ce qu'est vraiment une p-value, tests et puissance, intervalles de confiance et bootstrap, comparaisons multiples, corrélation contre causalité, et un A/B test de bout en bout.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Tests</span><span class="tag">p-value</span><span class="tag">Bootstrap</span><span class="tag">Causalité</span><span class="tag">A/B test</span></div>
+          <div class="project-tags"><span class="tag">Tests</span><span class="tag">p-value</span><span class="tag">Bootstrap</span><span class="tag">Causalité</span></div>
         </div>
       </div>
 
       <div class="project-card featured">
         <div class="project-card-header">
-          <div class="project-num">13</div>
+          <div class="project-num">9</div>
           <div>
-            <h3><a href="project7-m13.html">Probabilités, inférence bayésienne et incertitude</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 13 · Socle mathématique et statistique</p>
+            <h3><a href="project7-m09.html">Inférence bayésienne et incertitude</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 9 · Socle mathématique et statistique</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Lois usuelles comme briques de modélisation, vraisemblance et MAP (donc la régularisation comme a priori), MCMC et NUTS, modèles hiérarchiques, incertitude aléatoire contre épistémique, et prédiction conforme.</p>
+          <p>Vraisemblance et MAP (donc la régularisation comme a priori), MCMC et NUTS, modèles hiérarchiques, incertitude aléatoire contre épistémique, et prédiction conforme.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Incertitude</span><span class="tag">Conformal</span></div>
-        </div>
-      </div>
-
-      <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">22</div>
-          <div>
-            <h3><a href="project7-m22.html">Théorie de l'apprentissage</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 22 · Socle mathématique et statistique</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>Cadre PAC et dimension VC, no free lunch et biais inductif, double descente, régularisation implicite de SGD, PAC-Bayes — et ce que la théorie n'explique toujours pas du deep learning.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">PAC</span><span class="tag">VC</span><span class="tag">Double descente</span><span class="tag">PAC-Bayes</span></div>
+          <div class="project-tags"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Conformal</span></div>
         </div>
       </div>
 
@@ -201,14 +239,14 @@
 
       <div class="project-card">
         <div class="project-card-header">
-          <div class="project-num">6</div>
+          <div class="project-num">10</div>
           <div>
-            <h3><a href="project7-m06.html">Data science en pratique</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 6 · Méthode et données</p>
+            <h3><a href="project7-m10.html">Data science en pratique</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 10 · Méthode et données</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Cycle de vie d'un projet, cadrage, exploration et nettoyage, données manquantes et déséquilibrées, feature engineering, visualisation, validation croisée et catalogue des fuites de données.</p>
+          <p>Cycle de vie, cadrage, exploration, données manquantes et déséquilibrées, feature engineering, validation croisée adaptée aux données, et catalogue des fuites de données.</p>
         </div>
         <div class="project-card-footer">
           <div class="project-tags"><span class="tag">EDA</span><span class="tag">Features</span><span class="tag">Validation</span><span class="tag">Data leakage</span></div>
@@ -217,56 +255,56 @@
 
       <div class="project-card">
         <div class="project-card-header">
-          <div class="project-num">17</div>
+          <div class="project-num">11</div>
           <div>
-            <h3><a href="project7-m17.html">Apprendre avec peu d'étiquettes</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 17 · Méthode et données</p>
+            <h3><a href="project7-m11.html">Apprendre avec peu d'étiquettes</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 11 · Méthode et données</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Transfert, apprentissage actif, semi-supervisé et auto-supervisé, supervision faible et étiquettes bruitées, données synthétiques et sim2real, few-shot — et comment décider combien annoter.</p>
+          <p>Transfert, apprentissage actif, semi-supervisé et auto-supervisé, supervision faible, données synthétiques et sim2real, et comment décider combien annoter.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Active learning</span><span class="tag">Auto-supervisé</span><span class="tag">Snorkel</span><span class="tag">Sim2real</span></div>
-        </div>
-      </div>
-
-      <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">7</div>
-          <div>
-            <h3><a href="project7-m07.html">Machine learning classique</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 7 · Méthode et données</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>Compromis biais-variance, modèles linéaires régularisés, SVM, arbres, forêts aléatoires, gradient boosting et XGBoost, clustering, détection d'anomalies, recherche d'hyperparamètres et interprétabilité.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Régression</span><span class="tag">Random Forest</span><span class="tag">XGBoost</span><span class="tag">SVM</span><span class="tag">Clustering</span></div>
+          <div class="project-tags"><span class="tag">Active learning</span><span class="tag">Auto-supervisé</span><span class="tag">Sim2real</span></div>
         </div>
       </div>
 
     </div>
 
-    <h3>Partie IV — Familles de modèles et domaines</h3>
-    <p>Les grandes familles, et les domaines qui ont leurs propres règles.</p>
+    <h3>Partie IV — Familles de modèles</h3>
+    <p>Les grandes familles d'algorithmes, et pourquoi elles généralisent.</p>
 
     <div class="projects-grid">
 
       <div class="project-card">
         <div class="project-card-header">
-          <div class="project-num">8</div>
+          <div class="project-num">12</div>
           <div>
-            <h3><a href="project7-m08.html">Deep learning</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 8 · Familles de modèles et domaines</p>
+            <h3><a href="project7-m12.html">Machine learning classique</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 12 · Familles de modèles</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>MLP et rétropropagation, recettes d'entraînement, CNN, RNN, transformers et mécanisme d'attention, PINN pour les problèmes régis par des EDP, et où le deep learning perd face au ML classique.</p>
+          <p>Biais-variance, modèles linéaires régularisés, SVM, arbres, forêts aléatoires, gradient boosting, clustering, recherche d'hyperparamètres et interprétabilité SHAP.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">MLP</span><span class="tag">CNN</span><span class="tag">Transformers</span><span class="tag">PINN</span><span class="tag">PyTorch</span></div>
+          <div class="project-tags"><span class="tag">Régression</span><span class="tag">Random Forest</span><span class="tag">XGBoost</span><span class="tag">SHAP</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">13</div>
+          <div>
+            <h3><a href="project7-m13.html">Théorie de l'apprentissage</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 13 · Familles de modèles</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Cadre PAC et dimension VC, no free lunch et biais inductif, double descente, régularisation implicite de SGD — et ce que la théorie n'explique toujours pas.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">PAC</span><span class="tag">VC</span><span class="tag">Double descente</span></div>
         </div>
       </div>
 
@@ -274,15 +312,15 @@
         <div class="project-card-header">
           <div class="project-num">14</div>
           <div>
-            <h3><a href="project7-m14.html">Séries temporelles, signaux et durées de vie</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 14 · Familles de modèles et domaines</p>
+            <h3><a href="project7-m14.html">Deep learning</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 14 · Familles de modèles</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Stationnarité et décomposition, ETS et ARIMA, features temporelles pour le gradient boosting, prévision probabiliste, filtre de Kalman, analyse spectrale, et analyse de survie pour la fiabilité.</p>
+          <p>MLP et rétropropagation, recettes d'entraînement, CNN, RNN, transformers et attention, PINN pour les problèmes régis par des EDP, et les limites du deep learning.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">ARIMA</span><span class="tag">Prévision</span><span class="tag">Kalman</span><span class="tag">FFT</span><span class="tag">Survie</span></div>
+          <div class="project-tags"><span class="tag">MLP</span><span class="tag">CNN</span><span class="tag">Transformers</span><span class="tag">PINN</span></div>
         </div>
       </div>
 
@@ -290,157 +328,86 @@
         <div class="project-card-header">
           <div class="project-num">15</div>
           <div>
-            <h3><a href="project7-m15.html">Données non tabulaires</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 15 · Familles de modèles et domaines</p>
+            <h3><a href="project7-m15.html">Séries temporelles et durées de vie</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 15 · Familles de modèles</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Texte du TF-IDF aux transformers, vision au-delà de la classification (détection, segmentation, imagerie scientifique), audio, et un traitement complet des graphes et des GNN.</p>
+          <p>Stationnarité, ETS et ARIMA, features temporelles sans fuite, prévision probabiliste, filtre de Kalman, analyse spectrale, et analyse de survie pour la fiabilité.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">NLP</span><span class="tag">Segmentation</span><span class="tag">Audio</span><span class="tag">Graphes</span><span class="tag">GNN</span></div>
+          <div class="project-tags"><span class="tag">ARIMA</span><span class="tag">Kalman</span><span class="tag">FFT</span><span class="tag">Survie</span></div>
         </div>
       </div>
 
       <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">9</div>
-          <div>
-            <h3><a href="project7-m09.html">Processus gaussiens et optimisation bayésienne</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 9 · Familles de modèles et domaines</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>Régression par processus gaussien (noyaux, incertitude prédictive), fonctions d'acquisition, optimisation d'expériences coûteuses, plans d'expériences et calibration de modèles physiques avec BoTorch.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Gaussian Process</span><span class="tag">Bayesian Opt</span><span class="tag">BoTorch</span><span class="tag">DoE</span></div>
-        </div>
-      </div>
-
-      <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">10</div>
-          <div>
-            <h3><a href="project7-m10.html">Apprentissage par renforcement</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 10 · Familles de modèles et domaines</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>MDP, équations de Bellman, Q-learning et DQN, méthodes de gradient de politique (REINFORCE, PPO), et une évaluation honnête de ce que le RL coûte par rapport à l'apprentissage supervisé.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">MDP</span><span class="tag">Q-learning</span><span class="tag">PPO</span><span class="tag">Gymnasium</span></div>
-        </div>
-      </div>
-
-      <div class="project-card featured">
         <div class="project-card-header">
           <div class="project-num">16</div>
           <div>
-            <h3><a href="project7-m16.html">ML pour la simulation et l'ingénierie</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 16 · Familles de modèles et domaines</p>
+            <h3><a href="project7-m16.html">Données non tabulaires</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 16 · Familles de modèles</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Monte-Carlo et réduction de variance, plans d'expériences numériques, indices de Sobol, métamodèles et leur validation, réduction de modèle par POD, opérateurs neuronaux, assimilation de données et problèmes inverses.</p>
+          <p>Texte du TF-IDF aux transformers, vision au-delà de la classification, audio, et un traitement complet des graphes et des réseaux de neurones sur graphes.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Monte-Carlo</span><span class="tag">Sobol</span><span class="tag">Surrogate</span><span class="tag">POD</span><span class="tag">FNO</span></div>
+          <div class="project-tags"><span class="tag">NLP</span><span class="tag">Segmentation</span><span class="tag">Graphes</span><span class="tag">GNN</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">17</div>
+          <div>
+            <h3><a href="project7-m17.html">Processus gaussiens et optimisation bayésienne</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 17 · Familles de modèles</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Régression par processus gaussien, noyaux et incertitude prédictive, fonctions d'acquisition, optimisation d'expériences coûteuses avec BoTorch.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Gaussian Process</span><span class="tag">BoTorch</span><span class="tag">DoE</span></div>
         </div>
       </div>
 
     </div>
 
-    <h3>Partie V — Applications et décision</h3>
-    <p>Ce qu'on construit réellement avec, et comment cela devient une action.</p>
+    <h3>Partie V — Domaines et applications</h3>
+    <p>Les domaines qui ont leurs propres règles.</p>
 
     <div class="projects-grid">
-
-      <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">11</div>
-          <div>
-            <h3><a href="project7-m11.html">LLM, embeddings, RAG et adaptation</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 11 · Applications et décision</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>Embeddings et recherche sémantique, index vectoriels (HNSW, IVF-PQ), pipeline RAG complet et son évaluation, prompt engineering, LoRA et DPO : quand fine-tuner plutôt que récupérer.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Embeddings</span><span class="tag">RAG</span><span class="tag">Vector DB</span><span class="tag">LoRA</span><span class="tag">LLM</span></div>
-        </div>
-      </div>
-
-      <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">19</div>
-          <div>
-            <h3><a href="project7-m19.html">Recherche, ranking et recommandation</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 19 · Applications et décision</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>Architecture récupération-classement, recherche hybride, learning to rank et NDCG, biais de position des clics, factorisation matricielle, retour implicite, architectures two-tower et démarrage à froid.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">BM25</span><span class="tag">NDCG</span><span class="tag">LambdaMART</span><span class="tag">Reco</span><span class="tag">Cold start</span></div>
-        </div>
-      </div>
 
       <div class="project-card">
         <div class="project-card-header">
           <div class="project-num">18</div>
           <div>
-            <h3><a href="project7-m18.html">Décision et action</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 18 · Applications et décision</p>
+            <h3><a href="project7-m18.html">Apprentissage par renforcement</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 18 · Domaines et applications</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Seuils fondés sur les coûts d'erreur, sélection sous contrainte de capacité, uplift modeling, bandits contextuels, quantiles de décision, recherche opérationnelle et le piège du « prédire puis optimiser ».</p>
+          <p>MDP et équations de Bellman, Q-learning et DQN, gradient de politique et PPO, et une évaluation honnête du coût du RL face au supervisé.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Coûts</span><span class="tag">Uplift</span><span class="tag">Bandits</span><span class="tag">MILP</span><span class="tag">OR-Tools</span></div>
+          <div class="project-tags"><span class="tag">MDP</span><span class="tag">Q-learning</span><span class="tag">PPO</span></div>
         </div>
       </div>
 
-    </div>
-
-    <h3>Partie VI — Production et responsabilité</h3>
-    <p>Faire tourner, surveiller, et assumer.</p>
-
-    <div class="projects-grid">
-
-      <div class="project-card">
+      <div class="project-card featured">
         <div class="project-card-header">
-          <div class="project-num">21</div>
+          <div class="project-num">19</div>
           <div>
-            <h3><a href="project7-m21.html">Passer à l'échelle</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 21 · Production et responsabilité</p>
+            <h3><a href="project7-m19.html">ML pour la simulation et l'ingénierie</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 19 · Domaines et applications</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Hiérarchie mémoire des GPU et modèle roofline, précision mixte, budget mémoire d'un entraînement, profilage, pipeline d'entrée, DDP et FSDP, optimisation de l'inférence, coût et énergie.</p>
+          <p>Monte-Carlo et réduction de variance, plans d'expériences, indices de Sobol, métamodèles, réduction de modèle par POD, opérateurs neuronaux et assimilation de données.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">GPU</span><span class="tag">CUDA</span><span class="tag">DDP</span><span class="tag">FSDP</span><span class="tag">Profiling</span></div>
-        </div>
-      </div>
-
-      <div class="project-card">
-        <div class="project-card-header">
-          <div class="project-num">12</div>
-          <div>
-            <h3><a href="project7-m12.html">MLOps : industrialiser un modèle</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 12 · Production et responsabilité</p>
-          </div>
-        </div>
-        <div class="project-card-body">
-          <p>Reproductibilité, versioning des données et des modèles, tracking d'expériences, servage, CI/CD pour le ML, détection de dérive et monitoring, orchestration et checklist de mise en production.</p>
-        </div>
-        <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">MLflow</span><span class="tag">DVC</span><span class="tag">CI/CD</span><span class="tag">Monitoring</span><span class="tag">Drift</span></div>
+          <div class="project-tags"><span class="tag">Monte-Carlo</span><span class="tag">Sobol</span><span class="tag">Surrogate</span><span class="tag">POD</span></div>
         </div>
       </div>
 
@@ -448,42 +415,152 @@
         <div class="project-card-header">
           <div class="project-num">20</div>
           <div>
-            <h3><a href="project7-m20.html">Équité, robustesse, confidentialité et sécurité</a></h3>
-            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 20 · Production et responsabilité</p>
+            <h3><a href="project7-m20.html">LLM, embeddings et RAG</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 20 · Domaines et applications</p>
           </div>
         </div>
         <div class="project-card-body">
-          <p>Sources de biais, définitions d'équité et leur incompatibilité mathématique, audit par sous-groupe, attaques adverses et empoisonnement, confidentialité différentielle, apprentissage fédéré, RGPD et AI Act.</p>
+          <p>Embeddings et recherche sémantique, index vectoriels, pipeline RAG complet et son évaluation, prompt engineering, LoRA et DPO, servage et injection de prompt.</p>
         </div>
         <div class="project-card-footer">
-          <div class="project-tags"><span class="tag">Équité</span><span class="tag">Adversarial</span><span class="tag">Vie privée</span><span class="tag">DP-SGD</span><span class="tag">AI Act</span></div>
+          <div class="project-tags"><span class="tag">Embeddings</span><span class="tag">RAG</span><span class="tag">LoRA</span><span class="tag">vLLM</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">21</div>
+          <div>
+            <h3><a href="project7-m21.html">Recherche, ranking et recommandation</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 21 · Domaines et applications</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Architecture récupération-classement, recherche hybride, learning to rank et NDCG, biais de position, factorisation matricielle et retour implicite.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">BM25</span><span class="tag">NDCG</span><span class="tag">Reco</span><span class="tag">Cold start</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <h3>Partie VI — Décision, production et responsabilité</h3>
+    <p>Ce qui se passe une fois qu'un modèle existe.</p>
+
+    <div class="projects-grid">
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">22</div>
+          <div>
+            <h3><a href="project7-m22.html">Du score à la décision</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 22 · Décision, production et responsabilité</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Seuils fondés sur les coûts d'erreur, sélection sous contrainte de capacité, uplift modeling, bandits contextuels, quantiles de décision et recherche opérationnelle.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Coûts</span><span class="tag">Uplift</span><span class="tag">Bandits</span><span class="tag">MILP</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">23</div>
+          <div>
+            <h3><a href="project7-m23.html">Passer à l'échelle</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 23 · Décision, production et responsabilité</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Hiérarchie mémoire des GPU et modèle roofline, précision mixte, budget mémoire d'un entraînement, profilage, DDP et FSDP, optimisation de l'inférence.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">GPU</span><span class="tag">CUDA</span><span class="tag">DDP</span><span class="tag">Profiling</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">24</div>
+          <div>
+            <h3><a href="project7-m24.html">MLOps</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 24 · Décision, production et responsabilité</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Reproductibilité, versioning des données et des modèles, tracking d'expériences, servage, CI/CD, détection de dérive et checklist de mise en production.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">MLflow</span><span class="tag">DVC</span><span class="tag">CI/CD</span><span class="tag">Drift</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">25</div>
+          <div>
+            <h3><a href="project7-m25.html">Équité, robustesse et sécurité</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 25 · Décision, production et responsabilité</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Sources de biais, définitions d'équité et leur incompatibilité, attaques adverses, empoisonnement, confidentialité différentielle, RGPD et AI Act.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Équité</span><span class="tag">Adversarial</span><span class="tag">Vie privée</span><span class="tag">AI Act</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <h3>Partie VII — Mise en pratique</h3>
+    <p>Tout le cours, appliqué à un projet unique.</p>
+
+    <div class="projects-grid">
+
+      <div class="project-card featured">
+        <div class="project-card-header">
+          <div class="project-num">26</div>
+          <div>
+            <h3><a href="project7-m26.html">Projet de A à Z : annonces immobilières</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Module 26 · Mise en pratique</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Le pipeline complet, en tutoriel : scraping respectueux du droit, nettoyage, base PostgreSQL, modèle de prédiction de prix, API conteneurisée et CI/CD GitHub Actions.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Scraping</span><span class="tag">PostgreSQL</span><span class="tag">LightGBM</span><span class="tag">Docker</span><span class="tag">GitHub Actions</span></div>
         </div>
       </div>
 
     </div>
 
 
-    <h2>Références que j'utilise</h2>
-    <p>Le cours n'invente rien : il condense et réorganise. Les sources sur lesquelles je m'appuie le plus souvent :</p>
+    <h2>Références</h2>
+    <p>Le cours n'invente rien : il condense et réorganise. Les sources sur lesquelles il s'appuie le plus souvent :</p>
     <ul>
       <li><em>The Elements of Statistical Learning</em> (Hastie, Tibshirani, Friedman) — la référence du ML statistique ;</li>
-      <li><em>Pattern Recognition and Machine Learning</em> (Bishop) — pour le point de vue probabiliste ;</li>
+      <li><em>Pattern Recognition and Machine Learning</em> (Bishop) et <em>Probabilistic Machine Learning</em> (Murphy) ;</li>
       <li><em>Deep Learning</em> (Goodfellow, Bengio, Courville) et le cours de Karpathy pour les réseaux de neurones ;</li>
       <li><em>Gaussian Processes for Machine Learning</em> (Rasmussen &amp; Williams), disponible librement ;</li>
+      <li><em>Bayesian Data Analysis</em> (Gelman et al.) et <em>Statistical Rethinking</em> (McElreath) ;</li>
+      <li><em>Forecasting: Principles and Practice</em> (Hyndman &amp; Athanasopoulos), en accès libre ;</li>
       <li><em>Reinforcement Learning: An Introduction</em> (Sutton &amp; Barto) ;</li>
-      <li><em>Statistical Rethinking</em> (McElreath) et <em>Causal Inference: The Mixtape</em> (Cunningham) pour la statistique et la causalité ;</li>
-      <li><em>Probabilistic Machine Learning</em> (Murphy), la référence moderne la plus complète ;</li>
-      <li><em>Bayesian Data Analysis</em> (Gelman et al.) pour l'inférence bayésienne appliquée ;</li>
-      <li><em>Forecasting: Principles and Practice</em> (Hyndman &amp; Athanasopoulos), libre d'accès, pour les séries temporelles ;</li>
-      <li><em>Understanding Machine Learning</em> (Shalev-Shwartz &amp; Ben-David) pour la théorie de l'apprentissage ;</li>
-      <li>les documentations officielles (scikit-learn, PyTorch, polars, MLflow), qui sont souvent les meilleurs cours disponibles.</li>
+      <li><em>Understanding Machine Learning</em> (Shalev-Shwartz &amp; Ben-David) et <em>Causal Inference: The Mixtape</em> (Cunningham) ;</li>
+      <li>les documentations officielles (scikit-learn, PyTorch, polars, FastAPI, MLflow), souvent les meilleurs cours disponibles.</li>
     </ul>
   </div>
 
   <hr class="divider">
-  <a href="projects.html" class="btn btn-secondary">Retour aux projets</a>
-  <a href="project7-m01.html" class="btn btn-primary">Commencer par le module 1</a>
-  <br><br>
+  <div class="course-nav">
+    <a href="projects.html" class="btn btn-secondary">Retour aux projets</a>
+    <a href="project7-m01.html" class="btn btn-primary">Commencer par le module 1 →</a>
+    <a href="project7-m26.html" class="btn btn-ghost">Voir le projet final</a>
+  </div>
   <div class="project-meta"><span class="tag">Data science</span><span class="tag">Machine learning</span><span class="tag">Python</span><span class="tag">Statistiques</span><span class="tag">2026</span></div>
 </div>
   <footer>
@@ -508,42 +585,50 @@
     <h1>Data science &amp; machine learning course</h1>
   </div>
 
-  <div class="project-content">
-    <p>I am writing this course to learn data science and machine learning properly, and to keep a structured record of what I understand. The rule I set myself is simple: if I cannot explain a notion clearly, I do not know it yet.</p>
-    <p>It now runs to <strong>22 modules</strong>. The first twelve are the core track, from Python tooling to a monitored model in production; the next ten cover what that track left out — uncertainty, time, non-tabular data, numerical simulation, label budgets, decision-making, accountability, hardware and theory.</p>
+  <div class="project-content course-content">
+    <p>This course is my own study material for data science and machine learning — one place that centralises what I am learning, rather than notes scattered across notebooks, articles and bookmarks.</p>
+
+    <div class="step-block">
+      <h4>How this course was written</h4>
+      <p>The content was <strong>written by Claude Code</strong> (Anthropic's coding assistant) at my request, from a syllabus I defined and the gaps I had identified — principal component analysis, inferential statistics, concurrency in Python. I would rather state this plainly than let it pass for hand-written material: the goal is a coherent, complete path calibrated to my level, which I read, correct and extend as I go.</p>
+    </div>
 
     <div class="warning-block">
-      <strong>The course itself is written in French.</strong> It is personal study material, so I write it in my own language. Switch the language selector to <strong>FR</strong> to read the modules — the outline below tells you what each one covers.
+      <strong>The course itself is written in French.</strong> Switch the language selector to <strong>FR</strong> to read the modules — the outline below tells you what each one covers.
     </div>
 
     <h2>Format</h2>
-    <p>The course assumes solid mathematics and Python — basic syntax, elementary linear algebra and calculus are not re-explained. Every notion follows the same template: <strong>intuition</strong>, then the <strong>minimum formalism</strong> needed, a <strong>concrete use case</strong>, <strong>strengths and limitations</strong>, and a short <strong>code example</strong> when it helps.</p>
-    <p>Module numbers are stable identifiers in writing order; the suggested reading order is the six-part structure shown on the French page: tooling (1-3), mathematical and statistical foundations (4, 5, 13, 22), method and data (6, 17, 7), model families and domains (8, 14, 15, 9, 10, 16), applications and decisions (11, 19, 18), production and accountability (21, 12, 20).</p>
+    <p>It assumes solid mathematics and Python; anything specific to data science is introduced from the problem it solves, with runnable code. Every notion follows the same template: the problem, the intuition, the minimum formalism, the code, then strengths and limitations.</p>
+    <p>There are <strong>26 modules</strong> in seven parts: tooling (1-6), mathematical and statistical foundations (7-9), method and data (10-11), model families (12-17), domains and applications (18-21), decision, production and accountability (22-25), and a full end-to-end project (26).</p>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
 
     <h2>Main references</h2>
@@ -556,7 +641,7 @@
       <li><em>Forecasting: Principles and Practice</em> (Hyndman &amp; Athanasopoulos);</li>
       <li><em>Reinforcement Learning: An Introduction</em> (Sutton &amp; Barto);</li>
       <li><em>Understanding Machine Learning</em> (Shalev-Shwartz &amp; Ben-David) and <em>Causal Inference: The Mixtape</em> (Cunningham);</li>
-      <li>the official documentation of scikit-learn, PyTorch, polars and MLflow.</li>
+      <li>the official documentation of scikit-learn, PyTorch, polars, FastAPI and MLflow.</li>
     </ul>
   </div>
 

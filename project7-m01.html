@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 1 - Fondations Python, outillage et concurrence - Nils Malmberg</title>
+  <title>Module 1 - Python moderne : typage, décorateurs, itérateurs et outillage - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,348 +40,622 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 1</div>
-    <h1>Fondations Python, outillage et concurrence</h1>
+    <h1>Python moderne : typage, décorateurs, itérateurs et outillage</h1>
   </div>
 
-  <div class="project-content">
-    <p>Ce module ne réapprend pas Python : il installe l'environnement de travail d'un projet de data science et traite les points qui font perdre du temps quand on vient du calcul scientifique — la gestion des dépendances, la structure d'un projet, et surtout le modèle d'exécution concurrent de Python, qui n'a rien d'évident.</p>
+  <div class="project-content course-content">
+    <p>Ce module ne réapprend pas Python : il installe l'environnement de travail d'un projet de data science, et surtout il explique en détail quatre mécanismes du langage qu'on croise partout dans le code scientifique sans forcément les avoir jamais étudiés — les <strong>décorateurs</strong>, les <strong>dataclasses</strong>, les <strong>annotations de type</strong> et les <strong>générateurs</strong>. Chacun répond à un problème concret, et je pars du problème.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
         <li><a href="#projet">Structure d'un projet Python</a></li>
-        <li><a href="#uv">UV : environnements et dépendances</a></li>
-        <li><a href="#typage">Le typage qui sert vraiment</a></li>
-        <li><a href="#iterateurs">Itérateurs, générateurs et mémoire</a></li>
+        <li><a href="#uv">Environnements virtuels et UV</a></li>
+        <li><a href="#decorateurs">Les décorateurs, de zéro</a></li>
+        <li><a href="#dataclasses">Dataclasses : <code>frozen</code>, <code>slots</code> et le reste</a></li>
+        <li><a href="#typage">Les annotations de type</a></li>
+        <li><a href="#iterateurs">Itérateurs et générateurs</a></li>
         <li><a href="#qualite">Qualité : ruff, pytest, pre-commit</a></li>
         <li><a href="#git">Git pour un projet data</a></li>
-        <li><a href="#concurrence">Concurrence : GIL, threads, processus, asyncio</a></li>
       </ol>
     </div>
 
     <h2 id="projet">1. Structure d'un projet Python</h2>
-    <p>Un notebook exploratoire est un brouillon, pas un livrable. Dès qu'un bout de code est appelé deux fois, il migre dans un module importable. La disposition standard aujourd'hui est le <em>src layout</em> :</p>
 
-    <div class="code-label">arborescence</div>
+    <h3>Le problème</h3>
+    <p>Un projet de data science commence toujours de la même façon : un notebook, quelques cellules, un résultat. Puis on veut relancer l'analyse sur de nouvelles données, et on s'aperçoit que le résultat dépendait de l'ordre dans lequel les cellules ont été exécutées, qu'une variable a été modifiée à la main entre deux essais, et que la fonction de nettoyage existe en trois versions dans trois notebooks différents. Le code n'est plus reproductible, et personne ne sait laquelle des trois versions a produit le modèle en cours d'utilisation.</p>
+    <p>La discipline qui évite cela tient en une phrase : <strong>dès qu'un bout de code est appelé deux fois, il quitte le notebook et devient un module importable</strong>. Le notebook reste ce qu'il est — un brouillon interactif, excellent pour regarder les données — et importe la logique au lieu de la contenir.</p>
+
+    <h3>La disposition standard</h3>
+    <div class="code-label">arborescence type</div>
     <div class="code-block"><pre>mon-projet/
-├── pyproject.toml        # métadonnées + dépendances + config des outils
-├── uv.lock               # versions exactes, versionné dans Git
+├── pyproject.toml        # identité du projet, dépendances, config des outils
+├── uv.lock               # versions exactes installées (versionné dans Git)
 ├── README.md
 ├── src/
-│   └── mon_projet/
-│       ├── __init__.py
+│   └── mon_projet/       # le paquet importable : import mon_projet
+│       ├── __init__.py   # marque le dossier comme paquet (peut être vide)
 │       ├── data.py       # chargement / nettoyage
 │       ├── features.py   # transformations
 │       └── models.py     # entraînement / inférence
-├── notebooks/            # exploration, jamais de logique réutilisable
+├── notebooks/            # exploration ; aucune logique réutilisable ici
 ├── tests/
-└── data/                 # ignoré par Git (voir section 6)</pre></div>
+└── data/                 # ignoré par Git (voir section 8)</pre></div>
 
-    <p>L'intérêt du <code>src/</code> : le paquet n'est pas importable depuis la racine par accident. Si les tests passent, c'est que le paquet est réellement installé dans l'environnement, donc que ce qui est testé est ce qui sera distribué. Le <code>pyproject.toml</code> centralise tout — métadonnées, dépendances et configuration des outils :</p>
+    <p>Pourquoi ce dossier <code>src/</code> intermédiaire, qui semble n'ajouter qu'un niveau de profondeur ? Parce que sans lui, Python trouve le paquet simplement parce qu'il se trouve dans le répertoire courant. On peut alors avoir des tests qui passent alors que le paquet n'est en réalité pas installable — l'erreur n'apparaît que chez quelqu'un d'autre. Avec <code>src/</code>, le paquet n'est importable que s'il a été <em>réellement installé</em> dans l'environnement : ce qu'on teste est exactement ce qu'on distribuera.</p>
 
-    <div class="code-label">pyproject.toml</div>
+    <h3>Le fichier pyproject.toml</h3>
+    <p>C'est la carte d'identité du projet, au format TOML (un format de configuration lisible, à mi-chemin entre INI et JSON). Il a remplacé l'ancien trio <code>setup.py</code> / <code>setup.cfg</code> / <code>requirements.txt</code>, et il centralise aussi la configuration des outils de qualité.</p>
+
+    <div class="code-label">pyproject.toml, commenté</div>
     <div class="code-block"><pre>[project]
-name = "mon-projet"
+name = "mon-projet"                 # nom de distribution (tirets autorisés)
 version = "0.1.0"
-requires-python = "&gt;=3.12"
-dependencies = [
+requires-python = "&gt;=3.12"          # versions de Python acceptées
+dependencies = [                    # ce dont le projet a besoin pour FONCTIONNER
     "numpy&gt;=2.0",
     "polars&gt;=1.0",
     "scikit-learn&gt;=1.5",
 ]
 
-[dependency-groups]
-dev = ["pytest&gt;=8", "ruff&gt;=0.6", "mypy&gt;=1.11"]
+[dependency-groups]                 # ce dont on a besoin pour DÉVELOPPER
+dev = ["pytest&gt;=8", "ruff&gt;=0.6", "mypy&gt;=1.11", "pre-commit&gt;=3.8"]
 
-[build-system]
+[build-system]                      # comment fabriquer le paquet installable
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.ruff]
+[tool.ruff]                         # configuration du linter/formateur
 line-length = 100
 
-[tool.pytest.ini_options]
+[tool.pytest.ini_options]           # configuration des tests
 testpaths = ["tests"]</pre></div>
 
-    <div class="step-block">
-      <h4>Notebooks : la règle que je m'impose</h4>
-      <p>Un notebook sert à regarder les données et à essayer des choses. Tout ce qui doit être reproductible (chargement, features, entraînement) vit dans <code>src/</code> et est <em>importé</em> dans le notebook. Sinon on se retrouve avec une logique métier qui n'existe que dans un état d'exécution perdu, dépendant de l'ordre dans lequel les cellules ont été lancées.</p>
-    </div>
+    <p>La distinction entre <code>dependencies</code> et le groupe <code>dev</code> a une conséquence concrète : l'image Docker de production (module 5) n'installe que les premières, ce qui la rend plus légère et réduit sa surface d'attaque.</p>
 
-    <h2 id="uv">2. UV : environnements et dépendances</h2>
-    <p><a href="https://docs.astral.sh/uv/" target="_blank">UV</a> (écrit en Rust par Astral, les auteurs de ruff) remplace à lui seul <code>pip</code>, <code>virtualenv</code>, <code>pyenv</code>, <code>pipx</code> et <code>poetry</code>. Deux différences pratiques avec l'existant : il est un à deux ordres de grandeur plus rapide, et il gère aussi l'installation des <em>interpréteurs</em> Python eux-mêmes.</p>
+    <h2 id="uv">2. Environnements virtuels et UV</h2>
+
+    <h3>Pourquoi un environnement virtuel</h3>
+    <p>Un seul Python est installé sur la machine, avec un seul jeu de bibliothèques. Deux projets qui ont besoin de versions différentes de pandas ne peuvent donc pas coexister : installer l'un casse l'autre. Un <strong>environnement virtuel</strong> résout cela en créant un dossier — par convention <code>.venv/</code> — qui contient sa propre copie de l'interpréteur et ses propres bibliothèques. Chaque projet a son atelier, avec ses outils à lui, et rien de ce qu'on y installe ne déborde sur les autres.</p>
+
+    <h3>UV en pratique</h3>
+    <p><a href="https://docs.astral.sh/uv/" target="_blank">UV</a> (écrit en Rust par Astral, les auteurs de ruff) remplace à lui seul <code>pip</code>, <code>virtualenv</code>, <code>pyenv</code>, <code>pipx</code> et <code>poetry</code>. Deux différences pratiques : il est un à deux ordres de grandeur plus rapide, et il sait aussi installer les <em>interpréteurs</em> Python eux-mêmes — on n'a plus à se soucier de la version fournie par le système.</p>
 
     <div class="code-label">cycle de travail courant</div>
-    <div class="code-block"><pre># créer un projet (génère pyproject.toml, .venv, uv.lock)
+    <div class="code-block"><pre># créer un projet : génère pyproject.toml, .venv/ et uv.lock
 uv init mon-projet &amp;&amp; cd mon-projet
 
-# installer un interpréteur précis, sans toucher au Python système
+# installer une version précise de Python, sans toucher au Python système
 uv python install 3.12
+uv python pin 3.12              # fige la version pour ce projet
 
-# ajouter une dépendance : résolution + install + mise à jour du lock
+# ajouter une dépendance : résolution + installation + mise à jour du lock
 uv add "polars&gt;=1.0" scikit-learn
-uv add --dev pytest ruff mypy
+uv add --dev pytest ruff mypy pre-commit
+uv remove scikit-learn          # retirer proprement
 
-# recréer l'environnement exact d'un collègue (ou de la CI)
-uv sync
+# recréer à l'identique l'environnement d'un collègue, ou celui de la CI
+uv sync                         # installe EXACTEMENT ce que dit uv.lock
+uv sync --no-dev                # sans les outils de développement (production)
 
-# lancer du code dans l'environnement, sans l'activer
+# exécuter dans l'environnement, sans avoir à l'activer
 uv run python -m mon_projet.train
 uv run pytest
+uv run ruff check .
 
-# script autonome avec ses dépendances déclarées dans son en-tête (PEP 723)
+# mettre à jour volontairement
+uv lock --upgrade-package polars
+
+# script autonome, dépendances déclarées dans son propre en-tête (PEP 723)
 uv run --with pandas,matplotlib analyse.py</pre></div>
 
-    <h3>Résolution, lockfile et reproductibilité</h3>
-    <p>La distinction essentielle : <code>pyproject.toml</code> déclare des <strong>contraintes</strong> (« numpy au moins 2.0 »), <code>uv.lock</code> enregistre la <strong>solution exacte</strong> retenue (numpy 2.1.3, avec son hash). Le premier exprime l'intention, le second garantit que deux machines installent exactement les mêmes octets. Les deux se versionnent dans Git ; <code>uv.lock</code> est multiplateforme, contrairement à un <code>requirements.txt</code> figé par <code>pip freeze</code>.</p>
+    <h3>Contraintes et lockfile : la différence qui compte</h3>
+    <p>Deux fichiers, deux rôles distincts. Le <code>pyproject.toml</code> déclare des <strong>contraintes</strong> — « numpy au moins en 2.0 » — c'est-à-dire une intention. Le <code>uv.lock</code> enregistre la <strong>solution exacte</strong> retenue par le résolveur — numpy 2.1.3, avec l'empreinte cryptographique de chaque fichier téléchargé — c'est-à-dire un état reproductible. Les deux se versionnent dans Git. Résultat : <code>uv sync</code> installe les mêmes octets sur votre machine, sur celle d'un collègue et dans la chaîne d'intégration continue, aujourd'hui comme dans six mois.</p>
+    <p>C'est la différence avec un <code>requirements.txt</code> produit par <code>pip freeze</code> : celui-ci fige les versions d'une seule plateforme, mélange dépendances directes et indirectes, et ne dit pas lesquelles vous avez demandées.</p>
 
     <div class="warning-block">
-      <strong>Le piège CUDA.</strong> En ML, la dépendance qui casse la reproductibilité n'est pas Python mais le couple pilote GPU / version de CUDA compilée dans les wheels de PyTorch. UV sait pointer un index alternatif (<code>[tool.uv.sources]</code> vers le dépôt <code>cu124</code> par exemple), mais l'environnement « identique » s'arrête à la frontière du conteneur : c'est une des raisons de passer à Docker dès qu'un GPU entre en jeu (module 2).
+      <strong>Le piège CUDA.</strong> En ML, ce qui casse la reproductibilité n'est presque jamais Python : c'est le couple pilote GPU / version de CUDA compilée dans les <em>wheels</em> de PyTorch. UV sait pointer un index alternatif (section <code>[tool.uv.sources]</code> vers le dépôt <code>cu124</code>, par exemple), mais l'environnement « identique » s'arrête à la frontière de la machine. C'est une des raisons de passer à Docker dès qu'un GPU entre en jeu (module 5).
     </div>
 
-    <p><strong>Face à conda</strong> : conda reste utile quand on dépend de bibliothèques système non-Python compliquées (certains solveurs, GDAL, MKL configuré finement). Pour un projet de ML standard, UV est plus rapide, plus simple, et son lockfile est plus fiable qu'un <code>environment.yml</code>.</p>
+    <p><strong>Et conda ?</strong> Il reste utile quand on dépend de bibliothèques système non-Python compliquées à compiler (GDAL, certains solveurs, une MKL configurée finement). Pour un projet de ML standard, UV est plus rapide, plus simple, et son lockfile est nettement plus fiable qu'un <code>environment.yml</code>.</p>
 
-    <h2 id="typage">3. Le typage qui sert vraiment</h2>
-    <p>Les annotations de type ne sont pas vérifiées à l'exécution : ce sont des métadonnées lues par les outils (mypy, pyright) et par l'éditeur. En data science, leur rendement est maximal aux <em>frontières</em> — signatures de fonctions publiques, structures de configuration, formats d'entrée/sortie — et faible à l'intérieur d'un calcul numérique.</p>
+    <h2 id="decorateurs">3. Les décorateurs, de zéro</h2>
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from dataclasses import dataclass
+    <h3>Le problème qu'ils résolvent</h3>
+    <p>Supposons que l'on veuille chronométrer trois fonctions d'entraînement. La solution naïve consiste à copier deux lignes de mesure au début et à la fin de chacune. C'est répétitif, ça mélange la mesure et la logique métier, et le jour où l'on veut aussi journaliser les arguments, il faut repasser partout.</p>
+    <p>Un <strong>décorateur</strong> est la réponse de Python à ce problème : une façon d'<em>emballer</em> une fonction dans une autre qui ajoute un comportement avant et après, sans modifier une seule ligne de la fonction d'origine. L'image est celle d'un colis qu'on emballe : le contenu ne change pas, mais tout ce qui passe par l'emballage peut être compté, tracé, mis en cache.</p>
+
+    <h3>Le mécanisme, en trois temps</h3>
+    <p>Premier point à admettre : en Python, une fonction est une <em>valeur</em> comme une autre. On peut la mettre dans une variable, la passer en argument, la renvoyer.</p>
+
+    <div class="code-label">Python — les fonctions sont des objets</div>
+    <div class="code-block"><pre>def bonjour(nom):
+    return f"Bonjour {nom}"
+
+f = bonjour              # pas d'appel : on manipule la fonction elle-même
+print(f("Nils"))         # Bonjour Nils
+print(bonjour.__name__)  # bonjour  → une fonction a des attributs</pre></div>
+
+    <p>Deuxième point : on peut donc écrire une fonction qui <em>prend</em> une fonction et en <em>renvoie</em> une nouvelle.</p>
+
+    <div class="code-label">Python — un décorateur écrit à la main, sans sucre syntaxique</div>
+    <div class="code-block"><pre>import time
+
+def chrono(fonction):                     # reçoit la fonction à emballer
+    def emballage(*args, **kwargs):       # la nouvelle fonction qui la remplacera
+        debut = time.perf_counter()
+        resultat = fonction(*args, **kwargs)   # on appelle l'originale
+        duree = time.perf_counter() - debut
+        print(f"{fonction.__name__} : {duree:.3f} s")
+        return resultat                   # on renvoie SON résultat, inchangé
+    return emballage                      # on renvoie l'emballage, pas son appel
+
+def entrainer(n):
+    time.sleep(n)
+    return "modèle"
+
+entrainer = chrono(entrainer)             # on remplace la fonction par sa version emballée
+entrainer(0.5)                            # entrainer : 0.500 s</pre></div>
+
+    <p><code>*args</code> et <code>**kwargs</code> signifient « tous les arguments positionnels » et « tous les arguments nommés » : ils permettent à l'emballage d'accepter n'importe quelle signature et de la transmettre telle quelle. Sans eux, le décorateur ne fonctionnerait que pour des fonctions à un seul argument.</p>
+
+    <p>Troisième point : la ligne <code>entrainer = chrono(entrainer)</code> est si fréquente que Python lui donne une notation dédiée, le <code>@</code>. Les deux écritures ci-dessous sont <strong>rigoureusement équivalentes</strong> :</p>
+
+    <div class="code-label">Python — avant / après</div>
+    <div class="code-block"><pre># AVANT : réécriture explicite
+def entrainer(n): ...
+entrainer = chrono(entrainer)
+
+# APRÈS : la même chose, en une ligne au-dessus de la définition
+@chrono
+def entrainer(n): ...</pre></div>
+
+    <div class="step-block">
+      <h4>Le détail qui manque : <code>functools.wraps</code></h4>
+      <p>Tel qu'écrit plus haut, le décorateur remplace la fonction par <code>emballage</code> : <code>entrainer.__name__</code> vaut désormais <code>"emballage"</code>, la docstring a disparu, et les outils de débogage affichent le mauvais nom. <code>@functools.wraps(fonction)</code>, posé sur l'emballage, recopie ces métadonnées. Ce n'est pas optionnel — sans lui, les messages d'erreur deviennent trompeurs.</p>
+      <div class="code-block"><pre>import functools
+
+def chrono(fonction):
+    @functools.wraps(fonction)            # conserve nom, docstring, annotations
+    def emballage(*args, **kwargs):
+        ...
+    return emballage</pre></div>
+    </div>
+
+    <h3>Les décorateurs de la bibliothèque standard</h3>
+    <p>On en écrit rarement ; on en <em>utilise</em> constamment. Voici ceux qu'il faut reconnaître :</p>
+
+    <div class="code-label">Python — @property : un attribut calculé</div>
+    <div class="code-block"><pre>class Jeu:
+    def __init__(self, X, y):
+        self.X, self.y = X, y
+
+    @property
+    def taille(self):                     # se lit comme un attribut, se calcule à la demande
+        return len(self.y)
+
+    @property
+    def taux_positifs(self):
+        return float(self.y.mean())
+
+jeu = Jeu(X, y)
+print(jeu.taille)          # PAS jeu.taille() : le @property fait l'appel pour nous
+print(jeu.taux_positifs)</pre></div>
+    <p>L'intérêt : on expose une valeur <em>calculée</em> avec la même syntaxe qu'un attribut stocké. On peut donc transformer un attribut simple en valeur calculée plus tard, sans casser le code qui l'utilise. C'est aussi ce qui permet d'ajouter une validation à l'écriture, via un <code>@taille.setter</code>.</p>
+
+    <div class="code-label">Python — les autres décorateurs à connaître</div>
+    <div class="code-block"><pre>import functools
+
+class Modele:
+    @staticmethod                 # fonction rangée dans la classe, sans accès à self
+    def normaliser(x):
+        return (x - x.mean()) / x.std()
+
+    @classmethod                  # reçoit la CLASSE : sert de constructeur alternatif
+    def depuis_fichier(cls, chemin):
+        return cls(**json.load(open(chemin)))
+
+@functools.cache                  # mémorise les résultats : appel suivant = instantané
+def charger_referentiel(annee: int):
+    return pd.read_parquet(f"ref_{annee}.parquet")
+
+@functools.lru_cache(maxsize=1024)   # idem, mais avec une taille de cache bornée
+def distance(a: str, b: str) -&gt; float:
+    ...</pre></div>
+
+    <p>Le cache mérite une mise en garde : il garde les résultats en mémoire pour <em>toute la durée du programme</em> et exige des arguments hachables (donc pas de liste ni de DataFrame). Sur une fonction qui charge un gros fichier, c'est exactement ce qu'on veut ; sur une fonction appelée avec des millions d'arguments différents, c'est une fuite de mémoire.</p>
+
+    <p>Le même mécanisme se retrouve partout dans l'écosystème : <code>@pytest.fixture</code> et <code>@pytest.mark.parametrize</code> (section 7), <code>@app.get("/items")</code> dans FastAPI (module 6), <code>@task</code> dans les orchestrateurs, <code>@numba.njit</code> pour compiler une boucle. Savoir lire un <code>@</code> comme « cette fonction est emballée par ceci » suffit à comprendre ces bibliothèques.</p>
+
+    <h2 id="dataclasses">4. Dataclasses : <code>frozen</code>, <code>slots</code> et le reste</h2>
+
+    <h3>Le problème</h3>
+    <p>Regroupons trois paramètres d'entraînement dans une classe ordinaire. Il faut écrire un constructeur qui recopie chaque argument dans un attribut, puis une méthode d'affichage lisible, puis une comparaison — sinon deux configurations identiques seront considérées comme différentes. Cela donne une trentaine de lignes de code répétitif pour transporter trois valeurs.</p>
+
+    <div class="code-label">Python — AVANT : classe écrite à la main</div>
+    <div class="code-block"><pre>class TrainConfig:
+    def __init__(self, data_path, n_estimators=300, learning_rate=0.05, random_state=42):
+        self.data_path = data_path
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
+        self.random_state = random_state
+
+    def __repr__(self):
+        return (f"TrainConfig(data_path={self.data_path!r}, "
+                f"n_estimators={self.n_estimators}, "
+                f"learning_rate={self.learning_rate}, "
+                f"random_state={self.random_state})")
+
+    def __eq__(self, autre):
+        if not isinstance(autre, TrainConfig):
+            return NotImplemented
+        return (self.data_path, self.n_estimators, self.learning_rate, self.random_state) == \
+               (autre.data_path, autre.n_estimators, autre.learning_rate, autre.random_state)</pre></div>
+
+    <div class="code-label">Python — APRÈS : le décorateur @dataclass écrit tout cela</div>
+    <div class="code-block"><pre>from dataclasses import dataclass, field
 from pathlib import Path
-import numpy as np
-from numpy.typing import NDArray
 
-@dataclass(frozen=True, slots=True)
+@dataclass
 class TrainConfig:
-    """Configuration d'entraînement : immuable, hashable, auto-documentée."""
-    data_path: Path
+    data_path: Path                        # pas de valeur par défaut : argument obligatoire
     n_estimators: int = 300
     learning_rate: float = 0.05
     random_state: int | None = 42
 
-def rmse(y_true: NDArray[np.float64], y_pred: NDArray[np.float64]) -> float:
-    return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))</pre></div>
+cfg = TrainConfig(Path("data/train.parquet"), learning_rate=0.1)
+print(cfg)        # TrainConfig(data_path=PosixPath('data/train.parquet'),
+                  #             n_estimators=300, learning_rate=0.1, random_state=42)
+cfg == TrainConfig(Path("data/train.parquet"), learning_rate=0.1)   # True</pre></div>
 
-    <p><code>frozen=True</code> interdit la mutation (une config qui change en cours de route est une source de bugs irreproductibles), <code>slots=True</code> réduit l'empreinte mémoire et interdit les attributs fantômes dus à une faute de frappe. Pour valider des données <em>externes</em> (fichier YAML, requête HTTP), on passe à <strong>pydantic</strong>, qui lui vérifie et convertit à l'exécution — c'est le socle de FastAPI (module 2).</p>
+    <p>Le décorateur lit les annotations de la classe et <em>génère</em> pour nous <code>__init__</code>, <code>__repr__</code> et <code>__eq__</code>. Une remarque importante : ici, les annotations de type ne sont pas décoratives — c'est leur présence qui déclenche la génération du champ. C'est l'un des rares endroits où le typage a un effet réel à l'exécution.</p>
 
-    <div class="step-block">
-      <h4>À retenir</h4>
-      <p>Annotez les frontières, pas les boucles internes. Un <code>NDArray[np.float64]</code> ne dit rien de la <em>forme</em> du tableau — la vraie source d'erreurs en ML. D'où l'habitude d'écrire la forme attendue en commentaire (<code>(n_samples, n_features)</code>) et de la vérifier avec un <code>assert X.ndim == 2</code> en début de fonction.</p>
+    <h3>Les options utiles</h3>
+
+    <div class="code-label">Python — @dataclass(frozen=True, slots=True)</div>
+    <div class="code-block"><pre>@dataclass(frozen=True, slots=True)
+class TrainConfig:
+    data_path: Path
+    n_estimators: int = 300
+    learning_rate: float = 0.05
+    features: tuple[str, ...] = ()         # tuple, pas list : voir plus bas</pre></div>
+
+    <p><strong><code>frozen=True</code> — l'objet devient immuable.</strong> Toute tentative de modification lève une erreur au lieu de passer inaperçue :</p>
+    <div class="code-block"><pre>cfg.learning_rate = 0.5
+# FrozenInstanceError: cannot assign to field 'learning_rate'</pre></div>
+    <p>Pourquoi vouloir cela ? Parce qu'une configuration qui change en cours d'exécution est une source de bugs irreproductibles : on lance un entraînement, une fonction modifie discrètement un paramètre au passage, et le résultat ne correspond plus à ce qu'on croit avoir demandé. Une configuration figée est une garantie que ce qu'on a lu au début est ce qui a servi jusqu'au bout. Bénéfice secondaire : un objet immuable est <em>hachable</em>, donc utilisable comme clé de dictionnaire ou argument d'une fonction mise en cache (section 3). Pour obtenir une variante, on ne modifie pas : on copie en changeant ce qu'il faut, avec <code>dataclasses.replace(cfg, learning_rate=0.1)</code>.</p>
+
+    <p><strong><code>slots=True</code> — attributs fixés d'avance.</strong> Par défaut, chaque objet Python porte un dictionnaire interne (<code>__dict__</code>) qui associe des noms d'attributs à des valeurs, ce qui permet d'en ajouter n'importe quand. C'est souple, mais cela coûte de la mémoire et laisse passer les fautes de frappe :</p>
+    <div class="code-block"><pre># sans slots : la faute de frappe crée un NOUVEL attribut, en silence
+cfg.learnig_rate = 0.1        # aucune erreur ; le vrai paramètre n'a pas bougé
+
+# avec slots=True : la liste des attributs est figée à la création de la classe
+cfg.learnig_rate = 0.1
+# AttributeError: 'TrainConfig' object has no attribute 'learnig_rate'</pre></div>
+    <p>L'économie de mémoire (souvent 30 à 40 % par instance) ne compte que si l'on crée des millions d'objets ; la détection des fautes de frappe, elle, sert tous les jours.</p>
+
+    <div class="warning-block">
+      <strong>Le piège des valeurs par défaut mutables.</strong> Écrire <code>features: list[str] = []</code> lève une erreur, et c'est une bonne nouvelle : la liste serait créée <em>une seule fois</em> et partagée par toutes les instances — un classique des bugs Python. Deux solutions : un type immuable (<code>tuple[str, ...] = ()</code>), ou <code>field(default_factory=list)</code>, qui construit une liste neuve à chaque instance.
     </div>
 
-    <h2 id="iterateurs">4. Itérateurs, générateurs et mémoire</h2>
-    <p>La différence entre un script qui traite 50 Go et un script qui meurt en <code>MemoryError</code> tient souvent à une seule habitude : produire les données paresseusement plutôt que de les matérialiser.</p>
+    <div class="code-label">Python — les autres options, avec leur usage</div>
+    <div class="code-block"><pre>from dataclasses import dataclass, field, asdict, replace
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from collections.abc import Iterator
-import itertools
+@dataclass(frozen=True, slots=True, order=True, kw_only=True)
+class Resultat:
+    rmse: float
+    modele: str
+    # exclu de la comparaison et de l'affichage (par exemple un gros objet) :
+    predictions: list = field(default_factory=list, compare=False, repr=False)
 
-def lire_lignes(chemin: str) -> Iterator[dict]:
-    """Streaming : une ligne en mémoire à la fois, quel que soit le fichier."""
+    def __post_init__(self):              # appelé après l'init généré : validation
+        if self.rmse &lt; 0:
+            raise ValueError("un RMSE ne peut pas être négatif")
+
+r = Resultat(rmse=0.42, modele="gbm")     # kw_only : arguments NOMMÉS obligatoires
+sorted([r1, r2, r3])                      # order=True : comparaison champ par champ
+asdict(r)                                 # → dict, prêt pour json.dumps ou MLflow
+replace(r, modele="xgb")                  # copie modifiée (l'original est figé)</pre></div>
+
+    <p>Deux cousines à connaître : <code>typing.NamedTuple</code>, plus légère mais limitée à un tuple immuable, et <strong>pydantic</strong>, qui ressemble beaucoup à une dataclass mais <em>vérifie et convertit les types à l'exécution</em>. La règle de choix : dataclass pour les objets internes au code, pydantic dès que les données viennent de l'extérieur — fichier de configuration, requête HTTP, réponse d'API. C'est le socle de FastAPI, détaillé au <a href="project7-m06.html">module 6</a>.</p>
+
+    <h2 id="typage">5. Les annotations de type</h2>
+
+    <h3>Ce que c'est, et ce que ce n'est pas</h3>
+    <p>Une annotation comme <code>def rmse(y: np.ndarray) -&gt; float</code> est une <strong>métadonnée</strong>. Python ne la vérifie pas à l'exécution : passer une chaîne de caractères à cette fonction ne déclenchera aucune erreur de typage (seulement, plus loin, une erreur incompréhensible). Les annotations servent à trois choses : un <em>vérificateur statique</em> (mypy, pyright) qui lit le code sans l'exécuter et signale les incohérences, l'<em>éditeur</em> qui propose l'autocomplétion et détecte les fautes, et le <em>lecteur</em>, pour qui la signature devient une documentation qui ne peut pas mentir trop longtemps.</p>
+
+    <div class="code-label">Python — la syntaxe utile en pratique</div>
+    <div class="code-block"><pre>from collections.abc import Iterable, Callable, Sequence
+from pathlib import Path
+import numpy as np
+from numpy.typing import NDArray
+
+def charger(chemin: Path) -&gt; pd.DataFrame: ...
+
+def normaliser(x: NDArray[np.float64]) -&gt; NDArray[np.float64]: ...
+
+def selectionner(noms: Sequence[str], seuil: float = 0.5) -&gt; list[str]: ...
+
+# "peut valoir None" : le | remplace l'ancien Optional[...]
+def charger_modele(chemin: Path | None = None) -&gt; Modele | None: ...
+
+# une fonction en argument
+def appliquer(f: Callable[[float], float], valeurs: Iterable[float]) -&gt; list[float]:
+    return [f(v) for v in valeurs]
+
+# un dictionnaire dont on connaît les clés
+scores: dict[str, float] = {"rmse": 0.42, "mae": 0.31}</pre></div>
+
+    <div class="step-block">
+      <h4>Où le typage rapporte, et où il coûte</h4>
+      <p>Le rendement est maximal aux <strong>frontières</strong> : signatures des fonctions publiques, objets de configuration, structures de données échangées entre modules. Il est faible à l'intérieur d'un calcul numérique, où annoter chaque variable intermédiaire alourdit sans rien apporter. Et il faut connaître sa limite principale : <code>NDArray[np.float64]</code> ne dit rien de la <em>forme</em> du tableau, qui est pourtant la première source d'erreurs en ML. D'où l'habitude de documenter la forme attendue en commentaire — <code>(n_samples, n_features)</code> — et de la vérifier par un <code>assert X.ndim == 2</code> en début de fonction.</p>
+    </div>
+
+    <h2 id="iterateurs">6. Itérateurs et générateurs</h2>
+
+    <h3>Le problème</h3>
+    <p>Un fichier de journaux de 40 Go, une machine avec 16 Go de RAM. La ligne <code>lignes = open("events.jsonl").readlines()</code> échoue par manque de mémoire, parce qu'elle construit la liste complète avant d'en traiter le premier élément. Il faut une façon de produire les données <em>au fur et à mesure</em> : un distributeur qui fabrique à la demande, plutôt qu'un entrepôt qu'on remplit d'abord.</p>
+
+    <h3>Itérable et itérateur : deux notions distinctes</h3>
+    <p>Un <strong>itérable</strong> est un objet sur lequel on peut faire une boucle <code>for</code> (une liste, un dictionnaire, un fichier). Un <strong>itérateur</strong> est l'objet qui garde la position courante et sait donner l'élément suivant. La boucle <code>for</code> cache ce mécanisme : elle demande d'abord un itérateur à l'itérable, puis lui réclame les éléments un par un jusqu'à épuisement.</p>
+
+    <div class="code-label">Python — ce que fait réellement une boucle for</div>
+    <div class="code-block"><pre>nombres = [10, 20, 30]
+
+it = iter(nombres)      # on demande un itérateur à l'itérable
+print(next(it))         # 10
+print(next(it))         # 20
+print(next(it))         # 30
+print(next(it))         # StopIteration : c'est le signal de fin, que for intercepte
+
+# la boucle ci-dessous est exactement équivalente à ce qui précède
+for n in nombres:
+    print(n)</pre></div>
+
+    <h3>Écrire son propre itérateur (la version longue)</h3>
+    <p>Pour comprendre ce que les générateurs automatisent, écrivons d'abord un itérateur « à la main ». Il suffit d'implémenter deux méthodes : <code>__iter__</code>, qui renvoie l'itérateur lui-même, et <code>__next__</code>, qui renvoie l'élément suivant ou lève <code>StopIteration</code>.</p>
+
+    <div class="code-label">Python — un itérateur de lots, écrit explicitement</div>
+    <div class="code-block"><pre>class Lots:
+    """Découpe une séquence en lots de taille fixe."""
+
+    def __init__(self, donnees, taille):
+        self.donnees = donnees
+        self.taille = taille
+        self.position = 0          # l'ÉTAT que l'itérateur doit mémoriser
+
+    def __iter__(self):
+        return self                # l'objet est son propre itérateur
+
+    def __next__(self):
+        if self.position &gt;= len(self.donnees):
+            raise StopIteration    # plus rien à donner : fin de la boucle
+        lot = self.donnees[self.position : self.position + self.taille]
+        self.position += self.taille
+        return lot
+
+for lot in Lots(list(range(10)), 3):
+    print(lot)                     # [0,1,2] puis [3,4,5] puis [6,7,8] puis [9]</pre></div>
+
+    <h3>Le générateur : le même résultat en quatre lignes</h3>
+    <p>Une fonction qui contient le mot-clé <strong><code>yield</code></strong> ne se comporte plus comme une fonction ordinaire. L'appeler n'exécute rien : cela renvoie un générateur. À chaque <code>next()</code>, le corps s'exécute jusqu'au prochain <code>yield</code>, renvoie la valeur, puis <strong>se met en pause en conservant tout son état local</strong> — variables et position dans le code. L'appel suivant reprend exactement là où on s'était arrêté.</p>
+
+    <div class="code-label">Python — le même itérateur, en générateur</div>
+    <div class="code-block"><pre>def lots(donnees, taille):
+    for debut in range(0, len(donnees), taille):
+        yield donnees[debut : debut + taille]      # pause ici, reprise au prochain appel
+
+for lot in lots(list(range(10)), 3):
+    print(lot)                                     # résultat identique</pre></div>
+
+    <p>Le générateur écrit pour nous <code>__iter__</code>, <code>__next__</code>, la gestion de l'état et le <code>StopIteration</code> final. Observons la mise en pause pas à pas :</p>
+
+    <div class="code-label">Python — la mécanique du yield, étape par étape</div>
+    <div class="code-block"><pre>def trace():
+    print("  → début du corps")
+    yield 1
+    print("  → reprise après le premier yield")
+    yield 2
+    print("  → reprise après le second yield")
+
+g = trace()            # RIEN ne s'affiche : le corps n'a pas encore démarré
+print(next(g))         #   → début du corps        puis affiche 1
+print(next(g))         #   → reprise après ...     puis affiche 2
+next(g)                #   → reprise après ...     puis StopIteration</pre></div>
+
+    <h3>Application : traiter un fichier plus gros que la mémoire</h3>
+
+    <div class="code-label">Python — un pipeline de générateurs</div>
+    <div class="code-block"><pre>import json, itertools
+from collections.abc import Iterator
+
+def lire_lignes(chemin: str) -&gt; Iterator[dict]:
+    """Une ligne en mémoire à la fois, quelle que soit la taille du fichier."""
     with open(chemin, encoding="utf-8") as f:
-        for ligne in f:                 # le fichier est déjà un itérateur
+        for ligne in f:                 # un fichier ouvert EST déjà un itérateur
             yield json.loads(ligne)
 
-def par_lots(it, taille: int):
-    """Regroupe un itérable en lots — indispensable pour l'inférence batchée."""
-    it = iter(it)
-    while lot := list(itertools.islice(it, taille)):
+def valides(evenements: Iterator[dict]) -&gt; Iterator[dict]:
+    """Filtre, sans rien matérialiser."""
+    for e in evenements:
+        if e.get("prix") and e["prix"] &gt; 0:
+            yield e
+
+def par_lots(iterable, taille: int):
+    """Regroupe en lots — indispensable pour l'inférence batchée (module 6)."""
+    it = iter(iterable)
+    while lot := list(itertools.islice(it, taille)):   # := affecte ET teste
         yield lot
 
-# consommation : mémoire O(taille du lot), pas O(taille du fichier)
-for lot in par_lots(lire_lignes("events.jsonl"), 1024):
-    scores = model.predict(lot)</pre></div>
+# les trois générateurs se chaînent : la mémoire reste en O(taille du lot)
+flux = par_lots(valides(lire_lignes("events.jsonl")), 1024)
+for lot in flux:
+    scores = modele.predict(lot)</pre></div>
 
-    <p>Trois réflexes utiles : <code>itertools.islice</code> / <code>chain</code> / <code>groupby</code> plutôt que des boucles à index ; <code>functools.lru_cache</code> sur les fonctions pures coûteuses ; et <code>collections.Counter</code> / <code>defaultdict</code> pour les comptages, systématiquement plus rapides qu'un <code>dict</code> géré à la main. En Python 3.12+, <code>itertools.batched</code> fait le travail de <code>par_lots</code> nativement.</p>
+    <p>Rien n'est exécuté tant qu'on ne consomme pas le flux : c'est l'<em>évaluation paresseuse</em>. Chaque lot traverse les trois étapes à la demande, et la mémoire ne dépend que de la taille du lot. En Python 3.12+, <code>itertools.batched</code> fait le travail de <code>par_lots</code> nativement.</p>
 
-    <h2 id="qualite">5. Qualité : ruff, pytest, pre-commit</h2>
-    <p><strong>ruff</strong> remplace flake8, isort, black et une bonne partie de pylint, en une fraction du temps : <code>uv run ruff check --fix .</code> puis <code>uv run ruff format .</code>. Le formatage automatique n'est pas un détail esthétique : il supprime les diffs de style, qui polluent les revues et masquent les vrais changements.</p>
+    <div class="code-label">Python — les compléments utiles</div>
+    <div class="code-block"><pre># expression génératrice : comme une compréhension de liste, mais paresseuse
+carres = (x ** 2 for x in range(10_000_000))    # rien n'est calculé ni stocké
+total = sum(carres)                             # calcul au fil de la consommation
 
-    <p>Tester du code de data science demande d'adapter la cible. On ne teste pas « le modèle a 92 % d'accuracy » (c'est du monitoring, module 12), on teste la <em>plomberie</em> :</p>
+# yield from : déléguer à un autre générateur (aplatissement, composition)
+def tous_les_fichiers(dossiers):
+    for d in dossiers:
+        yield from lire_lignes(d)
+
+# générateur infini : parfaitement légitime, tant qu'on le borne à la consommation
+def compteur(debut=0):
+    n = debut
+    while True:
+        yield n
+        n += 1
+
+premiers = list(itertools.islice(compteur(), 5))     # [0, 1, 2, 3, 4]
+
+# itertools : groupby, chain, product, accumulate, tee — tous paresseux
+for cle, groupe in itertools.groupby(sorted(lignes, key=cle_ville), key=cle_ville):
+    print(cle, sum(1 for _ in groupe))</pre></div>
+
+    <div class="warning-block">
+      <strong>Un générateur ne se parcourt qu'une fois.</strong> Après consommation, il est épuisé : une seconde boucle ne produira rien, silencieusement. De même, <code>len()</code> et l'indexation n'existent pas sur un générateur, puisqu'on ignore combien d'éléments restent. Si l'on a besoin de plusieurs passages, il faut soit matérialiser avec <code>list(...)</code> — en acceptant le coût mémoire —, soit relancer le générateur depuis sa source.
+    </div>
+
+    <h2 id="qualite">7. Qualité : ruff, pytest, pre-commit</h2>
+
+    <h3>ruff : formatage et analyse statique</h3>
+    <p><strong>ruff</strong> remplace flake8, isort, black et une bonne partie de pylint, en une fraction du temps. Deux usages complémentaires : <em>check</em> signale les erreurs probables (import inutilisé, variable jamais lue, comparaison suspecte) et <em>format</em> réécrit le code dans un style unique.</p>
+    <div class="code-block"><pre>uv run ruff check --fix .        # signale et corrige ce qui peut l'être
+uv run ruff format .             # formatage automatique
+uv run mypy src/                 # vérification des types</pre></div>
+    <p>Le formatage automatique n'est pas une coquetterie : il supprime les différences de style dans les diffs, qui polluent les revues et masquent les vrais changements.</p>
+
+    <h3>pytest : tester du code de data science</h3>
+    <p>La question n'est pas « comment écrire un test » mais « que faut-il tester ». On ne teste pas « le modèle atteint 92 % d'accuracy » — cela dépend des données et relève du suivi en production (module 24). On teste la <em>plomberie</em> : les formes, les cas dégénérés, le déterminisme, les invariants métier.</p>
 
     <div class="code-label">tests/test_features.py</div>
     <div class="code-block"><pre>import numpy as np
 import pytest
-from mon_projet.features import ajouter_features_temporelles
+from mon_projet.features import ajouter_features_temporelles, entrainer
+
+@pytest.fixture                              # une donnée de test réutilisable
+def df_exemple():
+    return pd.DataFrame({"date": pd.date_range("2025-01-01", periods=30),
+                         "valeur": np.arange(30, dtype=float)})
 
 def test_pas_de_fuite_temporelle(df_exemple):
     """Une feature calculée à t ne doit jamais utiliser d'information de t+1."""
     out = ajouter_features_temporelles(df_exemple)
-    assert out["moyenne_mobile_7j"].iloc[0] != out["cible"].iloc[0]
+    assert out["moyenne_mobile_7j"].iloc[0] != out["valeur"].iloc[0]
 
-@pytest.mark.parametrize("n_lignes", [0, 1, 1000])
+@pytest.mark.parametrize("n_lignes", [0, 1, 1000])     # le test est joué 3 fois
 def test_robustesse_aux_tailles(n_lignes):
-    """Les cas dégénérés — DataFrame vide, une seule ligne — cassent souvent."""
+    """Les cas dégénérés — vide, une seule ligne — cassent souvent."""
     df = generer_df(n_lignes)
     assert len(ajouter_features_temporelles(df)) == n_lignes
 
 def test_deterministe():
     """Même graine, même résultat : sinon rien n'est reproductible."""
-    a = entrainer(seed=0).predict(X_test)
-    b = entrainer(seed=0).predict(X_test)
-    np.testing.assert_allclose(a, b)</pre></div>
+    np.testing.assert_allclose(entrainer(seed=0).predict(X), entrainer(seed=0).predict(X))
 
-    <p>Les tests à haut rendement, par ordre : formes et types de sortie, cas dégénérés (vide, une ligne, toutes valeurs manquantes, une seule classe), déterminisme à graine fixée, invariants métier (« une probabilité est dans [0, 1] », « la somme des parts vaut 1 »), et non-régression sur un jeu de données miniature stocké dans le dépôt. <strong>pre-commit</strong> branche ruff et les tests rapides sur le <code>git commit</code> pour que rien de mal formé n'entre dans l'historique.</p>
+def test_probabilites_valides():
+    p = modele.predict_proba(X)
+    assert np.all((p &gt;= 0) &amp; (p &lt;= 1)) and np.allclose(p.sum(axis=1), 1.0)</pre></div>
 
-    <h2 id="git">6. Git pour un projet data</h2>
-    <p>Le workflow que j'utilise, volontairement minimal : <code>main</code> toujours fonctionnelle, une branche par sujet, une <em>pull request</em> même en solo (elle force une relecture du diff complet, ce qui attrape beaucoup d'erreurs).</p>
+    <h3>pre-commit : automatiser les vérifications</h3>
+    <p><strong>Le problème.</strong> Les outils précédents ne servent que si on pense à les lancer. En pratique, on oublie, et le code mal formaté ou cassé entre dans l'historique Git ; la chaîne d'intégration continue le signale dix minutes plus tard, et il faut un commit supplémentaire pour corriger.</p>
+    <p><strong>La solution.</strong> Git sait déclencher des scripts à certains moments de son cycle — ce sont les <em>hooks</em>. <a href="https://pre-commit.com" target="_blank">pre-commit</a> est un outil qui installe un hook déclenché avant chaque commit, lance les vérifications sur <em>les seuls fichiers modifiés</em>, et <strong>annule le commit</strong> si quelque chose ne va pas. Le code fautif n'entre jamais dans l'historique.</p>
+
+    <div class="code-label">installation, une fois par projet</div>
+    <div class="code-block"><pre>uv add --dev pre-commit
+uv run pre-commit install        # écrit le hook dans .git/hooks/pre-commit
+
+# vérifier tout le dépôt (utile la première fois, ou en CI)
+uv run pre-commit run --all-files
+
+# mettre à jour les versions des outils déclarés
+uv run pre-commit autoupdate</pre></div>
+
+    <div class="code-label">.pre-commit-config.yaml, commenté</div>
+    <div class="code-block"><pre>repos:
+  # ── hooks génériques, fournis par pre-commit lui-même ──
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace        # supprime les espaces en fin de ligne
+      - id: end-of-file-fixer          # garantit un saut de ligne final
+      - id: check-yaml                 # valide la syntaxe des fichiers YAML
+      - id: check-added-large-files    # REFUSE les fichiers volumineux
+        args: ["--maxkb=5000"]         #   → empêche de committer un CSV par erreur
+      - id: check-merge-conflict       # détecte les marqueurs de conflit oubliés
+      - id: detect-private-key         # refuse une clé privée committée
+
+  # ── lint et formatage ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # ── types ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies: [numpy, pandas-stubs]
+
+  # ── notebooks : retire les sorties avant commit ──
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout</pre></div>
+
+    <p>Deux hooks méritent qu'on s'y arrête. <code>check-added-large-files</code> est la meilleure protection contre l'erreur la plus coûteuse d'un projet data — committer un jeu de données (section 8). <code>nbstripout</code> retire les sorties des notebooks : sans lui, chaque exécution produit un diff de plusieurs milliers de lignes illisibles, et les images encodées font gonfler le dépôt indéfiniment.</p>
+    <p>Un dernier détail pratique : <code>git commit --no-verify</code> contourne les hooks. C'est utile dans une urgence, et c'est aussi la raison pour laquelle les mêmes vérifications doivent tourner dans la chaîne d'intégration continue, où personne ne peut les contourner (module 24).</p>
+
+    <h2 id="git">8. Git pour un projet data</h2>
+    <p>Le workflow que j'utilise, volontairement minimal : <code>main</code> toujours fonctionnelle, une branche par sujet, une <em>pull request</em> même en solo — elle force une relecture du diff complet, ce qui attrape beaucoup d'erreurs.</p>
 
     <div class="code-label">bash</div>
-    <div class="code-block"><pre>git switch -c feat/gradient-boosting     # branche de travail
+    <div class="code-block"><pre>git switch -c feat/gradient-boosting     # créer et basculer sur une branche
 git add -p                               # relire chaque morceau avant de l'indexer
 git commit -m "feat(model): baseline XGBoost, RMSE 0.42 en CV"
 
 git fetch origin
 git rebase origin/main                   # historique linéaire AVANT publication
-git push -u origin feat/gradient-boosting</pre></div>
+git push -u origin feat/gradient-boosting
 
-    <p><strong>Rebase ou merge ?</strong> Rebase tant que la branche est privée : l'historique reste linéaire et lisible. Merge dès qu'elle est partagée : réécrire des commits que quelqu'un d'autre a déjà récupérés casse son dépôt. La règle tient en une phrase : <em>ne jamais réécrire un historique déjà publié</em>.</p>
+git log --oneline --graph -15            # visualiser l'historique
+git diff main...HEAD                     # tout ce que la branche apporte</pre></div>
 
-    <p>Les messages suivent la convention <em>Conventional Commits</em> (<code>feat:</code>, <code>fix:</code>, <code>refactor:</code>, <code>docs:</code>) : c'est ce qui permet de générer un changelog et, surtout, de retrouver <em>pourquoi</em> une transformation a été ajoutée six mois plus tard.</p>
+    <p><strong>Rebase ou merge ?</strong> Rebase tant que la branche est privée : l'historique reste linéaire et lisible. Merge dès qu'elle est partagée : réécrire des commits que quelqu'un a déjà récupérés casse son dépôt. La règle tient en une phrase — <em>ne jamais réécrire un historique déjà publié</em>.</p>
+    <p>Les messages suivent la convention <em>Conventional Commits</em> (<code>feat:</code>, <code>fix:</code>, <code>refactor:</code>, <code>docs:</code>) : cela permet de générer un changelog et, surtout, de retrouver <em>pourquoi</em> une transformation a été ajoutée six mois plus tard.</p>
 
     <div class="warning-block">
-      <strong>Git n'est pas fait pour les données.</strong> Un CSV de 2 Go committé reste dans l'historique <em>pour toujours</em>, même supprimé ensuite — chaque clone le retéléchargera. Mettez <code>data/</code>, <code>*.csv</code>, <code>*.parquet</code>, <code>*.pkl</code>, <code>models/</code> et <code>.ipynb_checkpoints/</code> dans <code>.gitignore</code> dès le premier commit. Pour versionner données et modèles, voir DVC au module 12. Pour les notebooks, <code>nbstripout</code> retire les sorties avant commit — sans lui, chaque exécution produit un diff illisible de plusieurs milliers de lignes.
+      <strong>Git n'est pas fait pour les données.</strong> Un CSV de 2 Go committé reste dans l'historique <em>pour toujours</em>, même supprimé ensuite : chaque clone le retéléchargera. Mettez <code>data/</code>, <code>*.csv</code>, <code>*.parquet</code>, <code>*.pkl</code>, <code>models/</code>, <code>.venv/</code> et <code>.ipynb_checkpoints/</code> dans <code>.gitignore</code> dès le premier commit. Pour versionner données et modèles, voir DVC au module 24.
     </div>
-
-    <h2 id="concurrence">7. Concurrence : GIL, threads, processus, asyncio</h2>
-    <p>C'est le point où l'intuition issue du C ou du calcul parallèle classique induit en erreur. Trois modèles coexistent en Python, et choisir le mauvais peut <em>ralentir</em> un programme.</p>
-
-    <h3>7.1 Le GIL, énoncé correctement</h3>
-    <p>Le <em>Global Interpreter Lock</em> est un verrou de l'interpréteur CPython : <strong>un seul thread exécute du bytecode Python à un instant donné</strong> dans un processus. Conséquence directe : plusieurs threads Python purs ne consomment pas plus d'un cœur au total. Mais l'énoncé complet est plus intéressant, car le GIL est <em>relâché</em> dans deux situations :</p>
-    <ul>
-      <li>pendant une <strong>attente d'entrée/sortie</strong> (lecture disque, requête réseau, appel à une base de données) ;</li>
-      <li>pendant l'exécution de code <strong>natif</strong> qui le relâche explicitement — et c'est exactement ce que font NumPy, SciPy, scikit-learn, PyTorch ou polars dans leurs boucles de calcul.</li>
-    </ul>
-    <p>Autrement dit : un produit matriciel NumPy dans quatre threads utilise réellement quatre cœurs, alors qu'une boucle Python pure dans quatre threads n'en utilise qu'un. Depuis Python 3.13 existe un mode expérimental <em>free-threaded</em> (PEP 703) sans GIL, mais l'écosystème scientifique n'y est pas encore entièrement porté : en 2026, on raisonne toujours avec le GIL.</p>
-
-    <h3>7.2 La question à se poser : où le temps passe-t-il ?</h3>
-    <div class="step-block">
-      <h4>Arbre de décision</h4>
-      <ol>
-        <li><strong>Le programme attend-il des I/O ?</strong> (API, base de données, fichiers, scraping) → <code>asyncio</code> pour des milliers d'attentes concurrentes, <code>ThreadPoolExecutor</code> si la bibliothèque utilisée est bloquante et synchrone.</li>
-        <li><strong>Calcule-t-il en Python pur ?</strong> (boucles, parsing, logique métier) → <code>ProcessPoolExecutor</code> ou <code>joblib</code> : un processus par cœur, chacun avec son propre GIL.</li>
-        <li><strong>Calcule-t-il dans NumPy / PyTorch / polars ?</strong> → c'est <em>déjà</em> parallèle (BLAS multithreadé). N'ajoutez rien avant d'avoir mesuré : la parallélisation naïve par-dessus dégrade presque toujours les performances.</li>
-      </ol>
-    </div>
-
-    <h3>7.3 Threads : pour attendre, pas pour calculer</h3>
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
-
-def telecharger(url: str) -&gt; bytes:
-    return requests.get(url, timeout=10).content   # le GIL est relâché pendant l'attente
-
-urls = [f"https://api.exemple.fr/page/{i}" for i in range(200)]
-
-with ThreadPoolExecutor(max_workers=16) as ex:
-    futures = {ex.submit(telecharger, u): u for u in urls}
-    for fut in as_completed(futures):
-        url = futures[fut]
-        try:
-            contenu = fut.result()
-        except Exception as e:                      # une exception n'explose qu'au .result()
-            print(f"échec {url}: {e}")</pre></div>
-    <p>200 requêtes séquentielles à 100 ms font 20 s ; avec 16 threads, environ 1,3 s. Le gain vient du fait que les threads passent leur temps <em>bloqués</em>, GIL relâché. Deux précautions : <code>as_completed</code> plutôt que <code>map</code> pour traiter les résultats dès qu'ils arrivent, et un <code>timeout</code> systématique — sans lui, un serveur muet bloque un worker indéfiniment.</p>
-
-    <h3>7.4 Processus : pour calculer en Python pur</h3>
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from concurrent.futures import ProcessPoolExecutor
-
-def simuler(seed: int) -&gt; float:
-    """Monte-Carlo en Python pur : CPU-bound, donc inutile de threader."""
-    rng = random.Random(seed)
-    return sum(rng.random() ** 2 for _ in range(1_000_000)) / 1_000_000
-
-if __name__ == "__main__":                 # OBLIGATOIRE avec la méthode spawn
-    with ProcessPoolExecutor(max_workers=8) as ex:
-        resultats = list(ex.map(simuler, range(64), chunksize=4))</pre></div>
-
-    <p>Trois contraintes structurelles, qui expliquent la plupart des échecs :</p>
-    <ul>
-      <li><strong>Sérialisation.</strong> Arguments et résultats transitent par <code>pickle</code>. Envoyer un DataFrame de 3 Go à huit workers, c'est le sérialiser huit fois : le transfert coûte plus cher que le calcul. Les <em>closures</em> et les lambdas ne sont pas picklables — d'où les erreurs cryptiques au lancement.</li>
-      <li><strong>Méthode de démarrage.</strong> <code>spawn</code> (défaut sous Windows et macOS, et sous Linux à partir de 3.14) relance un interpréteur neuf : le module est réimporté, d'où le garde <code>if __name__ == "__main__"</code>, sans lequel on obtient une bombe à fourche. <code>fork</code> (historique sous Linux) est plus rapide mais dangereux en présence de threads — un verrou détenu au moment du fork reste verrouillé à jamais dans l'enfant.</li>
-      <li><strong>Coût fixe.</strong> Compter quelques dizaines à quelques centaines de millisecondes par processus créé. Paralléliser des tâches de 5 ms est perdant ; d'où <code>chunksize</code>, qui regroupe les tâches en paquets.</li>
-    </ul>
-
-    <p>Pour les gros tableaux NumPy partagés en lecture, on évite la copie avec <code>multiprocessing.shared_memory</code> (ou <code>joblib</code>, qui bascule automatiquement en <em>memmap</em> au-delà d'un mégaoctet) :</p>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from joblib import Parallel, delayed
-
-# n_jobs=-1 : tous les cœurs. Les gros tableaux sont mémoire-mappés, pas copiés.
-scores = Parallel(n_jobs=-1, backend="loky")(
-    delayed(evaluer_pli)(X, y, pli) for pli in plis
-)</pre></div>
-
-    <h3>7.5 asyncio : un seul thread, des milliers d'attentes</h3>
-    <p>asyncio ne parallélise rien : il <em>entrelace</em>. Une boucle d'événements exécute une coroutine jusqu'à son prochain <code>await</code>, qui signale « j'attends », et passe la main. Le gain est le même qu'avec des threads pour de l'I/O, mais sans le coût d'un thread système par tâche — on tient des dizaines de milliers de connexions simultanées.</p>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import asyncio, httpx
-
-async def recuperer(client: httpx.AsyncClient, url: str, sem: asyncio.Semaphore) -&gt; dict:
-    async with sem:                                  # borne la charge sur le serveur distant
-        r = await client.get(url, timeout=10)
-        r.raise_for_status()
-        return r.json()
-
-async def main(urls: list[str]) -&gt; list[dict]:
-    sem = asyncio.Semaphore(20)                      # 20 requêtes en vol au maximum
-    async with httpx.AsyncClient() as client:
-        taches = [recuperer(client, u, sem) for u in urls]
-        return await asyncio.gather(*taches, return_exceptions=True)
-
-resultats = asyncio.run(main(urls))</pre></div>
-
-    <p>Le point de vigilance est la <strong>contagion</strong> : une fonction <code>async</code> ne peut être appelée que depuis du code <code>async</code>. Et un seul appel bloquant (un <code>requests.get</code>, un <code>time.sleep</code>, un calcul NumPy long) gèle <em>toute</em> la boucle, donc toutes les tâches en cours. La porte de sortie est <code>asyncio.to_thread(fonction_bloquante, ...)</code>, qui délègue l'appel à un thread. C'est exactement le mécanisme qui permet à FastAPI de servir un modèle scikit-learn sans bloquer le serveur (module 2).</p>
-
-    <h3>7.6 Le piège qui coûte le plus cher : la sursouscription</h3>
-    <div class="warning-block">
-      <strong>Diagnostic classique.</strong> Un <code>cross_val_score(..., n_jobs=8)</code> sur une machine à 8 cœurs, où chaque processus lance un BLAS lui-même configuré sur 8 threads : 64 threads se disputent 8 cœurs. Les changements de contexte et la contention de cache font que le résultat est souvent <em>plus lent</em> que la version séquentielle. Le remède : brider les threads natifs quand on parallélise au niveau des processus.
-    </div>
-
-    <div class="code-label">bash / Python</div>
-    <div class="code-block"><pre># à placer AVANT l'import de numpy — les bibliothèques lisent ces variables au chargement
-export OMP_NUM_THREADS=1
-export OPENBLAS_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-
-# ou, plus finement, par bloc de code :
-from threadpoolctl import threadpool_limits
-with threadpool_limits(limits=1, user_api="blas"):
-    scores = cross_val_score(modele, X, y, cv=5, n_jobs=8)</pre></div>
-
-    <p>La règle générale : <em>un seul niveau de parallélisme à la fois</em>. Soit on parallélise les plis de validation croisée et le BLAS est mono-thread, soit on laisse le BLAS travailler et on garde <code>n_jobs=1</code>. Le bon réglage se mesure, il ne se devine pas.</p>
-
-    <h3>7.7 Récapitulatif</h3>
-    <div class="code-label">quoi utiliser quand</div>
-    <div class="code-block"><pre>Type de charge              Outil                      Parallélisme réel
-─────────────────────────────────────────────────────────────────────────
-Requêtes HTTP, BDD          asyncio / httpx            oui (entrelacement)
-I/O avec lib bloquante      ThreadPoolExecutor         oui (GIL relâché)
-Boucles Python pures        ProcessPoolExecutor        oui (N processus)
-CV, grid search sklearn     joblib (n_jobs)            oui (loky)
-NumPy / PyTorch / polars    rien à faire               oui (BLAS / Rayon)
-Boucle Python + threads     ThreadPoolExecutor         NON — GIL
-Données &gt; RAM               Dask (module 3)            oui (out-of-core)</pre></div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>UV + <code>pyproject.toml</code> + <code>uv.lock</code> : un environnement reproductible en une commande.</li>
-        <li>Le code réutilisable vit dans <code>src/</code>, jamais dans un notebook.</li>
-        <li>Annotations et tests aux frontières ; tester la plomberie, pas la performance du modèle.</li>
-        <li>Jamais de données ni de modèles dans Git ; jamais de réécriture d'historique publié.</li>
-        <li>I/O → threads ou asyncio ; calcul Python pur → processus ; calcul NumPy → déjà parallèle, et surtout ne pas empiler les niveaux de parallélisme.</li>
+        <li>Le code réutilisable vit dans <code>src/</code>, jamais dans un notebook ; <code>pyproject.toml</code> centralise tout.</li>
+        <li>UV donne un environnement reproductible en une commande : contraintes dans <code>pyproject.toml</code>, solution exacte dans <code>uv.lock</code>, les deux versionnés.</li>
+        <li>Un décorateur est une fonction qui en emballe une autre ; <code>@</code> est un raccourci pour <code>f = decorateur(f)</code>.</li>
+        <li><code>@dataclass</code> génère le code répétitif ; <code>frozen=True</code> protège des mutations silencieuses, <code>slots=True</code> des fautes de frappe.</li>
+        <li>Les annotations ne sont pas vérifiées à l'exécution : elles servent aux outils et au lecteur, surtout aux frontières.</li>
+        <li><code>yield</code> met une fonction en pause en conservant son état : c'est ce qui permet de traiter des données plus grosses que la mémoire.</li>
+        <li>pre-commit empêche le code mal formé d'entrer dans l'historique, et un jeu de données d'y entrer du tout.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7.html" class="btn btn-secondary">Sommaire du cours</a>
-  <a href="project7-m02.html" class="btn btn-primary">Module 2 : Données et déploiement →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">Python</span><span class="tag">UV</span><span class="tag">Git</span><span class="tag">GIL</span><span class="tag">asyncio</span><span class="tag">multiprocessing</span></div>
+  <div class="course-nav">
+    <a href="project7.html" class="btn btn-secondary">← Sommaire du cours</a>
+    <a href="project7-m02.html" class="btn btn-primary">Module 2 : Concurrence →</a>
+  </div>
+  <div class="project-meta"><span class="tag">Python</span><span class="tag">Décorateurs</span><span class="tag">Dataclasses</span><span class="tag">Générateurs</span><span class="tag">UV</span><span class="tag">pre-commit</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -402,49 +676,55 @@ Données &gt; RAM               Dask (module 3)            oui (out-of-core)</pr
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 1</div>
-    <h1>Python foundations, tooling and concurrency</h1>
+    <h1>Modern Python: typing, decorators, iterators and tooling</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Project layout: <code>src/</code> layout, <code>pyproject.toml</code>, why notebooks never hold reusable logic.</li>
-      <li>UV: environments, dependency resolution, lockfiles and reproducibility (including the CUDA caveat).</li>
-      <li>Typing where it pays off: dataclasses, boundaries, pydantic vs static annotations.</li>
-      <li>Iterators and generators for datasets that do not fit in memory.</li>
-      <li>Tooling: ruff, pytest for data code (what is actually worth testing), pre-commit.</li>
-      <li>Git for a data project: branching, rebase vs merge, why data never belongs in the repository.</li>
-      <li>Concurrency in depth: the GIL stated precisely, threads vs processes vs asyncio, a decision tree, and the oversubscription trap that silently slows down cross-validation.</li>
+      <li>Project layout: why the <code>src/</code> layout exists, what <code>pyproject.toml</code> holds, and why reusable logic never stays in a notebook.</li>
+      <li>Virtual environments explained from the problem they solve, then UV in practice: installing interpreters, adding and removing dependencies, syncing, running without activating.</li>
+      <li>Constraints versus lockfiles, reproducibility, and the CUDA caveat.</li>
+      <li>Decorators built from scratch: functions as objects, writing a timing decorator by hand, the <code>@</code> syntax as pure sugar, <code>functools.wraps</code>, and the standard decorators worth recognising (<code>@property</code>, <code>@staticmethod</code>, <code>@classmethod</code>, <code>@cache</code>).</li>
+      <li>Dataclasses before and after, then each option explained: <code>frozen</code> for silent-mutation safety and hashability, <code>slots</code> for typo detection and memory, <code>field</code>, <code>__post_init__</code>, <code>kw_only</code>, <code>order</code>, and the mutable-default trap.</li>
+      <li>Type annotations: what they do and do not do at runtime, practical syntax, where they pay off, and the shape problem they cannot express.</li>
+      <li>Iterators and generators: the iterator protocol, a hand-written iterator, then the same thing with <code>yield</code>, a step-by-step trace of suspension, lazy pipelines over files larger than memory, generator expressions, <code>yield from</code>, itertools, and the single-pass caveat.</li>
+      <li>Tooling: ruff, what is actually worth testing in data code, and pre-commit with a fully commented configuration.</li>
+      <li>Git for data projects: branching, rebase versus merge, and why data never belongs in the repository.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><strong>Python foundations, tooling and concurrency</strong></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><strong>Modern Python: typing, decorators, iterators and tooling</strong></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

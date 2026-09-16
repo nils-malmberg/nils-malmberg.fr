@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 18 - Décision et action : du score à la décision - Nils Malmberg</title>
+  <title>Module 18 - Apprentissage par renforcement - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,143 +41,174 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 18</div>
-    <h1>Décision et action : du score à la décision</h1>
+    <h1>Apprentissage par renforcement</h1>
   </div>
 
-  <div class="project-content">
-    <p>Un modèle produit un nombre ; une organisation prend une action. Entre les deux se trouve un espace que les cours de machine learning traversent en une phrase — « on seuille à 0,5 » — et où se perd l'essentiel de la valeur des projets. Ce module traite ce chaînon : coûts d'erreur, contraintes de capacité, effet réel d'une action, et optimisation sous contraintes.</p>
+  <div class="project-content course-content">
+    <p>En apprentissage supervisé, on dispose de la bonne réponse pour chaque exemple. En apprentissage par renforcement, on ne dispose que d'un signal de récompense, souvent rare et différé, et les décisions influencent les situations futures. Ce module présente le cadre, les algorithmes qui comptent, et — point important — les raisons pour lesquelles il faut souvent y renoncer.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#utilite">Théorie de la décision et seuil optimal</a></li>
-        <li><a href="#capacite">Décider sous contrainte de capacité</a></li>
-        <li><a href="#uplift">Uplift : agir sur les bonnes personnes</a></li>
-        <li><a href="#bandits">Bandits contextuels</a></li>
-        <li><a href="#stock">Décision sous incertitude : le vendeur de journaux</a></li>
-        <li><a href="#ro">Recherche opérationnelle</a></li>
-        <li><a href="#spo">Prédire puis optimiser : le piège</a></li>
-        <li><a href="#humain">Humain dans la boucle et effets de bord</a></li>
+        <li><a href="#cadre">Le cadre : MDP et récompense</a></li>
+        <li><a href="#valeurs">Fonctions de valeur et équations de Bellman</a></li>
+        <li><a href="#exploration">Exploration et exploitation</a></li>
+        <li><a href="#tabulaire">Méthodes tabulaires : TD, Q-learning, SARSA</a></li>
+        <li><a href="#dqn">Deep RL : DQN</a></li>
+        <li><a href="#pg">Gradient de politique : REINFORCE, A2C, PPO</a></li>
+        <li><a href="#variantes">Model-based, offline RL, RLHF</a></li>
+        <li><a href="#pratique">En pratique, et pourquoi c'est difficile</a></li>
       </ol>
     </div>
 
-    <h2 id="utilite">1. Théorie de la décision et seuil optimal</h2>
-    <p>Décider, c'est choisir l'action qui maximise l'utilité espérée. Pour une décision binaire avec un coût \(C_{FP}\) de fausse alerte et \(C_{FN}\) de non-détection, le seuil optimal sur la probabilité prédite s'écrit :</p>
-    <div style="text-align:center;overflow-x:auto">\[ p^\star = \frac{C_{FP}}{C_{FP}+C_{FN}} \]</div>
-    <p>La formule vaut mieux qu'un long discours : si rater une panne coûte cent fois plus qu'une inspection inutile, le seuil optimal est à 1 % — et non à 50 %. Le seuil par défaut de 0,5 n'est justifié que dans le cas très particulier où les deux erreurs coûtent exactement pareil, ce qui n'arrive presque jamais. La conséquence pratique : <strong>obtenir de l'interlocuteur métier le rapport des coûts</strong> est une étape de modélisation à part entière, et elle n'exige pas des chiffres exacts — un ordre de grandeur suffit à déplacer le seuil de manière décisive.</p>
+    <h2 id="cadre">1. Le cadre : MDP et récompense</h2>
+    <p>Un agent observe un état \(s_t\), choisit une action \(a_t\), reçoit une récompense \(r_{t+1}\) et se retrouve dans un nouvel état \(s_{t+1}\). Le formalisme est le <strong>processus de décision markovien</strong> \((\mathcal{S}, \mathcal{A}, P, R, \gamma)\), dont l'hypothèse centrale est la propriété de Markov : l'état contient toute l'information utile pour prédire la suite — le passé n'apporte rien de plus.</p>
 
-    <div class="code-label">Python — seuil choisi sur le gain, pas sur le F1</div>
-    <div class="code-block"><pre>import numpy as np
+    <p>L'agent maximise le <strong>retour</strong>, somme actualisée des récompenses futures :</p>
+    <div style="text-align:center;overflow-x:auto">\[ G_t = \sum_{k=0}^{\infty}\gamma^k r_{t+k+1}, \qquad \gamma \in [0,1) \]</div>
+    <p>Le facteur \(\gamma\) joue deux rôles : il garantit la convergence de la somme, et il encode l'horizon temporel — \(\gamma = 0{,}99\) donne un horizon effectif d'environ \(1/(1-\gamma) = 100\) pas. C'est un paramètre bien plus structurant qu'il n'y paraît : le régler trop bas produit un agent myope, trop haut rend l'apprentissage instable.</p>
 
-cout_fp, cout_fn = 50.0, 4_000.0      # inspection inutile / panne subie
-p = modele.predict_proba(X_val)[:, 1]
-
-seuils = np.linspace(0.001, 0.5, 500)
-cout = [( (p &gt;= s) &amp; (y_val == 0)).sum() * cout_fp +
-        ((p &lt;  s) &amp; (y_val == 1)).sum() * cout_fn for s in seuils]
-
-s_opt = seuils[int(np.argmin(cout))]
-print(f"seuil optimal = {s_opt:.3f}  (théorique = {cout_fp/(cout_fp+cout_fn):.3f})")</pre></div>
-
-    <div class="warning-block">
-      <strong>Décider avec des probabilités exige qu'elles soient calibrées.</strong> Toute cette arithmétique suppose que « 0,012 » signifie réellement 1,2 % de chances. Un gradient boosting ou un réseau de neurones produisent des scores mal calibrés (modules 4 et 7) : le seuil calculé serait alors faux. Calibrer (Platt, isotonique) sur un jeu dédié <em>avant</em> de raisonner en coûts — et vérifier par un diagramme de fiabilité.
+    <div class="step-block">
+      <h4>Ce qui distingue vraiment le RL du supervisé</h4>
+      <ul>
+        <li><strong>Pas d'étiquette</strong> — seulement un signal évaluatif : « cette action a rapporté 3 », sans indiquer quelle action aurait rapporté davantage.</li>
+        <li><strong>Crédit différé</strong> — la récompense arrive parfois des centaines de pas après le choix qui l'a causée. Savoir à quelle décision l'attribuer est le problème central.</li>
+        <li><strong>Données non i.i.d. et non stationnaires</strong> — l'agent génère lui-même ses données, et cette distribution change à mesure qu'il apprend. Toute l'hypothèse de base de l'apprentissage supervisé tombe.</li>
+        <li><strong>Exploration</strong> — il faut essayer ce qu'on ne connaît pas pour découvrir mieux, au prix de mauvaises performances immédiates.</li>
+      </ul>
     </div>
 
-    <h2 id="capacite">2. Décider sous contrainte de capacité</h2>
-    <p>Dans la réalité, le seuil n'est souvent même pas le bon objet : une équipe de maintenance peut traiter vingt interventions par semaine, un service client rappeler cent clients par jour. La décision devient un problème de <strong>sélection sous budget</strong> — choisir les \(k\) meilleurs, ou maximiser le gain espéré sous contrainte de ressource.</p>
-    <p>Quand chaque action a un coût et un gain variables, c'est un problème de sac à dos : on classe par <em>ratio gain espéré sur coût</em> plutôt que par score brut. Et l'évaluation change de métrique : ni AUC ni F1, mais la <strong>courbe de gain cumulé</strong> (combien de valeur capturée en traitant les \(k\) premiers) et le <em>lift</em> aux rangs qui correspondent à la capacité réelle. Un modèle avec une AUC inférieure peut très bien être meilleur sur les 2 % de cas que l'on traitera effectivement — et c'est cela qu'il faut optimiser.</p>
+    <h2 id="valeurs">2. Fonctions de valeur et équations de Bellman</h2>
+    <p>Une <strong>politique</strong> \(\pi(a\mid s)\) donne la probabilité de choisir \(a\) dans \(s\). On lui associe deux fonctions de valeur :</p>
+    <div style="text-align:center;overflow-x:auto">\[ V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q^\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t=s,\, a_t=a] \]</div>
+    <p>\(V\) évalue un état, \(Q\) évalue un couple état-action — donc \(Q\) permet de <em>choisir</em> directement, sans connaître le modèle de transition. La récursivité du retour donne l'équation de Bellman, et sa version optimale :</p>
+    <div style="text-align:center;overflow-x:auto">\[ Q^\star(s,a) = \mathbb{E}\Big[r + \gamma \max_{a'} Q^\star(s',a')\Big] \]</div>
+    <p>C'est un point fixe d'un opérateur contractant (de facteur \(\gamma\)) : itérer l'opérateur converge vers \(Q^\star\), et la politique optimale s'en déduit par \(\pi^\star(s) = \arg\max_a Q^\star(s,a)\). Tout le RL par valeurs consiste à approcher ce point fixe à partir d'échantillons.</p>
 
-    <h2 id="uplift">3. Uplift : agir sur les bonnes personnes</h2>
-    <p>Voici l'erreur de raisonnement la plus coûteuse du domaine. Un modèle de churn identifie les clients qui vont partir ; on leur envoie une offre de rétention. Mais certains partiront quoi qu'on fasse, d'autres restaient de toute façon, et certains — c'est documenté — <em>partent parce que</em> l'offre leur rappelle qu'ils peuvent partir. Cibler la probabilité d'événement, c'est confondre prédiction et effet d'une action (module 5).</p>
+    <h2 id="exploration">3. Exploration et exploitation</h2>
+    <p>Le dilemme apparaît déjà dans le cas le plus simple, le <em>bandit manchot</em> : plusieurs leviers de récompense moyenne inconnue, et un budget de tirages. Exploiter le meilleur levier connu, c'est risquer de passer à côté d'un meilleur jamais essayé ; explorer, c'est payer des tirages sous-optimaux.</p>
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>ε-greedy          action aléatoire avec probabilité ε, sinon la meilleure connue.
+                  Simple ; on fait décroître ε au fil de l'apprentissage.
+Boltzmann         probabilité ∝ exp(Q/τ) : explore proportionnellement à la qualité.
+UCB               Q(a) + c·√(ln t / N(a)) : bonus d'optimisme pour les actions peu testées.
+                  Même intuition qu'en optimisation bayésienne (module 17).
+Thompson          tirage dans le postérieur sur les récompenses. Très efficace en bandits.
+Bonus intrinsèque  récompense de curiosité (erreur de prédiction, nouveauté de l'état)
+                  pour les environnements à récompense extrêmement rare.</pre></div>
 
-    <p>L'<strong>uplift</strong> (ou effet de traitement individuel) estime la bonne quantité :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \tau(x) = \mathbb{E}\big[Y \mid T=1, X=x\big] - \mathbb{E}\big[Y \mid T=0, X=x\big] \]</div>
-
-    <div class="code-label">les quatre populations</div>
-    <div class="code-block"><pre>                        Réagit si traité       Ne réagit pas si traité
-Réagit si non traité    Causes perdues         SÛRS — ne rien faire, gain nul
-Ne réagit pas si        PERSUADABLES —         À NE PAS DÉRANGER — le traitement
-non traité              la seule cible utile   NUIT : uplift négatif</pre></div>
-
-    <p>Estimer \(\tau\) demande des données expérimentales (un A/B test, module 5) ou des hypothèses causales fortes. Les approches usuelles : <em>T-learner</em> (un modèle par bras, différence des prédictions — simple, bruité), <em>S-learner</em> (un seul modèle avec le traitement comme variable — risque de le sous-pondérer), <em>X-learner</em> (meilleur quand les groupes sont déséquilibrés) et les <strong>forêts causales</strong> (<code>econml</code>, <code>causalml</code>), qui partitionnent l'espace pour maximiser l'hétérogénéité de l'effet. L'évaluation se fait par courbe d'uplift ou coefficient de <strong>Qini</strong> : on ordonne par uplift décroissant et on vérifie que le gain incrémental réel suit.</p>
-
-    <p>Le raisonnement vaut au-delà du marketing : traiter préventivement un équipement, envoyer un technicien, accorder une remise, prioriser un contrôle — dans tous ces cas, la question utile n'est jamais « que va-t-il se passer ? » mais « qu'est-ce que <em>mon action</em> change ? ».</p>
-
-    <h2 id="bandits">4. Bandits contextuels</h2>
-    <p>Quand plusieurs actions sont possibles et que l'on observe le résultat immédiatement, on peut apprendre <em>en agissant</em> plutôt que de figer un test A/B. Un bandit contextuel choisit une action selon le contexte, observe la récompense, et met à jour sa politique — c'est le cas particulier du RL (module 10) sans transition d'état, donc bien plus simple, plus stable et plus sûr.</p>
-
-    <div class="code-label">stratégies et positionnement</div>
-    <div class="code-block"><pre>ε-greedy          trivial à implémenter, exploration non ciblée
-LinUCB            borne supérieure de confiance sur un modèle linéaire du contexte
-Thompson sampling échantillonner dans le postérieur (module 13) : excellent en pratique,
-                  naturellement parallélisable, peu de réglage
-Bandit + coût     intégrer le coût de chaque action dans la récompense
-
-A/B test          quand il faut une MESURE causale propre à communiquer
-Bandit            quand il faut MAXIMISER le résultat pendant l'apprentissage
-                  (moins de trafic gaspillé sur les mauvaises variantes)</pre></div>
-
-    <p>Deux précautions : un bandit crée des données <em>biaisées par sa propre politique</em>, ce qui complique toute analyse a posteriori — il faut journaliser les probabilités de sélection pour permettre une évaluation hors ligne non biaisée (<em>inverse propensity scoring</em>). Et la non-stationnarité doit être traitée explicitement (oubli exponentiel), sinon le bandit reste bloqué sur une action devenue mauvaise.</p>
-
-    <h2 id="stock">5. Décision sous incertitude : le vendeur de journaux</h2>
-    <p>Le problème du <em>newsvendor</em> illustre parfaitement pourquoi une prévision ponctuelle ne suffit pas. On commande une quantité \(q\) avant de connaître la demande \(D\) ; le surstock coûte \(c_o\) par unité, la rupture \(c_u\). La quantité optimale n'est pas la demande moyenne, mais un <strong>quantile</strong> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ q^\star = F_D^{-1}\!\left(\frac{c_u}{c_u + c_o}\right) \]</div>
-    <p>Si une rupture coûte trois fois un surstock, il faut commander le quantile 75 % et non la moyenne. C'est ce qui justifie la prévision probabiliste du module 14 : la distribution complète est l'entrée de la décision, la moyenne n'en est qu'un résumé souvent inadapté. Le même raisonnement gouverne le dimensionnement d'une marge de sécurité, d'une réserve d'énergie, d'un effectif de garde ou d'un stock de pièces de rechange.</p>
-
-    <h2 id="ro">6. Recherche opérationnelle</h2>
-    <p>Beaucoup de décisions industrielles ne sont pas des prédictions mais des <em>allocations sous contraintes</em> : planifier une production, affecter des équipes, optimiser des tournées, choisir un plan de maintenance. Le ML estime des paramètres (durées, demandes, probabilités de panne) ; la recherche opérationnelle décide. Ignorer cette seconde moitié conduit à livrer des prédictions que personne ne sait transformer en planning.</p>
-
-    <div class="code-label">Python — affectation sous contraintes avec OR-Tools</div>
-    <div class="code-block"><pre>from ortools.linear_solver import pywraplp
-
-s = pywraplp.Solver.CreateSolver("SCIP")               # MILP
-
-x = {(i, j): s.BoolVar(f"x_{i}_{j}")                   # équipe i sur intervention j
-     for i in equipes for j in interventions}
-
-for j in interventions:                                # chaque intervention couverte
-    s.Add(sum(x[i, j] for i in equipes) == 1)
-for i in equipes:                                      # capacité hebdomadaire
-    s.Add(sum(duree[j] * x[i, j] for j in interventions) &lt;= capacite[i])
-
-# maximiser le risque évité, estimé par le modèle de survie du module 14
-s.Maximize(sum(risque_evite[j] * x[i, j] for i in equipes for j in interventions))
-
-s.Solve()</pre></div>
-
-    <p>Les outils : <strong>OR-Tools</strong> (Google — solveurs LP/MILP, programmation par contraintes, tournées de véhicules), <strong>PuLP</strong> ou <strong>Pyomo</strong> pour la modélisation, <strong>HiGHS</strong> comme solveur libre performant, Gurobi ou CPLEX en commercial. Ce qu'il faut retenir du fonctionnement : un problème <em>linéaire continu</em> se résout en temps polynomial, l'ajout de variables <em>entières</em> le rend NP-difficile — d'où l'importance de la formulation. Une bonne formulation résout en secondes ce qu'une mauvaise ne résout jamais. Et quand l'exactitude n'est pas nécessaire, les métaheuristiques (recuit simulé, tabou, algorithmes génétiques) donnent de bonnes solutions rapidement.</p>
-
-    <h2 id="spo">7. Prédire puis optimiser : le piège</h2>
-    <p>La démarche standard entraîne le modèle à minimiser une erreur de prédiction, puis optimise la décision à partir des prédictions. Le problème : <strong>ces deux objectifs ne sont pas alignés</strong>. Une erreur de prédiction peut être sans conséquence sur la décision (elle ne change pas le classement des options) ou catastrophique (elle inverse le choix optimal). Minimiser le RMSE traite ces deux erreurs de la même façon.</p>
-    <p>L'<em>apprentissage orienté décision</em> (SPO+, optimisation différentiable) intègre le problème d'optimisation dans l'entraînement, de sorte que le modèle apprenne à bien prédire <em>là où cela change la décision</em>. C'est un domaine encore jeune, mais l'idée est immédiatement exploitable même sans ces méthodes : <strong>évaluer toute chaîne prédiction-décision sur le résultat final</strong> — coût total, risque évité, valeur capturée — et non sur la métrique intermédiaire du modèle. C'est le prolongement exact du principe du module 6 : la métrique doit venir de la décision.</p>
-
-    <h2 id="humain">8. Humain dans la boucle et effets de bord</h2>
+    <h2 id="tabulaire">4. Méthodes tabulaires : TD, Q-learning, SARSA</h2>
+    <p>Quand les états et actions sont peu nombreux, \(Q\) tient dans un tableau. Trois familles pour l'estimer :</p>
     <ul>
-      <li><strong>Déléguer partiellement</strong> — la bonne architecture est souvent à trois zones : décision automatique quand le modèle est confiant et l'enjeu faible, transmission à un humain quand il hésite (les ensembles conformes du module 13 formalisent exactement ce « je ne sais pas trancher »), et procédure de référence quand l'entrée est hors domaine.</li>
-      <li><strong>Mesurer le système, pas le modèle</strong> — ce qui compte est la performance de l'ensemble humain + modèle. Un modèle un peu moins performant mais dont les erreurs sont <em>détectables</em> par l'opérateur produit un meilleur système qu'un modèle opaque légèrement plus précis.</li>
-      <li><strong>Anticiper les boucles de rétroaction</strong> (module 12) — un modèle qui déclenche des inspections ne verra plus jamais les pannes qu'il a évitées : ses futures données d'entraînement sont modifiées par ses propres décisions. Conserver une petite fraction de cas traités <em>aléatoirement</em> (un groupe témoin permanent) est ce qui permet de continuer à mesurer honnêtement.</li>
-      <li><strong>Prévoir le détournement</strong> — dès qu'une décision a des conséquences, les personnes concernées s'adaptent à la règle. Un critère devenu cible cesse d'être un bon critère ; les variables les plus faciles à manipuler doivent être écartées des modèles qui décident.</li>
+      <li><strong>Programmation dynamique</strong> — exacte, mais exige de connaître \(P\) et \(R\). Rarement le cas.</li>
+      <li><strong>Monte-Carlo</strong> — attendre la fin de l'épisode et moyenner les retours observés. Sans biais, mais de forte variance, et inapplicable aux tâches continues.</li>
+      <li><strong>Différences temporelles (TD)</strong> — la grande idée : mettre à jour <em>immédiatement</em> à partir de l'estimation courante de l'état suivant, sans attendre la fin. C'est du <em>bootstrapping</em> : on apprend une estimation à partir d'une autre estimation.</li>
     </ul>
+
+    <div style="text-align:center;overflow-x:auto">\[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\underbrace{r + \gamma \max_{a'}Q(s',a') - Q(s,a)}_{\text{erreur TD}}\Big] \]</div>
+
+    <p>C'est le <strong>Q-learning</strong>. Sa particularité : il apprend la valeur de la politique <em>optimale</em> (à cause du \(\max\)) tout en se comportant selon une politique exploratrice — c'est un algorithme <em>off-policy</em>, ce qui permet de réutiliser des données anciennes ou produites par un autre agent. <strong>SARSA</strong> remplace \(\max_{a'}Q(s',a')\) par \(Q(s',a')\) où \(a'\) est l'action réellement choisie : il apprend la valeur de la politique suivie, exploration comprise (<em>on-policy</em>), ce qui le rend plus prudent près des états dangereux. L'exemple canonique est la falaise : Q-learning longe le bord (trajet optimal) et tombe régulièrement pendant l'apprentissage, SARSA prend un chemin plus sûr.</p>
+
+    <h2 id="dqn">5. Deep RL : DQN</h2>
+    <p>Dès que l'espace d'états devient grand ou continu (des pixels), le tableau est remplacé par un réseau \(Q_\theta(s,a)\). Cette substitution casse les garanties de convergence, et trois mécanismes ont été nécessaires pour stabiliser l'entraînement :</p>
+    <ul>
+      <li><strong>Replay buffer</strong> — stocker les transitions et en tirer des mini-lots au hasard. Cela casse la corrélation temporelle des échantillons et réutilise chaque expérience plusieurs fois (efficacité en données).</li>
+      <li><strong>Réseau cible</strong> — la cible \(r + \gamma\max_{a'}Q_{\theta^-}(s',a')\) est calculée avec une copie figée \(\theta^-\), mise à jour périodiquement. Sans cela, on poursuit une cible qui bouge à chaque pas, et l'entraînement diverge.</li>
+      <li><strong>Double DQN</strong> — l'opérateur \(\max\) surestime systématiquement les valeurs (le maximum d'estimateurs bruités est biaisé vers le haut). On dissocie donc le choix de l'action (réseau courant) et son évaluation (réseau cible).</li>
+    </ul>
+    <p>Autres raffinements utiles : <em>dueling</em> (séparer valeur d'état et avantage de l'action), <em>prioritized replay</em> (rejouer davantage les transitions à forte erreur TD), et <em>n-step returns</em>. DQN et ses variantes ne traitent que les <strong>actions discrètes</strong> — pour un contrôle continu, il faut passer aux méthodes de politique.</p>
+
+    <h2 id="pg">6. Gradient de politique : REINFORCE, A2C, PPO</h2>
+    <p>Plutôt que d'estimer des valeurs pour en déduire une politique, on paramètre directement \(\pi_\theta(a\mid s)\) et on monte le gradient de la performance. Le théorème du gradient de politique donne une forme remarquablement simple :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a\mid s)\, A^{\pi}(s,a)\big] \]</div>
+    <p>La lecture est intuitive : on augmente la probabilité des actions dont l'<strong>avantage</strong> \(A = Q - V\) est positif (elles font mieux que la moyenne de l'état) et on diminue celle des autres. La fonction \(V\) joue ici le rôle de <em>baseline</em> : la soustraire ne change pas l'espérance du gradient mais réduit fortement sa variance — c'est ce qui rend la méthode utilisable.</p>
+
+    <p><strong>REINFORCE</strong> est la version brute (avantage estimé par le retour Monte-Carlo) : correcte mais très bruitée. Les méthodes <strong>acteur-critique</strong> ajoutent un second réseau, le critique, qui estime \(V\) et fournit un avantage à faible variance (A2C, A3C, puis GAE pour un compromis biais-variance réglable).</p>
+
+    <p><strong>PPO</strong> est devenu le défaut pratique. Son idée : réutiliser plusieurs fois un même lot de trajectoires pour faire plusieurs pas de gradient, tout en empêchant la politique de trop s'éloigner de celle qui a produit les données. En notant \(\rho = \pi_\theta(a|s)/\pi_{\text{old}}(a|s)\) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ L^{\text{CLIP}} = \mathbb{E}\Big[\min\big(\rho A,\; \operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,A\big)\Big] \]</div>
+    <p>L'écrêtage annule le gain marginal dès que le rapport sort de la bande \([1-\epsilon, 1+\epsilon]\) (typiquement \(\epsilon = 0{,}2\)) : le pas reste borné, sans le calcul coûteux d'une contrainte de divergence KL comme dans TRPO. C'est simple, robuste, et c'est l'algorithme utilisé pour l'alignement des LLM par retour humain.</p>
+
+    <div class="code-label">panorama des algorithmes</div>
+    <div class="code-block"><pre>Algorithme   Actions      On/Off-policy   Points forts
+────────────────────────────────────────────────────────────────────────────────
+Q-learning   discrètes    off             tabulaire, fondation théorique
+DQN          discrètes    off             pixels, jeux Atari, efficace en données
+REINFORCE    les deux     on              simple, mais forte variance
+A2C / A3C    les deux     on              acteur-critique, bon compromis
+PPO          les deux     on              LE défaut : robuste, peu de réglage
+SAC          continues    off             entropie maximale, très efficace en données :
+                                          le choix pour la robotique et le contrôle
+TD3          continues    off             DDPG corrigé de la surestimation</pre></div>
+
+    <div class="code-label">Python — Gymnasium + Stable-Baselines3</div>
+    <div class="code-block"><pre>import gymnasium as gym
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.evaluation import evaluate_policy
+
+env = make_vec_env("LunarLander-v3", n_envs=8)     # 8 environnements en parallèle
+
+modele = PPO("MlpPolicy", env, learning_rate=3e-4, n_steps=1024,
+             batch_size=256, gamma=0.999, verbose=0, seed=0)
+modele.learn(total_timesteps=1_000_000)
+
+moy, ecart = evaluate_policy(modele, gym.make("LunarLander-v3"), n_eval_episodes=30)
+print(f"récompense moyenne = {moy:.1f} ± {ecart:.1f}")</pre></div>
+
+    <p>Paralléliser les environnements est la première optimisation à faire : le goulot d'étranglement est presque toujours la <em>simulation</em>, pas le réseau. Et l'évaluation doit porter sur plusieurs graines : la variance entre exécutions en RL est notoirement élevée, au point qu'une comparaison sur une seule graine ne veut rien dire.</p>
+
+    <h2 id="variantes">7. Model-based, offline RL, RLHF</h2>
+    <ul>
+      <li><strong>Model-based</strong> — apprendre un modèle de la dynamique \(P(s'\mid s,a)\) et planifier dedans (Dyna, MuZero, MPC). Gain considérable en nombre d'interactions réelles, au prix des erreurs du modèle, que la planification a tendance à exploiter.</li>
+      <li><strong>Offline RL</strong> — apprendre uniquement à partir d'un jeu de données fixe, sans interagir : c'est le seul cadre réaliste en santé, en finance ou en industrie, où l'exploration est interdite. La difficulté est le décalage de distribution : l'agent surestime des actions jamais observées. Les algorithmes dédiés (CQL, IQL) contraignent la politique à rester près des données.</li>
+      <li><strong>RLHF</strong> — l'alignement des LLM : on entraîne un modèle de récompense sur des préférences humaines (« cette réponse est meilleure que celle-là »), puis on optimise le modèle de langage par PPO contre cette récompense, avec une pénalité KL pour ne pas trop s'éloigner du modèle initial. Les variantes plus récentes (DPO, GRPO) court-circuitent en partie cette boucle (module 20).</li>
+      <li><strong>Sim2real</strong> — entraîner en simulation puis transférer au réel. La <em>randomisation de domaine</em> (varier massivement frottements, masses, textures pendant l'entraînement) force une politique robuste au décalage entre simulateur et monde réel.</li>
+    </ul>
+
+    <h2 id="pratique">8. En pratique, et pourquoi c'est difficile</h2>
+    <div class="code-label">où le RL est réellement utilisé</div>
+    <div class="code-block"><pre>Jeux et simulation       Atari, Go, StarCraft — l'environnement est gratuit et parfait
+Robotique / contrôle     locomotion, manipulation, drones (avec sim2real)
+Systèmes opérés          refroidissement de datacenter, gestion d'énergie, trafic réseau
+Recommandation           optimisation d'engagement à long terme (via bandits contextuels)
+Alignement de LLM        RLHF, raisonnement par récompense vérifiable
+Gestion de portefeuille  allocation séquentielle sous contrainte de risque</pre></div>
+
+    <div class="warning-block">
+      <strong>Les difficultés, sans enrobage.</strong><br>
+      • <strong>Efficacité en données catastrophique</strong> — des millions d'interactions pour des tâches qu'un humain apprend en quelques essais. Acceptable en simulation, rédhibitoire sur un système réel.<br>
+      • <strong>Conception de la récompense</strong> — c'est le vrai travail, et le plus périlleux. Un agent optimise <em>exactement</em> ce qu'on mesure : le fameux bateau de course qui tourne en rond pour ramasser des bonus plutôt que de finir la course en est l'illustration canonique. Toute récompense mal spécifiée sera exploitée.<br>
+      • <strong>Instabilité et variance</strong> — deux exécutions du même algorithme avec des graines différentes peuvent donner des résultats opposés. Toujours rapporter plusieurs graines.<br>
+      • <strong>Sensibilité aux hyperparamètres</strong> — bien plus marquée qu'en supervisé, et les intuitions transfèrent mal d'un environnement à l'autre.<br>
+      • <strong>Sécurité</strong> — pendant l'exploration, l'agent fait par construction des choses absurdes. Inacceptable sur un procédé industriel ou un patient.
+    </div>
+
+    <div class="step-block">
+      <h4>La question préalable : ai-je vraiment besoin de RL ?</h4>
+      <p>Le RL se justifie quand la décision est <em>séquentielle</em> et que les actions <em>influencent les états futurs</em>. Si chaque décision est indépendante, un bandit contextuel — bien plus simple, mieux compris, plus sûr — suffit. Si l'on dispose d'exemples de bon comportement, l'imitation (apprentissage supervisé sur des démonstrations) est presque toujours plus rapide et plus stable, quitte à raffiner ensuite. Et si l'environnement est connu et modélisable, la commande optimale classique (MPC, LQR) offre des garanties que le RL n'apporte pas. Une part non négligeable des projets « RL » gagneraient à être l'un de ces trois autres projets.</p>
+    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Le seuil optimal découle du rapport des coûts d'erreur, pas de la convention 0,5 — et suppose des probabilités calibrées.</li>
-        <li>Sous contrainte de capacité, évaluer par courbe de gain cumulé aux rangs réellement traités.</li>
-        <li>Cibler l'uplift, pas la probabilité d'événement : certaines actions nuisent à une partie de la population.</li>
-        <li>Un bandit contextuel apprend en agissant ; journaliser les propensions pour pouvoir évaluer après coup.</li>
-        <li>Une décision sous incertitude se prend sur un quantile, d'où la prévision probabiliste.</li>
-        <li>La moitié des problèmes industriels sont des problèmes d'allocation : la recherche opérationnelle complète le ML.</li>
-        <li>Évaluer la chaîne complète sur la valeur finale, pas le modèle sur sa métrique intermédiaire.</li>
+        <li>MDP, retour actualisé, équations de Bellman : tout part de là.</li>
+        <li>TD apprend d'une estimation à partir d'une autre : c'est ce qui permet d'apprendre en ligne.</li>
+        <li>Q-learning est off-policy (réutilisation des données), SARSA on-policy (plus prudent).</li>
+        <li>DQN tient grâce au replay buffer et au réseau cible ; PPO est le défaut robuste, SAC pour le contrôle continu.</li>
+        <li>La conception de la récompense est le cœur du problème : l'agent exploitera toute faille.</li>
+        <li>Coût en données très élevé, forte variance : vérifier d'abord qu'un bandit ou de l'imitation ne suffisent pas.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m17.html" class="btn btn-secondary">← Module 17 : Apprendre avec peu d'étiquettes</a>
-  <a href="project7-m19.html" class="btn btn-primary">Module 19 : Recherche et recommandation →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">Coûts d'erreur</span><span class="tag">Uplift</span><span class="tag">Bandits</span><span class="tag">Newsvendor</span><span class="tag">MILP</span><span class="tag">OR-Tools</span></div>
+  <div class="course-nav">
+    <a href="project7-m17.html" class="btn btn-secondary">← Module 17 : Processus gaussiens</a>
+    <a href="project7-m19.html" class="btn btn-primary">Module 19 : Simulation et ingénierie →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">MDP</span><span class="tag">Bellman</span><span class="tag">Q-learning</span><span class="tag">DQN</span><span class="tag">PPO</span><span class="tag">Gymnasium</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -198,50 +229,54 @@ s.Solve()</pre></div>
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 18</div>
-    <h1>From scores to decisions</h1>
+    <h1>Reinforcement learning</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Decision theory: the optimal threshold as a ratio of error costs, why 0.5 is almost never right, and why calibrated probabilities are a prerequisite.</li>
-      <li>Deciding under capacity constraints: top-k selection, knapsack-style ranking by gain-to-cost, and cumulative gain curves instead of AUC or F1.</li>
-      <li>Uplift modelling: individual treatment effects, the four populations including the "do not disturb" group, T/S/X-learners and causal forests, and Qini evaluation.</li>
-      <li>Contextual bandits: LinUCB and Thompson sampling, when a bandit beats an A/B test, and logging propensities for unbiased offline evaluation.</li>
-      <li>The newsvendor problem: why an optimal order quantity is a quantile of the predictive distribution, not its mean.</li>
-      <li>Operations research: LP and MILP formulations with OR-Tools, why integrality makes problems NP-hard, and when metaheuristics suffice.</li>
-      <li>The predict-then-optimise trap: prediction error and decision error are not aligned, and every pipeline should be evaluated on final value.</li>
-      <li>Human-in-the-loop architectures, conformal abstention, feedback loops, permanent control groups and gaming of decision rules.</li>
+      <li>The MDP framework, discounted returns, and the four things that genuinely separate RL from supervised learning.</li>
+      <li>Value functions and Bellman equations as a contraction fixed point.</li>
+      <li>Exploration strategies: ε-greedy, Boltzmann, UCB, Thompson sampling, intrinsic curiosity.</li>
+      <li>Temporal-difference learning, Q-learning vs SARSA, and what off-policy vs on-policy changes in behaviour.</li>
+      <li>Deep Q-Networks: why function approximation breaks convergence, and the three fixes (replay buffer, target network, double estimation).</li>
+      <li>Policy gradients: the policy gradient theorem, advantage baselines, actor-critic methods, and PPO's clipped objective.</li>
+      <li>Model-based RL, offline RL and distribution shift, RLHF for language models, and sim2real transfer.</li>
+      <li>Where RL is actually used, an unvarnished list of its difficulties (sample efficiency, reward hacking, variance, safety), and the question to ask before starting: would a contextual bandit, imitation learning or classical optimal control do the job?</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><strong>From scores to decisions</strong></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><strong>Reinforcement learning</strong></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

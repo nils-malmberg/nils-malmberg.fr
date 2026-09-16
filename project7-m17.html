@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 17 - Apprendre avec peu d'étiquettes - Nils Malmberg</title>
+  <title>Module 17 - Processus gaussiens et optimisation bayésienne - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,168 +41,209 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 17</div>
-    <h1>Apprendre avec peu d'étiquettes</h1>
+    <h1>Processus gaussiens et optimisation bayésienne</h1>
   </div>
 
-  <div class="project-content">
-    <p>Dans presque tous les projets industriels, les données brutes abondent et les données <em>étiquetées</em> manquent : annoter demande un expert, un essai destructif, ou simplement du temps que personne n'a. Ce module rassemble les stratégies qui permettent d'apprendre quand même — et surtout, comment décider où dépenser le budget d'annotation.</p>
+  <div class="project-content course-content">
+    <p>Comment optimiser une fonction dont chaque évaluation prend six heures de simulation ou détruit une éprouvette ? La descente de gradient est inutilisable — pas de gradient, et un budget de quelques dizaines d'essais. C'est le domaine de l'optimisation bayésienne, qui construit un modèle probabiliste de la fonction et s'en sert pour décider où essayer ensuite. Pour un profil d'ingénieur, c'est probablement le module dont l'application est la plus immédiate.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#taxonomie">Situer le problème</a></li>
-        <li><a href="#transfert">Transfert : l'option par défaut</a></li>
-        <li><a href="#actif">Apprentissage actif</a></li>
-        <li><a href="#semi">Semi-supervisé</a></li>
-        <li><a href="#auto">Auto-supervisé</a></li>
-        <li><a href="#faible">Supervision faible et étiquettes bruitées</a></li>
-        <li><a href="#synthetique">Données synthétiques et simulation</a></li>
-        <li><a href="#fewshot">Few-shot et zero-shot</a></li>
-        <li><a href="#budget">Décider combien annoter</a></li>
+        <li><a href="#probleme">Le problème : une boîte noire coûteuse</a></li>
+        <li><a href="#gp">Processus gaussiens : distribution sur des fonctions</a></li>
+        <li><a href="#noyaux">Noyaux et hyperparamètres</a></li>
+        <li><a href="#bo">La boucle d'optimisation bayésienne</a></li>
+        <li><a href="#acquisition">Fonctions d'acquisition</a></li>
+        <li><a href="#botorch">BoTorch en pratique</a></li>
+        <li><a href="#extensions">Contraintes, multi-objectif, multi-fidélité</a></li>
+        <li><a href="#usages">Cas d'usage et limites</a></li>
       </ol>
     </div>
 
-    <h2 id="taxonomie">1. Situer le problème</h2>
-    <div class="code-label">quelle stratégie selon ce dont on dispose</div>
-    <div class="code-block"><pre>Situation                                        Stratégie
-─────────────────────────────────────────────────────────────────────────────────
-Un modèle pré-entraîné existe sur un domaine     transfert / fine-tuning (section 2)
-proche
-On PEUT annoter, mais c'est cher                 apprentissage actif (section 3)
-Beaucoup de données non annotées disponibles     semi-supervisé (4), auto-supervisé (5)
-Des règles métier ou des heuristiques existent   supervision faible (section 6)
-Les étiquettes existent mais sont bruitées       apprentissage robuste au bruit (6)
-Un simulateur du phénomène est disponible        données synthétiques, sim2real (7)
-Quelques exemples seulement, et un gros modèle   few-shot / zero-shot (section 8)</pre></div>
-
-    <p>Ces approches se combinent, et l'ordre compte : commencer par le transfert, puis récupérer des représentations auto-supervisées sur les données non annotées, puis annoter activement les cas informatifs. C'est le pipeline qui donne le meilleur résultat par euro dépensé.</p>
-
-    <h2 id="transfert">2. Transfert : l'option par défaut</h2>
-    <p>Réutiliser un modèle pré-entraîné est presque toujours le premier réflexe (modules 8 et 11). Ce qu'il faut savoir pour bien le faire :</p>
+    <h2 id="probleme">1. Le problème : une boîte noire coûteuse</h2>
+    <p>On cherche \(x^\star = \arg\max_{x\in\mathcal{X}} f(x)\) où \(f\) est :</p>
     <ul>
-      <li><strong>Geler puis dégeler</strong> — entraîner d'abord la tête seule, puis affiner les dernières couches avec un taux d'apprentissage 10 à 100 fois plus faible. Affiner tout, tout de suite, détruit les représentations utiles (<em>oubli catastrophique</em>).</li>
-      <li><strong>Extraction de features</strong> — plus radical encore : figer complètement le réseau, extraire les vecteurs de la couche pénultième et entraîner une régression logistique dessus. Avec quelques centaines d'exemples, cela bat souvent un fine-tuning qui surapprend.</li>
-      <li><strong>Distance entre domaines</strong> — le transfert fonctionne d'autant mieux que le domaine source ressemble à la cible. D'ImageNet vers des photographies industrielles, très bien ; vers des images de tomographie ou de microscopie, nettement moins — les statistiques de bas niveau diffèrent. Dans ce cas, un pré-entraînement auto-supervisé sur ses propres images non annotées est supérieur.</li>
-      <li><strong>Adaptation de domaine</strong> — cas où l'on a des étiquettes sur un domaine source et aucune sur le domaine cible. On y aligne les distributions de représentations (CORAL, DANN) ou on recalibre simplement les statistiques de normalisation sur les données cibles, ce qui est souvent étonnamment efficace.</li>
+      <li><strong>coûteuse</strong> — une évaluation demande des heures de calcul, un essai physique, ou une campagne d'entraînement ;</li>
+      <li><strong>opaque</strong> — pas d'expression analytique, donc pas de gradient exploitable ;</li>
+      <li><strong>possiblement bruitée</strong> — deux mesures au même point diffèrent.</li>
     </ul>
+    <p>Le budget se compte en dizaines d'évaluations, pas en millions. Une recherche aléatoire gaspille ; une descente de gradient numérique dépenserait tout son budget à estimer une seule direction. La stratégie gagnante consiste à <em>modéliser</em> \(f\) à partir des points déjà évalués, puis à choisir le prochain point en exploitant ce modèle. Ce modèle de substitution s'appelle un <em>surrogate</em>, et le choix naturel est un processus gaussien parce qu'il fournit, en plus d'une prédiction, une <strong>incertitude</strong> — exactement l'information nécessaire pour décider où explorer.</p>
 
-    <h2 id="actif">3. Apprentissage actif</h2>
-    <p>Principe : plutôt que d'annoter au hasard, laisser le modèle désigner les exemples dont l'annotation lui apprendrait le plus. La boucle est identique à celle de l'optimisation bayésienne (module 9) — un critère d'acquisition, une évaluation coûteuse, une mise à jour.</p>
+    <h2 id="gp">2. Processus gaussiens : distribution sur des fonctions</h2>
+    <p>Un processus gaussien est une loi de probabilité <em>sur des fonctions</em> : toute collection finie de valeurs \(\big(f(x_1),\dots,f(x_n)\big)\) suit une loi normale multivariée. Il est entièrement déterminé par une fonction moyenne (souvent prise nulle après centrage) et une fonction de covariance, le <strong>noyau</strong> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ f \sim \mathcal{GP}\big(m(x),\, k(x,x')\big) \]</div>
 
-    <div class="code-label">critères de sélection</div>
-    <div class="code-block"><pre>Moindre confiance      1 - max p(y|x) : les cas où le modèle hésite le plus
-Marge                  écart entre les deux meilleures classes. Souvent le meilleur
-                       critère simple en classification multiclasse.
-Entropie               incertitude globale de la distribution prédite
-Désaccord de comité    plusieurs modèles votent ; on annote là où ils divergent.
-(query-by-committee)   Très bon avec un ensemble profond (module 13).
-Diversité / core-set   couvrir l'espace des représentations plutôt que se concentrer
-                       sur une seule zone ambiguë
-Incertitude épistémique cibler ce que le modèle IGNORE plutôt que ce qui est
-                       intrinsèquement bruité — la distinction du module 13 est ici
-                       décisive : annoter du bruit aléatoire n'apporte rien.
-Espérance de gain      critère théoriquement optimal, coûteux à calculer
-d'information</pre></div>
+    <p>L'intuition est celle de l'interpolation avec mémoire de la confiance : le noyau encode l'idée que deux points proches ont des valeurs proches. Avant toute observation, le GP est une nuée de fonctions plausibles ; chaque observation élimine celles qui ne passent pas par le point mesuré, et l'incertitude se resserre localement.</p>
 
-    <div class="code-label">Python — une boucle d'annotation par lots</div>
+    <p>Conditionner une loi normale par une partie de ses coordonnées donne encore une loi normale, dont moyenne et covariance sont explicites. Avec \(K = k(X,X) + \sigma_n^2 I\) et \(k_* = k(X,x_*)\) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mu_*(x_*) = k_*^\top K^{-1} y, \qquad \sigma_*^2(x_*) = k(x_*,x_*) - k_*^\top K^{-1} k_* \]</div>
+
+    <p>Deux lectures importantes. D'abord, la moyenne prédictive est une <em>combinaison linéaire des observations</em> pondérée par la similarité — c'est exactement une interpolation par fonctions de base radiales (le sujet de mon <a href="project5.html">projet mdisd</a>), mais assortie d'une variance. Ensuite, la variance prédictive <strong>ne dépend pas des valeurs observées</strong>, seulement de la position des points : l'incertitude est grande loin des données et petite près d'elles, ce qui est la propriété dont l'optimisation bayésienne a besoin.</p>
+
+    <div class="warning-block">
+      <strong>Sur l'implémentation.</strong> On n'inverse jamais \(K\) : on factorise par Cholesky \(K = LL^\top\) puis on résout (module 7). Le terme \(\sigma_n^2 I\) n'est pas seulement le bruit de mesure — c'est aussi ce qui rend \(K\) définie positive numériquement. Sans un <em>jitter</em> minimal (typiquement \(10^{-6}\)), la factorisation échoue dès que deux points d'apprentissage sont proches.
+    </div>
+
+    <h2 id="noyaux">3. Noyaux et hyperparamètres</h2>
+    <div class="code-label">les noyaux usuels</div>
+    <div class="code-block"><pre>RBF / gaussien      k = σ²·exp(-‖x-x'‖²/2ℓ²)      fonctions infiniment dérivables :
+                                                   très (souvent trop) lisse.
+Matérn ν=5/2        polynôme·exp(-√5 r/ℓ)          deux fois dérivable. LE DÉFAUT en
+                                                   optimisation bayésienne : réaliste
+                                                   pour un système physique.
+Matérn ν=3/2                                       une fois dérivable : plus rugueux.
+Périodique          exp(-2sin²(π r/p)/ℓ²)          saisonnalité connue.
+Linéaire            x·x'                           tendance affine.
+Blanc               σ²·δ(x,x')                     bruit d'observation.
+Somme / produit     k₁+k₂, k₁·k₂                   combiner : tendance + saisonnalité + bruit.</pre></div>
+
+    <p>La <strong>longueur caractéristique</strong> \(\ell\) est l'hyperparamètre décisif : elle dit à quelle distance deux points cessent de s'informer mutuellement. Petite, le GP devient nerveux et l'incertitude explose entre les points ; grande, il lisse tout. Avec une longueur par dimension (<em>Automatic Relevance Determination</em>), le modèle apprend lui-même quelles variables comptent — une grande longueur signifie que la sortie est insensible à cette entrée, ce qui constitue au passage une analyse de sensibilité gratuite.</p>
+
+    <p>Les hyperparamètres (\(\ell\), \(\sigma^2\), \(\sigma_n^2\)) s'ajustent en maximisant la <strong>vraisemblance marginale</strong> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \log p(y\mid X,\theta) = -\tfrac{1}{2}y^\top K^{-1}y \;-\; \tfrac{1}{2}\log|K| \;-\; \tfrac{n}{2}\log 2\pi \]</div>
+    <p>Le premier terme récompense l'ajustement aux données, le second pénalise la complexité du modèle (une matrice de covariance « permissive » a un grand déterminant). Le rasoir d'Occam est ici <em>automatique</em>, sans validation croisée — c'est un des grands attraits du cadre bayésien.</p>
+
+    <div class="code-label">Python — régression GP avec scikit-learn</div>
     <div class="code-block"><pre>import numpy as np
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel
 
-etiquetes = np.zeros(len(X), dtype=bool)
-etiquetes[rng.choice(len(X), 100, replace=False)] = True    # amorçage ALÉATOIRE
+noyau = ConstantKernel(1.0) * Matern(length_scale=np.ones(3), nu=2.5) \
+        + WhiteKernel(noise_level=1e-3)         # ARD : une longueur par dimension
 
-for tour in range(10):
-    modele.fit(X[etiquetes], y[etiquetes])
+gp = GaussianProcessRegressor(kernel=noyau, normalize_y=True, n_restarts_optimizer=10)
+gp.fit(X, y)                                    # optimise les hyperparamètres par MLE
 
-    P = modele.predict_proba(X[~etiquetes])
-    tries = np.sort(P, axis=1)
-    marge = tries[:, -1] - tries[:, -2]                     # petite marge = ambigu
+mu, sigma = gp.predict(X_test, return_std=True)
+print(gp.kernel_)                               # longueurs apprises = sensibilité par variable</pre></div>
 
-    # diversité : on répartit le lot entre plusieurs groupes de l'espace des features
-    candidats = np.where(~etiquetes)[0][np.argsort(marge)[:500]]
-    lot = selection_diversifiee(candidats, k=50)            # k-means sur les embeddings
+    <p><strong>Le coût</strong> est la limite structurelle : la factorisation de \(K\) est en \(O(n^3)\) et la mémoire en \(O(n^2)\). Au-delà de quelques milliers de points, il faut des approximations creuses (points inducteurs, <em>variational GP</em> dans GPyTorch). Pour l'optimisation bayésienne, où \(n\) dépasse rarement quelques centaines, ce n'est pas un obstacle.</p>
 
-    y[lot] = annoter(X[lot])                                # l'étape coûteuse
-    etiquetes[lot] = True</pre></div>
+    <h2 id="bo">4. La boucle d'optimisation bayésienne</h2>
+    <div class="code-label">l'algorithme</div>
+    <div class="code-block"><pre>1. Évaluer f sur un plan initial (Latin Hypercube ou Sobol, 5 à 10 points par dimension)
+2. Répéter jusqu'à épuisement du budget :
+      a. ajuster le GP sur toutes les observations
+      b. maximiser la fonction d'acquisition α(x) sur le domaine
+         (α est peu coûteuse : on peut y lancer un optimiseur classique multi-départs)
+      c. évaluer f au point trouvé — LA seule opération coûteuse
+      d. ajouter (x, y) aux observations
+3. Renvoyer le meilleur point observé</pre></div>
+
+    <p>Le déplacement conceptuel est là : on remplace l'optimisation d'une fonction coûteuse par une suite d'optimisations d'une fonction bon marché (l'acquisition, calculée à partir du GP). Consommer quelques secondes de calcul pour choisir intelligemment un point vaut largement le coup quand ce point coûte six heures de simulation.</p>
+
+    <h2 id="acquisition">5. Fonctions d'acquisition</h2>
+    <p>L'acquisition traduit le compromis <strong>exploitation</strong> (aller là où le modèle prédit une bonne valeur) / <strong>exploration</strong> (aller là où il ne sait rien). En notant \(f^+\) le meilleur résultat observé, \(Z = (\mu(x)-f^+-\xi)/\sigma(x)\), \(\Phi\) et \(\varphi\) les fonctions de répartition et de densité normales :</p>
+
+    <div style="text-align:center;overflow-x:auto">\[ \text{EI}(x) = \big(\mu(x)-f^+-\xi\big)\Phi(Z) + \sigma(x)\,\varphi(Z) \]</div>
+
+    <p>L'<strong>amélioration espérée</strong> (EI) est l'espérance du gain par rapport au meilleur point connu. Sa structure est parlante : le premier terme récompense une moyenne élevée, le second une forte incertitude. C'est le choix par défaut — pas de paramètre à régler (\(\xi\) vaut typiquement 0,01), et un bon équilibre empirique.</p>
+
+    <div class="code-label">les alternatives</div>
+    <div class="code-block"><pre>UCB    μ(x) + β·σ(x)        exploration réglable explicitement par β. Garanties théoriques
+                            de regret (GP-UCB). β ≈ 2 en pratique.
+PI     P(f(x) &gt; f⁺)         probabilité d'amélioration : trop exploitante, converge
+                            souvent vers un optimum local.
+Thompson  tirer une fonction du postérieur et l'optimiser. Naturellement parallélisable :
+          k tirages donnent k points distincts à évaluer en batch.
+Entropy search  maximise l'information gagnée SUR LA POSITION de l'optimum plutôt que sur
+                la valeur. Plus coûteux, souvent plus efficace en nombre d'évaluations.
+Knowledge gradient  anticipe le gain sur la meilleure valeur atteignable après l'évaluation.</pre></div>
+
+    <h2 id="botorch">6. BoTorch en pratique</h2>
+    <p><a href="https://botorch.org" target="_blank">BoTorch</a> (Meta) est construit sur PyTorch et GPyTorch. Son atout : les acquisitions y sont <em>différentiables</em> et estimées par Monte-Carlo, ce qui permet de les maximiser par gradient et d'en construire des variantes (batch, contraintes, multi-objectif) sans dériver de nouvelles formules analytiques. <strong>Ax</strong> est la surcouche qui gère la campagne complète.</p>
+
+    <div class="code-label">Python — une boucle complète</div>
+    <div class="code-block"><pre>import torch
+from botorch.models import SingleTaskGP
+from botorch.fit import fit_gpytorch_mll
+from botorch.acquisition import qLogExpectedImprovement
+from botorch.optim import optimize_acqf
+from botorch.utils.sampling import draw_sobol_samples
+from gpytorch.mlls import ExactMarginalLogLikelihood
+
+bornes = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=torch.double)
+
+X = draw_sobol_samples(bounds=bornes, n=10, q=1).squeeze(1)   # plan initial
+Y = simulation_couteuse(X).unsqueeze(-1)                      # à maximiser
+
+for iteration in range(40):
+    gp  = SingleTaskGP(X, Y)                       # normalisation gérée en interne
+    mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+    fit_gpytorch_mll(mll)                          # hyperparamètres par vraisemblance
+
+    acq = qLogExpectedImprovement(model=gp, best_f=Y.max())
+    candidat, _ = optimize_acqf(
+        acq, bounds=bornes,
+        q=4,                                       # 4 points en parallèle : batch BO
+        num_restarts=20, raw_samples=512,
+    )
+
+    X = torch.cat([X, candidat])
+    Y = torch.cat([Y, simulation_couteuse(candidat).unsqueeze(-1)])
+
+print("meilleur point :", X[Y.argmax()], "valeur :", Y.max().item())</pre></div>
+
+    <p>Le paramètre <code>q=4</code> illustre un cas fréquent en ingénierie : si quatre simulations peuvent tourner en parallèle sur un cluster, on veut quatre points <em>complémentaires</em>, pas quatre fois le même. Les acquisitions « q » de BoTorch traitent cela correctement, en pénalisant la redondance à l'intérieur du lot.</p>
+
+    <h2 id="extensions">7. Contraintes, multi-objectif, multi-fidélité</h2>
+    <ul>
+      <li><strong>Contraintes coûteuses</strong> — quand la faisabilité elle-même doit être simulée (une contrainte mécanique, une température maximale), on modélise chaque contrainte par son propre GP et on pondère l'acquisition par la probabilité de faisabilité.</li>
+      <li><strong>Multi-objectif</strong> — rendement <em>et</em> coût, précision <em>et</em> latence. On ne cherche plus un optimum mais un <strong>front de Pareto</strong>. L'acquisition de référence est qEHVI (<em>expected hypervolume improvement</em>), qui mesure le gain de volume dominé par le front.</li>
+      <li><strong>Espaces mixtes</strong> — variables continues, entières et catégorielles mélangées (un choix de matériau, un nombre de couches). Traitées par des noyaux dédiés ou par relaxation continue.</li>
+      <li><strong>Multi-fidélité</strong> — souvent le gain le plus spectaculaire : on dispose d'un simulateur grossier rapide et d'un simulateur fin coûteux. Un GP multi-tâche apprend la corrélation entre les deux niveaux et n'appelle le coûteux que lorsque c'est décisif. Le même principe s'applique au réglage d'hyperparamètres, où « peu d'époques » est une fidélité basse — c'est l'idée de Hyperband, croisée avec la modélisation bayésienne dans BOHB.</li>
+    </ul>
+
+    <div class="code-label">comparaison des stratégies de réglage</div>
+    <div class="code-block"><pre>Méthode              Évaluations nécessaires   Parallélisme   Quand l'utiliser
+──────────────────────────────────────────────────────────────────────────────────
+Grid search          très nombreuses           parfait        2-3 paramètres, jamais au-delà
+Random search        nombreuses                parfait        baseline honnête, très robuste
+Hyperband / ASHA     moyennes                  bon            entraînements interruptibles
+TPE (Optuna)         peu                       bon            défaut pratique en ML
+GP + EI (BoTorch)    très peu                  bon (batch)    évaluations RÉELLEMENT coûteuses,
+                                                              dimension modérée (&lt; 20)</pre></div>
+
+    <p>Un repère honnête : en dessous de 20 ou 30 évaluations disponibles et en dimension modérée, l'optimisation bayésienne par GP domine nettement. Pour régler les hyperparamètres d'un gradient boosting qui s'entraîne en dix secondes, Optuna (TPE) est plus simple et suffisant. Et la recherche aléatoire reste une baseline étonnamment solide, qu'il faut toujours inclure dans la comparaison.</p>
+
+    <h2 id="usages">8. Cas d'usage et limites</h2>
+    <div class="code-label">où c'est réellement utile</div>
+    <div class="code-block"><pre>Plans d'expériences      choisir les essais physiques suivants (chimie, matériaux, procédés)
+Calibration de modèle    identifier les paramètres d'un modèle physique à partir de mesures
+Conception assistée      optimiser une géométrie évaluée par CFD ou éléments finis
+Réglage coûteux          hyperparamètres d'un gros réseau (des heures par entraînement)
+Contrôle / robotique     réglage de contrôleurs sur système réel, où chaque essai a un coût
+A/B testing adaptatif    allocation séquentielle, à la frontière des bandits</pre></div>
 
     <div class="warning-block">
-      <strong>Trois pièges de l'apprentissage actif.</strong> D'abord, le jeu annoté devient <em>non représentatif</em> : il est concentré près des frontières de décision. Il ne peut donc plus servir à estimer la performance — il faut conserver un jeu de test tiré <strong>aléatoirement</strong> et intouchable. Ensuite, sélectionner un lot par pure incertitude renvoie cinquante exemples quasi identiques : l'ajout d'un critère de diversité n'est pas optionnel. Enfin, le démarrage à froid : avec un modèle initial mauvais, ses scores d'incertitude n'ont aucun sens — les premières centaines d'annotations doivent être tirées au hasard.
+      <strong>Les limites, sans détour.</strong><br>
+      • <strong>Dimension</strong> — au-delà de 20 à 30 variables, le GP peine : le volume à explorer croît exponentiellement et l'incertitude ne se réduit plus nulle part. Remèdes : sous-espaces aléatoires (ALEBO, TuRBO), hypothèses d'additivité, réduction préalable.<br>
+      • <strong>Coût du surrogate</strong> — \(O(n^3)\) : au-delà de quelques milliers d'évaluations, l'ajustement du GP devient lui-même coûteux.<br>
+      • <strong>Hypothèse de régularité</strong> — le noyau suppose une certaine continuité. Sur une fonction discontinue ou fractale, le modèle est faux, donc les décisions le sont aussi.<br>
+      • <strong>Bruit hétéroscédastique</strong> — un bruit dont l'amplitude varie selon \(x\) demande un modèle dédié ; sinon le GP le confond avec du signal.<br>
+      • <strong>Sensibilité au noyau</strong> — c'est le vrai choix de modélisation. Un RBF sur un phénomène rugueux produit des prédictions trop lisses et une incertitude sous-estimée. Matérn 5/2 est le défaut raisonnable.
     </div>
-
-    <h2 id="semi">4. Semi-supervisé</h2>
-    <p>On exploite les données non étiquetées pour contraindre le modèle, en s'appuyant sur deux hypothèses : les points d'un même groupe dense partagent probablement une étiquette (<em>hypothèse de cluster</em>), et la frontière de décision passe dans les zones de faible densité.</p>
-    <ul>
-      <li><strong>Pseudo-étiquetage</strong> — le modèle étiquette lui-même les cas où il est très confiant, et se réentraîne dessus. Simple et souvent efficace, mais il <em>amplifie ses propres erreurs</em> : indispensable de fixer un seuil de confiance élevé, de recalibrer les probabilités (module 4) et de vérifier la performance à chaque tour.</li>
-      <li><strong>Régularisation par cohérence</strong> — exiger que deux versions augmentées de la même donnée reçoivent la même prédiction. C'est l'idée de <strong>FixMatch</strong> : une augmentation faible produit la pseudo-étiquette, une augmentation forte doit la reproduire. L'une des méthodes les plus efficaces en vision avec très peu d'étiquettes.</li>
-      <li><strong>Propagation sur graphe</strong> — construire un graphe de voisinage (module 15) et diffuser les étiquettes le long des arêtes.</li>
-    </ul>
-    <p>Une mise en garde honnête : le semi-supervisé peut <em>dégrader</em> la performance si les hypothèses ne tiennent pas — classes qui se chevauchent fortement, ou données non étiquetées issues d'une distribution différente (des images d'un autre capteur, par exemple). Il faut donc toujours le comparer à la baseline purement supervisée sur le même jeu de test.</p>
-
-    <h2 id="auto">5. Auto-supervisé</h2>
-    <p>Ici, on fabrique une tâche à partir des données elles-mêmes, sans aucune étiquette humaine, uniquement pour apprendre de bonnes représentations — qu'un petit modèle supervisé exploitera ensuite.</p>
-    <ul>
-      <li><strong>Contrastif</strong> (SimCLR, MoCo) — rapprocher deux vues augmentées d'une même donnée, éloigner celles de données différentes. Le choix des augmentations <em>définit</em> les invariances apprises : c'est la décision de conception principale.</li>
-      <li><strong>Masquage</strong> (BERT pour le texte, MAE pour l'image) — cacher une partie de l'entrée et la reconstruire. Plus stable que le contrastif, sans besoin de paires négatives.</li>
-      <li><strong>Prédiction de contexte</strong> — prédire la suite d'un signal, l'ordre de fragments, la rotation appliquée.</li>
-    </ul>
-    <p>C'est l'approche à privilégier quand on possède beaucoup de données brutes spécifiques (des millions de spectres, d'images de production, de journaux machine) et peu d'annotations : un pré-entraînement sur <em>ses propres</em> données bat généralement un transfert depuis un domaine éloigné.</p>
-
-    <h2 id="faible">6. Supervision faible et étiquettes bruitées</h2>
-    <p><strong>Supervision faible</strong> : plutôt que d'annoter un par un, on écrit des <em>fonctions d'étiquetage</em> — des règles, des expressions régulières, des seuils métier, un modèle existant — chacune imprécise et couvrant partiellement les données. Un modèle génératif (approche Snorkel) estime alors la fiabilité de chaque règle à partir de leurs accords et désaccords, et produit des étiquettes probabilistes pour tout le corpus. Trois experts qui écrivent dix règles en une journée produisent souvent l'équivalent de plusieurs semaines d'annotation manuelle.</p>
-
-    <p><strong>Étiquettes bruitées</strong> : elles sont la norme, pas l'exception. Quelques défenses efficaces : privilégier les pertes robustes (MAE, Huber, perte symétrique) plutôt que l'entropie croisée pure, qui sur-pénalise les exemples mal étiquetés ; utiliser le <em>label smoothing</em> ; entraîner en priorité sur les exemples de faible perte (<em>co-teaching</em>) ; et surtout <strong>détecter les erreurs d'annotation</strong> — un modèle entraîné en validation croisée et très confiant en désaccord avec l'étiquette signale un cas à re-vérifier (<code>cleanlab</code>). Corriger 2 % d'étiquettes fausses rapporte souvent davantage que tout le réglage d'hyperparamètres.</p>
-
-    <h2 id="synthetique">7. Données synthétiques et simulation</h2>
-    <p>Quand un simulateur du phénomène existe — et c'est fréquent en ingénierie (module 16) — il devient une source illimitée de données étiquetées, puisque la vérité terrain est connue par construction. Le problème est le <strong>fossé simulation-réalité</strong> : un modèle entraîné sur des images de synthèse échoue sur des images réelles à cause de différences subtiles de texture, de bruit et d'éclairage.</p>
-    <ul>
-      <li><strong>Randomisation de domaine</strong> — faire varier massivement et exagérément les paramètres non essentiels du simulateur (textures, éclairages, bruits, frottements). Le réel devient alors « un cas parmi d'autres » du domaine d'entraînement. C'est la technique qui a permis les transferts sim2real les plus convaincants en robotique (module 10).</li>
-      <li><strong>Mélange et ajustement</strong> — pré-entraîner sur le synthétique, affiner sur un petit jeu réel : très efficace, et c'est souvent tout ce dont on a besoin.</li>
-      <li><strong>Génération par modèle</strong> — VAE, GAN, modèles de diffusion, ou LLM pour du texte. Utile pour équilibrer des classes rares, mais le modèle génératif n'invente rien : il recombine ce qu'il a vu. Entraîner massivement sur des données générées par un modèle entraîne un appauvrissement progressif de la diversité.</li>
-      <li><strong>Confidentialité</strong> — les données synthétiques sont parfois présentées comme une solution au partage de données personnelles. À manier avec prudence : sans garantie formelle (confidentialité différentielle, module 20), un générateur peut mémoriser et restituer des enregistrements réels.</li>
-    </ul>
-
-    <div class="warning-block">
-      <strong>Évaluer, toujours, sur des données réelles.</strong> Un modèle entraîné sur du synthétique et évalué sur du synthétique affiche des scores excellents et sans signification. Le jeu de test doit provenir du monde réel, dans les conditions d'exploitation visées — c'est la seule mesure qui compte.
-    </div>
-
-    <h2 id="fewshot">8. Few-shot et zero-shot</h2>
-    <p>Les grands modèles pré-entraînés ont déplacé la frontière : un LLM (module 11) classe correctement du texte avec trois exemples dans son prompt, CLIP (module 15) reconnaît des catégories décrites en langage naturel sans aucun exemple. Pour un prototype ou une tâche à faible volume, c'est souvent la solution la plus rapide, et elle permet surtout de <em>tester la valeur du projet</em> avant d'investir dans l'annotation.</p>
-    <p>Trois réserves : le coût par prédiction reste élevé (un appel de modèle par exemple, contre quelques microsecondes pour une régression logistique) ; la performance plafonne en dessous de ce qu'atteint un petit modèle spécialisé bien entraîné dès que le domaine est technique ; et la dépendance à un fournisseur externe pose des questions de confidentialité et de reproductibilité. La trajectoire raisonnable : démarrer en zero-shot, utiliser le grand modèle pour <em>pré-annoter</em> (en faisant valider par un expert), puis distiller le tout dans un petit modèle maison qui sera dix mille fois moins cher à l'inférence.</p>
-
-    <h2 id="budget">9. Décider combien annoter</h2>
-    <p>La question la plus utile du module se pose en euros : faut-il annoter mille exemples de plus, ou changer de modèle ? La <strong>courbe d'apprentissage</strong> y répond empiriquement — on entraîne sur 10 %, 25 %, 50 %, 100 % des étiquettes disponibles et on extrapole.</p>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.model_selection import learning_curve
-
-tailles, score_train, score_val = learning_curve(
-    modele, X, y, train_sizes=np.linspace(0.1, 1.0, 8),
-    cv=5, scoring="average_precision", n_jobs=-1)
-
-# la performance suit typiquement une loi de puissance : erreur ≈ a·n^(-b) + c
-# l'ajuster permet de PRÉDIRE le gain des 1000 prochaines annotations</pre></div>
-
-    <p>La lecture décide de la suite : si la courbe de validation monte encore nettement, annoter davantage est le meilleur investissement ; si elle a plafonné loin du niveau souhaité, le problème est ailleurs — features insuffisantes, étiquettes bruitées, ou tâche intrinsèquement difficile — et mille annotations de plus ne changeront rien. C'est le même raisonnement que le diagnostic biais-variance du module 7, mais exprimé en budget.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Ordre d'attaque : transfert, puis auto-supervisé sur ses propres données brutes, puis annotation active.</li>
-        <li>L'apprentissage actif cible l'incertitude <em>épistémique</em>, exige de la diversité dans les lots, et impose de garder un test tiré au hasard.</li>
-        <li>Le semi-supervisé aide quand ses hypothèses tiennent — à vérifier contre la baseline supervisée.</li>
-        <li>Des règles métier (supervision faible) valent souvent des semaines d'annotation manuelle.</li>
-        <li>Nettoyer 2 % d'étiquettes fausses rapporte plus que tout le réglage d'hyperparamètres.</li>
-        <li>Le synthétique s'évalue sur du réel, sans exception ; la randomisation de domaine réduit le fossé sim2real.</li>
-        <li>Le zero-shot sert à valider la valeur du projet, puis à pré-annoter, puis à distiller.</li>
-        <li>La courbe d'apprentissage transforme « faut-il annoter plus ? » en décision chiffrée.</li>
+        <li>Un GP est une loi sur des fonctions : il fournit une prédiction <em>et</em> une incertitude calibrée, ce que ne font ni les arbres ni les réseaux.</li>
+        <li>Le noyau encode l'hypothèse de régularité ; Matérn 5/2 avec ARD est le défaut ; la vraisemblance marginale règle les hyperparamètres avec une pénalité de complexité intégrée.</li>
+        <li>L'optimisation bayésienne remplace une fonction coûteuse par une suite d'optimisations bon marché de l'acquisition.</li>
+        <li>EI par défaut, UCB si l'on veut piloter l'exploration explicitement, Thompson ou acquisitions « q » pour le parallèle.</li>
+        <li>Le domaine d'excellence : évaluations réellement coûteuses, dimension modérée, budget de quelques dizaines de points. Ailleurs, random search ou TPE suffisent.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m16.html" class="btn btn-secondary">← Module 16 : ML pour la simulation</a>
-  <a href="project7-m18.html" class="btn btn-primary">Module 18 : Du score à la décision →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">Active learning</span><span class="tag">Semi-supervisé</span><span class="tag">Auto-supervisé</span><span class="tag">Snorkel</span><span class="tag">Sim2real</span><span class="tag">Few-shot</span></div>
+  <div class="course-nav">
+    <a href="project7-m16.html" class="btn btn-secondary">← Module 16 : Données non tabulaires</a>
+    <a href="project7-m18.html" class="btn btn-primary">Module 18 : Renforcement →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Gaussian Process</span><span class="tag">Noyaux</span><span class="tag">Bayesian Optimization</span><span class="tag">BoTorch</span><span class="tag">DoE</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -223,51 +264,54 @@ tailles, score_train, score_val = learning_curve(
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 17</div>
-    <h1>Learning with few labels</h1>
+    <h1>Gaussian processes and Bayesian optimisation</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>A decision table mapping what you have (a pre-trained model, unlabelled data, business rules, a simulator, noisy labels) to the strategy that fits.</li>
-      <li>Transfer learning done properly: freeze-then-unfreeze, feature extraction for very small datasets, domain distance, and unsupervised domain adaptation.</li>
-      <li>Active learning: uncertainty, margin, entropy, committee disagreement, core-set diversity and epistemic targeting — with the three traps (non-representative labelled set, redundant batches, cold start).</li>
-      <li>Semi-supervised learning: pseudo-labelling, consistency regularisation (FixMatch), graph propagation, and the conditions under which it helps rather than hurts.</li>
-      <li>Self-supervised pre-training: contrastive and masked objectives, and why pre-training on your own raw data beats transfer from a distant domain.</li>
-      <li>Weak supervision with labelling functions (Snorkel), and learning with noisy labels — including finding mislabelled examples, which usually pays more than hyperparameter tuning.</li>
-      <li>Synthetic data and simulation: domain randomisation for sim2real, mixing and fine-tuning, generative data and its diversity collapse, privacy caveats — and the rule that evaluation must always be on real data.</li>
-      <li>Few-shot and zero-shot with foundation models, and the sensible trajectory: validate, pre-annotate, then distil.</li>
-      <li>Learning curves as a budgeting tool: turning "should we label more?" into a quantified decision.</li>
+      <li>The expensive black-box optimisation problem, and why gradient methods do not apply.</li>
+      <li>Gaussian processes as distributions over functions: the posterior mean and variance derived from conditioning, why the predictive variance ignores observed values, and the Cholesky-based implementation.</li>
+      <li>Kernels (RBF, Matérn, periodic, composite), length scales and ARD as free sensitivity analysis, and hyperparameter fitting by marginal likelihood with its built-in Occam penalty.</li>
+      <li>The Bayesian optimisation loop: replacing one expensive optimisation with many cheap ones.</li>
+      <li>Acquisition functions: expected improvement derived and explained, UCB, probability of improvement, Thompson sampling, entropy search and knowledge gradient.</li>
+      <li>A complete BoTorch loop, including batch acquisition for parallel simulations.</li>
+      <li>Extensions: expensive constraints, multi-objective optimisation and Pareto fronts (qEHVI), mixed spaces, and multi-fidelity modelling.</li>
+      <li>A comparison of tuning strategies (grid, random, Hyperband, TPE, GP-based) and an honest account of where Bayesian optimisation breaks down.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><strong>Learning with few labels</strong></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><strong>Gaussian processes and Bayesian optimisation</strong></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

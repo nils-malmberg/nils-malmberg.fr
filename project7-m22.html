@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 22 - Théorie de l'apprentissage : pourquoi ça généralise - Nils Malmberg</title>
+  <title>Module 22 - Décision et action : du score à la décision - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,112 +41,145 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 22</div>
-    <h1>Théorie de l'apprentissage : pourquoi ça généralise</h1>
+    <h1>Décision et action : du score à la décision</h1>
   </div>
 
-  <div class="project-content">
-    <p>Tout le cours repose sur un pari implicite : un modèle ajusté sur \(n\) exemples fonctionnera sur des données jamais vues. Rien ne le garantit a priori — un modèle peut parfaitement mémoriser son jeu d'entraînement sans rien avoir appris. Ce module expose ce que la théorie sait démontrer, ce qu'elle ne sait pas expliquer (notamment le succès des réseaux profonds), et ce qu'un praticien doit en retenir.</p>
+  <div class="project-content course-content">
+    <p>Un modèle produit un nombre ; une organisation prend une action. Entre les deux se trouve un espace que les cours de machine learning traversent en une phrase — « on seuille à 0,5 » — et où se perd l'essentiel de la valeur des projets. Ce module traite ce chaînon : coûts d'erreur, contraintes de capacité, effet réel d'une action, et optimisation sous contraintes.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#pac">Le cadre PAC</a></li>
-        <li><a href="#vc">Dimension VC et complexité de Rademacher</a></li>
-        <li><a href="#nfl">Pas de repas gratuit : le biais inductif</a></li>
-        <li><a href="#double">Double descente et sur-paramétrisation</a></li>
-        <li><a href="#implicite">La régularisation implicite de SGD</a></li>
-        <li><a href="#autres">Stabilité, PAC-Bayes, compression</a></li>
-        <li><a href="#limites">Ce que la théorie n'explique pas</a></li>
-        <li><a href="#pratique">Ce qu'on en retient en pratique</a></li>
+        <li><a href="#utilite">Théorie de la décision et seuil optimal</a></li>
+        <li><a href="#capacite">Décider sous contrainte de capacité</a></li>
+        <li><a href="#uplift">Uplift : agir sur les bonnes personnes</a></li>
+        <li><a href="#bandits">Bandits contextuels</a></li>
+        <li><a href="#stock">Décision sous incertitude : le vendeur de journaux</a></li>
+        <li><a href="#ro">Recherche opérationnelle</a></li>
+        <li><a href="#spo">Prédire puis optimiser : le piège</a></li>
+        <li><a href="#humain">Humain dans la boucle et effets de bord</a></li>
       </ol>
     </div>
 
-    <h2 id="pac">1. Le cadre PAC</h2>
-    <p>Le cadre <em>probablement approximativement correct</em> (Valiant, 1984) formalise l'objectif : avec une probabilité d'au moins \(1-\delta\) sur le tirage de l'échantillon, l'erreur réelle doit être proche de l'erreur empirique. On veut borner l'écart de généralisation :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(h) - \hat{R}_n(h), \qquad R(h)=\mathbb{E}_{(x,y)\sim\mathcal D}\big[\ell(h(x),y)\big], \quad \hat R_n(h)=\frac1n\sum_{i=1}^n \ell(h(x_i),y_i) \]</div>
+    <h2 id="utilite">1. Théorie de la décision et seuil optimal</h2>
+    <p>Décider, c'est choisir l'action qui maximise l'utilité espérée. Pour une décision binaire avec un coût \(C_{FP}\) de fausse alerte et \(C_{FN}\) de non-détection, le seuil optimal sur la probabilité prédite s'écrit :</p>
+    <div style="text-align:center;overflow-x:auto">\[ p^\star = \frac{C_{FP}}{C_{FP}+C_{FN}} \]</div>
+    <p>La formule vaut mieux qu'un long discours : si rater une panne coûte cent fois plus qu'une inspection inutile, le seuil optimal est à 1 % — et non à 50 %. Le seuil par défaut de 0,5 n'est justifié que dans le cas très particulier où les deux erreurs coûtent exactement pareil, ce qui n'arrive presque jamais. La conséquence pratique : <strong>obtenir de l'interlocuteur métier le rapport des coûts</strong> est une étape de modélisation à part entière, et elle n'exige pas des chiffres exacts — un ordre de grandeur suffit à déplacer le seuil de manière décisive.</p>
 
-    <p>Pour une hypothèse <em>fixée à l'avance</em>, l'inégalité de Hoeffding suffit : l'écart est en \(O(1/\sqrt{n})\). Mais on choisit \(h\) <em>après</em> avoir vu les données, parmi toute une classe \(\mathcal{H}\) — et le maximum d'un grand nombre d'écarts est bien plus grand que chacun d'eux. D'où une borne uniforme, qui pour une classe finie s'écrit :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(h) \;\leq\; \hat R_n(h) + \sqrt{\frac{\log|\mathcal{H}| + \log(1/\delta)}{2n}} \qquad \text{pour tout } h \in \mathcal{H} \]</div>
+    <div class="code-label">Python — seuil choisi sur le gain, pas sur le F1</div>
+    <div class="code-block"><pre>import numpy as np
 
-    <p>La structure de ce résultat est l'essentiel : l'erreur réelle est majorée par l'erreur observée plus un terme de <strong>complexité</strong> divisé par \(\sqrt{n}\). Plus la classe de modèles est riche, plus il faut de données pour que l'erreur empirique reste informative. C'est la formalisation exacte du surapprentissage, et la justification théorique de la régularisation (module 4).</p>
+cout_fp, cout_fn = 50.0, 4_000.0      # inspection inutile / panne subie
+p = modele.predict_proba(X_val)[:, 1]
 
-    <h2 id="vc">2. Dimension VC et complexité de Rademacher</h2>
-    <p>Pour une classe infinie — tous les hyperplans, tous les réseaux d'une architecture donnée —, \(\log|\mathcal H|\) n'a plus de sens. La <strong>dimension de Vapnik-Chervonenkis</strong> le remplace : c'est le plus grand nombre de points que la classe peut <em>pulvériser</em>, c'est-à-dire séparer selon les \(2^d\) étiquetages possibles. Un hyperplan en dimension \(p\) a une dimension VC de \(p+1\). La borne devient :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(h) \leq \hat R_n(h) + O\!\left(\sqrt{\frac{d_{VC}\log(n/d_{VC}) + \log(1/\delta)}{n}}\right) \]</div>
-    <p>La lecture pratique : il faut environ autant d'exemples que de « degrés de liberté effectifs » pour espérer généraliser. La <strong>complexité de Rademacher</strong> raffine en mesurant la capacité de la classe à s'ajuster à du <em>bruit pur</em> (des étiquettes tirées au hasard) — une définition plus fine, dépendante des données et de leur distribution, donc souvent bien moins pessimiste.</p>
+seuils = np.linspace(0.001, 0.5, 500)
+cout = [( (p &gt;= s) &amp; (y_val == 0)).sum() * cout_fp +
+        ((p &lt;  s) &amp; (y_val == 1)).sum() * cout_fn for s in seuils]
 
-    <div class="step-block">
-      <h4>Ce que ces bornes valent réellement</h4>
-      <p>Elles sont <em>pire cas</em>, valables pour toute distribution, et uniformes sur toute la classe. Cela les rend correctes mais très lâches : appliquées à un réseau moderne, dont le nombre de paramètres dépasse largement le nombre d'exemples, elles donnent des bornes supérieures à 1 — donc vides, puisqu'une probabilité d'erreur est déjà inférieure à 1. Leur valeur est <strong>conceptuelle</strong> : elles disent <em>quelles quantités</em> gouvernent la généralisation (complexité effective, taille d'échantillon, marge), pas <em>combien</em> vaut l'erreur. Confondre les deux mène à des conclusions fausses dans les deux sens.</p>
-    </div>
+s_opt = seuils[int(np.argmin(cout))]
+print(f"seuil optimal = {s_opt:.3f}  (théorique = {cout_fp/(cout_fp+cout_fn):.3f})")</pre></div>
 
-    <h2 id="nfl">3. Pas de repas gratuit : le biais inductif</h2>
-    <p>Le théorème du <em>no free lunch</em> (Wolpert) énonce que, moyenné sur <strong>toutes</strong> les fonctions cibles possibles, tous les algorithmes d'apprentissage ont la même performance. Aucun n'est universellement supérieur. Ce résultat, souvent cité comme une curiosité, dit quelque chose de fondamental : <strong>apprendre est impossible sans hypothèse préalable</strong>. Ce qui fonctionne en pratique fonctionne parce que le monde réel n'est pas un tirage uniforme parmi toutes les fonctions : il est structuré — régularité, localité, hiérarchie, invariances, parcimonie.</p>
-    <p>D'où la notion centrale de <strong>biais inductif</strong> : l'ensemble des hypothèses qu'un modèle incorpore avant de voir les données. Une convolution suppose la localité et l'invariance par translation ; un arbre suppose des effets de seuil ; un noyau RBF suppose une régularité ; un modèle linéaire suppose l'additivité ; une attention suppose des dépendances à longue portée. Choisir un modèle, c'est parier sur la structure du problème — et le module 8 le formulait déjà ainsi. La conséquence pratique est nette : <em>la connaissance du domaine est un gain de performance</em>, pas un supplément d'âme. Imposer une symétrie connue ou une loi de conservation (module 16) vaut souvent mieux que dix fois plus de données.</p>
-
-    <h2 id="double">4. Double descente et sur-paramétrisation</h2>
-    <p>La théorie classique prédit une courbe en U : l'erreur de test décroît puis remonte quand la capacité augmente. Les réseaux profonds contredisent apparemment ce tableau — un modèle à des milliards de paramètres ajusté à erreur d'entraînement nulle généralise très bien. La <strong>double descente</strong> réconcilie les observations :</p>
-
-    <div class="code-label">l'allure réelle de la courbe</div>
-    <div class="code-block"><pre>Régime SOUS-paramétré    capacité ↑ → erreur de test ↓ puis ↑   (le U classique)
-Seuil d'interpolation    capacité ≈ nombre d'exemples : PIC d'erreur. Le modèle atteint
-                         tout juste l'erreur nulle et n'a AUCUNE marge de manœuvre :
-                         la solution est unique et très instable.
-Régime SUR-paramétré     capacité ≫ n : l'erreur de test REDESCEND, souvent en dessous
-                         du meilleur point du premier régime.</pre></div>
-
-    <p>L'explication tient à l'existence de multiples solutions. Au-delà du seuil d'interpolation, une infinité de paramétrages atteignent une erreur d'entraînement nulle ; l'algorithme d'optimisation en choisit un, et il se trouve qu'il choisit systématiquement une solution « simple » au sens d'une norme. Autrement dit, ce n'est plus la <em>taille</em> de la classe qui gouverne la généralisation, mais la solution que l'optimiseur sélectionne à l'intérieur de cette classe. La complexité pertinente n'est pas le nombre de paramètres.</p>
-
-    <h2 id="implicite">5. La régularisation implicite de SGD</h2>
-    <p>Cette sélection a un nom : la régularisation implicite. Dans le cas linéaire séparable, la descente de gradient sur une perte logistique converge vers le <strong>séparateur à marge maximale</strong> — le même que celui du SVM (module 7) — sans qu'aucune régularisation n'ait été écrite. Sur un système sous-déterminé avec perte quadratique, elle converge vers la solution de <strong>norme minimale</strong>, exactement celle que donne la pseudo-inverse (module 4).</p>
-    <p>À cela s'ajoutent des effets bien documentés empiriquement : le bruit stochastique des mini-lots favorise les minima « plats », dont on observe qu'ils généralisent mieux que les minima « pointus » ; un grand taux d'apprentissage empêche de s'installer trop tôt dans une vallée étroite, ce qui explique pourquoi le <em>warmup</em> puis la décroissance (module 4) ne sont pas que des recettes ; et l'arrêt anticipé est lui-même une régularisation, équivalente dans le cas linéaire à une pénalité de type ridge. La conclusion théorique importante : <strong>l'algorithme d'optimisation fait partie du modèle</strong>. On n'entraîne pas « une classe de fonctions », on entraîne un couple architecture-optimiseur, et ce couple porte le biais inductif.</p>
-
-    <h2 id="autres">6. Stabilité, PAC-Bayes, compression</h2>
-    <p>Trois approches modernes donnent des bornes plus informatives que la dimension VC :</p>
-    <ul>
-      <li><strong>Stabilité algorithmique</strong> — si changer un seul exemple d'entraînement modifie peu la fonction apprise, l'algorithme généralise. Le résultat est élégant car il porte sur l'<em>algorithme</em> et non sur la classe : SGD avec un pas décroissant est stable, ce qui donne directement une borne.</li>
-      <li><strong>PAC-Bayes</strong> — borne l'erreur d'une distribution de prédicteurs par son erreur empirique plus une divergence KL à une distribution a priori. C'est le cadre qui produit aujourd'hui les bornes <em>non vides</em> les plus serrées pour des réseaux de neurones, et il éclaire au passage le lien avec la platitude des minima (un minimum plat tolère du bruit sur les poids, donc une distribution large, donc une faible divergence).</li>
-      <li><strong>Bornes par compression</strong> — si un réseau entraîné peut être fortement compressé (élagage, quantification) sans perte, sa complexité effective est faible, et cela se traduit en borne. Ce point de vue relie généralisation et compressibilité, avec un écho direct aux pratiques du module 21.</li>
-    </ul>
-
-    <h2 id="limites">7. Ce que la théorie n'explique pas</h2>
     <div class="warning-block">
-      <strong>L'état honnête de la question.</strong> Aucune théorie ne prédit aujourd'hui, avant entraînement, la performance de généralisation d'un réseau profond donné sur un problème donné. L'expérience de Zhang et ses coauteurs (2017) l'a montré de façon frappante : les mêmes réseaux qui généralisent parfaitement sur des images réelles peuvent aussi apprendre par cœur les mêmes images avec des <em>étiquettes aléatoires</em>. Leur capacité est donc largement suffisante pour mémoriser ; ce qui les fait généraliser n'est pas une limitation de capacité, mais l'interaction entre la structure des données, l'architecture et l'optimiseur. Ce que la théorie ne couvre pas non plus : les capacités émergentes des grands modèles, l'efficacité du transfert, la robustesse hors distribution, et la raison pour laquelle certaines architectures surpassent les autres. La pratique a plusieurs années d'avance sur la théorie dans ce domaine — et il vaut mieux le dire que de le masquer.
+      <strong>Décider avec des probabilités exige qu'elles soient calibrées.</strong> Toute cette arithmétique suppose que « 0,012 » signifie réellement 1,2 % de chances. Un gradient boosting ou un réseau de neurones produisent des scores mal calibrés (modules 12 et 7) : le seuil calculé serait alors faux. Calibrer (Platt, isotonique) sur un jeu dédié <em>avant</em> de raisonner en coûts — et vérifier par un diagramme de fiabilité.
     </div>
 
-    <h2 id="pratique">8. Ce qu'on en retient en pratique</h2>
+    <h2 id="capacite">2. Décider sous contrainte de capacité</h2>
+    <p>Dans la réalité, le seuil n'est souvent même pas le bon objet : une équipe de maintenance peut traiter vingt interventions par semaine, un service client rappeler cent clients par jour. La décision devient un problème de <strong>sélection sous budget</strong> — choisir les \(k\) meilleurs, ou maximiser le gain espéré sous contrainte de ressource.</p>
+    <p>Quand chaque action a un coût et un gain variables, c'est un problème de sac à dos : on classe par <em>ratio gain espéré sur coût</em> plutôt que par score brut. Et l'évaluation change de métrique : ni AUC ni F1, mais la <strong>courbe de gain cumulé</strong> (combien de valeur capturée en traitant les \(k\) premiers) et le <em>lift</em> aux rangs qui correspondent à la capacité réelle. Un modèle avec une AUC inférieure peut très bien être meilleur sur les 2 % de cas que l'on traitera effectivement — et c'est cela qu'il faut optimiser.</p>
+
+    <h2 id="uplift">3. Uplift : agir sur les bonnes personnes</h2>
+    <p>Voici l'erreur de raisonnement la plus coûteuse du domaine. Un modèle de churn identifie les clients qui vont partir ; on leur envoie une offre de rétention. Mais certains partiront quoi qu'on fasse, d'autres restaient de toute façon, et certains — c'est documenté — <em>partent parce que</em> l'offre leur rappelle qu'ils peuvent partir. Cibler la probabilité d'événement, c'est confondre prédiction et effet d'une action (module 8).</p>
+
+    <p>L'<strong>uplift</strong> (ou effet de traitement individuel) estime la bonne quantité :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \tau(x) = \mathbb{E}\big[Y \mid T=1, X=x\big] - \mathbb{E}\big[Y \mid T=0, X=x\big] \]</div>
+
+    <div class="code-label">les quatre populations</div>
+    <div class="code-block"><pre>                        Réagit si traité       Ne réagit pas si traité
+Réagit si non traité    Causes perdues         SÛRS — ne rien faire, gain nul
+Ne réagit pas si        PERSUADABLES —         À NE PAS DÉRANGER — le traitement
+non traité              la seule cible utile   NUIT : uplift négatif</pre></div>
+
+    <p>Estimer \(\tau\) demande des données expérimentales (un A/B test, module 8) ou des hypothèses causales fortes. Les approches usuelles : <em>T-learner</em> (un modèle par bras, différence des prédictions — simple, bruité), <em>S-learner</em> (un seul modèle avec le traitement comme variable — risque de le sous-pondérer), <em>X-learner</em> (meilleur quand les groupes sont déséquilibrés) et les <strong>forêts causales</strong> (<code>econml</code>, <code>causalml</code>), qui partitionnent l'espace pour maximiser l'hétérogénéité de l'effet. L'évaluation se fait par courbe d'uplift ou coefficient de <strong>Qini</strong> : on ordonne par uplift décroissant et on vérifie que le gain incrémental réel suit.</p>
+
+    <p>Le raisonnement vaut au-delà du marketing : traiter préventivement un équipement, envoyer un technicien, accorder une remise, prioriser un contrôle — dans tous ces cas, la question utile n'est jamais « que va-t-il se passer ? » mais « qu'est-ce que <em>mon action</em> change ? ».</p>
+
+    <h2 id="bandits">4. Bandits contextuels</h2>
+    <p>Quand plusieurs actions sont possibles et que l'on observe le résultat immédiatement, on peut apprendre <em>en agissant</em> plutôt que de figer un test A/B. Un bandit contextuel choisit une action selon le contexte, observe la récompense, et met à jour sa politique — c'est le cas particulier du RL (module 18) sans transition d'état, donc bien plus simple, plus stable et plus sûr.</p>
+
+    <div class="code-label">stratégies et positionnement</div>
+    <div class="code-block"><pre>ε-greedy          trivial à implémenter, exploration non ciblée
+LinUCB            borne supérieure de confiance sur un modèle linéaire du contexte
+Thompson sampling échantillonner dans le postérieur (module 9) : excellent en pratique,
+                  naturellement parallélisable, peu de réglage
+Bandit + coût     intégrer le coût de chaque action dans la récompense
+
+A/B test          quand il faut une MESURE causale propre à communiquer
+Bandit            quand il faut MAXIMISER le résultat pendant l'apprentissage
+                  (moins de trafic gaspillé sur les mauvaises variantes)</pre></div>
+
+    <p>Deux précautions : un bandit crée des données <em>biaisées par sa propre politique</em>, ce qui complique toute analyse a posteriori — il faut journaliser les probabilités de sélection pour permettre une évaluation hors ligne non biaisée (<em>inverse propensity scoring</em>). Et la non-stationnarité doit être traitée explicitement (oubli exponentiel), sinon le bandit reste bloqué sur une action devenue mauvaise.</p>
+
+    <h2 id="stock">5. Décision sous incertitude : le vendeur de journaux</h2>
+    <p>Le problème du <em>newsvendor</em> illustre parfaitement pourquoi une prévision ponctuelle ne suffit pas. On commande une quantité \(q\) avant de connaître la demande \(D\) ; le surstock coûte \(c_o\) par unité, la rupture \(c_u\). La quantité optimale n'est pas la demande moyenne, mais un <strong>quantile</strong> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ q^\star = F_D^{-1}\!\left(\frac{c_u}{c_u + c_o}\right) \]</div>
+    <p>Si une rupture coûte trois fois un surstock, il faut commander le quantile 75 % et non la moyenne. C'est ce qui justifie la prévision probabiliste du module 15 : la distribution complète est l'entrée de la décision, la moyenne n'en est qu'un résumé souvent inadapté. Le même raisonnement gouverne le dimensionnement d'une marge de sécurité, d'une réserve d'énergie, d'un effectif de garde ou d'un stock de pièces de rechange.</p>
+
+    <h2 id="ro">6. Recherche opérationnelle</h2>
+    <p>Beaucoup de décisions industrielles ne sont pas des prédictions mais des <em>allocations sous contraintes</em> : planifier une production, affecter des équipes, optimiser des tournées, choisir un plan de maintenance. Le ML estime des paramètres (durées, demandes, probabilités de panne) ; la recherche opérationnelle décide. Ignorer cette seconde moitié conduit à livrer des prédictions que personne ne sait transformer en planning.</p>
+
+    <div class="code-label">Python — affectation sous contraintes avec OR-Tools</div>
+    <div class="code-block"><pre>from ortools.linear_solver import pywraplp
+
+s = pywraplp.Solver.CreateSolver("SCIP")               # MILP
+
+x = {(i, j): s.BoolVar(f"x_{i}_{j}")                   # équipe i sur intervention j
+     for i in equipes for j in interventions}
+
+for j in interventions:                                # chaque intervention couverte
+    s.Add(sum(x[i, j] for i in equipes) == 1)
+for i in equipes:                                      # capacité hebdomadaire
+    s.Add(sum(duree[j] * x[i, j] for j in interventions) &lt;= capacite[i])
+
+# maximiser le risque évité, estimé par le modèle de survie du module 15
+s.Maximize(sum(risque_evite[j] * x[i, j] for i in equipes for j in interventions))
+
+s.Solve()</pre></div>
+
+    <p>Les outils : <strong>OR-Tools</strong> (Google — solveurs LP/MILP, programmation par contraintes, tournées de véhicules), <strong>PuLP</strong> ou <strong>Pyomo</strong> pour la modélisation, <strong>HiGHS</strong> comme solveur libre performant, Gurobi ou CPLEX en commercial. Ce qu'il faut retenir du fonctionnement : un problème <em>linéaire continu</em> se résout en temps polynomial, l'ajout de variables <em>entières</em> le rend NP-difficile — d'où l'importance de la formulation. Une bonne formulation résout en secondes ce qu'une mauvaise ne résout jamais. Et quand l'exactitude n'est pas nécessaire, les métaheuristiques (recuit simulé, tabou, algorithmes génétiques) donnent de bonnes solutions rapidement.</p>
+
+    <h2 id="spo">7. Prédire puis optimiser : le piège</h2>
+    <p>La démarche standard entraîne le modèle à minimiser une erreur de prédiction, puis optimise la décision à partir des prédictions. Le problème : <strong>ces deux objectifs ne sont pas alignés</strong>. Une erreur de prédiction peut être sans conséquence sur la décision (elle ne change pas le classement des options) ou catastrophique (elle inverse le choix optimal). Minimiser le RMSE traite ces deux erreurs de la même façon.</p>
+    <p>L'<em>apprentissage orienté décision</em> (SPO+, optimisation différentiable) intègre le problème d'optimisation dans l'entraînement, de sorte que le modèle apprenne à bien prédire <em>là où cela change la décision</em>. C'est un domaine encore jeune, mais l'idée est immédiatement exploitable même sans ces méthodes : <strong>évaluer toute chaîne prédiction-décision sur le résultat final</strong> — coût total, risque évité, valeur capturée — et non sur la métrique intermédiaire du modèle. C'est le prolongement exact du principe du module 10 : la métrique doit venir de la décision.</p>
+
+    <h2 id="humain">8. Humain dans la boucle et effets de bord</h2>
     <ul>
-      <li><strong>La complexité effective compte, pas le nombre de paramètres.</strong> Un grand modèle bien régularisé peut généraliser mieux qu'un petit modèle mal contraint.</li>
-      <li><strong>Le biais inductif est une ressource.</strong> Encoder une invariance connue, une contrainte physique ou une structure du domaine vaut souvent mieux que davantage de données.</li>
-      <li><strong>L'optimiseur fait partie du modèle.</strong> Taille de lot, taux d'apprentissage et arrêt anticipé changent la solution atteinte, pas seulement la vitesse pour y arriver.</li>
-      <li><strong>Les garanties sont rarement des nombres utilisables.</strong> Pour une estimation chiffrée de la performance, la validation croisée (module 6) et un jeu de test intouché restent les seuls outils fiables ; pour une garantie utilisable en production, la prédiction conforme (module 13) donne une couverture démontrable.</li>
-      <li><strong>Le no free lunch a une conséquence méthodologique.</strong> Comparer des modèles sans tenir compte du domaine n'a pas de sens universel : un benchmark ne transfère pas automatiquement à votre problème.</li>
+      <li><strong>Déléguer partiellement</strong> — la bonne architecture est souvent à trois zones : décision automatique quand le modèle est confiant et l'enjeu faible, transmission à un humain quand il hésite (les ensembles conformes du module 9 formalisent exactement ce « je ne sais pas trancher »), et procédure de référence quand l'entrée est hors domaine.</li>
+      <li><strong>Mesurer le système, pas le modèle</strong> — ce qui compte est la performance de l'ensemble humain + modèle. Un modèle un peu moins performant mais dont les erreurs sont <em>détectables</em> par l'opérateur produit un meilleur système qu'un modèle opaque légèrement plus précis.</li>
+      <li><strong>Anticiper les boucles de rétroaction</strong> (module 24) — un modèle qui déclenche des inspections ne verra plus jamais les pannes qu'il a évitées : ses futures données d'entraînement sont modifiées par ses propres décisions. Conserver une petite fraction de cas traités <em>aléatoirement</em> (un groupe témoin permanent) est ce qui permet de continuer à mesurer honnêtement.</li>
+      <li><strong>Prévoir le détournement</strong> — dès qu'une décision a des conséquences, les personnes concernées s'adaptent à la règle. Un critère devenu cible cesse d'être un bon critère ; les variables les plus faciles à manipuler doivent être écartées des modèles qui décident.</li>
     </ul>
-
-    <hr class="divider">
-
-    <h2 id="fin">Fin des approfondissements</h2>
-    <p>Ce module referme le second cycle du cours. Les douze premiers modules forment le tronc commun, de l'environnement Python au modèle surveillé en production ; les dix suivants traitent ce que ce tronc laissait de côté — l'incertitude, le temps, les données non tabulaires, la simulation, le budget d'annotation, la décision, la responsabilité, le matériel, et enfin la théorie.</p>
-    <p>S'il fallait retenir une seule idée de l'ensemble : <em>presque tout ce qui décide du succès d'un projet se trouve en dehors de l'algorithme</em> — dans la formulation du problème, la qualité des données, le protocole d'évaluation, la traduction en décision, et la lucidité sur ce que le modèle ne sait pas. Les algorithmes, eux, sont la partie documentée.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Les bornes PAC/VC donnent la bonne <em>structure</em> — erreur empirique plus terme de complexité en \(1/\sqrt{n}\) — mais des valeurs numériques inutilisables en deep learning.</li>
-        <li>Sans biais inductif, pas d'apprentissage : le no free lunch en fait une nécessité mathématique.</li>
-        <li>La double descente montre que le nombre de paramètres n'est pas la bonne mesure de complexité.</li>
-        <li>SGD régularise implicitement : marge maximale, norme minimale, minima plats.</li>
-        <li>Stabilité, PAC-Bayes et compression expliquent mieux le deep learning que la dimension VC.</li>
-        <li>Pour un chiffre fiable, mesurer ; pour une garantie utilisable, conformaliser.</li>
+        <li>Le seuil optimal découle du rapport des coûts d'erreur, pas de la convention 0,5 — et suppose des probabilités calibrées.</li>
+        <li>Sous contrainte de capacité, évaluer par courbe de gain cumulé aux rangs réellement traités.</li>
+        <li>Cibler l'uplift, pas la probabilité d'événement : certaines actions nuisent à une partie de la population.</li>
+        <li>Un bandit contextuel apprend en agissant ; journaliser les propensions pour pouvoir évaluer après coup.</li>
+        <li>Une décision sous incertitude se prend sur un quantile, d'où la prévision probabiliste.</li>
+        <li>La moitié des problèmes industriels sont des problèmes d'allocation : la recherche opérationnelle complète le ML.</li>
+        <li>Évaluer la chaîne complète sur la valeur finale, pas le modèle sur sa métrique intermédiaire.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m21.html" class="btn btn-secondary">← Module 21 : Passer à l'échelle</a>
-  <a href="project7.html" class="btn btn-primary">Retour au sommaire du cours</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">PAC</span><span class="tag">Dimension VC</span><span class="tag">No free lunch</span><span class="tag">Double descente</span><span class="tag">PAC-Bayes</span></div>
+  <div class="course-nav">
+    <a href="project7-m21.html" class="btn btn-secondary">← Module 21 : Recherche et recommandation</a>
+    <a href="project7-m23.html" class="btn btn-primary">Module 23 : Passer à l'échelle →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Coûts d'erreur</span><span class="tag">Uplift</span><span class="tag">Bandits</span><span class="tag">Newsvendor</span><span class="tag">MILP</span><span class="tag">OR-Tools</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -167,50 +200,54 @@ Régime SUR-paramétré     capacité ≫ n : l'erreur de test REDESCEND, souven
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 22</div>
-    <h1>Learning theory: why generalisation happens</h1>
+    <h1>From scores to decisions</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The PAC framework: bounding the generalisation gap, and why choosing a hypothesis after seeing the data requires uniform bounds.</li>
-      <li>VC dimension and Rademacher complexity, with an honest account of how loose these bounds are for modern networks — and why they are still conceptually valuable.</li>
-      <li>The no free lunch theorem and inductive bias: learning is impossible without prior assumptions, which makes domain knowledge a performance lever rather than a nicety.</li>
-      <li>Double descent and over-parameterisation: the interpolation threshold, and why parameter count is not the right complexity measure.</li>
-      <li>Implicit regularisation of gradient descent: maximum-margin and minimum-norm solutions, flat minima, early stopping as regularisation — and the conclusion that the optimiser is part of the model.</li>
-      <li>Modern approaches that explain deep learning better: algorithmic stability, PAC-Bayes (the source of today's tightest non-vacuous bounds) and compression bounds.</li>
-      <li>What theory still cannot explain, including the random-label experiment that shows capacity is not what limits memorisation.</li>
-      <li>Practical takeaways, and the closing note of the whole course.</li>
+      <li>Decision theory: the optimal threshold as a ratio of error costs, why 0.5 is almost never right, and why calibrated probabilities are a prerequisite.</li>
+      <li>Deciding under capacity constraints: top-k selection, knapsack-style ranking by gain-to-cost, and cumulative gain curves instead of AUC or F1.</li>
+      <li>Uplift modelling: individual treatment effects, the four populations including the "do not disturb" group, T/S/X-learners and causal forests, and Qini evaluation.</li>
+      <li>Contextual bandits: LinUCB and Thompson sampling, when a bandit beats an A/B test, and logging propensities for unbiased offline evaluation.</li>
+      <li>The newsvendor problem: why an optimal order quantity is a quantile of the predictive distribution, not its mean.</li>
+      <li>Operations research: LP and MILP formulations with OR-Tools, why integrality makes problems NP-hard, and when metaheuristics suffice.</li>
+      <li>The predict-then-optimise trap: prediction error and decision error are not aligned, and every pipeline should be evaluated on final value.</li>
+      <li>Human-in-the-loop architectures, conformal abstention, feedback loops, permanent control groups and gaming of decision rules.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><strong>Learning theory: why generalisation happens</strong></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><strong>From scores to decisions</strong></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

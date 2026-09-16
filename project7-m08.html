@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 8 - Deep learning - Nils Malmberg</title>
+  <title>Module 8 - Statistique inférentielle : estimer, tester, décider - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,206 +41,246 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 8</div>
-    <h1>Deep learning</h1>
+    <h1>Statistique inférentielle : estimer, tester, décider</h1>
   </div>
 
-  <div class="project-content">
-    <p>Le deep learning n'est pas un meilleur machine learning : c'est une famille de modèles qui apprennent leurs propres représentations, ce qui les rend imbattables là où les données brutes sont structurées et abondantes — images, son, texte, signaux — et souvent décevants ailleurs. Ce module couvre les architectures, les recettes d'entraînement qui font réellement la différence, et les PINN, qui relient réseaux de neurones et équations aux dérivées partielles.</p>
+  <div class="project-content course-content">
+    <p>Un modèle donne des nombres ; la statistique inférentielle dit lesquels sont crédibles. C'est ce qui sépare « la variante B a fait +2,3 % » de « la variante B est meilleure ». Ce module traite les p-values et les tests d'hypothèse pour ce qu'ils sont — des outils précis, très souvent mal interprétés — puis la question qui compte vraiment : quand a-t-on le droit de parler de cause ?</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#quand">Quand le deep learning est pertinent</a></li>
-        <li><a href="#mlp">Du perceptron au MLP</a></li>
-        <li><a href="#backprop">Rétropropagation</a></li>
-        <li><a href="#recettes">Les recettes d'entraînement</a></li>
-        <li><a href="#cnn">CNN et vision</a></li>
-        <li><a href="#rnn">RNN, LSTM, et leurs limites</a></li>
-        <li><a href="#transformers">Transformers et attention</a></li>
-        <li><a href="#representations">Autoencodeurs et représentations</a></li>
-        <li><a href="#pinn">PINN : apprendre sous contrainte physique</a></li>
-        <li><a href="#limites">Limites</a></li>
+        <li><a href="#cadre">Échantillon, estimateur, variabilité</a></li>
+        <li><a href="#ic">Intervalles de confiance et bootstrap</a></li>
+        <li><a href="#tests">Tests d'hypothèse : mécanique et p-value</a></li>
+        <li><a href="#puissance">Erreurs, puissance, taille d'échantillon</a></li>
+        <li><a href="#catalogue">Catalogue des tests usuels</a></li>
+        <li><a href="#multiple">Comparaisons multiples et p-hacking</a></li>
+        <li><a href="#causalite">Corrélation, causalité, confondants</a></li>
+        <li><a href="#abtest">Un A/B test de bout en bout</a></li>
       </ol>
     </div>
 
-    <h2 id="quand">1. Quand le deep learning est pertinent</h2>
-    <div class="code-label">arbitrage</div>
-    <div class="code-block"><pre>Le deep learning gagne quand...          Le ML classique gagne quand...
-──────────────────────────────────────────────────────────────────────────────
-données brutes structurées               données tabulaires hétérogènes
-(pixels, audio, texte, séquences)        (le boosting reste devant)
-beaucoup de données (10⁴ – 10⁹)          peu de données (10² – 10⁴)
-la représentation EST le problème        les features métier existent déjà
-une architecture pré-entraînée existe    l'interprétabilité est exigée
-un GPU est disponible                    le coût d'inférence doit rester minimal</pre></div>
+    <h2 id="cadre">1. Échantillon, estimateur, variabilité</h2>
+    <p>On veut connaître une quantité \(\theta\) d'une population (une moyenne, une proportion, un écart) mais on n'observe qu'un échantillon de taille \(n\). On calcule alors un <strong>estimateur</strong> \(\hat\theta\), qui est une variable aléatoire : un autre échantillon aurait donné une autre valeur. Toute la statistique inférentielle consiste à quantifier cette variabilité.</p>
 
-    <p>La question utile n'est donc pas « quel modèle est le meilleur » mais « existe-t-il un biais inductif adapté à mes données ? ». Une convolution encode l'invariance par translation ; une attention encode des dépendances à longue portée ; un arbre encode des effets de seuil. Choisir un modèle, c'est choisir l'hypothèse structurelle qui correspond au problème.</p>
-
-    <h2 id="mlp">2. Du perceptron au MLP</h2>
-    <p>Une couche dense applique une transformation affine suivie d'une non-linéarité, \(h = \sigma(Wx + b)\), et on les empile. Sans la non-linéarité, la composition de couches affines resterait affine : \(\sigma\) est ce qui donne sa puissance à l'empilement. Le théorème d'approximation universelle garantit qu'un réseau à une couche cachée suffisamment large approche n'importe quelle fonction continue sur un compact — résultat rassurant mais peu opérationnel, car il ne dit rien sur le nombre de neurones nécessaires ni sur la possibilité d'<em>apprendre</em> ces poids. La profondeur, elle, permet d'exprimer certaines fonctions avec exponentiellement moins de paramètres que la largeur.</p>
-
-    <div class="code-label">fonctions d'activation</div>
-    <div class="code-block"><pre>ReLU        max(0, x)            le défaut. Simple, gradient constant, mais neurones "morts"
-                                 si le gradient les pousse durablement dans la zone nulle.
-LeakyReLU   max(αx, x)           corrige les neurones morts avec une pente résiduelle.
-GELU        x·Φ(x)               lisse ; le standard dans les transformers.
-SiLU/Swish  x·sigmoid(x)         proche de GELU, très utilisé en vision moderne.
-tanh        (-1, 1)              centrée, encore utile dans les RNN et les PINN.
-sigmoid     (0, 1)               réservée à la SORTIE binaire : sature et tue le gradient
-                                 si elle est utilisée en couche cachée.
-softmax                          sortie multiclasse : produit une distribution.</pre></div>
-
-    <p>L'<strong>initialisation</strong> n'est pas un détail. Trop petite, le signal s'éteint en traversant les couches ; trop grande, il explose. Les schémas de Xavier/Glorot (pour tanh) et He/Kaiming (pour ReLU) choisissent la variance des poids de façon à conserver l'échelle du signal d'une couche à l'autre. C'est ce qui a rendu possible l'entraînement des réseaux profonds bien avant les architectures modernes.</p>
-
-    <h2 id="backprop">3. Rétropropagation</h2>
-    <p>La rétropropagation n'est rien d'autre que la règle de dérivation des fonctions composées, appliquée efficacement. Pour une perte \(L\) et une couche \(z^{(l)} = W^{(l)}a^{(l-1)}+b^{(l)}\), on définit l'erreur locale \(\delta^{(l)} = \partial L/\partial z^{(l)}\) et on la propage vers l'arrière :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \delta^{(l)} = \big(W^{(l+1)\top}\delta^{(l+1)}\big)\odot \sigma'\!\big(z^{(l)}\big), \qquad \frac{\partial L}{\partial W^{(l)}} = \delta^{(l)}\,a^{(l-1)\top} \]</div>
-    <p>L'astuce algorithmique tient en une phrase : en réutilisant les \(\delta\) déjà calculés, le coût du gradient complet est du même ordre que celui d'une passe avant — et non proportionnel au nombre de paramètres, comme le serait une différentiation numérique.</p>
-
-    <p>Le produit de matrices sur toute la profondeur explique aussi les pathologies classiques : si les termes sont systématiquement inférieurs à 1, le gradient <strong>s'évanouit</strong> et les premières couches n'apprennent plus ; s'ils dépassent 1, il <strong>explose</strong>. Les trois remèdes structurels sont les connexions résiduelles (section 5), la normalisation (section 4) et l'écrêtage du gradient (module 4).</p>
-
-    <h2 id="recettes">4. Les recettes d'entraînement</h2>
-    <p>En deep learning, l'écart entre un modèle qui converge et un modèle qui stagne tient rarement à l'architecture. Les leviers, par ordre d'impact :</p>
-
-    <ol>
-      <li><strong>Taux d'apprentissage</strong> — de loin le plus important. Le trouver par une montée exponentielle sur quelques centaines de pas (<em>LR range test</em>), puis prendre un ordre de grandeur en dessous du point de divergence. Ensuite : warmup court puis décroissance en cosinus (module 4).</li>
-      <li><strong>Normalisation</strong> — la <em>batch norm</em> normalise chaque feature sur le lot (efficace en vision, mais dépendante de la taille du lot et délicate en inférence) ; la <em>layer norm</em> normalise sur les features d'un exemple (indépendante du lot, standard dans les transformers). L'effet principal est un meilleur conditionnement, donc une convergence plus rapide et plus stable.</li>
-      <li><strong>Régularisation</strong> — <em>dropout</em> (désactivation aléatoire de neurones à l'entraînement, ce qui force la redondance), <em>weight decay</em> via AdamW, et surtout <strong>early stopping</strong>, la plus simple et la plus efficace : on garde les poids du meilleur point de validation.</li>
-      <li><strong>Augmentation de données</strong> — en vision, c'est souvent le gain le plus important : recadrages, symétries, variations colorimétriques, <em>mixup</em>, <em>cutmix</em>. On encode ainsi des invariances connues sans annoter davantage.</li>
-      <li><strong>Taille de lot</strong> — grand lot = gradient moins bruité et meilleure utilisation du GPU, mais généralisation parfois moins bonne. Règle empirique utile : en multipliant le lot par \(k\), multiplier le taux d'apprentissage par \(k\) (ou \(\sqrt{k}\) avec Adam). Si la mémoire manque, l'<em>accumulation de gradient</em> simule un grand lot.</li>
-      <li><strong>Précision mixte</strong> — calculs en 16 bits avec accumulation en 32 bits : mémoire divisée par deux et accélération d'un facteur 2 à 3 sur GPU récent, sans perte mesurable de qualité.</li>
-    </ol>
+    <p>Deux résultats suffisent à presque tout. La <strong>loi des grands nombres</strong> garantit que \(\bar X_n \to \mu\). Le <strong>théorème central limite</strong> précise <em>à quelle vitesse</em> et <em>sous quelle forme</em> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \sqrt{n}\,\frac{\bar X_n - \mu}{\sigma} \xrightarrow[n\to\infty]{\mathcal{L}} \mathcal{N}(0,1) \]</div>
+    <p>L'<strong>erreur type</strong> \(\sigma/\sqrt{n}\) décroît en \(1/\sqrt{n}\) : diviser l'incertitude par deux demande <em>quatre</em> fois plus de données. C'est la contrainte économique de fond de toute expérimentation.</p>
 
     <div class="step-block">
-      <h4>La première chose à faire avant tout entraînement long</h4>
-      <p><strong>Surapprendre volontairement un tout petit échantillon</strong> (16 exemples). Si le modèle n'atteint pas une perte quasi nulle dessus, il y a un bug — étiquettes mal alignées, normalisation erronée, gradients non propagés, perte mal branchée — et aucun réglage d'hyperparamètre ne le sauvera. Ce test de trente secondes évite des heures de calcul inutile.</p>
+      <h4>Deux distinctions à ne pas confondre</h4>
+      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable — c'est exactement l'argument de la régularisation (module 12).</p>
     </div>
 
-    <h2 id="cnn">5. CNN et vision</h2>
-    <p>Une convolution applique un même petit noyau à toutes les positions de l'image. Deux propriétés en découlent : le <strong>partage de poids</strong> (un noyau 3×3 a 9 paramètres, quelle que soit la taille de l'image) et l'<strong>équivariance par translation</strong> (un motif déplacé produit une réponse déplacée). C'est le biais inductif exact des images, et la raison pour laquelle un CNN bat massivement un MLP à nombre de paramètres égal.</p>
-
-    <p>En empilant des couches, le <strong>champ réceptif</strong> — la zone de l'image influençant un neurone — s'élargit : les premières couches détectent des contours, les suivantes des textures, puis des parties d'objets. Le <em>pooling</em> (ou une convolution à pas 2) réduit la résolution spatiale tout en augmentant le nombre de canaux.</p>
-
-    <p>Le tournant architectural est la <strong>connexion résiduelle</strong> de ResNet : \(y = \mathcal{F}(x) + x\). Le bloc n'apprend qu'une correction, et le terme \(+x\) ouvre au gradient un chemin direct vers les couches profondes — ce qui a rendu possible l'entraînement de réseaux de plus de cent couches. L'idée est si générale qu'on la retrouve dans tous les transformers.</p>
-
-    <div class="code-label">Python — transfer learning, le cas d'usage réaliste</div>
-    <div class="code-block"><pre>import torch, torchvision as tv
-
-modele = tv.models.resnet50(weights="IMAGENET1K_V2")
-
-for p in modele.parameters():          # on gèle le tronc pré-entraîné
-    p.requires_grad = False
-modele.fc = torch.nn.Linear(2048, n_classes)   # nouvelle tête, entraînable
-
-# 1) entraîner la tête seule quelques époques (taux élevé)
-# 2) dégeler les derniers blocs et affiner avec un taux 10 à 100× plus faible
-for p in modele.layer4.parameters():
-    p.requires_grad = True</pre></div>
-
-    <p>C'est la démarche par défaut : entraîner un réseau de vision depuis zéro exige des centaines de milliers d'images, alors qu'un ajustement fin sur un modèle pré-entraîné donne d'excellents résultats avec quelques milliers — parfois quelques centaines.</p>
-
-    <h2 id="rnn">6. RNN, LSTM, et leurs limites</h2>
-    <p>Un réseau récurrent maintient un état caché \(h_t = \sigma(W_h h_{t-1} + W_x x_t + b)\) mis à jour pas à pas. Élégant pour les séquences, mais handicapé par deux défauts : le gradient, propagé à travers le temps, s'évanouit sur les longues dépendances ; et le calcul est intrinsèquement <em>séquentiel</em>, donc impossible à paralléliser sur la longueur. LSTM et GRU corrigent partiellement le premier point avec des portes qui régulent ce qui est conservé et oublié, mais pas le second.</p>
-
-    <p>Les transformers ont remplacé les RNN presque partout en traitement du langage, précisément parce qu'ils traitent toute la séquence en parallèle. Les RNN gardent un intérêt en inférence à très faible latence sur séquences courtes, et sur les très petits jeux de données temporelles. Pour la prévision de séries temporelles classique, un gradient boosting sur features de décalage reste d'ailleurs souvent supérieur aux deux.</p>
-
-    <h2 id="transformers">7. Transformers et attention</h2>
-    <p>Le mécanisme d'attention répond à une question simple : pour produire la représentation du mot \(i\), quels autres mots faut-il regarder, et avec quel poids ? Chaque position projette son vecteur en trois rôles — <em>requête</em> \(Q\), <em>clé</em> \(K\), <em>valeur</em> \(V\) — et l'on calcule :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \operatorname{Attention}(Q,K,V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V \]</div>
-
-    <p>Le produit \(QK^\top\) mesure la compatibilité entre chaque requête et chaque clé ; le softmax en fait des poids sommant à 1 ; on en tire une moyenne pondérée des valeurs. La division par \(\sqrt{d_k}\) est indispensable : sans elle, les produits scalaires en grande dimension ont une variance proportionnelle à \(d_k\), le softmax sature et le gradient disparaît.</p>
-
-    <p>L'<strong>attention multi-têtes</strong> réalise plusieurs fois cette opération en parallèle dans des sous-espaces différents, chaque tête pouvant se spécialiser (accord syntaxique, coréférence, position relative). Comme l'opération est invariante à l'ordre, il faut injecter la position explicitement : encodages sinusoïdaux à l'origine, positions relatives ou rotatives (RoPE) aujourd'hui.</p>
-
-    <div class="code-label">anatomie d'un bloc transformer</div>
-    <div class="code-block"><pre>x = x + MultiHeadAttention(LayerNorm(x))      # connexion résiduelle + pré-normalisation
-x = x + FeedForward(LayerNorm(x))             # MLP 2 couches, expansion ×4, activation GELU
-
-Encodeur seul    BERT — compréhension, classification, embeddings (module 11)
-Décodeur seul    GPT — génération, attention causale (on ne regarde que le passé)
-Encodeur-décodeur T5, traduction — l'architecture d'origine</pre></div>
-
-    <p><strong>Le coût</strong> : l'attention est quadratique en longueur de séquence, \(O(n^2 d)\), ce qui borne le contexte. D'où une industrie entière de variantes — attention creuse, FlashAttention (exacte mais optimisée pour la hiérarchie mémoire du GPU), et modèles à espace d'états comme Mamba, linéaires en \(n\). <strong>Le bénéfice</strong> : chaque position accède directement à toutes les autres, sans le chemin de longueur \(n\) d'un RNN, et l'ensemble se parallélise — c'est ce qui a rendu possible l'entraînement à l'échelle actuelle.</p>
-
-    <p>Le <em>Vision Transformer</em> applique la même recette aux images en les découpant en imagettes traitées comme des jetons. Il dépasse les CNN au-delà d'un certain volume de données, mais reste en retrait sur les petits jeux : n'ayant pas le biais inductif de la convolution, il doit apprendre la localité à partir des exemples.</p>
-
-    <h2 id="representations">8. Autoencodeurs et représentations</h2>
-    <p>Un autoencodeur compresse l'entrée dans un espace latent de faible dimension, puis la reconstruit. Avec des couches linéaires et une perte quadratique, il retrouve exactement le sous-espace de la PCA (module 4) ; avec des non-linéarités, il capture des variétés courbes. Usages : réduction de dimension non linéaire, débruitage (on entraîne à reconstruire une entrée propre depuis une entrée bruitée), et détection d'anomalies par erreur de reconstruction.</p>
-
-    <p>Plus important encore : l'<strong>apprentissage auto-supervisé</strong>, qui fabrique une tâche à partir des données non annotées — prédire un mot masqué, rapprocher deux vues augmentées d'une même image (apprentissage contrastif). C'est le principe qui a permis de pré-entraîner sur des corpus gigantesques sans annotation humaine, et qui produit les <em>embeddings</em> utilisés en recherche sémantique (module 11).</p>
-
-    <h2 id="pinn">9. PINN : apprendre sous contrainte physique</h2>
-    <p>Les <em>Physics-Informed Neural Networks</em> répondent à une situation fréquente en ingénierie : on connaît les équations qui régissent le système, mais on a peu de données — ou l'inverse, on a des mesures et un paramètre physique inconnu à identifier. L'idée est d'ajouter le résidu de l'équation dans la fonction de perte.</p>
-
-    <p>Pour une EDP \(\mathcal{N}[u](x,t) = 0\), on approche la solution par un réseau \(u_\theta(x,t)\) et on minimise :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \mathcal{L} = \underbrace{\frac{1}{N_d}\sum_i \big|u_\theta(x_i,t_i) - u_i\big|^2}_{\text{données}} + \lambda_b \underbrace{\mathcal{L}_{\text{bord/initial}}}_{\text{conditions}} + \lambda_f \underbrace{\frac{1}{N_f}\sum_j \big|\mathcal{N}[u_\theta](x_j,t_j)\big|^2}_{\text{résidu physique}} \]</div>
-
-    <p>Le point élégant : les dérivées de l'EDP sont obtenues par <strong>différentiation automatique</strong> du réseau lui-même, exactement et en tout point — pas de maillage, pas de schéma aux différences finies. Les points de collocation où l'on évalue le résidu peuvent être tirés au hasard dans le domaine, et ils ne coûtent aucune donnée expérimentale.</p>
-
-    <div class="code-label">PyTorch — oscillateur amorti : m·u'' + c·u' + k·u = 0</div>
-    <div class="code-block"><pre>import torch, torch.nn as nn
-
-m, c, k = 1.0, 0.4, 20.0            # paramètres physiques connus
-
-reseau = nn.Sequential(             # tanh : dérivées d'ordre 2 bien définies et lisses
-    nn.Linear(1, 64), nn.Tanh(),
-    nn.Linear(64, 64), nn.Tanh(),
-    nn.Linear(64, 64), nn.Tanh(),
-    nn.Linear(64, 1),
-)
-opt = torch.optim.Adam(reseau.parameters(), lr=1e-3)
-
-def residu(t):
-    t = t.requires_grad_(True)
-    u   = reseau(t)
-    u_t = torch.autograd.grad(u,   t, torch.ones_like(u),   create_graph=True)[0]
-    u_tt= torch.autograd.grad(u_t, t, torch.ones_like(u_t), create_graph=True)[0]
-    return m * u_tt + c * u_t + k * u          # doit valoir 0 partout
-
-t0 = torch.zeros(1, 1, requires_grad=True)     # conditions initiales : u(0)=1, u'(0)=0
-for etape in range(20_000):
-    tf = torch.rand(256, 1) * 2.0              # collocation aléatoire sur [0, 2]
-
-    u0   = reseau(t0)
-    u0_t = torch.autograd.grad(u0, t0, torch.ones_like(u0), create_graph=True)[0]
-
-    perte = (residu(tf) ** 2).mean() + (u0 - 1.0) ** 2 + u0_t ** 2
-    opt.zero_grad(); perte.backward(); opt.step()</pre></div>
-
-    <p><strong>Ce que les PINN apportent</strong> : une solution continue et différentiable (donc dérivable et interpolable partout), pas de maillage — un avantage décisif en géométrie complexe ou en grande dimension —, l'assimilation naturelle de données expérimentales bruitées, et surtout la résolution de <em>problèmes inverses</em> : en déclarant un paramètre physique comme entraînable (\(c\) dans l'exemple ci-dessus), le réseau l'identifie à partir de quelques mesures. C'est le cas d'usage où ils sont réellement compétitifs.</p>
+    <h2 id="ic">2. Intervalles de confiance et bootstrap</h2>
+    <p>Pour une moyenne, l'intervalle de confiance à \(1-\alpha\) s'écrit :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \bar{x} \;\pm\; t_{n-1,\,1-\alpha/2}\,\frac{s}{\sqrt{n}} \]</div>
+    <p>La loi de Student remplace la loi normale parce que \(\sigma\) est estimé par \(s\) ; l'écart n'est appréciable qu'en dessous de \(n \approx 30\).</p>
 
     <div class="warning-block">
-      <strong>Ce que les PINN ne sont pas.</strong> Ils ne remplacent pas un solveur d'EDP classique : sur un problème direct bien posé où un schéma aux éléments finis existe, celui-ci est plus rapide, plus précis et vient avec des garanties de convergence. Les PINN sont difficiles à entraîner (la pondération \(\lambda_f\) entre termes de perte est délicate, les gradients des différents termes entrent en compétition), et ils échouent sur les solutions raides ou à forts gradients — chocs, hautes fréquences — à cause du biais spectral des réseaux, qui apprennent les basses fréquences en premier. Les remèdes existent (pondération adaptative, décomposition de domaine, <em>Fourier features</em>) mais restent des sujets de recherche.
+      <strong>L'interprétation correcte.</strong> Un IC à 95 % ne signifie <em>pas</em> « il y a 95 % de chances que \(\mu\) soit dans cet intervalle ». Dans le cadre fréquentiste, \(\mu\) est une constante : elle y est ou elle n'y est pas. La bonne formulation porte sur la <em>procédure</em> : si on répétait l'expérience un grand nombre de fois, 95 % des intervalles ainsi construits contiendraient \(\mu\). L'énoncé probabiliste direct sur \(\mu\) existe bel et bien, mais il s'appelle un intervalle <em>crédible</em> et relève de l'approche bayésienne.
     </div>
 
-    <h2 id="limites">10. Limites</h2>
+    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 (il peut sortir de [0,1] et sa couverture réelle chute bien en dessous de 95 %). L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut — c'est celui que renvoie <code>proportion_confint</code> de statsmodels avec <code>method="wilson"</code>.</p>
+
+    <h3>Le bootstrap : quand on ne sait pas calculer</h3>
+    <p>Pour une médiane, un coefficient de Gini, un R², un ratio de métriques — bref dès que la loi de l'estimateur n'a pas de forme analytique commode — on rééchantillonne. L'idée, remarquablement simple : l'échantillon est notre meilleure approximation de la population, alors tirons dedans avec remise et regardons varier la statistique.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+x = rng.lognormal(mean=1.0, sigma=1.2, size=200)     # très asymétrique
+
+# bootstrap "à la main" : 10 000 rééchantillonnages de la médiane
+idx = rng.integers(0, len(x), size=(10_000, len(x)))
+medianes = np.median(x[idx], axis=1)
+ic_percentile = np.percentile(medianes, [2.5, 97.5])
+
+# version scipy, avec correction BCa (biais + asymétrie) : plus fiable
+res = stats.bootstrap((x,), np.median, confidence_level=0.95,
+                      n_resamples=10_000, method="BCa", random_state=0)
+print(ic_percentile, res.confidence_interval)</pre></div>
+
+    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien), et il ne crée pas d'information — sur 12 observations, il reste 12 observations.</p>
+
+    <h2 id="tests">3. Tests d'hypothèse : mécanique et p-value</h2>
+    <p>La démarche est celle d'un raisonnement par l'absurde probabiliste :</p>
+    <ol>
+      <li>poser une hypothèse nulle \(H_0\) — « aucun effet », « les deux moyennes sont égales » ;</li>
+      <li>choisir une statistique de test \(T\) dont on connaît la loi <em>sous \(H_0\)</em> ;</li>
+      <li>calculer \(t_{\text{obs}}\) sur les données ;</li>
+      <li>évaluer à quel point cette valeur serait surprenante si \(H_0\) était vraie.</li>
+    </ol>
+
+    <p>Cette dernière quantité est la <strong>p-value</strong> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ p = \mathbb{P}\big(|T| \geq |t_{\text{obs}}| \;\big|\; H_0 \text{ vraie}\big) \]</div>
+
+    <div class="warning-block">
+      <strong>Ce que la p-value n'est pas.</strong><br>
+      • Ce n'est <strong>pas</strong> la probabilité que \(H_0\) soit vraie. Elle est calculée <em>en supposant</em> \(H_0\) vraie — c'est \(P(\text{données}\mid H_0)\), jamais \(P(H_0\mid\text{données})\).<br>
+      • Ce n'est <strong>pas</strong> une mesure de la taille de l'effet. Avec \(n = 10^6\), une différence de 0,01 % devient « hautement significative » sans avoir le moindre intérêt pratique.<br>
+      • \(p \gt 0{,}05\) ne <strong>prouve pas</strong> \(H_0\). Absence de preuve n'est pas preuve d'absence : c'est souvent un simple manque de puissance.<br>
+      • Le seuil de 0,05 est une <strong>convention</strong> de Fisher, pas une loi de la nature. Rien ne distingue \(p = 0{,}049\) de \(p = 0{,}051\).
+    </div>
+
+    <p>Le réflexe sain consiste à toujours rapporter <em>trois</em> choses ensemble : la taille d'effet (l'écart observé, dans son unité métier), son intervalle de confiance, et la p-value. L'intervalle contient à lui seul presque toute l'information utile — et un IC qui exclut zéro dit exactement la même chose qu'un test significatif, en plus informatif.</p>
+
+    <h2 id="puissance">4. Erreurs, puissance, taille d'échantillon</h2>
+    <div class="code-label">les deux erreurs</div>
+    <div class="code-block"><pre>                        H0 vraie en réalité      H0 fausse en réalité
+Rejeter H0              erreur de type I (α)     décision correcte (puissance = 1-β)
+Ne pas rejeter H0       décision correcte        erreur de type II (β)</pre></div>
+
+    <p>\(\alpha\) est choisi (5 % par convention) : c'est le taux de faux positifs qu'on accepte. \(\beta\) se subit, sauf si on dimensionne l'expérience. La <strong>puissance</strong> \(1-\beta\) est la probabilité de détecter un effet qui existe réellement ; on la vise à 80 % ou 90 %.</p>
+
+    <p>Pour comparer deux moyennes, en notant \(d = |\mu_1-\mu_2|/\sigma\) la taille d'effet de Cohen, la taille par groupe nécessaire pour \(\alpha=5\%\) et une puissance de 80 % est bien approchée par :</p>
+    <div style="text-align:center;overflow-x:auto">\[ n \approx \frac{16}{d^{2}} \]</div>
+    <p>Un effet « moyen » (\(d=0{,}5\)) demande donc environ 64 observations par groupe ; un petit effet (\(d=0{,}2\)) en demande 400. Cette formule, faite de tête, évite de lancer des expériences qui n'avaient aucune chance de conclure.</p>
+
+    <div class="code-label">Python — dimensionnement et vérification par simulation</div>
+    <div class="code-block"><pre>import numpy as np
+from statsmodels.stats.power import TTestIndPower
+from scipy import stats
+
+# combien d'observations pour détecter d = 0.3 avec 80 % de puissance ?
+n = TTestIndPower().solve_power(effect_size=0.3, alpha=0.05, power=0.8)
+print(f"n = {np.ceil(n):.0f} par groupe")          # 176
+
+# vérification empirique : on simule 10 000 expériences
+rng = np.random.default_rng(0)
+n = 176
+rejets = sum(
+    stats.ttest_ind(rng.normal(0, 1, n), rng.normal(0.3, 1, n)).pvalue &lt; 0.05
+    for _ in range(10_000)
+)
+print(f"puissance simulée = {rejets / 10_000:.2%}")   # ≈ 80 %</pre></div>
+
+    <div class="step-block">
+      <h4>Le piège des études sous-dimensionnées</h4>
+      <p>Une expérience à faible puissance ne se contente pas de « rater » des effets. Quand elle atteint quand même la significativité, c'est nécessairement parce que le hasard a gonflé l'estimation : les effets publiés à partir de petits échantillons sont <em>systématiquement surestimés</em> (on parle d'erreur de type M, pour magnitude). C'est un des moteurs de la crise de reproductibilité.</p>
+    </div>
+
+    <h2 id="catalogue">5. Catalogue des tests usuels</h2>
+    <div class="code-label">quel test pour quelle question</div>
+    <div class="code-block"><pre>Question                              Test                        Fonction scipy/statsmodels
+─────────────────────────────────────────────────────────────────────────────────────────
+Moyenne = valeur de référence ?       t à un échantillon          stats.ttest_1samp
+Deux groupes indépendants ?           t de Welch (défaut !)       stats.ttest_ind(equal_var=False)
+Avant/après sur les mêmes sujets ?    t apparié                   stats.ttest_rel
+Idem, sans hypothèse de normalité ?   Mann-Whitney / Wilcoxon     stats.mannwhitneyu / wilcoxon
+Plus de deux groupes ?                ANOVA / Kruskal-Wallis      stats.f_oneway / kruskal
+Deux variables catégorielles liées ?  chi² d'indépendance         stats.chi2_contingency
+Idem, petits effectifs (&lt; 5) ?        test exact de Fisher        stats.fisher_exact
+Deux proportions (A/B test) ?         test z de proportions       proportions_ztest
+Même distribution ?                   Kolmogorov-Smirnov          stats.ks_2samp
+Distribution normale ?                Shapiro-Wilk                stats.shapiro
+Corrélation linéaire ? monotone ?     Pearson / Spearman          stats.pearsonr / spearmanr</pre></div>
+
+    <p>Trois remarques valent mieux qu'un long tableau. <strong>Le test de Welch doit être le défaut</strong> pour comparer deux groupes : il ne suppose pas l'égalité des variances, et il ne perd presque rien quand celles-ci sont effectivement égales. <strong>Les tests de normalité sont contre-productifs</strong> sur de grands échantillons : ils rejettent systématiquement pour des écarts sans conséquence, alors que le TCL rend justement le test de Student robuste à la non-normalité dès que \(n\) dépasse quelques dizaines. Un histogramme et un QQ-plot informent mieux. Enfin, les <strong>tests non paramétriques</strong> (Mann-Whitney) ne comparent pas des moyennes mais des rangs : ils répondent à « une valeur tirée de A a-t-elle tendance à dépasser une valeur tirée de B ? », ce qui n'est pas la même question.</p>
+
+    <h2 id="multiple">6. Comparaisons multiples et p-hacking</h2>
+    <p>Tester 20 hypothèses au seuil de 5 % alors qu'aucune n'est vraie donne une probabilité \(1 - 0{,}95^{20} \approx 64\%\) d'obtenir au moins un « résultat significatif ». C'est mécanique, et c'est la raison pour laquelle explorer librement un jeu de données produit toujours quelque chose.</p>
+
+    <div class="code-label">corrections</div>
+    <div class="code-block"><pre>Bonferroni        seuil α/m            contrôle le FWER. Simple, très conservateur.
+Holm-Bonferroni   séquentiel           même garantie, uniformément plus puissant.
+Benjamini-Hochberg contrôle le FDR     accepte une proportion q de faux parmi les rejets.
+                                        Le bon choix quand on teste des centaines
+                                        d'hypothèses (génomique, sélection de features).</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from statsmodels.stats.multitest import multipletests
+
+rejets, p_corriges, _, _ = multipletests(p_values, alpha=0.05, method="fdr_bh")</pre></div>
+
+    <p>La distinction est importante : Bonferroni et Holm contrôlent la probabilité de commettre <em>ne serait-ce qu'une</em> fausse découverte (FWER), ce qui est adapté quand une erreur coûte cher. Benjamini-Hochberg contrôle la <em>proportion</em> de fausses découvertes parmi les résultats déclarés positifs (FDR) : sur 10 000 gènes testés, on accepte que 5 % des gènes retenus soient des faux positifs, ce qui est infiniment plus puissant et parfaitement raisonnable en phase exploratoire.</p>
+
+    <div class="warning-block">
+      <strong>Le p-hacking n'est pas toujours conscient.</strong> Essayer plusieurs définitions de la variable cible, retirer « les valeurs manifestement aberrantes », tester plusieurs sous-groupes, arrêter la collecte quand le résultat devient significatif, choisir la transformation qui « marche le mieux » : chacune de ces décisions, prise après avoir vu les données, multiplie les tests implicites. Le remède est procédural : <em>écrire l'analyse avant de regarder les résultats</em>, séparer un jeu d'exploration d'un jeu de confirmation, et rapporter tout ce qui a été essayé.
+    </div>
+
+    <h2 id="causalite">7. Corrélation, causalité, confondants</h2>
+    <p>Une corrélation entre \(X\) et \(Y\) admet cinq explications : \(X\) cause \(Y\) ; \(Y\) cause \(X\) ; une variable \(Z\) cause les deux (<strong>confondant</strong>) ; l'échantillon a été sélectionné d'une façon qui crée l'association (<strong>biais de sélection</strong>) ; ou c'est le hasard. Rien dans les données seules ne permet de trancher — il faut une hypothèse sur le mécanisme.</p>
+
+    <div class="step-block">
+      <h4>Le paradoxe de Simpson</h4>
+      <p>Un traitement peut être meilleur dans <em>chaque</em> sous-groupe et pire globalement. Exemple classique : un hôpital de pointe affiche une mortalité supérieure à une clinique de quartier, parce qu'il reçoit les cas graves. La gravité est un confondant ; l'agrégation inverse la conclusion. La leçon n'est pas « il faut toujours stratifier » — conditionner sur la mauvaise variable peut <em>créer</em> un biais — mais « il faut un modèle causal explicite pour savoir sur quoi conditionner ».</p>
+    </div>
+
+    <p>L'outil formel est le <strong>graphe causal</strong> (DAG) : on y dessine les relations supposées, et des règles graphiques disent quelles variables ajuster. Trois structures suffisent à comprendre l'essentiel :</p>
     <ul>
-      <li><strong>Appétit en données et en calcul</strong> — sans pré-entraînement, un réseau profond sur 2 000 exemples surapprend systématiquement.</li>
-      <li><strong>Opacité</strong> — l'attribution par gradients ou par SHAP donne des indications, pas une explication vérifiable.</li>
-      <li><strong>Incertitude mal calibrée</strong> — un réseau est typiquement <em>trop confiant</em>, y compris sur des entrées hors distribution. Remèdes : température de calibration, ensembles profonds, dropout à l'inférence, ou modèles probabilistes (module 9).</li>
-      <li><strong>Fragilité</strong> — les exemples adverses montrent qu'une perturbation imperceptible peut renverser une prédiction.</li>
-      <li><strong>Reproductibilité</strong> — non-déterminisme des noyaux GPU, sensibilité aux graines : deux entraînements identiques ne donnent pas exactement le même modèle.</li>
-      <li><strong>Empreinte</strong> — coût énergétique et financier de l'entraînement comme de l'inférence, qui doit entrer dans l'arbitrage (module 12).</li>
+      <li><strong>Chaîne</strong> \(X \to M \to Y\) : \(M\) est un médiateur. Conditionner dessus <em>supprime</em> l'effet qu'on cherche à mesurer.</li>
+      <li><strong>Fourche</strong> \(X \leftarrow Z \to Y\) : \(Z\) est un confondant. Il <em>faut</em> conditionner dessus (critère de la porte dérobée).</li>
+      <li><strong>Collisionneur</strong> \(X \to C \leftarrow Y\) : \(C\) est un effet commun. Conditionner dessus <strong>crée</strong> une corrélation artificielle entre \(X\) et \(Y\). C'est la source de biais la plus contre-intuitive — et la plus fréquente quand on « contrôle par tout ce qu'on a ».</li>
     </ul>
+
+    <p>La seule méthode qui élimine tous les confondants d'un coup, connus comme inconnus, est la <strong>randomisation</strong> : en tirant l'affectation au hasard, on rend le traitement indépendant de tout le reste. C'est pour cette raison que l'essai contrôlé randomisé — l'A/B test — est l'étalon-or. Quand on ne peut pas randomiser, on s'appuie sur des méthodes quasi-expérimentales : différence-en-différences (deux groupes suivis avant/après), variables instrumentales, régression sur discontinuité, ou appariement sur score de propension. Toutes reposent sur des hypothèses <em>non vérifiables à partir des données seules</em> : elles doivent être argumentées, pas supposées.</p>
+
+    <div class="warning-block">
+      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention. L'importance d'une variable dans un modèle (module 12) n'est pas un effet causal.
+    </div>
+
+    <h2 id="abtest">8. Un A/B test de bout en bout</h2>
+    <p>C'est l'exercice qui mobilise tout ce module. La séquence, dans l'ordre :</p>
+
+    <ol>
+      <li><strong>Définir la métrique principale</strong> — une seule, décidée à l'avance. Les autres sont des garde-fous (métriques de non-régression) ou de l'exploration.</li>
+      <li><strong>Fixer l'effet minimal détectable</strong> — quel gain justifierait le changement ? Cette valeur vient du métier, pas des données.</li>
+      <li><strong>Dimensionner</strong> — en déduire \(n\) et la durée. Couvrir des semaines entières : le comportement du lundi n'est pas celui du samedi.</li>
+      <li><strong>Randomiser au bon niveau</strong> — par utilisateur, pas par session, sinon le même individu voit les deux variantes et les observations ne sont plus indépendantes.</li>
+      <li><strong>Vérifier l'équilibre</strong> — un test A/A et un contrôle du ratio de répartition (<em>sample ratio mismatch</em>) détectent les bugs d'assignation, cause n° 1 des résultats invraisemblables.</li>
+      <li><strong>Attendre la fin</strong> — regarder les résultats en continu et s'arrêter dès que \(p \lt 0{,}05\) fait exploser le taux de faux positifs bien au-delà de 5 %. Si l'arrêt anticipé est nécessaire, il faut des méthodes conçues pour cela (tests séquentiels, bornes de O'Brien-Fleming).</li>
+      <li><strong>Analyser</strong> — effet, intervalle de confiance, puis p-value.</li>
+    </ol>
+
+    <div class="code-label">Python — analyse d'un test sur un taux de conversion</div>
+    <div class="code-block"><pre>import numpy as np
+from statsmodels.stats.proportion import proportions_ztest, confint_proportions_2indep
+
+conv = np.array([1183, 1279])        # conversions A, B
+n    = np.array([20_143, 20_089])    # visiteurs A, B
+
+stat, p = proportions_ztest(conv, n)
+lo, hi = confint_proportions_2indep(conv[1], n[1], conv[0], n[0], method="wald")
+
+taux = conv / n
+print(f"A = {taux[0]:.3%}, B = {taux[1]:.3%}")
+print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p = {p:.4f}")
+# A = 5.873%, B = 6.367%
+# écart absolu = +0.494%  IC95 = [+0.031%, +0.957%]  p = 0.0366</pre></div>
+
+    <p>La lecture correcte de ce résultat : l'écart estimé est de +0,49 point, et les données sont compatibles avec un gain compris entre +0,03 et +0,96 point. C'est significatif au seuil de 5 %, mais l'intervalle frôle zéro — la décision dépend donc du coût de mise en œuvre et du gain minimal jugé pertinent, pas du seul verdict binaire du test.</p>
+
+    <div class="step-block">
+      <h4>Et l'approche bayésienne ?</h4>
+      <p>Elle répond à la question qu'on se pose réellement : « quelle est la probabilité que B soit meilleure que A ? ». On pose une loi a priori sur les taux, on la met à jour par les données, on obtient une loi a posteriori d'où se lisent directement \(P(p_B \gt p_A)\) et l'espérance de perte en cas de mauvais choix. Avantages : interprétation naturelle, arrêt anticipé sans pénalité formelle, intégration d'une connaissance préalable. Coûts : il faut assumer un a priori, et la communication d'un résultat bayésien exige un peu de pédagogie. Pour deux proportions, l'implémentation tient en quelques lignes avec des lois Beta conjuguées.</p>
+    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Choisir une architecture, c'est choisir un biais inductif : convolution pour la localité, attention pour les dépendances longues.</li>
-        <li>Le taux d'apprentissage domine tous les autres hyperparamètres ; commencer par surapprendre 16 exemples pour valider la chaîne.</li>
-        <li>Connexions résiduelles, normalisation et écrêtage résolvent les pathologies du gradient.</li>
-        <li>Transfer learning par défaut : entraîner de zéro est rarement le bon choix.</li>
-        <li>L'attention est quadratique en longueur de séquence — c'est la contrainte structurante des LLM.</li>
-        <li>Les PINN brillent sur les problèmes inverses et l'assimilation de données, pas en remplacement d'un solveur classique.</li>
+        <li>L'erreur type décroît en \(1/\sqrt{n}\) : la précision coûte quadratiquement cher.</li>
+        <li>Un IC porte sur la procédure, pas sur le paramètre ; Wilson pour les proportions, bootstrap quand il n'y a pas de formule.</li>
+        <li>La p-value est \(P(\text{données}\mid H_0)\), rien d'autre. Rapporter effet + IC + p, dans cet ordre.</li>
+        <li>Dimensionner avant de collecter : \(n \approx 16/d^2\). Une étude sous-puissante surestime les effets qu'elle détecte.</li>
+        <li>Welch par défaut ; les tests de normalité sont inutiles sur grand échantillon.</li>
+        <li>Corriger les comparaisons multiples : Holm pour quelques tests, Benjamini-Hochberg pour des centaines.</li>
+        <li>Pas de causalité sans hypothèse causale : confondants, collisionneurs, randomisation.</li>
+        <li>Dans un A/B test : une métrique, une durée fixée à l'avance, une randomisation par utilisateur, pas de coup d'œil anticipé.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m07.html" class="btn btn-secondary">← Module 7 : Machine learning classique</a>
-  <a href="project7-m09.html" class="btn btn-primary">Module 9 : Processus gaussiens →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">MLP</span><span class="tag">CNN</span><span class="tag">Transformers</span><span class="tag">Attention</span><span class="tag">PINN</span><span class="tag">PyTorch</span></div>
+  <div class="course-nav">
+    <a href="project7-m07.html" class="btn btn-secondary">← Module 7 : Mathématiques du ML</a>
+    <a href="project7-m09.html" class="btn btn-primary">Module 9 : Inférence bayésienne →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Inférence</span><span class="tag">p-value</span><span class="tag">Bootstrap</span><span class="tag">Puissance</span><span class="tag">Causalité</span><span class="tag">A/B test</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -261,52 +301,54 @@ for etape in range(20_000):
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 8</div>
-    <h1>Deep learning</h1>
+    <h1>Inferential statistics: estimate, test, decide</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>When deep learning wins and when gradient boosting still wins, framed as a choice of inductive bias.</li>
-      <li>From the perceptron to the MLP: activation functions, the universal approximation theorem and what it does not say, and why initialisation matters.</li>
-      <li>Backpropagation as the chain rule applied efficiently, and the vanishing/exploding gradient pathologies it explains.</li>
-      <li>Training recipes ranked by impact: learning rate finding, batch vs layer normalisation, dropout and weight decay, augmentation, batch size, mixed precision — plus the 30-second sanity check of overfitting 16 examples.</li>
-      <li>CNNs: weight sharing, receptive fields, residual connections, and transfer learning as the realistic default.</li>
-      <li>RNNs and LSTMs, and the two limitations that transformers removed.</li>
-      <li>Transformers: scaled dot-product attention derived step by step, multi-head attention, positional encodings, the quadratic cost, and Vision Transformers.</li>
-      <li>Autoencoders, self-supervised learning and representations.</li>
-      <li>Physics-Informed Neural Networks: the composite loss, automatic differentiation of PDE residuals, a working PyTorch example on a damped oscillator, inverse problems — and an honest account of where PINNs fail.</li>
-      <li>Limitations: data hunger, opacity, miscalibrated uncertainty, adversarial fragility, reproducibility and footprint.</li>
+      <li>Sampling variability, the central limit theorem, and why precision costs quadratically.</li>
+      <li>Confidence intervals: the correct frequentist reading, Wilson intervals for proportions, and the bootstrap (percentile and BCa) with its limitations.</li>
+      <li>Hypothesis testing: the mechanics, a rigorous definition of the p-value, and a list of what it is <em>not</em>.</li>
+      <li>Type I and II errors, statistical power, effect sizes, sample sizing (<em>n ≈ 16/d²</em>) and why underpowered studies overstate the effects they find.</li>
+      <li>A catalogue of the usual tests, why Welch should be the default, and why normality tests are counterproductive on large samples.</li>
+      <li>Multiple comparisons: Bonferroni, Holm, Benjamini-Hochberg (FWER vs FDR), and the many unintentional forms of p-hacking.</li>
+      <li>Correlation vs causation: confounders, Simpson's paradox, DAGs (chains, forks, colliders), randomisation and quasi-experimental designs.</li>
+      <li>A complete A/B test: metric definition, sizing, randomisation unit, sample ratio mismatch, the cost of peeking, and how to read the result.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><strong>Deep learning</strong></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><strong>Inferential statistics: estimate, test, decide</strong></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

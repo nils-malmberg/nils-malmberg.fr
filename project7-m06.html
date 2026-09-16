@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 6 - Data science en pratique : du problème au dataset - Nils Malmberg</title>
+  <title>Module 6 - Exposer un modèle : FastAPI, Pydantic, Jinja - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 <header><div class="header-inner">
@@ -41,254 +40,422 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 6</div>
-    <h1>Data science en pratique : du problème au dataset</h1>
+    <h1>Exposer un modèle : FastAPI, Pydantic, Jinja</h1>
   </div>
 
-  <div class="project-content">
-    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes.</p>
+  <div class="project-content course-content">
+    <p>Un modèle entraîné dans un notebook ne sert à personne : il faut que d'autres programmes — ou d'autres humains — puissent lui poser des questions. Ce module construit ce pont : une API HTTP avec <strong>FastAPI</strong>, des données d'entrée validées avec <strong>Pydantic</strong>, et une petite page web générée avec <strong>Jinja</strong> pour donner une interface à ceux qui ne parlent pas JSON.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cycle">Cycle de vie d'un projet</a></li>
-        <li><a href="#cadrage">Cadrage : la cible et la baseline</a></li>
-        <li><a href="#eda">Exploration : une checklist</a></li>
-        <li><a href="#viz">Visualisation utile</a></li>
-        <li><a href="#manquantes">Données manquantes</a></li>
-        <li><a href="#features">Feature engineering</a></li>
-        <li><a href="#desequilibre">Classes déséquilibrées</a></li>
-        <li><a href="#validation">Validation croisée : choisir le bon schéma</a></li>
-        <li><a href="#leakage">Fuites de données : le catalogue</a></li>
+        <li><a href="#pourquoi">Pourquoi une API</a></li>
+        <li><a href="#http">Le minimum vital sur HTTP</a></li>
+        <li><a href="#pydantic">Pydantic : valider ce qui entre</a></li>
+        <li><a href="#fastapi">FastAPI : premier serveur</a></li>
+        <li><a href="#modele">Servir un modèle de ML</a></li>
+        <li><a href="#jinja">Jinja : une interface web</a></li>
+        <li><a href="#tests">Tester une API</a></li>
+        <li><a href="#prod">Mise en production</a></li>
       </ol>
     </div>
 
-    <h2 id="cycle">1. Cycle de vie d'un projet</h2>
-    <div class="code-label">les étapes, et leur poids réel en temps</div>
-    <div class="code-block"><pre>1. Cadrage métier          définir la question, la métrique, ce qu'on fera du résultat   ~10 %
-2. Collecte / accès        trouver, extraire, joindre les données                        ~20 %
-3. Exploration            comprendre les données, détecter les anomalies                 ~15 %
-4. Préparation            nettoyage, features, encodages                                 ~25 %
-5. Modélisation           baseline, puis itérations                                      ~10 %
-6. Évaluation             protocole, métriques, analyse d'erreurs                        ~10 %
-7. Déploiement / suivi    mise en production, monitoring, ré-entraînement                ~10 %</pre></div>
+    <h2 id="pourquoi">1. Pourquoi une API</h2>
+    <p>Trois façons de rendre un modèle utilisable. Le <strong>script batch</strong> : on lit un fichier, on écrit les prédictions dans un autre. C'est simple, robuste, et suffisant dans une majorité de cas — personne n'a besoin d'un score de churn à la milliseconde. La <strong>bibliothèque</strong> : on publie un paquet Python que les autres importent ; élégant, mais cela impose à tous le même langage et le même environnement. L'<strong>API</strong> : le modèle tourne quelque part, et n'importe quel programme lui parle par le réseau, quel que soit son langage.</p>
+    <p>L'API s'impose quand la prédiction doit être <em>fraîche</em> (au moment de l'action, pas la veille au soir), quand plusieurs applications hétérogènes doivent y accéder, ou quand on veut découpler le cycle de vie du modèle de celui des applications qui l'utilisent — remplacer le modèle sans redéployer le site web qui l'appelle.</p>
 
-    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique.</p>
+    <h2 id="http">2. Le minimum vital sur HTTP</h2>
+    <p>Une API web repose sur un échange requête-réponse. Le client envoie une <strong>requête</strong> : une méthode, un chemin, des en-têtes, parfois un corps. Le serveur renvoie une <strong>réponse</strong> : un code de statut, des en-têtes, un corps.</p>
 
-    <div class="step-block">
-      <h4>La question à poser avant tout le reste</h4>
-      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout le reste : la métrique (un coût d'erreur asymétrique change le seuil), la latence acceptable (temps réel ou lot nocturne), le besoin d'explicabilité (un refus de crédit doit être motivé), et même la faisabilité — certaines décisions ont besoin de causalité, pas de prédiction (module 5).</p>
-    </div>
+    <div class="code-label">l'essentiel, en un tableau</div>
+    <div class="code-block"><pre>MÉTHODES
+  GET     lire une ressource, sans effet de bord. Paramètres dans l'URL.
+  POST    envoyer des données, créer, déclencher un calcul. Données dans le CORPS.
+  PUT     remplacer une ressource     DELETE  supprimer     PATCH  modifier
 
-    <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
-    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif est-il parti ?). Deux définitions raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables.</p>
+CODES DE STATUT
+  2xx succès        200 OK, 201 Créé, 204 Pas de contenu
+  4xx faute du CLIENT   400 requête malformée   401 non authentifié
+                        403 interdit            404 introuvable
+                        422 données invalides   429 trop de requêtes
+  5xx faute du SERVEUR  500 erreur interne      503 indisponible
 
-    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8).</p>
+FORMAT       JSON dans la quasi-totalité des cas : {"surface": 72.5, "pieces": 3}
+             En-tête Content-Type: application/json</pre></div>
 
-    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle : la moyenne pour une régression, la classe majoritaire pour une classification, la valeur de la veille pour une série temporelle, ou la règle métier existante. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème. La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, le modèle ne vaut peut-être pas sa complexité opérationnelle.</p>
+    <p>Pour une prédiction, on utilise <code>POST</code> plutôt que <code>GET</code> : les paramètres sont nombreux et structurés, ce qui tient mal dans une URL, et le corps de requête permet des types imbriqués. On réserve <code>GET</code> aux lectures simples, comme un <code>/health</code>.</p>
 
-    <h2 id="eda">3. Exploration : une checklist</h2>
-    <div class="code-label">ce que je regarde systématiquement</div>
-    <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
-Cible          distribution, taux de positifs, valeurs extrêmes, évolution dans le temps
-Manquants      taux par colonne, structure des manquants (voir section 5)
-Doublons       lignes identiques ET doublons sur la clé métier
-Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
-Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix négatif)
-Temps          couverture, trous, saisonnalité, ruptures (changement de collecte ?)
-Relations      corrélations entre features, lien de chaque feature avec la cible
-Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
+    <h2 id="pydantic">3. Pydantic : valider ce qui entre</h2>
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import polars as pl
+    <h3>Le problème</h3>
+    <p>Dès qu'une donnée vient de l'extérieur — une requête HTTP, un fichier de configuration, une réponse d'API tierce — on ne contrôle plus rien. Un client peut envoyer une surface sous forme de chaîne de caractères, oublier un champ, ajouter un champ inconnu, ou envoyer une valeur absurde comme une surface de -40 m². Sans validation, ces valeurs traversent le code et finissent dans le modèle, qui produit alors une prédiction absurde — ou une exception incompréhensible dix fonctions plus loin.</p>
+    <p>Écrire cette validation à la main donne une cinquantaine de lignes de <code>if</code> imbriqués par point d'entrée, qu'il faut maintenir en double avec la documentation. C'est exactement ce que <strong>Pydantic</strong> supprime.</p>
 
-df = pl.read_parquet("data/clients.parquet")
+    <h3>Le principe</h3>
+    <p>On décrit la forme attendue des données comme une classe annotée — très proche d'une dataclass (module 1) — et Pydantic s'occupe du reste : il <em>vérifie</em> les types à l'exécution, <em>convertit</em> ce qui peut l'être (la chaîne <code>"72.5"</code> devient le flottant <code>72.5</code>), <em>refuse</em> le reste avec un message précis, et fournit une description exploitable par les outils.</p>
 
-print(df.describe())                                    # stats de base par colonne
-print(df.null_count())                                  # manquants par colonne
-print(df.select(pl.all().n_unique()))                   # cardinalités
-print(df.filter(pl.struct(df.columns).is_duplicated())) # doublons exacts
+    <div class="code-label">Python — AVANT : validation manuelle</div>
+    <div class="code-block"><pre>def predire(donnees: dict):
+    if "surface" not in donnees:
+        raise ValueError("champ 'surface' manquant")
+    try:
+        surface = float(donnees["surface"])
+    except (TypeError, ValueError):
+        raise ValueError("'surface' doit être un nombre")
+    if surface &lt;= 0 or surface &gt; 10_000:
+        raise ValueError("'surface' hors bornes")
+    # … et la même chose pour chacun des douze autres champs</pre></div>
 
-# valeurs impossibles : toujours confronter aux bornes métier
-print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))</pre></div>
+    <div class="code-label">Python — APRÈS : un modèle Pydantic</div>
+    <div class="code-block"><pre>from typing import Literal
+from pydantic import BaseModel, Field, field_validator
 
-    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou qu'une valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
+class Annonce(BaseModel):
+    surface: float = Field(gt=0, le=10_000, description="surface habitable en m²")
+    n_pieces: int = Field(ge=1, le=20)
+    code_postal: str = Field(pattern=r"^\d{5}$")
+    type_bien: Literal["appartement", "maison"]        # valeurs autorisées
+    etage: int | None = None                           # champ facultatif
+    ascenseur: bool = False                            # avec valeur par défaut
 
-    <div class="warning-block">
-      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une feature semble trop belle, c'est généralement qu'elle contient une information qui n'existera pas au moment de la prédiction (section 9).
-    </div>
+    @field_validator("code_postal")
+    @classmethod
+    def departement_couvert(cls, v: str) -&gt; str:       # règle MÉTIER, pas de type
+        if not v.startswith(("38", "69", "73", "74")):
+            raise ValueError("département non couvert par le modèle")
+        return v
 
-    <h2 id="viz">4. Visualisation utile</h2>
-    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellent par défaut), <strong>plotly</strong> (interactif, précieux pour explorer un nuage de points dense). Quelques principes qui changent réellement la lisibilité :</p>
-    <ul>
-      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure. Doubler avec un <em>violin plot</em> ou un <em>strip plot</em> quand l'échantillon est petit.</li>
-      <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
-      <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
-      <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 12).</li>
-      <li><strong>Se méfier des moyennes</strong> : le quartet d'Anscombe et le « datasaurus » rappellent que des jeux de données de statistiques identiques peuvent être radicalement différents. Regarder les distributions, pas les résumés.</li>
-    </ul>
+a = Annonce(surface="72.5", n_pieces=3, code_postal="38000", type_bien="appartement")
+print(a.surface, type(a.surface))     # 72.5 &lt;class 'float'&gt;  → converti automatiquement</pre></div>
 
-    <h2 id="manquantes">5. Données manquantes</h2>
-    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin :</p>
-    <ul>
-      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
-      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est légitime.</li>
-      <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
-    </ul>
+    <p>Ce qui se passe à l'instanciation : chaque champ est vérifié, converti si possible, et une erreur groupée est levée si quelque chose ne va pas. Le message est directement exploitable :</p>
 
-    <div class="code-label">stratégies</div>
-    <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
-Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
-Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase les corrélations.
-KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux mais bien meilleur.
-Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres.
-Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement les NaN,
-                          et apprennent la meilleure direction pour les valeurs absentes.
-Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est souvent
-                          lui-même informatif (un client qui ne renseigne pas son revenu...).</pre></div>
+    <div class="code-block"><pre>Annonce(surface=-5, n_pieces=0, code_postal="7500", type_bien="chalet")
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
-from sklearn.impute import IterativeImputer, SimpleImputer
+# ValidationError: 4 validation errors for Annonce
+#   surface       Input should be greater than 0 [input_value=-5]
+#   n_pieces      Input should be greater than or equal to 1 [input_value=0]
+#   code_postal   String should match pattern '^\d{5}$' [input_value='7500']
+#   type_bien     Input should be 'appartement' or 'maison' [input_value='chalet']</pre></div>
 
-# imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
-imp = IterativeImputer(max_iter=10, random_state=0)
+    <p>Les quatre erreurs sont signalées d'un coup, avec le champ fautif et la valeur reçue — au lieu d'un <code>KeyError</code> anonyme au milieu du traitement.</p>
 
-# conserver l'information "cette valeur manquait"
-imp_simple = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
+    <div class="code-label">Python — ce qu'on utilise le plus souvent</div>
+    <div class="code-block"><pre>from pydantic import BaseModel, Field, ConfigDict, model_validator
+from datetime import date
 
-    <div class="warning-block">
-      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3).
-    </div>
+class AnnonceStricte(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",        # REFUSE les champs inconnus (défaut : les ignorer)
+        frozen=True,           # immuable, comme une dataclass frozen (module 1)
+        str_strip_whitespace=True,
+    )
 
-    <h2 id="features">6. Feature engineering</h2>
-    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne feature bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter.</p>
+    ville: str
+    prix: float = Field(gt=0)
+    date_publication: date                  # "2026-03-14" → objet date automatiquement
+    photos: list[str] = Field(default_factory=list)
 
-    <h3>Variables catégorielles</h3>
-    <div class="code-label">encodages</div>
-    <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
-Ordinal          entier par modalité. Uniquement si un ORDRE existe réellement
-                 (S &lt; M &lt; L), ou pour des modèles à base d'arbres qui savent découper.
-Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
-                 forte cardinalité (code postal, produit) — et très exposé à la fuite.
-Hashing          projette dans un espace fixe. Utile en streaming, perd l'interprétabilité.
-Embeddings       représentation apprise, dense. Pour les réseaux de neurones (module 8).</pre></div>
+    @model_validator(mode="after")          # validation qui porte sur PLUSIEURS champs
+    def coherence(self):
+        if self.prix &gt; 5_000_000 and not self.photos:
+            raise ValueError("un bien à ce prix sans photo est suspect")
+        return self
 
-    <p>Le <strong>target encoding</strong> mérite un mot, car il est à la fois redoutable et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute mais une moyenne lissée vers la moyenne globale :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
-    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> (chaque pli encodé avec les statistiques des autres plis), faute de quoi chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
-
-    <h3>Variables numériques et temporelles</h3>
-    <ul>
-      <li><strong>Transformations</strong> — log sur les variables à queue lourde (prix, revenus, durées), Yeo-Johnson si des valeurs négatives ou nulles existent. Cela rend les distributions plus symétriques, ce qui aide les modèles linéaires et les réseaux (pas les arbres, insensibles aux transformations monotones).</li>
-      <li><strong>Discrétisation</strong> — transformer l'âge en tranches capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information.</li>
-      <li><strong>Interactions et ratios</strong> — souvent l'apport décisif : prix au m², revenu par personne du foyer, nombre de connexions par jour d'ancienneté. Les arbres approchent mal les ratios, il faut les fournir explicitement.</li>
-      <li><strong>Features temporelles</strong> — heure, jour de la semaine, mois, jour férié, ancienneté. Les variables cycliques se codent par \(\sin(2\pi t/T)\) et \(\cos(2\pi t/T)\) pour que 23 h soit proche de 0 h.</li>
-      <li><strong>Agrégats à fenêtre</strong> — moyennes, écarts types et comptages sur les 7, 30, 90 derniers jours. C'est le cœur du feature engineering en données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 2). Impérativement calculés avec une fenêtre <em>strictement passée</em>.</li>
-    </ul>
-
-    <h3>Sélection de features</h3>
-    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 7) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées à l'intérieur de la validation croisée.</p>
-
-    <h2 id="desequilibre">7. Classes déséquilibrées</h2>
-    <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
-    <ol>
-      <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 4).</li>
-      <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
-      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, pas à 0,5 par défaut.</li>
-      <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
-    </ol>
-
-    <div class="warning-block">
-      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test, lui, doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
-    </div>
-
-    <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
-    <p>Un découpage unique train/test est bruité : le score dépend du tirage. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
-
-    <div class="code-label">quel schéma pour quelle structure de données</div>
-    <div class="code-block"><pre>KFold                  données i.i.d., régression                        K = 5 ou 10
-StratifiedKFold        classification : conserve les proportions         le défaut en classif
-GroupKFold             plusieurs lignes par entité (patient, client)     un groupe = un seul pli
-StratifiedGroupKFold   les deux contraintes à la fois
-TimeSeriesSplit        séries temporelles : entraîner sur le passé,      jamais de mélange
-                       tester sur le futur (fenêtre glissante)
-LeaveOneOut            très peu de données                               coûteux, variance élevée
-Nested CV              quand on optimise DES hyperparamètres ET qu'on    boucle interne = réglage
-                       veut une estimation non biaisée de performance    boucle externe = évaluation</pre></div>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.model_selection import (GroupKFold, StratifiedKFold,
-                                     TimeSeriesSplit, cross_validate)
-
-# données transactionnelles : plusieurs lignes par client → GroupKFold
-cv = GroupKFold(n_splits=5)
-res = cross_validate(pipeline, X, y, groups=df["client_id"],
-                     cv=cv, scoring=["roc_auc", "average_precision"],
-                     return_train_score=True)
-
-# l'écart train/validation mesure directement le surapprentissage
-print(res["train_roc_auc"].mean(), res["test_roc_auc"].mean())</pre></div>
+# sérialisation dans les deux sens
+a = AnnonceStricte.model_validate(dictionnaire)      # depuis un dict
+a = AnnonceStricte.model_validate_json(chaine_json)  # depuis du JSON brut
+a.model_dump()                                       # → dict
+a.model_dump_json()                                  # → chaîne JSON</pre></div>
 
     <div class="step-block">
-      <h4>Le protocole que je considère comme correct</h4>
+      <h4>Pydantic ou dataclass ?</h4>
+      <p>La règle est nette. <strong>Dataclass</strong> pour les objets internes, dont on maîtrise la construction : aucune vérification n'est nécessaire, et le coût d'exécution est nul. <strong>Pydantic</strong> à chaque frontière avec l'extérieur : requête HTTP, fichier de configuration, réponse d'API, ligne scrapée. La validation a un coût — quelques microsecondes par objet, le cœur de Pydantic v2 étant écrit en Rust — parfaitement acceptable pour une requête, mais qu'on ne veut pas payer un million de fois dans une boucle interne.</p>
+      <p>Cas particulier utile : <code>pydantic-settings</code> lit la configuration depuis les variables d'environnement en la validant, ce qui remplace avantageusement les <code>os.environ.get</code> éparpillés — et fait échouer le démarrage immédiatement si une variable manque, plutôt qu'au premier appel.</p>
+    </div>
+
+    <h2 id="fastapi">4. FastAPI : premier serveur</h2>
+    <p>FastAPI relie tout cela : les routes sont des fonctions Python décorées (module 1), les entrées et sorties sont des modèles Pydantic, et la documentation interactive est générée automatiquement à partir des types.</p>
+
+    <div class="code-label">Python — src/mon_projet/api.py, version minimale</div>
+    <div class="code-block"><pre>from fastapi import FastAPI
+
+app = FastAPI(title="API de scoring immobilier", version="1.0.0")
+
+@app.get("/health")              # décorateur : "cette fonction répond au GET /health"
+def health() -&gt; dict:
+    return {"status": "ok"}      # le dict est converti en JSON automatiquement</pre></div>
+
+    <div class="code-block"><pre>uv run uvicorn mon_projet.api:app --reload    # --reload : redémarre à chaque sauvegarde
+#                └─ module:objet
+# → http://127.0.0.1:8000/health
+# → http://127.0.0.1:8000/docs   : documentation interactive, générée toute seule</pre></div>
+
+    <p>La page <code>/docs</code> mérite qu'on s'y arrête : elle liste les routes, les schémas d'entrée et de sortie, et permet d'envoyer une requête de test depuis le navigateur. Elle est produite à partir des annotations de type, donc elle ne peut pas se désynchroniser du code — contrairement à une documentation écrite à la main.</p>
+
+    <div class="code-label">Python — les trois façons de recevoir des paramètres</div>
+    <div class="code-block"><pre>from fastapi import FastAPI, Query, Path, HTTPException
+
+@app.get("/annonces/{annonce_id}")                   # 1. dans le CHEMIN
+def lire(annonce_id: int = Path(ge=1)) -&gt; dict:
+    annonce = base.get(annonce_id)
+    if annonce is None:
+        raise HTTPException(status_code=404, detail="annonce introuvable")
+    return annonce
+
+@app.get("/annonces")                                 # 2. en QUERY : /annonces?ville=Lyon
+def chercher(ville: str, prix_max: float = Query(default=1e9, gt=0),
+             limite: int = Query(default=20, le=100)) -&gt; list[dict]:
+    ...
+
+@app.post("/predict")                                 # 3. dans le CORPS de la requête
+def predire(annonce: Annonce) -&gt; Reponse:             # ← modèle Pydantic
+    ...</pre></div>
+
+    <p>Le troisième cas est le plus intéressant : FastAPI voit que le paramètre est un modèle Pydantic, en déduit qu'il faut le lire dans le corps de la requête, le valide, et renvoie automatiquement un code <strong>422</strong> avec le détail des erreurs si les données ne conviennent pas. Aucune ligne de validation à écrire.</p>
+
+    <h2 id="modele">5. Servir un modèle de ML</h2>
+
+    <div class="code-label">Python — src/mon_projet/api.py, version complète</div>
+    <div class="code-block"><pre>from contextlib import asynccontextmanager
+import anyio, joblib, numpy as np, pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+MODELE_VERSION = "1.4.2"
+etat: dict = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── exécuté UNE FOIS au démarrage ──
+    etat["modele"] = joblib.load(f"models/gbm-{MODELE_VERSION}.joblib")
+    yield
+    # ── exécuté à l'arrêt ──
+    etat.clear()
+
+app = FastAPI(title="API de scoring immobilier", version=MODELE_VERSION, lifespan=lifespan)
+
+class Annonce(BaseModel):
+    surface: float = Field(gt=0, le=10_000)
+    n_pieces: int = Field(ge=1, le=20)
+    code_postal: str = Field(pattern=r"^\d{5}$")
+    type_bien: str
+
+class Prediction(BaseModel):
+    prix_estime: float
+    intervalle_bas: float
+    intervalle_haut: float
+    version_modele: str
+
+@app.get("/health")
+def health() -&gt; dict:
+    return {"status": "ok", "modele_charge": "modele" in etat, "version": MODELE_VERSION}
+
+@app.post("/predict", response_model=Prediction)
+async def predire(annonce: Annonce) -&gt; Prediction:
+    X = pd.DataFrame([annonce.model_dump()])          # le pipeline attend un DataFrame
+    try:
+        # predict est BLOQUANT : on le sort de la boucle d'événements (module 2)
+        y = await anyio.to_thread.run_sync(etat["modele"].predict, X)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="échec de l'inférence") from exc
+
+    prix = float(y[0])
+    return Prediction(prix_estime=prix,
+                      intervalle_bas=prix * 0.9, intervalle_haut=prix * 1.1,
+                      version_modele=MODELE_VERSION)
+
+@app.post("/predict/batch", response_model=list[Prediction])
+async def predire_lot(annonces: list[Annonce]) -&gt; list[Prediction]:
+    """Un seul appel pour N annonces : bien plus efficace que N appels."""
+    X = pd.DataFrame([a.model_dump() for a in annonces])
+    y = await anyio.to_thread.run_sync(etat["modele"].predict, X)
+    return [Prediction(prix_estime=float(p), intervalle_bas=float(p) * 0.9,
+                       intervalle_haut=float(p) * 1.1, version_modele=MODELE_VERSION)
+            for p in y]</pre></div>
+
+    <div class="step-block">
+      <h4>Les cinq points qui reviennent systématiquement en production</h4>
       <ol>
-        <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
-        <li>Travailler en validation croisée sur le reste : exploration, features, réglages.</li>
-        <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
-        <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
-        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation.</li>
+        <li><strong>Charger le modèle au démarrage</strong>, via <code>lifespan</code>. Le charger dans la fonction de prédiction ajouterait des centaines de millisecondes à chaque appel, et multiplierait la mémoire utilisée.</li>
+        <li><strong>Sortir le calcul de la boucle d'événements.</strong> Un <code>predict</code> scikit-learn est bloquant ; appelé directement dans une coroutine, il gèle tout le serveur pendant son exécution (module 2). <code>anyio.to_thread.run_sync</code> le délègue à un thread.</li>
+        <li><strong>Valider strictement les entrées.</strong> Les contraintes Pydantic rejettent les valeurs aberrantes avant qu'elles n'atteignent le modèle : c'est la première ligne de défense contre les prédictions absurdes sur des données hors domaine.</li>
+        <li><strong>Renvoyer la version du modèle.</strong> Sans cela, impossible de relier a posteriori une prédiction contestée à l'artefact qui l'a produite (module 24).</li>
+        <li><strong>Prévoir une route par lot.</strong> Cent appels unitaires paient cent fois le coût du réseau et de la conversion ; un appel pour cent annonces est souvent dix fois plus rapide.</li>
       </ol>
     </div>
 
-    <h2 id="leakage">9. Fuites de données : le catalogue</h2>
-    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production. Les formes les plus fréquentes :</p>
+    <h2 id="jinja">6. Jinja : une interface web</h2>
 
-    <div class="code-label">formes de fuite</div>
-    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de features ajustés sur TOUT
-                         le jeu avant le découpage.        → tout mettre dans un Pipeline
+    <h3>À quoi sert un moteur de templates</h3>
+    <p>Une API renvoie du JSON, parfait pour un programme, illisible pour un humain. Pour donner un petit formulaire à un collègue non technicien, il faut produire du HTML — et le produire par concaténation de chaînes en Python devient vite ingérable et dangereux (une valeur contenant du code HTML casserait la page, voire injecterait un script).</p>
+    <p>Un <strong>moteur de templates</strong> sépare la structure de la page et les données. On écrit un fichier HTML normal, dans lequel on place des marqueurs ; le moteur remplit ces marqueurs avec les valeurs fournies. <strong>Jinja</strong> est le moteur de référence en Python — celui de Flask, et il s'utilise aussi bien avec FastAPI.</p>
 
-Fuite temporelle         une feature utilise de l'information postérieure à la date de
-                         prédiction (moyenne calculée sur toute la période, statut final
-                         du dossier).                      → figer une date de référence
+    <div class="code-label">la syntaxe Jinja, en trois formes</div>
+    <div class="code-block"><pre>{{ expression }}          affiche une valeur      → {{ annonce.prix }}
+{% instruction %}         logique                 → {% if %} {% for %} {% block %}
+{# commentaire #}         n'apparaît pas dans la page finale
 
-Duplication              la même observation (ou quasi) des deux côtés du découpage :
-                         doublons, utilisateur présent plusieurs fois.  → GroupKFold
+filtres : une valeur passée dans une transformation
+{{ prix | round(2) }}            {{ nom | upper }}
+{{ liste | length }}             {{ texte | default("inconnu") }}</pre></div>
 
-Cible déguisée           une colonne qui n'existe que parce que l'événement a eu lieu :
-                         "date de résiliation", "montant remboursé", "motif de panne".
+    <div class="code-label">templates/formulaire.html</div>
+    <div class="code-block"><pre>&lt;!DOCTYPE html&gt;
+&lt;html lang="fr"&gt;
+&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;title&gt;Estimation de prix&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;Estimer le prix d'un bien&lt;/h1&gt;
 
-Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
-                         → encodage en validation croisée interne
+  &lt;form method="post" action="/estimer"&gt;
+    &lt;label&gt;Surface (m²) &lt;input type="number" name="surface" step="0.1" required&gt;&lt;/label&gt;
+    &lt;label&gt;Pièces &lt;input type="number" name="n_pieces" min="1" required&gt;&lt;/label&gt;
+    &lt;label&gt;Code postal &lt;input type="text" name="code_postal" pattern="\d{5}" required&gt;&lt;/label&gt;
+    &lt;button type="submit"&gt;Estimer&lt;/button&gt;
+  &lt;/form&gt;
 
-Fuite par le seuil       choisir le seuil de décision sur le jeu de test.
+  {# ce bloc ne s'affiche que si une estimation a été calculée #}
+  {% if prix %}
+    &lt;p&gt;Prix estimé : &lt;strong&gt;{{ prix | round(0) }} €&lt;/strong&gt;
+       ({{ (prix / surface) | round(0) }} €/m²)&lt;/p&gt;
+  {% endif %}
 
-Sélection répétée        essayer 200 modèles et garder le meilleur score de test :
-                         le test devient un jeu d'entraînement déguisé.</pre></div>
+  {% if annonces_comparables %}
+    &lt;h2&gt;Biens comparables&lt;/h2&gt;
+    &lt;ul&gt;
+    {% for a in annonces_comparables %}
+      &lt;li&gt;{{ a.ville }} — {{ a.surface }} m² — {{ a.prix | round(0) }} €&lt;/li&gt;
+    {% else %}
+      &lt;li&gt;aucun bien comparable trouvé&lt;/li&gt;
+    {% endfor %}
+    &lt;/ul&gt;
+  {% endif %}
+&lt;/body&gt;&lt;/html&gt;</pre></div>
 
-    <div class="step-block">
-      <h4>Comment la détecter</h4>
-      <p>Un score anormalement élevé (AUC de 0,99 sur un problème réputé difficile) doit déclencher une suspicion, pas une satisfaction. Deux gestes efficaces : regarder les <em>importances de features</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; et rejouer la chaîne complète sur une période postérieure (validation temporelle) — une fuite y disparaît, et le score s'effondre. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
-    </div>
+    <div class="code-label">Python — brancher Jinja sur FastAPI</div>
+    <div class="code-block"><pre>from fastapi import Form, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/", response_class=HTMLResponse)
+def formulaire(request: Request):
+    return templates.TemplateResponse("formulaire.html", {"request": request})
+
+@app.post("/estimer", response_class=HTMLResponse)
+async def estimer(request: Request,
+                  surface: float = Form(...), n_pieces: int = Form(...),
+                  code_postal: str = Form(...)):
+    annonce = Annonce(surface=surface, n_pieces=n_pieces,
+                      code_postal=code_postal, type_bien="appartement")
+    X = pd.DataFrame([annonce.model_dump()])
+    prix = float((await anyio.to_thread.run_sync(etat["modele"].predict, X))[0])
+
+    # les clés du dictionnaire deviennent les variables disponibles dans le template
+    return templates.TemplateResponse("formulaire.html", {
+        "request": request, "prix": prix, "surface": surface,
+        "annonces_comparables": chercher_comparables(annonce),
+    })</pre></div>
+
+    <p>Deux mécanismes de Jinja méritent d'être connus. L'<strong>échappement automatique</strong> : une valeur contenant <code>&lt;script&gt;</code> est affichée comme du texte et non exécutée, ce qui bloque par défaut les injections de code. Et l'<strong>héritage de templates</strong> : un fichier <code>base.html</code> définit la structure commune avec des <code>{% block contenu %}</code>, et chaque page fait <code>{% extends "base.html" %}</code> puis remplit les blocs — exactement le principe qui évite de dupliquer l'en-tête et le pied de page sur toutes les pages.</p>
+
+    <h2 id="tests">7. Tester une API</h2>
+    <p>FastAPI fournit un client de test qui appelle l'application <em>en mémoire</em>, sans démarrer de serveur ni ouvrir de port : les tests sont donc rapides et utilisables en intégration continue.</p>
+
+    <div class="code-label">tests/test_api.py</div>
+    <div class="code-block"><pre>from fastapi.testclient import TestClient
+from mon_projet.api import app
+
+client = TestClient(app)            # déclenche aussi le lifespan (chargement du modèle)
+
+def test_health():
+    r = client.get("/health")
+    assert r.status_code == 200 and r.json()["modele_charge"] is True
+
+def test_prediction_valide():
+    r = client.post("/predict", json={"surface": 72.5, "n_pieces": 3,
+                                      "code_postal": "38000", "type_bien": "appartement"})
+    assert r.status_code == 200
+    corps = r.json()
+    assert corps["prix_estime"] &gt; 0
+    assert corps["version_modele"] == "1.4.2"
+
+def test_entree_invalide_renvoie_422():
+    r = client.post("/predict", json={"surface": -5, "n_pieces": 3,
+                                      "code_postal": "38000", "type_bien": "appartement"})
+    assert r.status_code == 422
+    assert "surface" in r.text          # le champ fautif est nommé dans la réponse
+
+def test_champ_manquant():
+    r = client.post("/predict", json={"surface": 72.5})
+    assert r.status_code == 422</pre></div>
+
+    <h2 id="prod">8. Mise en production</h2>
+
+    <div class="code-label">bash — servir pour de bon</div>
+    <div class="code-block"><pre># en développement
+uv run uvicorn mon_projet.api:app --reload
+
+# en production : plusieurs processus workers, chacun avec son propre GIL (module 2)
+uv run uvicorn mon_projet.api:app --host 0.0.0.0 --port 8000 --workers 4
+
+# dans un conteneur, la commande du Dockerfile (module 5)
+CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]</pre></div>
+
+    <p>Chaque worker charge <em>sa propre copie</em> du modèle : quatre workers avec un modèle de 2 Go consomment 8 Go de RAM. C'est l'arbitrage principal à faire, entre débit et mémoire. Au-delà, on regroupe les requêtes par lots côté serveur (<em>dynamic batching</em>), ce que font Triton ou vLLM (modules 20 et 23).</p>
+
+    <div class="code-label">Python — les garde-fous minimaux</div>
+    <div class="code-block"><pre>from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, Header, HTTPException
+import logging, time, uuid
+
+# 1. CORS : quels sites web ont le droit d'appeler cette API depuis un navigateur
+app.add_middleware(CORSMiddleware, allow_origins=["https://mon-site.fr"],
+                   allow_methods=["POST", "GET"], allow_headers=["*"])
+
+# 2. authentification simple par clé d'API
+def verifier_cle(x_api_key: str = Header(...)):
+    if x_api_key != os.environ["API_KEY"]:
+        raise HTTPException(status_code=401, detail="clé invalide")
+
+@app.post("/predict", dependencies=[Depends(verifier_cle)])
+async def predire(...): ...
+
+# 3. journalisation : identifiant de requête, durée, version du modèle
+@app.middleware("http")
+async def journaliser(request, call_next):
+    rid, debut = str(uuid.uuid4())[:8], time.perf_counter()
+    reponse = await call_next(request)
+    logging.info("%s %s %s %.1fms", rid, request.url.path,
+                 reponse.status_code, (time.perf_counter() - debut) * 1000)
+    reponse.headers["X-Request-ID"] = rid
+    return reponse</pre></div>
+
+    <p>S'y ajoutent, selon le contexte : une limitation de débit (<em>rate limiting</em>) pour éviter qu'un client ne sature le service, et l'exposition de métriques au format Prometheus pour le suivi (module 24). Le <code>Depends</code> utilisé ci-dessus est le système d'<em>injection de dépendances</em> de FastAPI : une fonction déclarée comme dépendance est exécutée avant la route, et son résultat est fourni à celle-ci — c'est le mécanisme standard pour l'authentification, l'ouverture d'une session de base de données ou la lecture de la configuration.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
-        <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
-        <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
-        <li>Le feature engineering paie plus que le choix d'algorithme ; ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
-        <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
-        <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
-        <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
+        <li>Une API se justifie quand la prédiction doit être fraîche ou partagée entre applications ; sinon, un batch suffit souvent.</li>
+        <li>Pydantic valide et convertit les données <em>à l'exécution</em> : c'est la frontière entre le monde extérieur et le code.</li>
+        <li>Dataclass à l'intérieur, Pydantic aux frontières.</li>
+        <li>FastAPI déduit la documentation et la validation des annotations de type ; <code>/docs</code> ne peut pas se désynchroniser.</li>
+        <li>Modèle chargé une fois au démarrage, inférence déportée dans un thread, version renvoyée dans la réponse, route par lot prévue.</li>
+        <li>Jinja sépare structure et données, échappe automatiquement le HTML et permet l'héritage de gabarits.</li>
+        <li>Tester avec <code>TestClient</code>, y compris les entrées invalides qui doivent renvoyer 422.</li>
+        <li>En production : plusieurs workers (attention à la mémoire), CORS, authentification, journalisation avec identifiant de requête.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m05.html" class="btn btn-secondary">← Module 5 : Statistique inférentielle</a>
-  <a href="project7-m07.html" class="btn btn-primary">Module 7 : Machine learning classique →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">EDA</span><span class="tag">Feature engineering</span><span class="tag">Imputation</span><span class="tag">Validation croisée</span><span class="tag">Data leakage</span></div>
+  <div class="course-nav">
+    <a href="project7-m05.html" class="btn btn-secondary">← Module 5 : Docker et Kubernetes</a>
+    <a href="project7-m07.html" class="btn btn-primary">Module 7 : Mathématiques du ML →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">FastAPI</span><span class="tag">Pydantic</span><span class="tag">Jinja</span><span class="tag">HTTP</span><span class="tag">uvicorn</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -309,51 +476,54 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 6</div>
-    <h1>Data science in practice: from problem to dataset</h1>
+    <h1>Serving a model: FastAPI, Pydantic, Jinja</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The real shape of a data project, and the one question to answer first: which decision will change because of this model?</li>
-      <li>Framing: defining the target, the observation unit, and a baseline worth beating.</li>
-      <li>An exploration checklist, automated profiling, and the "disguised identifier" trap.</li>
-      <li>Visualisation rules that actually improve readability.</li>
-      <li>Missing data: Rubin's MCAR / MAR / MNAR typology, imputation strategies, and why imputation belongs inside the pipeline.</li>
-      <li>Feature engineering: categorical encodings (including smoothed, cross-fitted target encoding), transformations, cyclical time features, windowed aggregates, feature selection.</li>
-      <li>Imbalanced classes: metrics first, class weights, threshold tuning, and an honest assessment of SMOTE.</li>
-      <li>Cross-validation schemes matched to data structure (groups, time series, stratification), nested CV, and a protocol that keeps the test set honest.</li>
-      <li>A catalogue of data leakage patterns and how to detect them.</li>
+      <li>When an API is the right answer, compared with batch scoring or shipping a library.</li>
+      <li>The HTTP essentials: methods, status codes, JSON bodies, and why prediction endpoints use POST.</li>
+      <li>Pydantic from the problem it solves: hand-written validation versus a declared model, automatic type coercion, grouped error messages, field and model validators, strict configuration, serialisation — and when to use a dataclass instead.</li>
+      <li>FastAPI basics: routes as decorated functions, the three ways of receiving parameters, and auto-generated interactive documentation that cannot drift from the code.</li>
+      <li>Serving a model properly: loading it once with <code>lifespan</code>, keeping blocking inference off the event loop, strict input validation, returning the model version, and providing a batch endpoint.</li>
+      <li>Jinja: what a template engine is for, its three syntactic forms, a commented HTML form, wiring it to FastAPI, automatic escaping and template inheritance.</li>
+      <li>Testing with <code>TestClient</code>, including invalid payloads that must return 422.</li>
+      <li>Production concerns: uvicorn workers and their memory cost, CORS, API-key authentication with dependency injection, request-level logging, rate limiting and metrics.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><strong>Data science in practice: from problem to dataset</strong></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><strong>Serving a model: FastAPI, Pydantic, Jinja</strong></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

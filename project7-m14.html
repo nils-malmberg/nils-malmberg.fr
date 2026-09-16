@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 14 - Séries temporelles, signaux et durées de vie - Nils Malmberg</title>
+  <title>Module 14 - Deep learning - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,220 +41,208 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 14</div>
-    <h1>Séries temporelles, signaux et durées de vie</h1>
+    <h1>Deep learning</h1>
   </div>
 
-  <div class="project-content">
-    <p>Dès que le temps entre en jeu, l'hypothèse d'indépendance des observations — sur laquelle repose tout le reste du cours — tombe. Validation croisée, tests statistiques, feature engineering : tout doit être repensé. Ce module couvre les trois familles de problèmes temporels que l'on rencontre réellement : prévoir une trajectoire, analyser un signal, et estimer une durée avant événement.</p>
+  <div class="project-content course-content">
+    <p>Le deep learning n'est pas un meilleur machine learning : c'est une famille de modèles qui apprennent leurs propres représentations, ce qui les rend imbattables là où les données brutes sont structurées et abondantes — images, son, texte, signaux — et souvent décevants ailleurs. Ce module couvre les architectures, les recettes d'entraînement qui font réellement la différence, et les PINN, qui relient réseaux de neurones et équations aux dérivées partielles.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#specificites">Ce que le temps change</a></li>
-        <li><a href="#decomposition">Décomposition et stationnarité</a></li>
-        <li><a href="#classiques">Modèles classiques : ETS et ARIMA</a></li>
-        <li><a href="#ml">Approche ML : features et gradient boosting</a></li>
-        <li><a href="#dl">Deep learning et modèles de fondation</a></li>
-        <li><a href="#proba">Prévision probabiliste et évaluation</a></li>
-        <li><a href="#kalman">Modèles espace-état et filtre de Kalman</a></li>
-        <li><a href="#rupture">Ruptures et anomalies temporelles</a></li>
-        <li><a href="#spectral">Analyse spectrale et filtrage</a></li>
-        <li><a href="#survie">Durées de vie, censure et fiabilité</a></li>
+        <li><a href="#quand">Quand le deep learning est pertinent</a></li>
+        <li><a href="#mlp">Du perceptron au MLP</a></li>
+        <li><a href="#backprop">Rétropropagation</a></li>
+        <li><a href="#recettes">Les recettes d'entraînement</a></li>
+        <li><a href="#cnn">CNN et vision</a></li>
+        <li><a href="#rnn">RNN, LSTM, et leurs limites</a></li>
+        <li><a href="#transformers">Transformers et attention</a></li>
+        <li><a href="#representations">Autoencodeurs et représentations</a></li>
+        <li><a href="#pinn">PINN : apprendre sous contrainte physique</a></li>
+        <li><a href="#limites">Limites</a></li>
       </ol>
     </div>
 
-    <h2 id="specificites">1. Ce que le temps change</h2>
-    <div class="code-label">quatre conséquences directes</div>
-    <div class="code-block"><pre>Autocorrélation      les observations voisines se ressemblent : la taille d'échantillon
-                     EFFECTIVE est bien inférieure à n. Un test qui ignore cela déclare
-                     significatif ce qui ne l'est pas (module 5).
-Non-stationnarité    moyenne, variance et saisonnalité évoluent. Le passé lointain peut
-                     être trompeur plutôt qu'informatif.
-Ordre imposé         entraîner sur le futur pour prédire le passé n'a aucun sens :
-                     la validation devient séquentielle (module 6).
-Horizon              prévoir à J+1 et à J+30 sont deux problèmes différents, avec des
-                     features et des performances différentes.</pre></div>
+    <h2 id="quand">1. Quand le deep learning est pertinent</h2>
+    <div class="code-label">arbitrage</div>
+    <div class="code-block"><pre>Le deep learning gagne quand...          Le ML classique gagne quand...
+──────────────────────────────────────────────────────────────────────────────
+données brutes structurées               données tabulaires hétérogènes
+(pixels, audio, texte, séquences)        (le boosting reste devant)
+beaucoup de données (10⁴ – 10⁹)          peu de données (10² – 10⁴)
+la représentation EST le problème        les features métier existent déjà
+une architecture pré-entraînée existe    l'interprétabilité est exigée
+un GPU est disponible                    le coût d'inférence doit rester minimal</pre></div>
 
-    <div class="warning-block">
-      <strong>La première question à poser.</strong> S'agit-il vraiment d'une prévision ? Beaucoup de problèmes présentés comme temporels sont en réalité des régressions ordinaires où la date sert de variable explicative parmi d'autres. On ne fait de la prévision que lorsque l'on doit extrapoler <em>au-delà</em> de la dernière observation, sans connaître les variables explicatives futures. Si les régresseurs futurs sont connus (un calendrier, une météo prévue, un plan de production), le problème est plus simple et les outils du module 7 suffisent.
-    </div>
+    <p>La question utile n'est donc pas « quel modèle est le meilleur » mais « existe-t-il un biais inductif adapté à mes données ? ». Une convolution encode l'invariance par translation ; une attention encode des dépendances à longue portée ; un arbre encode des effets de seuil. Choisir un modèle, c'est choisir l'hypothèse structurelle qui correspond au problème.</p>
 
-    <h2 id="decomposition">2. Décomposition et stationnarité</h2>
-    <p>Une série se lit d'abord comme la somme (ou le produit) de trois composantes : tendance, saisonnalité, résidu. La décomposition <strong>STL</strong> (par lissage local) est l'outil de référence : robuste aux valeurs aberrantes, elle accepte une saisonnalité qui évolue lentement.</p>
+    <h2 id="mlp">2. Du perceptron au MLP</h2>
+    <p>Une couche dense applique une transformation affine suivie d'une non-linéarité, \(h = \sigma(Wx + b)\), et on les empile. Sans la non-linéarité, la composition de couches affines resterait affine : \(\sigma\) est ce qui donne sa puissance à l'empilement. Le théorème d'approximation universelle garantit qu'un réseau à une couche cachée suffisamment large approche n'importe quelle fonction continue sur un compact — résultat rassurant mais peu opérationnel, car il ne dit rien sur le nombre de neurones nécessaires ni sur la possibilité d'<em>apprendre</em> ces poids. La profondeur, elle, permet d'exprimer certaines fonctions avec exponentiellement moins de paramètres que la largeur.</p>
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import pandas as pd
-from statsmodels.tsa.seasonal import STL
-from statsmodels.tsa.stattools import adfuller, kpss, acf, pacf
+    <div class="code-label">fonctions d'activation</div>
+    <div class="code-block"><pre>ReLU        max(0, x)            le défaut. Simple, gradient constant, mais neurones "morts"
+                                 si le gradient les pousse durablement dans la zone nulle.
+LeakyReLU   max(αx, x)           corrige les neurones morts avec une pente résiduelle.
+GELU        x·Φ(x)               lisse ; le standard dans les transformers.
+SiLU/Swish  x·sigmoid(x)         proche de GELU, très utilisé en vision moderne.
+tanh        (-1, 1)              centrée, encore utile dans les RNN et les PINN.
+sigmoid     (0, 1)               réservée à la SORTIE binaire : sature et tue le gradient
+                                 si elle est utilisée en couche cachée.
+softmax                          sortie multiclasse : produit une distribution.</pre></div>
 
-serie = pd.read_csv("conso.csv", index_col="date", parse_dates=True)["valeur"].asfreq("D")
+    <p>L'<strong>initialisation</strong> n'est pas un détail. Trop petite, le signal s'éteint en traversant les couches ; trop grande, il explose. Les schémas de Xavier/Glorot (pour tanh) et He/Kaiming (pour ReLU) choisissent la variance des poids de façon à conserver l'échelle du signal d'une couche à l'autre. C'est ce qui a rendu possible l'entraînement des réseaux profonds bien avant les architectures modernes.</p>
 
-res = STL(serie, period=7, robust=True).fit()
-res.plot()                                   # tendance, saison, résidu
+    <h2 id="backprop">3. Rétropropagation</h2>
+    <p>La rétropropagation n'est rien d'autre que la règle de dérivation des fonctions composées, appliquée efficacement. Pour une perte \(L\) et une couche \(z^{(l)} = W^{(l)}a^{(l-1)}+b^{(l)}\), on définit l'erreur locale \(\delta^{(l)} = \partial L/\partial z^{(l)}\) et on la propage vers l'arrière :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \delta^{(l)} = \big(W^{(l+1)\top}\delta^{(l+1)}\big)\odot \sigma'\!\big(z^{(l)}\big), \qquad \frac{\partial L}{\partial W^{(l)}} = \delta^{(l)}\,a^{(l-1)\top} \]</div>
+    <p>L'astuce algorithmique tient en une phrase : en réutilisant les \(\delta\) déjà calculés, le coût du gradient complet est du même ordre que celui d'une passe avant — et non proportionnel au nombre de paramètres, comme le serait une différentiation numérique.</p>
 
-print(adfuller(serie)[1])                    # H0 = racine unitaire : p petit → stationnaire
-print(kpss(serie, regression="c")[1])        # H0 = stationnarité : p petit → NON stationnaire</pre></div>
+    <p>Le produit de matrices sur toute la profondeur explique aussi les pathologies classiques : si les termes sont systématiquement inférieurs à 1, le gradient <strong>s'évanouit</strong> et les premières couches n'apprennent plus ; s'ils dépassent 1, il <strong>explose</strong>. Les trois remèdes structurels sont les connexions résiduelles (section 5), la normalisation (section 4) et l'écrêtage du gradient (module 7).</p>
 
-    <p>Une série est <strong>stationnaire</strong> si ses propriétés statistiques ne dépendent pas de la date. Les modèles classiques l'exigent, et on s'y ramène par différenciation (\(\nabla y_t = y_t - y_{t-1}\)), différenciation saisonnière (\(y_t - y_{t-s}\)) ou transformation stabilisante (log pour une variance proportionnelle au niveau, Box-Cox sinon). Utiliser les deux tests ADF et KPSS <em>ensemble</em> est plus sûr : leurs hypothèses nulles sont inversées, et un désaccord signale une situation ambiguë qu'il vaut mieux examiner graphiquement.</p>
+    <h2 id="recettes">4. Les recettes d'entraînement</h2>
+    <p>En deep learning, l'écart entre un modèle qui converge et un modèle qui stagne tient rarement à l'architecture. Les leviers, par ordre d'impact :</p>
 
-    <p>L'<strong>ACF</strong> (autocorrélation) et la <strong>PACF</strong> (autocorrélation partielle) restent les deux graphiques les plus informatifs : une décroissance lente de l'ACF signale une non-stationnarité, un pic à un multiple de la période révèle la saisonnalité, et la coupure de la PACF suggère l'ordre autorégressif.</p>
-
-    <h2 id="classiques">3. Modèles classiques : ETS et ARIMA</h2>
-    <p><strong>Lissage exponentiel (ETS)</strong> — l'idée tient en une ligne : une moyenne pondérée du passé dont les poids décroissent géométriquement. Holt-Winters ajoute une tendance et une saisonnalité, chacune avec son propre coefficient de lissage :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \ell_t = \alpha\,(y_t - s_{t-m}) + (1-\alpha)(\ell_{t-1}+b_{t-1}), \qquad \hat y_{t+h} = \ell_t + h\,b_t + s_{t+h-m} \]</div>
-    <p>Simple, rapide, étonnamment difficile à battre sur des séries métier courtes et régulières.</p>
-
-    <p><strong>ARIMA(p,d,q)</strong> — \(d\) différenciations pour se ramener à la stationnarité, \(p\) termes autorégressifs (le passé de la série) et \(q\) termes de moyenne mobile (le passé des erreurs) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \nabla^d y_t = c + \sum_{i=1}^{p}\phi_i \nabla^d y_{t-i} + \sum_{j=1}^{q}\theta_j \varepsilon_{t-j} + \varepsilon_t \]</div>
-    <p>SARIMA ajoute les mêmes termes à la fréquence saisonnière, SARIMAX ajoute des régresseurs externes. La sélection des ordres se fait par AIC/BIC — <code>statsforecast</code> (Nixtla) et <code>pmdarima</code> l'automatisent en quelques secondes.</p>
-
-    <div class="step-block">
-      <h4>Quand les modèles classiques battent le machine learning</h4>
-      <p>Systématiquement quand : la série est <em>courte</em> (moins de quelques centaines de points), il y en a <em>peu</em> (une ou dix, pas dix mille), la structure est régulière, et il faut des intervalles de prévision fiables. Les compétitions M4 et M5 l'ont confirmé : les méthodes statistiques simples, et surtout les <em>combinaisons</em> de méthodes simples, restent redoutables. Le ML prend l'avantage quand on doit prévoir des milliers de séries apparentées simultanément, avec beaucoup de régresseurs externes — une chaîne de magasins, un parc de capteurs.</p>
-    </div>
-
-    <h2 id="ml">4. Approche ML : features et gradient boosting</h2>
-    <p>On transforme la prévision en régression tabulaire en construisant des features exclusivement passées, puis on applique le module 7.</p>
-
-    <div class="code-label">Python — polars, fenêtres strictement passées</div>
-    <div class="code-block"><pre>import polars as pl
-
-df = (
-    df.sort("date")
-      .with_columns(
-          # décalages : la valeur d'il y a 1, 7 et 364 jours
-          *[pl.col("y").shift(k).over("serie_id").alias(f"lag_{k}") for k in (1, 7, 364)],
-          # moyennes glissantes calculées sur le PASSÉ uniquement (d'où le shift(1))
-          pl.col("y").shift(1).rolling_mean(7).over("serie_id").alias("ma_7"),
-          pl.col("y").shift(1).rolling_std(28).over("serie_id").alias("sd_28"),
-          # calendrier et saisonnalité cyclique (module 6)
-          pl.col("date").dt.weekday().alias("jour_semaine"),
-          (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).sin().alias("an_sin"),
-      )
-)</pre></div>
-
-    <p>Deux décisions structurent le reste. <strong>Stratégie d'horizon</strong> : la prévision <em>récursive</em> réinjecte ses propres prédictions (simple, mais les erreurs s'accumulent), la prévision <em>directe</em> entraîne un modèle par horizon (plus coûteux, plus stable au-delà de quelques pas). <strong>Validation</strong> : uniquement en avançant dans le temps, avec une fenêtre glissante ou extensible, en respectant un <em>écart</em> égal à l'horizon entre entraînement et test — sans quoi on évalue une situation impossible en production.</p>
-
-    <div class="warning-block">
-      <strong>Le piège qui invalide silencieusement un projet de prévision.</strong> Une moyenne glissante calculée sans <code>shift(1)</code> inclut la valeur courante : le modèle « prédit » en lisant sa propre cible, et le score est spectaculaire jusqu'à la mise en production. Le second piège est la <em>disponibilité</em> : une feature peut être passée mais ne pas être encore <em>connue</em> au moment où la prévision doit être produite (un chiffre consolidé publié avec trois jours de retard). Toujours raisonner en « que sais-je à l'instant où je prédis ? », pas en « quelle est la date de cette ligne ? ».
-    </div>
-
-    <h2 id="dl">5. Deep learning et modèles de fondation</h2>
-    <ul>
-      <li><strong>N-BEATS / N-HiTS</strong> — empilements de blocs résiduels, sans composante récurrente ; performances solides et entraînement rapide.</li>
-      <li><strong>DeepAR</strong> — modèle autorégressif probabiliste entraîné sur un ensemble de séries apparentées : il apprend des motifs partagés, ce qui aide beaucoup les séries courtes.</li>
-      <li><strong>Temporal Fusion Transformer</strong> — attention sur les séquences avec gestion propre des covariables connues à l'avance (calendrier, promotions) et une part d'interprétabilité.</li>
-      <li><strong>Modèles de fondation</strong> (Chronos, TimesFM, Moirai, TimeGPT) — pré-entraînés sur d'énormes corpus de séries, utilisables en <em>zero-shot</em>. Intéressants pour obtenir une baseline sans entraînement ; pas systématiquement meilleurs qu'un bon modèle spécifique, et à manier avec précaution quand la série contient de l'information confidentielle.</li>
-    </ul>
-    <p>La bibliothèque <code>nixtla</code> (statsforecast / mlforecast / neuralforecast) donne accès aux trois familles avec la même interface, ce qui permet de les comparer honnêtement — la seule façon de trancher.</p>
-
-    <h2 id="proba">6. Prévision probabiliste et évaluation</h2>
-    <p>Une prévision ponctuelle est rarement suffisante : dimensionner un stock ou une réserve d'énergie demande un quantile, pas une moyenne. On entraîne donc directement sur la <strong>perte pinball</strong>, qui pénalise asymétriquement selon le quantile visé :</p>
-    <div style="text-align:center;overflow-x:auto">\[ L_\tau(y,\hat y) = \max\big(\tau(y-\hat y),\; (\tau-1)(y-\hat y)\big) \]</div>
-    <p>Le <strong>CRPS</strong> évalue une distribution prédictive complète et se réduit à la MAE pour une prévision ponctuelle, ce qui en fait la métrique de référence en prévision probabiliste. La prédiction conforme du module 13 s'applique aussi, dans ses variantes adaptées à la dérive temporelle.</p>
-
-    <div class="code-label">métriques de prévision</div>
-    <div class="code-block"><pre>MAE / RMSE   interprétables, mais non comparables entre séries d'échelles différentes
-MAPE         en pourcentage ; explose près de zéro et pénalise asymétriquement
-sMAPE        version symétrique, un peu moins instable
-MASE         erreur rapportée à celle de la prévision naïve : &lt; 1 = mieux que naïf.
-             LA métrique à préférer pour comparer des séries hétérogènes.
-Pinball      évalue un quantile donné
-CRPS         évalue toute la distribution prédictive</pre></div>
-
-    <p>Et la règle d'or : toujours comparer à la <strong>prévision naïve</strong> (la dernière valeur, ou la valeur de la même période l'an dernier). Un modèle qui ne bat pas la naïve saisonnière ne sert à rien, et c'est plus fréquent qu'on ne le croit.</p>
-
-    <h2 id="kalman">7. Modèles espace-état et filtre de Kalman</h2>
-    <p>Un modèle espace-état sépare ce qu'on cherche à connaître (un état caché \(x_t\), qui évolue) de ce qu'on observe (\(z_t\), bruité) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ x_t = F x_{t-1} + B u_t + w_t, \qquad z_t = H x_t + v_t, \qquad w_t\sim\mathcal{N}(0,Q),\; v_t\sim\mathcal{N}(0,R) \]</div>
-    <p>Le <strong>filtre de Kalman</strong> alterne deux étapes — <em>prédiction</em> par le modèle dynamique, puis <em>correction</em> par la mesure, pondérée par le gain \(K\) qui arbitre entre confiance dans le modèle (\(Q\)) et confiance dans le capteur (\(R\)). C'est l'estimateur optimal au sens de la variance minimale dans le cas linéaire-gaussien, et il est <em>récursif</em> : coût constant par pas, mémoire constante. D'où son omniprésence en navigation, en poursuite de cible et en fusion de capteurs.</p>
-    <p>Les extensions traitent le cas non linéaire : EKF (linéarisation), UKF (propagation de points sigma, plus stable), et filtres particulaires (Monte-Carlo séquentiel, sans hypothèse gaussienne). Pour un ingénieur, l'intérêt est double : lisser un signal bruité en temps réel, et estimer des grandeurs non mesurables directement à partir de mesures indirectes — ce qui relie ce module à l'assimilation de données du <a href="project7-m16.html">module 16</a>.</p>
-
-    <h2 id="rupture">8. Ruptures et anomalies temporelles</h2>
-    <ul>
-      <li><strong>Détection de rupture</strong> — identifier les dates où le régime change (changement de moyenne, de variance, de tendance). La bibliothèque <code>ruptures</code> implémente PELT et la segmentation binaire ; CUSUM reste la méthode de référence pour une surveillance en ligne. Utile pour savoir <em>à partir de quand</em> réentraîner un modèle.</li>
-      <li><strong>Anomalies ponctuelles</strong> — un point s'écarte fortement de la prévision : on compare le résidu à un intervalle de prédiction plutôt qu'à un seuil fixe, ce qui rend la détection insensible à la saisonnalité.</li>
-      <li><strong>Anomalies collectives</strong> — un motif anormal sur une fenêtre, détectable par distance entre sous-séquences (<em>matrix profile</em>) ou par erreur de reconstruction d'un autoencodeur (module 8).</li>
-      <li><strong>Un rappel utile</strong> — sur un flux, tester en continu revient à faire des milliers de tests : sans contrôle du taux de fausses alertes (module 5), le système d'alerte devient du bruit et finit ignoré.</li>
-    </ul>
-
-    <h2 id="spectral">9. Analyse spectrale et filtrage</h2>
-    <p>Sur un signal physique — vibration, acoustique, mesure de capteur —, le domaine fréquentiel révèle souvent ce que le domaine temporel cache. La FFT donne le périodogramme, la méthode de Welch le lisse en moyennant des segments, et la densité spectrale de puissance identifie les composantes périodiques (une fréquence de rotation, une résonance, un harmonique de défaut de roulement).</p>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import numpy as np
-from scipy import signal
-
-f, Pxx = signal.welch(x, fs=25_600, nperseg=4096)        # densité spectrale de puissance
-pic = f[np.argmax(Pxx)]
-
-# spectrogramme : évolution du contenu fréquentiel dans le temps
-f, t, Sxx = signal.spectrogram(x, fs=25_600, nperseg=1024)
-
-# filtrage passe-bande sans déphasage (filtrage aller-retour)
-sos = signal.butter(4, [50, 2000], btype="band", fs=25_600, output="sos")
-x_filtre = signal.sosfiltfilt(sos, x)</pre></div>
-
-    <p>Deux usages en machine learning. D'abord, le spectre fournit d'excellentes <strong>features</strong> : énergie par bande, fréquence dominante, kurtosis spectral, coefficients cepstraux — c'est la base de la maintenance prédictive sur signaux vibratoires. Ensuite, le <strong>spectrogramme</strong> transforme un signal 1D en image 2D, ce qui permet d'appliquer directement un CNN (module 8) — l'approche standard en classification audio.</p>
-    <p>Deux pièges classiques du traitement du signal restent valables ici : le <em>repliement de spectre</em> (respecter Shannon, filtrer avant d'échantillonner) et les <em>fuites spectrales</em> (utiliser une fenêtre de Hann plutôt qu'une troncature brutale). Et pour les phénomènes non stationnaires, la transformée en ondelettes offre un meilleur compromis temps-fréquence que la FFT à fenêtre.</p>
-
-    <h2 id="survie">10. Durées de vie, censure et fiabilité</h2>
-    <p>Troisième famille temporelle, et la plus mal traitée en pratique : on veut prédire le <em>temps avant un événement</em> — panne d'un composant, résiliation d'un client, rechute d'un patient. La difficulté s'appelle la <strong>censure</strong> : à la fin de l'étude, beaucoup d'unités n'ont pas encore connu l'événement. Les exclure biaise massivement vers le bas ; leur attribuer la durée observée aussi. L'analyse de survie est précisément l'appareil statistique qui exploite correctement ces observations incomplètes.</p>
-
-    <p>Deux fonctions suffisent à tout exprimer — la survie et le taux de défaillance instantané :</p>
-    <div style="text-align:center;overflow-x:auto">\[ S(t) = \mathbb{P}(T \gt t), \qquad h(t) = \lim_{dt\to 0}\frac{\mathbb{P}(t \leq T \lt t+dt \mid T \geq t)}{dt}, \qquad S(t) = e^{-\int_0^t h(u)\,du} \]</div>
-
-    <div class="code-label">les outils, par ordre d'usage</div>
-    <div class="code-block"><pre>Kaplan-Meier      estimation non paramétrique de S(t), avec censure. Le point de départ.
-Test du log-rank  comparer deux courbes de survie (deux lots, deux traitements).
-Cox (PH)          h(t|x) = h₀(t)·exp(βᵀx) : effet MULTIPLICATIF des covariables sur le
-                  risque, sans spécifier h₀. exp(β) se lit comme un hazard ratio.
-                  Hypothèse à vérifier : risques proportionnels (résidus de Schoenfeld).
-Weibull / AFT     modèle paramétrique : les covariables ACCÉLÈRENT le temps. Permet
-                  d'extrapoler au-delà de la fenêtre d'observation — ce que Cox ne fait pas.
-Survie par ML     Random Survival Forest, gradient boosting de Cox, DeepSurv :
-                  capturent les non-linéarités et les interactions.</pre></div>
-
-    <p>Le paramètre de forme de la <strong>loi de Weibull</strong> se lit directement comme un diagnostic de mode de défaillance : \(k \lt 1\) correspond à un taux décroissant (mortalité infantile, défauts de fabrication), \(k = 1\) à un taux constant (défaillances aléatoires, loi exponentielle sans mémoire), \(k \gt 1\) à un taux croissant (usure). C'est la lecture de la courbe en baignoire de la fiabilité, et c'est ce qui permet de distinguer un problème de qualité d'un problème de vieillissement.</p>
-
-    <div class="code-label">Python — lifelines</div>
-    <div class="code-block"><pre>from lifelines import KaplanMeierFitter, CoxPHFitter, WeibullFitter
-
-km = KaplanMeierFitter().fit(durees, evenement_observe)     # evenement=0 → censuré
-km.plot_survival_function()
-print(km.median_survival_time_)
-
-cox = CoxPHFitter().fit(df, duration_col="duree", event_col="panne")
-cox.print_summary()                      # hazard ratios et intervalles de confiance
-cox.check_assumptions(df)                # test des risques proportionnels
-
-wb = WeibullFitter().fit(durees, evenement_observe)
-print(wb.rho_)                           # paramètre de forme : &lt; 1 rodage, &gt; 1 usure</pre></div>
+    <ol>
+      <li><strong>Taux d'apprentissage</strong> — de loin le plus important. Le trouver par une montée exponentielle sur quelques centaines de pas (<em>LR range test</em>), puis prendre un ordre de grandeur en dessous du point de divergence. Ensuite : warmup court puis décroissance en cosinus (module 7).</li>
+      <li><strong>Normalisation</strong> — la <em>batch norm</em> normalise chaque feature sur le lot (efficace en vision, mais dépendante de la taille du lot et délicate en inférence) ; la <em>layer norm</em> normalise sur les features d'un exemple (indépendante du lot, standard dans les transformers). L'effet principal est un meilleur conditionnement, donc une convergence plus rapide et plus stable.</li>
+      <li><strong>Régularisation</strong> — <em>dropout</em> (désactivation aléatoire de neurones à l'entraînement, ce qui force la redondance), <em>weight decay</em> via AdamW, et surtout <strong>early stopping</strong>, la plus simple et la plus efficace : on garde les poids du meilleur point de validation.</li>
+      <li><strong>Augmentation de données</strong> — en vision, c'est souvent le gain le plus important : recadrages, symétries, variations colorimétriques, <em>mixup</em>, <em>cutmix</em>. On encode ainsi des invariances connues sans annoter davantage.</li>
+      <li><strong>Taille de lot</strong> — grand lot = gradient moins bruité et meilleure utilisation du GPU, mais généralisation parfois moins bonne. Règle empirique utile : en multipliant le lot par \(k\), multiplier le taux d'apprentissage par \(k\) (ou \(\sqrt{k}\) avec Adam). Si la mémoire manque, l'<em>accumulation de gradient</em> simule un grand lot.</li>
+      <li><strong>Précision mixte</strong> — calculs en 16 bits avec accumulation en 32 bits : mémoire divisée par deux et accélération d'un facteur 2 à 3 sur GPU récent, sans perte mesurable de qualité.</li>
+    </ol>
 
     <div class="step-block">
-      <h4>Le lien avec la maintenance prédictive</h4>
-      <p>Prédire la <em>durée de vie résiduelle</em> (RUL) d'un équipement combine tout ce module : features spectrales issues des capteurs (section 9), modèle de dégradation espace-état (section 7), et modèle de survie pour la probabilité de défaillance à un horizon donné (section 10). Deux exigences industrielles s'ajoutent : une <strong>prédiction probabiliste</strong>, parce qu'une décision de remplacement se prend sur un quantile bas et non sur une espérance, et une <strong>anticipation suffisante</strong> — un modèle qui prédit la panne deux heures avant est exact et inutile. La métrique doit donc incorporer le coût asymétrique entre une intervention inutile et une défaillance subie.</p>
+      <h4>La première chose à faire avant tout entraînement long</h4>
+      <p><strong>Surapprendre volontairement un tout petit échantillon</strong> (16 exemples). Si le modèle n'atteint pas une perte quasi nulle dessus, il y a un bug — étiquettes mal alignées, normalisation erronée, gradients non propagés, perte mal branchée — et aucun réglage d'hyperparamètre ne le sauvera. Ce test de trente secondes évite des heures de calcul inutile.</p>
     </div>
+
+    <h2 id="cnn">5. CNN et vision</h2>
+    <p>Une convolution applique un même petit noyau à toutes les positions de l'image. Deux propriétés en découlent : le <strong>partage de poids</strong> (un noyau 3×3 a 9 paramètres, quelle que soit la taille de l'image) et l'<strong>équivariance par translation</strong> (un motif déplacé produit une réponse déplacée). C'est le biais inductif exact des images, et la raison pour laquelle un CNN bat massivement un MLP à nombre de paramètres égal.</p>
+
+    <p>En empilant des couches, le <strong>champ réceptif</strong> — la zone de l'image influençant un neurone — s'élargit : les premières couches détectent des contours, les suivantes des textures, puis des parties d'objets. Le <em>pooling</em> (ou une convolution à pas 2) réduit la résolution spatiale tout en augmentant le nombre de canaux.</p>
+
+    <p>Le tournant architectural est la <strong>connexion résiduelle</strong> de ResNet : \(y = \mathcal{F}(x) + x\). Le bloc n'apprend qu'une correction, et le terme \(+x\) ouvre au gradient un chemin direct vers les couches profondes — ce qui a rendu possible l'entraînement de réseaux de plus de cent couches. L'idée est si générale qu'on la retrouve dans tous les transformers.</p>
+
+    <div class="code-label">Python — transfer learning, le cas d'usage réaliste</div>
+    <div class="code-block"><pre>import torch, torchvision as tv
+
+modele = tv.models.resnet50(weights="IMAGENET1K_V2")
+
+for p in modele.parameters():          # on gèle le tronc pré-entraîné
+    p.requires_grad = False
+modele.fc = torch.nn.Linear(2048, n_classes)   # nouvelle tête, entraînable
+
+# 1) entraîner la tête seule quelques époques (taux élevé)
+# 2) dégeler les derniers blocs et affiner avec un taux 10 à 100× plus faible
+for p in modele.layer4.parameters():
+    p.requires_grad = True</pre></div>
+
+    <p>C'est la démarche par défaut : entraîner un réseau de vision depuis zéro exige des centaines de milliers d'images, alors qu'un ajustement fin sur un modèle pré-entraîné donne d'excellents résultats avec quelques milliers — parfois quelques centaines.</p>
+
+    <h2 id="rnn">6. RNN, LSTM, et leurs limites</h2>
+    <p>Un réseau récurrent maintient un état caché \(h_t = \sigma(W_h h_{t-1} + W_x x_t + b)\) mis à jour pas à pas. Élégant pour les séquences, mais handicapé par deux défauts : le gradient, propagé à travers le temps, s'évanouit sur les longues dépendances ; et le calcul est intrinsèquement <em>séquentiel</em>, donc impossible à paralléliser sur la longueur. LSTM et GRU corrigent partiellement le premier point avec des portes qui régulent ce qui est conservé et oublié, mais pas le second.</p>
+
+    <p>Les transformers ont remplacé les RNN presque partout en traitement du langage, précisément parce qu'ils traitent toute la séquence en parallèle. Les RNN gardent un intérêt en inférence à très faible latence sur séquences courtes, et sur les très petits jeux de données temporelles. Pour la prévision de séries temporelles classique, un gradient boosting sur features de décalage reste d'ailleurs souvent supérieur aux deux.</p>
+
+    <h2 id="transformers">7. Transformers et attention</h2>
+    <p>Le mécanisme d'attention répond à une question simple : pour produire la représentation du mot \(i\), quels autres mots faut-il regarder, et avec quel poids ? Chaque position projette son vecteur en trois rôles — <em>requête</em> \(Q\), <em>clé</em> \(K\), <em>valeur</em> \(V\) — et l'on calcule :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \operatorname{Attention}(Q,K,V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V \]</div>
+
+    <p>Le produit \(QK^\top\) mesure la compatibilité entre chaque requête et chaque clé ; le softmax en fait des poids sommant à 1 ; on en tire une moyenne pondérée des valeurs. La division par \(\sqrt{d_k}\) est indispensable : sans elle, les produits scalaires en grande dimension ont une variance proportionnelle à \(d_k\), le softmax sature et le gradient disparaît.</p>
+
+    <p>L'<strong>attention multi-têtes</strong> réalise plusieurs fois cette opération en parallèle dans des sous-espaces différents, chaque tête pouvant se spécialiser (accord syntaxique, coréférence, position relative). Comme l'opération est invariante à l'ordre, il faut injecter la position explicitement : encodages sinusoïdaux à l'origine, positions relatives ou rotatives (RoPE) aujourd'hui.</p>
+
+    <div class="code-label">anatomie d'un bloc transformer</div>
+    <div class="code-block"><pre>x = x + MultiHeadAttention(LayerNorm(x))      # connexion résiduelle + pré-normalisation
+x = x + FeedForward(LayerNorm(x))             # MLP 2 couches, expansion ×4, activation GELU
+
+Encodeur seul    BERT — compréhension, classification, embeddings (module 20)
+Décodeur seul    GPT — génération, attention causale (on ne regarde que le passé)
+Encodeur-décodeur T5, traduction — l'architecture d'origine</pre></div>
+
+    <p><strong>Le coût</strong> : l'attention est quadratique en longueur de séquence, \(O(n^2 d)\), ce qui borne le contexte. D'où une industrie entière de variantes — attention creuse, FlashAttention (exacte mais optimisée pour la hiérarchie mémoire du GPU), et modèles à espace d'états comme Mamba, linéaires en \(n\). <strong>Le bénéfice</strong> : chaque position accède directement à toutes les autres, sans le chemin de longueur \(n\) d'un RNN, et l'ensemble se parallélise — c'est ce qui a rendu possible l'entraînement à l'échelle actuelle.</p>
+
+    <p>Le <em>Vision Transformer</em> applique la même recette aux images en les découpant en imagettes traitées comme des jetons. Il dépasse les CNN au-delà d'un certain volume de données, mais reste en retrait sur les petits jeux : n'ayant pas le biais inductif de la convolution, il doit apprendre la localité à partir des exemples.</p>
+
+    <h2 id="representations">8. Autoencodeurs et représentations</h2>
+    <p>Un autoencodeur compresse l'entrée dans un espace latent de faible dimension, puis la reconstruit. Avec des couches linéaires et une perte quadratique, il retrouve exactement le sous-espace de la PCA (module 7) ; avec des non-linéarités, il capture des variétés courbes. Usages : réduction de dimension non linéaire, débruitage (on entraîne à reconstruire une entrée propre depuis une entrée bruitée), et détection d'anomalies par erreur de reconstruction.</p>
+
+    <p>Plus important encore : l'<strong>apprentissage auto-supervisé</strong>, qui fabrique une tâche à partir des données non annotées — prédire un mot masqué, rapprocher deux vues augmentées d'une même image (apprentissage contrastif). C'est le principe qui a permis de pré-entraîner sur des corpus gigantesques sans annotation humaine, et qui produit les <em>embeddings</em> utilisés en recherche sémantique (module 20).</p>
+
+    <h2 id="pinn">9. PINN : apprendre sous contrainte physique</h2>
+    <p>Les <em>Physics-Informed Neural Networks</em> répondent à une situation fréquente en ingénierie : on connaît les équations qui régissent le système, mais on a peu de données — ou l'inverse, on a des mesures et un paramètre physique inconnu à identifier. L'idée est d'ajouter le résidu de l'équation dans la fonction de perte.</p>
+
+    <p>Pour une EDP \(\mathcal{N}[u](x,t) = 0\), on approche la solution par un réseau \(u_\theta(x,t)\) et on minimise :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mathcal{L} = \underbrace{\frac{1}{N_d}\sum_i \big|u_\theta(x_i,t_i) - u_i\big|^2}_{\text{données}} + \lambda_b \underbrace{\mathcal{L}_{\text{bord/initial}}}_{\text{conditions}} + \lambda_f \underbrace{\frac{1}{N_f}\sum_j \big|\mathcal{N}[u_\theta](x_j,t_j)\big|^2}_{\text{résidu physique}} \]</div>
+
+    <p>Le point élégant : les dérivées de l'EDP sont obtenues par <strong>différentiation automatique</strong> du réseau lui-même, exactement et en tout point — pas de maillage, pas de schéma aux différences finies. Les points de collocation où l'on évalue le résidu peuvent être tirés au hasard dans le domaine, et ils ne coûtent aucune donnée expérimentale.</p>
+
+    <div class="code-label">PyTorch — oscillateur amorti : m·u'' + c·u' + k·u = 0</div>
+    <div class="code-block"><pre>import torch, torch.nn as nn
+
+m, c, k = 1.0, 0.4, 20.0            # paramètres physiques connus
+
+reseau = nn.Sequential(             # tanh : dérivées d'ordre 2 bien définies et lisses
+    nn.Linear(1, 64), nn.Tanh(),
+    nn.Linear(64, 64), nn.Tanh(),
+    nn.Linear(64, 64), nn.Tanh(),
+    nn.Linear(64, 1),
+)
+opt = torch.optim.Adam(reseau.parameters(), lr=1e-3)
+
+def residu(t):
+    t = t.requires_grad_(True)
+    u   = reseau(t)
+    u_t = torch.autograd.grad(u,   t, torch.ones_like(u),   create_graph=True)[0]
+    u_tt= torch.autograd.grad(u_t, t, torch.ones_like(u_t), create_graph=True)[0]
+    return m * u_tt + c * u_t + k * u          # doit valoir 0 partout
+
+t0 = torch.zeros(1, 1, requires_grad=True)     # conditions initiales : u(0)=1, u'(0)=0
+for etape in range(20_000):
+    tf = torch.rand(256, 1) * 2.0              # collocation aléatoire sur [0, 2]
+
+    u0   = reseau(t0)
+    u0_t = torch.autograd.grad(u0, t0, torch.ones_like(u0), create_graph=True)[0]
+
+    perte = (residu(tf) ** 2).mean() + (u0 - 1.0) ** 2 + u0_t ** 2
+    opt.zero_grad(); perte.backward(); opt.step()</pre></div>
+
+    <p><strong>Ce que les PINN apportent</strong> : une solution continue et différentiable (donc dérivable et interpolable partout), pas de maillage — un avantage décisif en géométrie complexe ou en grande dimension —, l'assimilation naturelle de données expérimentales bruitées, et surtout la résolution de <em>problèmes inverses</em> : en déclarant un paramètre physique comme entraînable (\(c\) dans l'exemple ci-dessus), le réseau l'identifie à partir de quelques mesures. C'est le cas d'usage où ils sont réellement compétitifs.</p>
+
+    <div class="warning-block">
+      <strong>Ce que les PINN ne sont pas.</strong> Ils ne remplacent pas un solveur d'EDP classique : sur un problème direct bien posé où un schéma aux éléments finis existe, celui-ci est plus rapide, plus précis et vient avec des garanties de convergence. Les PINN sont difficiles à entraîner (la pondération \(\lambda_f\) entre termes de perte est délicate, les gradients des différents termes entrent en compétition), et ils échouent sur les solutions raides ou à forts gradients — chocs, hautes fréquences — à cause du biais spectral des réseaux, qui apprennent les basses fréquences en premier. Les remèdes existent (pondération adaptative, décomposition de domaine, <em>Fourier features</em>) mais restent des sujets de recherche.
+    </div>
+
+    <h2 id="limites">10. Limites</h2>
+    <ul>
+      <li><strong>Appétit en données et en calcul</strong> — sans pré-entraînement, un réseau profond sur 2 000 exemples surapprend systématiquement.</li>
+      <li><strong>Opacité</strong> — l'attribution par gradients ou par SHAP donne des indications, pas une explication vérifiable.</li>
+      <li><strong>Incertitude mal calibrée</strong> — un réseau est typiquement <em>trop confiant</em>, y compris sur des entrées hors distribution. Remèdes : température de calibration, ensembles profonds, dropout à l'inférence, ou modèles probabilistes (module 17).</li>
+      <li><strong>Fragilité</strong> — les exemples adverses montrent qu'une perturbation imperceptible peut renverser une prédiction.</li>
+      <li><strong>Reproductibilité</strong> — non-déterminisme des noyaux GPU, sensibilité aux graines : deux entraînements identiques ne donnent pas exactement le même modèle.</li>
+      <li><strong>Empreinte</strong> — coût énergétique et financier de l'entraînement comme de l'inférence, qui doit entrer dans l'arbitrage (module 24).</li>
+    </ul>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>L'autocorrélation réduit l'information effective : les tests et la validation doivent en tenir compte.</li>
-        <li>Décomposer et stationnariser avant de modéliser ; ACF/PACF restent les graphiques les plus instructifs.</li>
-        <li>ETS et ARIMA battent souvent le ML sur peu de séries courtes ; le ML gagne sur beaucoup de séries avec covariables.</li>
-        <li>Toute feature doit être strictement passée <em>et</em> réellement disponible au moment de la prévision.</li>
-        <li>Comparer systématiquement à la prévision naïve, et préférer MASE et CRPS.</li>
-        <li>Kalman estime un état caché en temps réel, avec un coût constant par pas.</li>
-        <li>La censure ne s'ignore pas : Kaplan-Meier, Cox et Weibull existent pour ça, et le paramètre de forme de Weibull diagnostique le mode de défaillance.</li>
+        <li>Choisir une architecture, c'est choisir un biais inductif : convolution pour la localité, attention pour les dépendances longues.</li>
+        <li>Le taux d'apprentissage domine tous les autres hyperparamètres ; commencer par surapprendre 16 exemples pour valider la chaîne.</li>
+        <li>Connexions résiduelles, normalisation et écrêtage résolvent les pathologies du gradient.</li>
+        <li>Transfer learning par défaut : entraîner de zéro est rarement le bon choix.</li>
+        <li>L'attention est quadratique en longueur de séquence — c'est la contrainte structurante des LLM.</li>
+        <li>Les PINN brillent sur les problèmes inverses et l'assimilation de données, pas en remplacement d'un solveur classique.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m13.html" class="btn btn-secondary">← Module 13 : Inférence bayésienne</a>
-  <a href="project7-m15.html" class="btn btn-primary">Module 15 : Données non tabulaires →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">ARIMA</span><span class="tag">Prévision</span><span class="tag">Kalman</span><span class="tag">FFT</span><span class="tag">Survie</span><span class="tag">Fiabilité</span></div>
+  <div class="course-nav">
+    <a href="project7-m13.html" class="btn btn-secondary">← Module 13 : Théorie de l'apprentissage</a>
+    <a href="project7-m15.html" class="btn btn-primary">Module 15 : Séries temporelles →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">MLP</span><span class="tag">CNN</span><span class="tag">Transformers</span><span class="tag">Attention</span><span class="tag">PINN</span><span class="tag">PyTorch</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -275,52 +263,56 @@ print(wb.rho_)                           # paramètre de forme : &lt; 1 rodage, 
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 14</div>
-    <h1>Time series, signals and time-to-event data</h1>
+    <h1>Deep learning</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>What temporal dependence breaks: effective sample size, non-stationarity, ordering and horizon — and the first question, whether this is forecasting at all.</li>
-      <li>STL decomposition, stationarity testing with ADF and KPSS together, differencing, ACF and PACF.</li>
-      <li>Exponential smoothing (ETS / Holt-Winters) and ARIMA/SARIMAX, and the cases where classical statistics still beat machine learning.</li>
-      <li>The ML approach: strictly past lag and rolling features, recursive vs direct multi-horizon strategies, time-aware validation with a gap — and the leakage trap that silently invalidates forecasting projects.</li>
-      <li>Deep learning models (N-BEATS, DeepAR, Temporal Fusion Transformer) and time-series foundation models.</li>
-      <li>Probabilistic forecasting: pinball loss, CRPS, MASE, and always benchmarking against the naive forecast.</li>
-      <li>State-space models and the Kalman filter (predict/update, EKF, UKF, particle filters) for real-time estimation of hidden states.</li>
-      <li>Change-point detection and temporal anomaly detection, including the multiple-testing issue on streaming alerts.</li>
-      <li>Spectral analysis: FFT and Welch, spectrograms as CNN inputs, band-pass filtering, aliasing and leakage, wavelets.</li>
-      <li>Time-to-event data: censoring, Kaplan-Meier, log-rank, Cox proportional hazards, Weibull/AFT models and the bathtub curve — plus how remaining-useful-life prediction combines the whole module.</li>
+      <li>When deep learning wins and when gradient boosting still wins, framed as a choice of inductive bias.</li>
+      <li>From the perceptron to the MLP: activation functions, the universal approximation theorem and what it does not say, and why initialisation matters.</li>
+      <li>Backpropagation as the chain rule applied efficiently, and the vanishing/exploding gradient pathologies it explains.</li>
+      <li>Training recipes ranked by impact: learning rate finding, batch vs layer normalisation, dropout and weight decay, augmentation, batch size, mixed precision — plus the 30-second sanity check of overfitting 16 examples.</li>
+      <li>CNNs: weight sharing, receptive fields, residual connections, and transfer learning as the realistic default.</li>
+      <li>RNNs and LSTMs, and the two limitations that transformers removed.</li>
+      <li>Transformers: scaled dot-product attention derived step by step, multi-head attention, positional encodings, the quadratic cost, and Vision Transformers.</li>
+      <li>Autoencoders, self-supervised learning and representations.</li>
+      <li>Physics-Informed Neural Networks: the composite loss, automatic differentiation of PDE residuals, a working PyTorch example on a damped oscillator, inverse problems — and an honest account of where PINNs fail.</li>
+      <li>Limitations: data hunger, opacity, miscalibrated uncertainty, adversarial fragility, reproducibility and footprint.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><strong>Time series, signals and time-to-event data</strong></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><strong>Deep learning</strong></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

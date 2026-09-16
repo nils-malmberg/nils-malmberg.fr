@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 10 - Apprentissage par renforcement - Nils Malmberg</title>
+  <title>Module 10 - Data science en pratique : du problème au dataset - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,172 +41,256 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 10</div>
-    <h1>Apprentissage par renforcement</h1>
+    <h1>Data science en pratique : du problème au dataset</h1>
   </div>
 
-  <div class="project-content">
-    <p>En apprentissage supervisé, on dispose de la bonne réponse pour chaque exemple. En apprentissage par renforcement, on ne dispose que d'un signal de récompense, souvent rare et différé, et les décisions influencent les situations futures. Ce module présente le cadre, les algorithmes qui comptent, et — point important — les raisons pour lesquelles il faut souvent y renoncer.</p>
+  <div class="project-content course-content">
+    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cadre">Le cadre : MDP et récompense</a></li>
-        <li><a href="#valeurs">Fonctions de valeur et équations de Bellman</a></li>
-        <li><a href="#exploration">Exploration et exploitation</a></li>
-        <li><a href="#tabulaire">Méthodes tabulaires : TD, Q-learning, SARSA</a></li>
-        <li><a href="#dqn">Deep RL : DQN</a></li>
-        <li><a href="#pg">Gradient de politique : REINFORCE, A2C, PPO</a></li>
-        <li><a href="#variantes">Model-based, offline RL, RLHF</a></li>
-        <li><a href="#pratique">En pratique, et pourquoi c'est difficile</a></li>
+        <li><a href="#cycle">Cycle de vie d'un projet</a></li>
+        <li><a href="#cadrage">Cadrage : la cible et la baseline</a></li>
+        <li><a href="#eda">Exploration : une checklist</a></li>
+        <li><a href="#viz">Visualisation utile</a></li>
+        <li><a href="#manquantes">Données manquantes</a></li>
+        <li><a href="#features">Feature engineering</a></li>
+        <li><a href="#desequilibre">Classes déséquilibrées</a></li>
+        <li><a href="#validation">Validation croisée : choisir le bon schéma</a></li>
+        <li><a href="#leakage">Fuites de données : le catalogue</a></li>
       </ol>
     </div>
 
-    <h2 id="cadre">1. Le cadre : MDP et récompense</h2>
-    <p>Un agent observe un état \(s_t\), choisit une action \(a_t\), reçoit une récompense \(r_{t+1}\) et se retrouve dans un nouvel état \(s_{t+1}\). Le formalisme est le <strong>processus de décision markovien</strong> \((\mathcal{S}, \mathcal{A}, P, R, \gamma)\), dont l'hypothèse centrale est la propriété de Markov : l'état contient toute l'information utile pour prédire la suite — le passé n'apporte rien de plus.</p>
+    <h2 id="cycle">1. Cycle de vie d'un projet</h2>
+    <div class="code-label">les étapes, et leur poids réel en temps</div>
+    <div class="code-block"><pre>1. Cadrage métier          définir la question, la métrique, ce qu'on fera du résultat   ~10 %
+2. Collecte / accès        trouver, extraire, joindre les données                        ~20 %
+3. Exploration            comprendre les données, détecter les anomalies                 ~15 %
+4. Préparation            nettoyage, features, encodages                                 ~25 %
+5. Modélisation           baseline, puis itérations                                      ~10 %
+6. Évaluation             protocole, métriques, analyse d'erreurs                        ~10 %
+7. Déploiement / suivi    mise en production, monitoring, ré-entraînement                ~10 %</pre></div>
 
-    <p>L'agent maximise le <strong>retour</strong>, somme actualisée des récompenses futures :</p>
-    <div style="text-align:center;overflow-x:auto">\[ G_t = \sum_{k=0}^{\infty}\gamma^k r_{t+k+1}, \qquad \gamma \in [0,1) \]</div>
-    <p>Le facteur \(\gamma\) joue deux rôles : il garantit la convergence de la somme, et il encode l'horizon temporel — \(\gamma = 0{,}99\) donne un horizon effectif d'environ \(1/(1-\gamma) = 100\) pas. C'est un paramètre bien plus structurant qu'il n'y paraît : le régler trop bas produit un agent myope, trop haut rend l'apprentissage instable.</p>
+    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique.</p>
 
     <div class="step-block">
-      <h4>Ce qui distingue vraiment le RL du supervisé</h4>
-      <ul>
-        <li><strong>Pas d'étiquette</strong> — seulement un signal évaluatif : « cette action a rapporté 3 », sans indiquer quelle action aurait rapporté davantage.</li>
-        <li><strong>Crédit différé</strong> — la récompense arrive parfois des centaines de pas après le choix qui l'a causée. Savoir à quelle décision l'attribuer est le problème central.</li>
-        <li><strong>Données non i.i.d. et non stationnaires</strong> — l'agent génère lui-même ses données, et cette distribution change à mesure qu'il apprend. Toute l'hypothèse de base de l'apprentissage supervisé tombe.</li>
-        <li><strong>Exploration</strong> — il faut essayer ce qu'on ne connaît pas pour découvrir mieux, au prix de mauvaises performances immédiates.</li>
-      </ul>
+      <h4>La question à poser avant tout le reste</h4>
+      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout le reste : la métrique (un coût d'erreur asymétrique change le seuil), la latence acceptable (temps réel ou lot nocturne), le besoin d'explicabilité (un refus de crédit doit être motivé), et même la faisabilité — certaines décisions ont besoin de causalité, pas de prédiction (module 8).</p>
     </div>
 
-    <h2 id="valeurs">2. Fonctions de valeur et équations de Bellman</h2>
-    <p>Une <strong>politique</strong> \(\pi(a\mid s)\) donne la probabilité de choisir \(a\) dans \(s\). On lui associe deux fonctions de valeur :</p>
-    <div style="text-align:center;overflow-x:auto">\[ V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q^\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t=s,\, a_t=a] \]</div>
-    <p>\(V\) évalue un état, \(Q\) évalue un couple état-action — donc \(Q\) permet de <em>choisir</em> directement, sans connaître le modèle de transition. La récursivité du retour donne l'équation de Bellman, et sa version optimale :</p>
-    <div style="text-align:center;overflow-x:auto">\[ Q^\star(s,a) = \mathbb{E}\Big[r + \gamma \max_{a'} Q^\star(s',a')\Big] \]</div>
-    <p>C'est un point fixe d'un opérateur contractant (de facteur \(\gamma\)) : itérer l'opérateur converge vers \(Q^\star\), et la politique optimale s'en déduit par \(\pi^\star(s) = \arg\max_a Q^\star(s,a)\). Tout le RL par valeurs consiste à approcher ce point fixe à partir d'échantillons.</p>
+    <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
+    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif est-il parti ?). Deux définitions raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables.</p>
 
-    <h2 id="exploration">3. Exploration et exploitation</h2>
-    <p>Le dilemme apparaît déjà dans le cas le plus simple, le <em>bandit manchot</em> : plusieurs leviers de récompense moyenne inconnue, et un budget de tirages. Exploiter le meilleur levier connu, c'est risquer de passer à côté d'un meilleur jamais essayé ; explorer, c'est payer des tirages sous-optimaux.</p>
-    <div class="code-label">stratégies</div>
-    <div class="code-block"><pre>ε-greedy          action aléatoire avec probabilité ε, sinon la meilleure connue.
-                  Simple ; on fait décroître ε au fil de l'apprentissage.
-Boltzmann         probabilité ∝ exp(Q/τ) : explore proportionnellement à la qualité.
-UCB               Q(a) + c·√(ln t / N(a)) : bonus d'optimisme pour les actions peu testées.
-                  Même intuition qu'en optimisation bayésienne (module 9).
-Thompson          tirage dans le postérieur sur les récompenses. Très efficace en bandits.
-Bonus intrinsèque  récompense de curiosité (erreur de prédiction, nouveauté de l'état)
-                  pour les environnements à récompense extrêmement rare.</pre></div>
+    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8).</p>
 
-    <h2 id="tabulaire">4. Méthodes tabulaires : TD, Q-learning, SARSA</h2>
-    <p>Quand les états et actions sont peu nombreux, \(Q\) tient dans un tableau. Trois familles pour l'estimer :</p>
-    <ul>
-      <li><strong>Programmation dynamique</strong> — exacte, mais exige de connaître \(P\) et \(R\). Rarement le cas.</li>
-      <li><strong>Monte-Carlo</strong> — attendre la fin de l'épisode et moyenner les retours observés. Sans biais, mais de forte variance, et inapplicable aux tâches continues.</li>
-      <li><strong>Différences temporelles (TD)</strong> — la grande idée : mettre à jour <em>immédiatement</em> à partir de l'estimation courante de l'état suivant, sans attendre la fin. C'est du <em>bootstrapping</em> : on apprend une estimation à partir d'une autre estimation.</li>
-    </ul>
+    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle : la moyenne pour une régression, la classe majoritaire pour une classification, la valeur de la veille pour une série temporelle, ou la règle métier existante. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème. La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, le modèle ne vaut peut-être pas sa complexité opérationnelle.</p>
 
-    <div style="text-align:center;overflow-x:auto">\[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\underbrace{r + \gamma \max_{a'}Q(s',a') - Q(s,a)}_{\text{erreur TD}}\Big] \]</div>
+    <h2 id="eda">3. Exploration : une checklist</h2>
+    <div class="code-label">ce que je regarde systématiquement</div>
+    <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
+Cible          distribution, taux de positifs, valeurs extrêmes, évolution dans le temps
+Manquants      taux par colonne, structure des manquants (voir section 5)
+Doublons       lignes identiques ET doublons sur la clé métier
+Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
+Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix négatif)
+Temps          couverture, trous, saisonnalité, ruptures (changement de collecte ?)
+Relations      corrélations entre features, lien de chaque feature avec la cible
+Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
 
-    <p>C'est le <strong>Q-learning</strong>. Sa particularité : il apprend la valeur de la politique <em>optimale</em> (à cause du \(\max\)) tout en se comportant selon une politique exploratrice — c'est un algorithme <em>off-policy</em>, ce qui permet de réutiliser des données anciennes ou produites par un autre agent. <strong>SARSA</strong> remplace \(\max_{a'}Q(s',a')\) par \(Q(s',a')\) où \(a'\) est l'action réellement choisie : il apprend la valeur de la politique suivie, exploration comprise (<em>on-policy</em>), ce qui le rend plus prudent près des états dangereux. L'exemple canonique est la falaise : Q-learning longe le bord (trajet optimal) et tombe régulièrement pendant l'apprentissage, SARSA prend un chemin plus sûr.</p>
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import polars as pl
 
-    <h2 id="dqn">5. Deep RL : DQN</h2>
-    <p>Dès que l'espace d'états devient grand ou continu (des pixels), le tableau est remplacé par un réseau \(Q_\theta(s,a)\). Cette substitution casse les garanties de convergence, et trois mécanismes ont été nécessaires pour stabiliser l'entraînement :</p>
-    <ul>
-      <li><strong>Replay buffer</strong> — stocker les transitions et en tirer des mini-lots au hasard. Cela casse la corrélation temporelle des échantillons et réutilise chaque expérience plusieurs fois (efficacité en données).</li>
-      <li><strong>Réseau cible</strong> — la cible \(r + \gamma\max_{a'}Q_{\theta^-}(s',a')\) est calculée avec une copie figée \(\theta^-\), mise à jour périodiquement. Sans cela, on poursuit une cible qui bouge à chaque pas, et l'entraînement diverge.</li>
-      <li><strong>Double DQN</strong> — l'opérateur \(\max\) surestime systématiquement les valeurs (le maximum d'estimateurs bruités est biaisé vers le haut). On dissocie donc le choix de l'action (réseau courant) et son évaluation (réseau cible).</li>
-    </ul>
-    <p>Autres raffinements utiles : <em>dueling</em> (séparer valeur d'état et avantage de l'action), <em>prioritized replay</em> (rejouer davantage les transitions à forte erreur TD), et <em>n-step returns</em>. DQN et ses variantes ne traitent que les <strong>actions discrètes</strong> — pour un contrôle continu, il faut passer aux méthodes de politique.</p>
+df = pl.read_parquet("data/clients.parquet")
 
-    <h2 id="pg">6. Gradient de politique : REINFORCE, A2C, PPO</h2>
-    <p>Plutôt que d'estimer des valeurs pour en déduire une politique, on paramètre directement \(\pi_\theta(a\mid s)\) et on monte le gradient de la performance. Le théorème du gradient de politique donne une forme remarquablement simple :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a\mid s)\, A^{\pi}(s,a)\big] \]</div>
-    <p>La lecture est intuitive : on augmente la probabilité des actions dont l'<strong>avantage</strong> \(A = Q - V\) est positif (elles font mieux que la moyenne de l'état) et on diminue celle des autres. La fonction \(V\) joue ici le rôle de <em>baseline</em> : la soustraire ne change pas l'espérance du gradient mais réduit fortement sa variance — c'est ce qui rend la méthode utilisable.</p>
+print(df.describe())                                    # stats de base par colonne
+print(df.null_count())                                  # manquants par colonne
+print(df.select(pl.all().n_unique()))                   # cardinalités
+print(df.filter(pl.struct(df.columns).is_duplicated())) # doublons exacts
 
-    <p><strong>REINFORCE</strong> est la version brute (avantage estimé par le retour Monte-Carlo) : correcte mais très bruitée. Les méthodes <strong>acteur-critique</strong> ajoutent un second réseau, le critique, qui estime \(V\) et fournit un avantage à faible variance (A2C, A3C, puis GAE pour un compromis biais-variance réglable).</p>
+# valeurs impossibles : toujours confronter aux bornes métier
+print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))</pre></div>
 
-    <p><strong>PPO</strong> est devenu le défaut pratique. Son idée : réutiliser plusieurs fois un même lot de trajectoires pour faire plusieurs pas de gradient, tout en empêchant la politique de trop s'éloigner de celle qui a produit les données. En notant \(\rho = \pi_\theta(a|s)/\pi_{\text{old}}(a|s)\) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ L^{\text{CLIP}} = \mathbb{E}\Big[\min\big(\rho A,\; \operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,A\big)\Big] \]</div>
-    <p>L'écrêtage annule le gain marginal dès que le rapport sort de la bande \([1-\epsilon, 1+\epsilon]\) (typiquement \(\epsilon = 0{,}2\)) : le pas reste borné, sans le calcul coûteux d'une contrainte de divergence KL comme dans TRPO. C'est simple, robuste, et c'est l'algorithme utilisé pour l'alignement des LLM par retour humain.</p>
-
-    <div class="code-label">panorama des algorithmes</div>
-    <div class="code-block"><pre>Algorithme   Actions      On/Off-policy   Points forts
-────────────────────────────────────────────────────────────────────────────────
-Q-learning   discrètes    off             tabulaire, fondation théorique
-DQN          discrètes    off             pixels, jeux Atari, efficace en données
-REINFORCE    les deux     on              simple, mais forte variance
-A2C / A3C    les deux     on              acteur-critique, bon compromis
-PPO          les deux     on              LE défaut : robuste, peu de réglage
-SAC          continues    off             entropie maximale, très efficace en données :
-                                          le choix pour la robotique et le contrôle
-TD3          continues    off             DDPG corrigé de la surestimation</pre></div>
-
-    <div class="code-label">Python — Gymnasium + Stable-Baselines3</div>
-    <div class="code-block"><pre>import gymnasium as gym
-from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.evaluation import evaluate_policy
-
-env = make_vec_env("LunarLander-v3", n_envs=8)     # 8 environnements en parallèle
-
-modele = PPO("MlpPolicy", env, learning_rate=3e-4, n_steps=1024,
-             batch_size=256, gamma=0.999, verbose=0, seed=0)
-modele.learn(total_timesteps=1_000_000)
-
-moy, ecart = evaluate_policy(modele, gym.make("LunarLander-v3"), n_eval_episodes=30)
-print(f"récompense moyenne = {moy:.1f} ± {ecart:.1f}")</pre></div>
-
-    <p>Paralléliser les environnements est la première optimisation à faire : le goulot d'étranglement est presque toujours la <em>simulation</em>, pas le réseau. Et l'évaluation doit porter sur plusieurs graines : la variance entre exécutions en RL est notoirement élevée, au point qu'une comparaison sur une seule graine ne veut rien dire.</p>
-
-    <h2 id="variantes">7. Model-based, offline RL, RLHF</h2>
-    <ul>
-      <li><strong>Model-based</strong> — apprendre un modèle de la dynamique \(P(s'\mid s,a)\) et planifier dedans (Dyna, MuZero, MPC). Gain considérable en nombre d'interactions réelles, au prix des erreurs du modèle, que la planification a tendance à exploiter.</li>
-      <li><strong>Offline RL</strong> — apprendre uniquement à partir d'un jeu de données fixe, sans interagir : c'est le seul cadre réaliste en santé, en finance ou en industrie, où l'exploration est interdite. La difficulté est le décalage de distribution : l'agent surestime des actions jamais observées. Les algorithmes dédiés (CQL, IQL) contraignent la politique à rester près des données.</li>
-      <li><strong>RLHF</strong> — l'alignement des LLM : on entraîne un modèle de récompense sur des préférences humaines (« cette réponse est meilleure que celle-là »), puis on optimise le modèle de langage par PPO contre cette récompense, avec une pénalité KL pour ne pas trop s'éloigner du modèle initial. Les variantes plus récentes (DPO, GRPO) court-circuitent en partie cette boucle (module 11).</li>
-      <li><strong>Sim2real</strong> — entraîner en simulation puis transférer au réel. La <em>randomisation de domaine</em> (varier massivement frottements, masses, textures pendant l'entraînement) force une politique robuste au décalage entre simulateur et monde réel.</li>
-    </ul>
-
-    <h2 id="pratique">8. En pratique, et pourquoi c'est difficile</h2>
-    <div class="code-label">où le RL est réellement utilisé</div>
-    <div class="code-block"><pre>Jeux et simulation       Atari, Go, StarCraft — l'environnement est gratuit et parfait
-Robotique / contrôle     locomotion, manipulation, drones (avec sim2real)
-Systèmes opérés          refroidissement de datacenter, gestion d'énergie, trafic réseau
-Recommandation           optimisation d'engagement à long terme (via bandits contextuels)
-Alignement de LLM        RLHF, raisonnement par récompense vérifiable
-Gestion de portefeuille  allocation séquentielle sous contrainte de risque</pre></div>
+    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou qu'une valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
 
     <div class="warning-block">
-      <strong>Les difficultés, sans enrobage.</strong><br>
-      • <strong>Efficacité en données catastrophique</strong> — des millions d'interactions pour des tâches qu'un humain apprend en quelques essais. Acceptable en simulation, rédhibitoire sur un système réel.<br>
-      • <strong>Conception de la récompense</strong> — c'est le vrai travail, et le plus périlleux. Un agent optimise <em>exactement</em> ce qu'on mesure : le fameux bateau de course qui tourne en rond pour ramasser des bonus plutôt que de finir la course en est l'illustration canonique. Toute récompense mal spécifiée sera exploitée.<br>
-      • <strong>Instabilité et variance</strong> — deux exécutions du même algorithme avec des graines différentes peuvent donner des résultats opposés. Toujours rapporter plusieurs graines.<br>
-      • <strong>Sensibilité aux hyperparamètres</strong> — bien plus marquée qu'en supervisé, et les intuitions transfèrent mal d'un environnement à l'autre.<br>
-      • <strong>Sécurité</strong> — pendant l'exploration, l'agent fait par construction des choses absurdes. Inacceptable sur un procédé industriel ou un patient.
+      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une feature semble trop belle, c'est généralement qu'elle contient une information qui n'existera pas au moment de la prédiction (section 9).
     </div>
 
+    <h2 id="viz">4. Visualisation utile</h2>
+    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellent par défaut), <strong>plotly</strong> (interactif, précieux pour explorer un nuage de points dense). Quelques principes qui changent réellement la lisibilité :</p>
+    <ul>
+      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure. Doubler avec un <em>violin plot</em> ou un <em>strip plot</em> quand l'échantillon est petit.</li>
+      <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
+      <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
+      <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 24).</li>
+      <li><strong>Se méfier des moyennes</strong> : le quartet d'Anscombe et le « datasaurus » rappellent que des jeux de données de statistiques identiques peuvent être radicalement différents. Regarder les distributions, pas les résumés.</li>
+    </ul>
+
+    <h2 id="manquantes">5. Données manquantes</h2>
+    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin :</p>
+    <ul>
+      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
+      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est légitime.</li>
+      <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
+    </ul>
+
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
+Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
+Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase les corrélations.
+KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux mais bien meilleur.
+Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres.
+Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement les NaN,
+                          et apprennent la meilleure direction pour les valeurs absentes.
+Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est souvent
+                          lui-même informatif (un client qui ne renseigne pas son revenu...).</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
+from sklearn.impute import IterativeImputer, SimpleImputer
+
+# imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
+imp = IterativeImputer(max_iter=10, random_state=0)
+
+# conserver l'information "cette valeur manquait"
+imp_simple = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
+
+    <div class="warning-block">
+      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3).
+    </div>
+
+    <h2 id="features">6. Feature engineering</h2>
+    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne feature bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter.</p>
+
+    <h3>Variables catégorielles</h3>
+    <div class="code-label">encodages</div>
+    <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
+Ordinal          entier par modalité. Uniquement si un ORDRE existe réellement
+                 (S &lt; M &lt; L), ou pour des modèles à base d'arbres qui savent découper.
+Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
+                 forte cardinalité (code postal, produit) — et très exposé à la fuite.
+Hashing          projette dans un espace fixe. Utile en streaming, perd l'interprétabilité.
+Embeddings       représentation apprise, dense. Pour les réseaux de neurones (module 14).</pre></div>
+
+    <p>Le <strong>target encoding</strong> mérite un mot, car il est à la fois redoutable et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute mais une moyenne lissée vers la moyenne globale :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
+    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> (chaque pli encodé avec les statistiques des autres plis), faute de quoi chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
+
+    <h3>Variables numériques et temporelles</h3>
+    <ul>
+      <li><strong>Transformations</strong> — log sur les variables à queue lourde (prix, revenus, durées), Yeo-Johnson si des valeurs négatives ou nulles existent. Cela rend les distributions plus symétriques, ce qui aide les modèles linéaires et les réseaux (pas les arbres, insensibles aux transformations monotones).</li>
+      <li><strong>Discrétisation</strong> — transformer l'âge en tranches capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information.</li>
+      <li><strong>Interactions et ratios</strong> — souvent l'apport décisif : prix au m², revenu par personne du foyer, nombre de connexions par jour d'ancienneté. Les arbres approchent mal les ratios, il faut les fournir explicitement.</li>
+      <li><strong>Features temporelles</strong> — heure, jour de la semaine, mois, jour férié, ancienneté. Les variables cycliques se codent par \(\sin(2\pi t/T)\) et \(\cos(2\pi t/T)\) pour que 23 h soit proche de 0 h.</li>
+      <li><strong>Agrégats à fenêtre</strong> — moyennes, écarts types et comptages sur les 7, 30, 90 derniers jours. C'est le cœur du feature engineering en données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 4). Impérativement calculés avec une fenêtre <em>strictement passée</em>.</li>
+    </ul>
+
+    <h3>Sélection de features</h3>
+    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 12) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées à l'intérieur de la validation croisée.</p>
+
+    <h2 id="desequilibre">7. Classes déséquilibrées</h2>
+    <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
+    <ol>
+      <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 7).</li>
+      <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
+      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, pas à 0,5 par défaut.</li>
+      <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
+    </ol>
+
+    <div class="warning-block">
+      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test, lui, doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
+    </div>
+
+    <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
+    <p>Un découpage unique train/test est bruité : le score dépend du tirage. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
+
+    <div class="code-label">quel schéma pour quelle structure de données</div>
+    <div class="code-block"><pre>KFold                  données i.i.d., régression                        K = 5 ou 10
+StratifiedKFold        classification : conserve les proportions         le défaut en classif
+GroupKFold             plusieurs lignes par entité (patient, client)     un groupe = un seul pli
+StratifiedGroupKFold   les deux contraintes à la fois
+TimeSeriesSplit        séries temporelles : entraîner sur le passé,      jamais de mélange
+                       tester sur le futur (fenêtre glissante)
+LeaveOneOut            très peu de données                               coûteux, variance élevée
+Nested CV              quand on optimise DES hyperparamètres ET qu'on    boucle interne = réglage
+                       veut une estimation non biaisée de performance    boucle externe = évaluation</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.model_selection import (GroupKFold, StratifiedKFold,
+                                     TimeSeriesSplit, cross_validate)
+
+# données transactionnelles : plusieurs lignes par client → GroupKFold
+cv = GroupKFold(n_splits=5)
+res = cross_validate(pipeline, X, y, groups=df["client_id"],
+                     cv=cv, scoring=["roc_auc", "average_precision"],
+                     return_train_score=True)
+
+# l'écart train/validation mesure directement le surapprentissage
+print(res["train_roc_auc"].mean(), res["test_roc_auc"].mean())</pre></div>
+
     <div class="step-block">
-      <h4>La question préalable : ai-je vraiment besoin de RL ?</h4>
-      <p>Le RL se justifie quand la décision est <em>séquentielle</em> et que les actions <em>influencent les états futurs</em>. Si chaque décision est indépendante, un bandit contextuel — bien plus simple, mieux compris, plus sûr — suffit. Si l'on dispose d'exemples de bon comportement, l'imitation (apprentissage supervisé sur des démonstrations) est presque toujours plus rapide et plus stable, quitte à raffiner ensuite. Et si l'environnement est connu et modélisable, la commande optimale classique (MPC, LQR) offre des garanties que le RL n'apporte pas. Une part non négligeable des projets « RL » gagneraient à être l'un de ces trois autres projets.</p>
+      <h4>Le protocole que je considère comme correct</h4>
+      <ol>
+        <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
+        <li>Travailler en validation croisée sur le reste : exploration, features, réglages.</li>
+        <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
+        <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
+        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation.</li>
+      </ol>
+    </div>
+
+    <h2 id="leakage">9. Fuites de données : le catalogue</h2>
+    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production. Les formes les plus fréquentes :</p>
+
+    <div class="code-label">formes de fuite</div>
+    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de features ajustés sur TOUT
+                         le jeu avant le découpage.        → tout mettre dans un Pipeline
+
+Fuite temporelle         une feature utilise de l'information postérieure à la date de
+                         prédiction (moyenne calculée sur toute la période, statut final
+                         du dossier).                      → figer une date de référence
+
+Duplication              la même observation (ou quasi) des deux côtés du découpage :
+                         doublons, utilisateur présent plusieurs fois.  → GroupKFold
+
+Cible déguisée           une colonne qui n'existe que parce que l'événement a eu lieu :
+                         "date de résiliation", "montant remboursé", "motif de panne".
+
+Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
+                         → encodage en validation croisée interne
+
+Fuite par le seuil       choisir le seuil de décision sur le jeu de test.
+
+Sélection répétée        essayer 200 modèles et garder le meilleur score de test :
+                         le test devient un jeu d'entraînement déguisé.</pre></div>
+
+    <div class="step-block">
+      <h4>Comment la détecter</h4>
+      <p>Un score anormalement élevé (AUC de 0,99 sur un problème réputé difficile) doit déclencher une suspicion, pas une satisfaction. Deux gestes efficaces : regarder les <em>importances de features</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; et rejouer la chaîne complète sur une période postérieure (validation temporelle) — une fuite y disparaît, et le score s'effondre. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>MDP, retour actualisé, équations de Bellman : tout part de là.</li>
-        <li>TD apprend d'une estimation à partir d'une autre : c'est ce qui permet d'apprendre en ligne.</li>
-        <li>Q-learning est off-policy (réutilisation des données), SARSA on-policy (plus prudent).</li>
-        <li>DQN tient grâce au replay buffer et au réseau cible ; PPO est le défaut robuste, SAC pour le contrôle continu.</li>
-        <li>La conception de la récompense est le cœur du problème : l'agent exploitera toute faille.</li>
-        <li>Coût en données très élevé, forte variance : vérifier d'abord qu'un bandit ou de l'imitation ne suffisent pas.</li>
+        <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
+        <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
+        <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
+        <li>Le feature engineering paie plus que le choix d'algorithme ; ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
+        <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
+        <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
+        <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m09.html" class="btn btn-secondary">← Module 9 : Processus gaussiens</a>
-  <a href="project7-m11.html" class="btn btn-primary">Module 11 : LLM, embeddings et RAG →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">MDP</span><span class="tag">Bellman</span><span class="tag">Q-learning</span><span class="tag">DQN</span><span class="tag">PPO</span><span class="tag">Gymnasium</span></div>
+  <div class="course-nav">
+    <a href="project7-m09.html" class="btn btn-secondary">← Module 9 : Inférence bayésienne</a>
+    <a href="project7-m11.html" class="btn btn-primary">Module 11 : Peu d'étiquettes →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">EDA</span><span class="tag">Feature engineering</span><span class="tag">Imputation</span><span class="tag">Validation croisée</span><span class="tag">Data leakage</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -227,50 +311,55 @@ Gestion de portefeuille  allocation séquentielle sous contrainte de risque</pre
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 10</div>
-    <h1>Reinforcement learning</h1>
+    <h1>Data science in practice: from problem to dataset</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The MDP framework, discounted returns, and the four things that genuinely separate RL from supervised learning.</li>
-      <li>Value functions and Bellman equations as a contraction fixed point.</li>
-      <li>Exploration strategies: ε-greedy, Boltzmann, UCB, Thompson sampling, intrinsic curiosity.</li>
-      <li>Temporal-difference learning, Q-learning vs SARSA, and what off-policy vs on-policy changes in behaviour.</li>
-      <li>Deep Q-Networks: why function approximation breaks convergence, and the three fixes (replay buffer, target network, double estimation).</li>
-      <li>Policy gradients: the policy gradient theorem, advantage baselines, actor-critic methods, and PPO's clipped objective.</li>
-      <li>Model-based RL, offline RL and distribution shift, RLHF for language models, and sim2real transfer.</li>
-      <li>Where RL is actually used, an unvarnished list of its difficulties (sample efficiency, reward hacking, variance, safety), and the question to ask before starting: would a contextual bandit, imitation learning or classical optimal control do the job?</li>
+      <li>The real shape of a data project, and the one question to answer first: which decision will change because of this model?</li>
+      <li>Framing: defining the target, the observation unit, and a baseline worth beating.</li>
+      <li>An exploration checklist, automated profiling, and the "disguised identifier" trap.</li>
+      <li>Visualisation rules that actually improve readability.</li>
+      <li>Missing data: Rubin's MCAR / MAR / MNAR typology, imputation strategies, and why imputation belongs inside the pipeline.</li>
+      <li>Feature engineering: categorical encodings (including smoothed, cross-fitted target encoding), transformations, cyclical time features, windowed aggregates, feature selection.</li>
+      <li>Imbalanced classes: metrics first, class weights, threshold tuning, and an honest assessment of SMOTE.</li>
+      <li>Cross-validation schemes matched to data structure (groups, time series, stratification), nested CV, and a protocol that keeps the test set honest.</li>
+      <li>A catalogue of data leakage patterns and how to detect them.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><strong>Reinforcement learning</strong></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><strong>Data science in practice: from problem to dataset</strong></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

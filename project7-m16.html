@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 16 - ML pour la simulation et l'ingénierie - Nils Malmberg</title>
+  <title>Module 16 - Données non tabulaires : texte, images, audio, graphes - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,192 +41,171 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 16</div>
-    <h1>ML pour la simulation et l'ingénierie</h1>
+    <h1>Données non tabulaires : texte, images, audio, graphes</h1>
   </div>
 
-  <div class="project-content">
-    <p>C'est le module où la formation d'ingénieur devient un avantage plutôt qu'un détour. La situation est toujours la même : on dispose d'un code de calcul fiable mais coûteux — CFD, éléments finis, neutronique, Monte-Carlo de transport — et l'on a besoin de milliers d'évaluations pour propager des incertitudes, optimiser une conception ou piloter un système en temps réel. Le machine learning n'y remplace pas la physique : il en construit une approximation utilisable, et il faut savoir exactement dans quelles limites elle reste valide.</p>
+  <div class="project-content course-content">
+    <p>Un modèle ne consomme que des nombres. Tout le travail, sur ces données, consiste donc à construire une représentation — et le choix de cette représentation pèse bien plus lourd que le choix de l'algorithme qui vient après. Ce module traite les quatre modalités que l'on rencontre le plus souvent, avec une insistance particulière sur les graphes, qui sont absents de la plupart des cours généralistes alors qu'ils modélisent naturellement beaucoup de systèmes d'ingénierie.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#monte-carlo">Monte-Carlo et réduction de variance</a></li>
-        <li><a href="#qmc">Quasi-Monte-Carlo et plans d'expériences</a></li>
-        <li><a href="#propagation">Propagation d'incertitude et chaos polynomial</a></li>
-        <li><a href="#sobol">Analyse de sensibilité</a></li>
-        <li><a href="#surrogates">Métamodèles : construire et valider</a></li>
-        <li><a href="#rom">Réduction de modèle : POD, DMD</a></li>
-        <li><a href="#sciml">SciML : opérateurs neuronaux et hybrides</a></li>
-        <li><a href="#assimilation">Assimilation de données et problèmes inverses</a></li>
-        <li><a href="#jumeau">Jumeau numérique et crédibilité</a></li>
+        <li><a href="#texte">Texte : du TF-IDF aux transformers</a></li>
+        <li><a href="#taches-nlp">Tâches classiques du NLP</a></li>
+        <li><a href="#images">Images : au-delà de la classification</a></li>
+        <li><a href="#audio">Audio et signaux perceptifs</a></li>
+        <li><a href="#graphes">Graphes : représentation et mesures</a></li>
+        <li><a href="#gnn">Réseaux de neurones sur graphes</a></li>
+        <li><a href="#multimodal">Multimodal</a></li>
+        <li><a href="#annotation">Annotation et qualité</a></li>
       </ol>
     </div>
 
-    <h2 id="monte-carlo">1. Monte-Carlo et réduction de variance</h2>
-    <p>Estimer \(I = \mathbb{E}[f(X)]\) par tirage aléatoire donne \(\hat I_N = \frac1N\sum f(x_i)\), d'erreur type \(\sigma/\sqrt{N}\). La propriété remarquable — et la raison pour laquelle la méthode domine en grande dimension — est que <strong>cette vitesse ne dépend pas de la dimension</strong>, contrairement à toute quadrature déterministe. Le revers : gagner un chiffre significatif coûte cent fois plus de simulations. D'où l'importance des techniques de réduction de variance, qui s'attaquent au numérateur plutôt qu'au dénominateur.</p>
+    <h2 id="texte">1. Texte : du TF-IDF aux transformers</h2>
+    <p>Avant d'appeler un modèle de langage, il faut savoir que le pipeline classique reste imbattable sur certaines tâches : il s'entraîne en secondes, tourne sur CPU, et s'explique coefficient par coefficient.</p>
 
-    <div class="code-label">réduire la variance, pas augmenter N</div>
-    <div class="code-block"><pre>Variables antithétiques   tirer u et 1-u : la corrélation négative annule une partie
-                          de la fluctuation. Gain modeste, coût nul.
-Variable de contrôle      utiliser une grandeur g corrélée à f dont l'espérance est
-                          CONNUE : Î = mean(f) - c·(mean(g) - E[g]). Souvent le
-                          meilleur rapport gain/effort — un modèle simplifié ou un
-                          surrogate fait un excellent contrôle.
-Échantillonnage           tirer selon une loi q qui concentre les tirages là où f
-préférentiel              compte, puis corriger par le poids p/q. INDISPENSABLE pour
-                          les événements rares (probabilité de défaillance à 10⁻⁶).
-Stratification / LHS      découper l'espace et garantir une couverture régulière.
-Multi-niveaux (MLMC)      combiner beaucoup de simulations grossières et peu de
-                          simulations fines : réduit le coût de plusieurs ordres.</pre></div>
+    <p><strong>TF-IDF</strong> pondère chaque terme par sa fréquence dans le document et sa rareté dans le corpus :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{tfidf}(t,d) = \underbrace{f_{t,d}}_{\text{fréquence locale}} \times \underbrace{\log\frac{N}{1+n_t}}_{\text{rareté globale}} \]</div>
+    <p>Un mot fréquent partout (« le », « système ») reçoit un poids quasi nul, un mot rare mais présent porte l'information. <strong>BM25</strong> raffine en saturant la fréquence (le dixième « pompe » n'apporte plus grand-chose) et en normalisant par la longueur du document — c'est la composante lexicale de la recherche hybride du module 20.</p>
+
+    <div class="code-label">Python — baseline de classification de texte</div>
+    <div class="code-block"><pre>from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+
+modele = make_pipeline(
+    TfidfVectorizer(ngram_range=(1, 2), min_df=3, max_df=0.7,
+                    sublinear_tf=True, strip_accents="unicode"),
+    LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced"),
+).fit(textes_train, y_train)
+
+# interprétabilité gratuite : les n-grammes les plus discriminants
+noms = modele[0].get_feature_names_out()
+poids = modele[-1].coef_[0]
+print([noms[i] for i in poids.argsort()[-15:]])</pre></div>
 
     <div class="step-block">
-      <h4>Le cas des événements rares</h4>
-      <p>Estimer une probabilité de défaillance de \(10^{-6}\) par Monte-Carlo direct demande de l'ordre de \(10^{8}\) simulations pour une précision de 10 % — hors de portée avec un code coûteux. Les méthodes dédiées (échantillonnage préférentiel, <em>subset simulation</em>, FORM/SORM en fiabilité des structures) ramènent cela à quelques milliers d'appels, souvent combinées à un métamodèle raffiné près de la surface d'état limite. C'est exactement l'articulation entre ce module et l'optimisation bayésienne du module 9 : on enrichit le plan là où la décision se joue.</p>
+      <h4>Quand le classique suffit — et quand il ne suffit plus</h4>
+      <p>TF-IDF + régression logistique reste excellent quand le vocabulaire est <em>discriminant par lui-même</em> : tri de tickets, détection de spam, classification thématique de documents techniques. Il échoue dès que le sens dépend de l'ordre, de la négation ou du contexte (« ce n'est pas un défaut » et « c'est un défaut » ont presque le même sac de mots). C'est là que les embeddings contextuels et les modèles de langage (module 20) deviennent nécessaires. La bonne démarche reste de mesurer l'écart : si la baseline lexicale atteint 95 % de la performance d'un transformer pour un millième du coût, la question est tranchée.</p>
     </div>
 
-    <h2 id="qmc">2. Quasi-Monte-Carlo et plans d'expériences</h2>
-    <p>Les suites à faible discordance (Sobol, Halton) remplacent l'aléa par des points délibérément bien répartis. La convergence passe de \(O(N^{-1/2})\) à \(O((\log N)^d/N)\) : bien meilleure en dimension modérée, l'avantage s'érodant quand \(d\) devient grand. Pour un plan d'expériences numériques, les options usuelles :</p>
+    <p>Sur le prétraitement, deux remarques. La <strong>lemmatisation</strong> (spaCy) est utile en français, langue fortement fléchie, là où la racinisation brutale dégrade souvent. Et la suppression des <em>stop words</em> n'est pas toujours souhaitable : la négation et les mots-outils portent parfois exactement l'information recherchée.</p>
 
-    <div class="code-label">Python — scipy.stats.qmc</div>
-    <div class="code-block"><pre>from scipy.stats import qmc
-
-# hypercube latin optimisé : projection uniforme sur chaque axe
-plan = qmc.LatinHypercube(d=6, optimization="random-cd", seed=0).random(n=120)
-
-# suite de Sobol : extensible par puissances de 2, excellente uniformité
-sobol = qmc.Sobol(d=6, scramble=True, seed=0).random_base2(m=7)     # 128 points
-
-# mise à l'échelle vers les bornes physiques des paramètres
-X = qmc.scale(plan, l_bounds=[0.1, 300, 1e5, 0.2, 1.0, 0.0],
-                    u_bounds=[0.9, 600, 5e5, 0.8, 3.0, 1.0])
-print(qmc.discrepancy(plan))              # plus c'est bas, mieux l'espace est couvert</pre></div>
-
-    <p>Règle empirique pour un premier plan destiné à construire un métamodèle : environ dix points par dimension d'entrée, puis enrichissement adaptatif (module 9) plutôt qu'un grand plan figé. Et toujours prévoir un jeu de <em>validation</em> tiré indépendamment : valider un surrogate sur les points qui ont servi à le construire n'a aucun sens.</p>
-
-    <h2 id="propagation">3. Propagation d'incertitude et chaos polynomial</h2>
-    <p>Les entrées d'un calcul sont incertaines : propriétés matériaux, conditions aux limites, tolérances géométriques. La propagation consiste à en déduire la loi de la sortie — et pas seulement sa moyenne, car une décision de sûreté porte sur un quantile extrême.</p>
-
-    <p>Le <strong>chaos polynomial</strong> (PCE) développe la sortie sur une base de polynômes orthogonaux des variables aléatoires d'entrée :</p>
-    <div style="text-align:center;overflow-x:auto">\[ Y = f(\xi) \approx \sum_{j=0}^{P} \alpha_j \Psi_j(\xi), \qquad \mathbb{E}[Y] = \alpha_0, \quad \operatorname{Var}(Y) = \sum_{j\geq 1}\alpha_j^2 \]</div>
-    <p>La base est choisie selon la loi des entrées (Hermite pour des gaussiennes, Legendre pour des uniformes). L'intérêt est double : moyenne et variance se lisent <em>directement</em> sur les coefficients, et les indices de sensibilité s'en déduisent analytiquement (section suivante). Les coefficients s'obtiennent par projection ou par régression parcimonieuse (LARS), ce qui en fait un cas particulier remarquable de la régression régularisée du module 7. Limites : la taille de la base explose avec la dimension et le degré, et la méthode suppose une réponse régulière — un comportement discontinu (bifurcation, changement de régime) la met en échec, exactement comme un GP à noyau lisse.</p>
-
-    <h2 id="sobol">4. Analyse de sensibilité</h2>
-    <p>Question centrale en ingénierie : <em>quelle part de la variabilité de la sortie chaque entrée explique-t-elle ?</em> Les dérivées locales ne répondent pas — elles ne valent qu'au point où elles sont calculées. L'analyse de sensibilité <strong>globale</strong> décompose la variance :</p>
-    <div style="text-align:center;overflow-x:auto">\[ S_i = \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_i]\big)}{\operatorname{Var}(Y)}, \qquad S_{T_i} = 1 - \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_{\sim i}]\big)}{\operatorname{Var}(Y)} \]</div>
-    <p>\(S_i\) est l'indice du <em>premier ordre</em> (effet propre de \(X_i\)), \(S_{T_i}\) l'indice <em>total</em> (effet propre plus toutes ses interactions). Leur lecture conjointe est très informative : \(S_{T_i} \approx S_i\) signale une variable qui agit seule ; \(S_{T_i} \gg S_i\) révèle une variable qui n'agit qu'en interaction ; \(S_{T_i} \approx 0\) autorise à <strong>fixer</strong> la variable, ce qui réduit la dimension du problème. Et \(\sum_i S_i \lt 1\) mesure la part due aux interactions.</p>
-
-    <div class="code-label">Python — SALib</div>
-    <div class="code-block"><pre>from SALib.sample import sobol as sobol_sample
-from SALib.analyze import sobol as sobol_analyze
-
-probleme = {"num_vars": 4,
-            "names": ["conductivite", "debit", "epaisseur", "coef_echange"],
-            "bounds": [[10, 25], [0.5, 2.0], [1e-3, 5e-3], [200, 900]]}
-
-X = sobol_sample.sample(probleme, 1024)        # N(2d+2) évaluations
-Y = np.array([simulation(x) for x in X])       # ou le SURROGATE, bien moins cher
-
-Si = sobol_analyze.analyze(probleme, Y)
-print(Si["S1"], Si["ST"])                      # premier ordre / total</pre></div>
-
-    <p>Le coût — \(N(2d+2)\) évaluations — est la raison pour laquelle on calcule presque toujours les indices de Sobol <em>sur un métamodèle</em> plutôt que sur le code direct. Pour un simple criblage préalable en grande dimension, la méthode de Morris identifie les variables négligeables pour quelques dizaines d'évaluations seulement.</p>
-
-    <h2 id="surrogates">5. Métamodèles : construire et valider</h2>
-    <p>Un métamodèle remplace le code de calcul par une fonction bon marché ajustée sur un plan d'expériences. Les familles, et le critère de choix :</p>
-
-    <div class="code-label">choisir un surrogate</div>
-    <div class="code-block"><pre>Krigeage / GP       interpole exactement, fournit une VARIANCE de prédiction.
-(module 9)          Le défaut pour n &lt; quelques milliers de points. Indispensable
-                    si l'on veut enrichir le plan de façon adaptative.
-RBF                 interpolation par fonctions radiales : simple, robuste, très bon
-                    en dimension modérée. Sans incertitude native — c'est exactement
-                    ce que j'ai implémenté dans mdisd (voir le projet).
-Chaos polynomial    moments et indices de Sobol analytiques. Excellent si la réponse
-                    est régulière et la dimension modérée.
-Gradient boosting   robuste aux discontinuités et au bruit numérique, mais N'EXTRAPOLE
-                    PAS (module 7) : dangereux hors du domaine du plan.
-Réseau de neurones  utile quand le plan est très grand (10⁴+) ou la sortie de grande
-                    dimension (un champ complet plutôt qu'un scalaire).</pre></div>
-
-    <div class="warning-block">
-      <strong>Un métamodèle se valide sur des points qu'il n'a jamais vus.</strong> Le critère usuel est le \(Q^2\) (le \(R^2\) calculé sur un jeu de validation indépendant, ou par validation croisée <em>leave-one-out</em>, quasi gratuite pour un krigeage). Un \(Q^2\) de 0,99 sur les points d'apprentissage ne veut rien dire : un interpolateur passe par tous ses points par construction. Trois vérifications supplémentaires valent d'être systématiques : l'erreur maximale (et non seulement moyenne) sur le jeu de validation, la qualité de l'approximation <em>dans la zone qui décide</em> (près d'un seuil de sûreté, la moyenne globale n'a aucun intérêt), et la cohérence physique — monotonie attendue, signe, ordres de grandeur, comportement aux limites.
-    </div>
-
-    <h2 id="rom">6. Réduction de modèle : POD, DMD</h2>
-    <p>Les métamodèles précédents prédisent un scalaire. Quand la sortie est un <em>champ</em> — température en tout point, vitesse sur tout le maillage —, on passe par la réduction de modèle. L'observation fondatrice : les solutions d'un système physique paramétré vivent presque toujours dans un sous-espace de très faible dimension.</p>
-
-    <p>La <strong>POD</strong> (décomposition orthogonale aux valeurs propres) consiste à assembler une matrice de <em>snapshots</em> — chaque colonne est un champ solution pour un jeu de paramètres — et à en calculer la SVD (module 4). Les premiers vecteurs singuliers forment une base de modes, et la décroissance des valeurs singulières indique combien en garder. C'est, mot pour mot, une PCA sur des champs physiques : les modes obtenus ont souvent une interprétation directe (structures cohérentes d'un écoulement, modes propres de vibration).</p>
-
-    <div class="code-label">Python — POD sur des snapshots</div>
-    <div class="code-block"><pre>import numpy as np
-
-S = np.column_stack(snapshots)                 # (n_ddl, n_simulations)
-moyenne = S.mean(axis=1, keepdims=True)
-U, s, Vt = np.linalg.svd(S - moyenne, full_matrices=False)
-
-energie = np.cumsum(s**2) / np.sum(s**2)
-r = int(np.searchsorted(energie, 0.9999) + 1)  # souvent r ≈ 10-30 pour 99,99 %
-Phi = U[:, :r]                                 # base réduite
-
-# coefficients réduits : la cible d'un surrogate (GP, RBF) sur les paramètres
-A = Phi.T @ (S - moyenne)                      # (r, n_simulations)
-champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ complet</pre></div>
-
-    <p>Deux stratégies en découlent. Le ROM <em>non intrusif</em> — celui du code ci-dessus — apprend simplement les coefficients modaux en fonction des paramètres : facile, applicable à un code fermé, sans garantie physique. Le ROM <em>intrusif</em> (projection de Galerkin des équations sur la base réduite) conserve la structure des équations et offre de meilleures garanties, mais exige d'accéder aux opérateurs du solveur, et la non-linéarité impose des techniques d'hyper-réduction (DEIM). La <strong>DMD</strong>, elle, extrait des modes associés à des fréquences et des taux de croissance, ce qui en fait l'outil naturel pour analyser une dynamique et prédire à court terme.</p>
-
-    <p>La limite commune est claire : ces méthodes supposent une <em>faible dimension effective</em>. Un écoulement fortement turbulent, un problème avec chocs ou fronts mobiles, une bifurcation — et le spectre ne décroît plus. C'est d'ailleurs l'information utile : la décroissance des valeurs singulières <em>mesure</em> la réductibilité du problème avant tout investissement.</p>
-
-    <h2 id="sciml">7. SciML : opérateurs neuronaux et hybrides</h2>
-    <p>Le module 8 présente les PINN, qui apprennent <em>une</em> solution sous contrainte d'EDP. Les <strong>opérateurs neuronaux</strong> visent plus haut : apprendre l'application qui envoie une fonction d'entrée (champ de conditions initiales, de coefficients, de géométrie) sur la fonction solution — donc une famille entière de problèmes.</p>
+    <h2 id="taches-nlp">2. Tâches classiques du NLP</h2>
     <ul>
-      <li><strong>DeepONet</strong> — deux réseaux, l'un encodant la fonction d'entrée échantillonnée, l'autre les coordonnées d'évaluation, combinés par produit scalaire. Fondé sur un théorème d'approximation d'opérateurs.</li>
-      <li><strong>FNO</strong> (<em>Fourier Neural Operator</em>) — effectue la convolution dans l'espace de Fourier en ne gardant que les basses fréquences : le coût passe en \(O(n\log n)\), et le modèle est <em>indépendant de la discrétisation</em>, donc entraînable sur maillage grossier et évaluable sur maillage fin. Très efficace sur les problèmes à géométrie régulière et périodique.</li>
-      <li><strong>GNN sur maillage</strong> (module 15) — la bonne réponse quand la géométrie est complexe et non structurée.</li>
+      <li><strong>Classification</strong> — thématique, sentiment, intention. Métriques du module 7, attention au déséquilibre.</li>
+      <li><strong>Reconnaissance d'entités (NER)</strong> — extraire personnes, dates, références produit, valeurs numériques avec unités. Évaluation par F1 <em>au niveau de l'entité</em> (une entité partiellement détectée est fausse), pas au niveau du jeton.</li>
+      <li><strong>Extraction structurée</strong> — passer d'un rapport libre à un enregistrement exploitable. Historiquement des règles et des expressions régulières, aujourd'hui souvent un LLM à sortie contrainte (module 20) — mais les règles restent supérieures sur les formats rigides, et elles sont déterministes.</li>
+      <li><strong>Topic modeling</strong> — LDA (modèle génératif bayésien, module 9), NMF (factorisation à coefficients positifs, plus lisible, module 7) ou BERTopic (embeddings + clustering + c-TF-IDF), qui donne aujourd'hui les regroupements les plus interprétables.</li>
+      <li><strong>Résumé, traduction, question-réponse</strong> — domaine des modèles génératifs ; la difficulté s'y déplace entièrement vers l'<em>évaluation</em> (module 20).</li>
     </ul>
-    <p>Une fois entraînés, ces modèles évaluent une solution en millisecondes contre des heures de calcul — d'où leur intérêt pour l'optimisation de forme, le contrôle en temps réel ou l'exploration paramétrique. Le prix à payer : la précision plafonne bien au-dessus de celle d'un solveur, la généralisation hors du régime d'entraînement est mauvaise, et l'entraînement demande un gros corpus de simulations, donc l'investissement ne se justifie que par un grand nombre d'évaluations futures.</p>
 
-    <div class="step-block">
-      <h4>Hybrider plutôt que remplacer</h4>
-      <p>Les approches qui fonctionnent le mieux en pratique ne substituent pas le ML à la physique, elles le placent là où la physique est mal connue : apprendre une <em>loi de fermeture</em> (turbulence, loi de comportement matériau) tout en conservant les équations de conservation ; apprendre la <em>correction</em> entre un modèle grossier rapide et la réalité expérimentale (<em>multi-fidélité</em>, module 9), ce qui demande beaucoup moins de données qu'apprendre la sortie complète ; imposer des contraintes dures — positivité, conservation de la masse, symétries, équivariance — directement dans l'architecture, ce qui améliore autant la fiabilité que l'efficacité en données. Un modèle qui viole la conservation de l'énergie n'est pas utilisable, quelle que soit son erreur quadratique moyenne.</p>
-    </div>
+    <h2 id="images">3. Images : au-delà de la classification</h2>
+    <p>Le module 14 traite les CNN et la classification. En pratique, les tâches utiles sont souvent d'un autre type :</p>
 
-    <h2 id="assimilation">8. Assimilation de données et problèmes inverses</h2>
-    <p>L'assimilation combine un modèle physique et des mesures pour estimer l'état ou les paramètres d'un système. C'est le cadre de la météorologie opérationnelle, du recalage de modèles et de la surveillance en ligne. Le formalisme variationnel (4D-Var) s'écrit comme la minimisation d'une fonctionnelle :</p>
-    <div style="text-align:center;overflow-x:auto">\[ J(x_0) = \underbrace{\tfrac12 (x_0-x^b)^\top B^{-1}(x_0-x^b)}_{\text{écart à l'ébauche}} + \underbrace{\tfrac12\sum_{k}(\mathcal{H}(x_k)-z_k)^\top R^{-1}(\mathcal{H}(x_k)-z_k)}_{\text{écart aux observations}} \]</div>
-    <p>On reconnaît un MAP (module 13) : \(B\) encode la confiance a priori, \(R\) la précision des capteurs. La minimisation demande le gradient par rapport à l'état initial, obtenu par le modèle <em>adjoint</em> — c'est exactement de la différentiation automatique en mode inverse, la même mécanique que la rétropropagation (module 8). D'où l'intérêt actuel des <strong>simulateurs différentiables</strong> : quand le solveur lui-même est écrit dans un cadre autodifférentiable (JAX, PyTorch), calibrer un paramètre physique devient une optimisation par gradient ordinaire.</p>
-    <p>L'alternative séquentielle est le filtre de Kalman d'ensemble (EnKF), qui propage un ensemble d'états au lieu d'une covariance explicite — indispensable dès que la dimension dépasse quelques milliers (module 14).</p>
+    <div class="code-label">tâches de vision et leurs métriques</div>
+    <div class="code-block"><pre>Classification        une étiquette par image                  accuracy, F1
+Détection d'objets    boîtes + classes (YOLO, DETR)            mAP à IoU 0,5 / 0,5:0,95
+Segmentation sém.     une classe par pixel (U-Net, DeepLab)    IoU, Dice
+Segmentation d'inst.  objets séparés (Mask R-CNN, SAM)         mAP masque
+Estimation de pose    points clés                              PCK, OKS
+OCR                   texte dans l'image (docTR, Tesseract)    CER, WER
+Recherche d'images    similarité par embedding (module 20)     recall@k</pre></div>
+
+    <p>L'<strong>IoU</strong> (intersection sur union) mesure le recouvrement entre prédiction et vérité terrain ; le <strong>Dice</strong> \(2|A\cap B|/(|A|+|B|)\) lui est préféré en imagerie scientifique et médicale, parce qu'il se comporte mieux quand l'objet d'intérêt est petit devant le fond.</p>
+
+    <p>Pour un profil d'ingénieur, les cas d'usage les plus fréquents ne sont d'ailleurs pas les photographies : segmentation de micrographies pour quantifier une microstructure (taille de grains, porosité, fraction de phase), détection de défauts sur des images de contrôle non destructif, analyse d'images de simulation ou de tomographie. Trois particularités y changent la méthode : les jeux d'images annotées sont <em>très</em> petits (d'où le transfer learning et une augmentation agressive), les images sont souvent en niveaux de gris et à haute résolution (d'où le découpage en tuiles), et la sortie attendue est généralement une <em>mesure physique</em> — ce qui déplace l'évaluation du score de segmentation vers l'erreur sur la grandeur mesurée.</p>
 
     <div class="warning-block">
-      <strong>Identifiabilité : la question à poser avant de calibrer.</strong> Un problème inverse est presque toujours mal posé : plusieurs jeux de paramètres reproduisent les mêmes mesures. Deux paramètres peuvent être <em>compensatoires</em> — seule leur combinaison est identifiable — et un optimiseur retournera alors une valeur précise et arbitraire. Les remèdes : régulariser (Tikhonov, c'est-à-dire un a priori), réduire le nombre de paramètres calibrés à ceux que l'analyse de sensibilité désigne comme influents, et surtout <strong>estimer l'incertitude a posteriori</strong> plutôt qu'un point unique. Un paramètre calibré sans intervalle de crédibilité n'est pas un résultat.
+      <strong>L'augmentation doit respecter la physique.</strong> Une symétrie horizontale est anodine sur une photo de chat, désastreuse sur un caractère manuscrit ou une image où la chiralité a un sens. De même, une variation de contraste change la valeur de gris qui, en tomographie, <em>code une densité</em>. L'augmentation encode des invariances : elle n'est valide que si l'invariance existe réellement dans le phénomène.
     </div>
 
-    <h2 id="jumeau">9. Jumeau numérique et crédibilité</h2>
-    <p>Un jumeau numérique n'est pas une simulation 3D animée : c'est un modèle d'un système <em>physique particulier</em>, synchronisé avec ses mesures, et utilisé pour décider. L'architecture typique assemble tout ce module : un modèle réduit ou un surrogate pour tenir la contrainte temps réel, un mécanisme d'assimilation pour se recaler sur les capteurs, une quantification d'incertitude pour assortir chaque prédiction d'une marge, et un module de décision (maintenance, pilotage). Les difficultés réelles sont moins scientifiques qu'opérationnelles : qualité et dérive des capteurs, latence, versionnement du modèle et de ses recalages (module 12), et la question de savoir quand le jumeau doit déclarer qu'il ne sait plus.</p>
+    <h2 id="audio">4. Audio et signaux perceptifs</h2>
+    <p>La chaîne standard transforme le son en image : fenêtrage, FFT à court terme, passage sur l'échelle de Mel (qui reproduit la résolution non linéaire de l'oreille), puis un CNN ou un transformer sur le spectrogramme obtenu (modules 15 et 14). Les <strong>MFCC</strong> — coefficients cepstraux — restent une représentation compacte utile pour les tâches légères sur CPU.</p>
+    <p>Trois précautions spécifiques : l'augmentation se fait sur le signal (bruit additif, variation de vitesse, réverbération) <em>et</em> sur le spectrogramme (<em>SpecAugment</em>, qui masque des bandes de temps et de fréquence) ; la découpe train/test doit se faire par <em>locuteur</em> ou par <em>appareil</em>, jamais par extrait, sous peine de fuite (module 10) ; et pour la reconnaissance vocale, un modèle pré-entraîné comme Whisper rend l'entraînement de zéro sans objet dans l'immense majorité des cas.</p>
 
-    <div class="step-block">
-      <h4>Un modèle appris dans un contexte où la sûreté compte</h4>
-      <p>Les référentiels de vérification et validation (V&amp;V) demandent trois choses distinctes : la <em>vérification</em> (résout-on correctement les équations ?), la <em>validation</em> (les équations décrivent-elles la réalité ?) et la quantification des incertitudes. Un modèle appris s'y insère mal par nature : il n'a pas d'équations à vérifier, et son comportement hors domaine est imprévisible. Les pratiques qui le rendent défendable : déclarer explicitement un <strong>domaine de validité</strong> et refuser de prédire au-delà (la variance épistémique d'un GP ou un détecteur de nouveauté servent de garde-fou, module 13) ; assortir chaque sortie d'un intervalle avec garantie de couverture ; conserver un modèle physique de référence comme arbitre sur les cas critiques ; et tracer chaque prédiction jusqu'aux données et à la version du modèle. Autrement dit : le ML accélère l'exploration, il ne signe pas le dossier de sûreté.</p>
+    <h2 id="graphes">5. Graphes : représentation et mesures</h2>
+    <p>Un graphe modélise des entités et leurs relations. Beaucoup de systèmes techniques en sont naturellement : un réseau électrique ou hydraulique, un maillage de calcul, une molécule, un graphe de dépendances logicielles, un circuit, une chaîne d'approvisionnement, un réseau social. Ignorer cette structure et aplatir en tableau revient à jeter l'information la plus spécifique du problème.</p>
+
+    <div class="code-label">mesures structurelles et ce qu'elles disent</div>
+    <div class="code-block"><pre>Degré                 nombre de voisins : popularité, connectivité locale
+Intermédiarité        fréquence d'apparition sur les plus courts chemins :
+(betweenness)         identifie les points de passage obligés — donc les points de
+                      fragilité d'un réseau technique
+PageRank              importance récursive : est important qui est pointé par des
+                      nœuds importants
+Coefficient de        propension des voisins d'un nœud à être voisins entre eux
+clustering
+Communautés           partition en groupes densément connectés (Louvain, Leiden)
+Composantes           parties déconnectées : souvent la première chose à regarder
+Assortativité         les nœuds semblables se connectent-ils entre eux ?</pre></div>
+
+    <div class="code-label">Python — NetworkX</div>
+    <div class="code-block"><pre>import networkx as nx
+
+G = nx.from_pandas_edgelist(df, "source", "cible", edge_attr="poids")
+
+centralite = nx.betweenness_centrality(G, weight="poids")   # points critiques
+communautes = nx.community.louvain_communities(G, seed=0)
+print(nx.density(G), nx.number_connected_components(G))
+
+# ces mesures deviennent des FEATURES tabulaires pour un modèle classique (module 12)
+df_noeuds["pagerank"] = df_noeuds.index.map(nx.pagerank(G))
+df_noeuds["degre"] = df_noeuds.index.map(dict(G.degree()))</pre></div>
+
+    <p>La dernière ligne mérite d'être soulignée : dans bien des projets, la meilleure façon d'exploiter un graphe n'est pas d'entraîner un modèle de graphe, mais d'en <strong>extraire des features</strong> et de les donner à un gradient boosting. C'est simple, robuste, et souvent suffisant. Les plongements de nœuds (<em>node2vec</em>, DeepWalk), qui appliquent l'idée de word2vec à des marches aléatoires sur le graphe, constituent l'étape intermédiaire.</p>
+
+    <h2 id="gnn">6. Réseaux de neurones sur graphes</h2>
+    <p>Un GNN généralise la convolution à une structure irrégulière. Le principe, appelé <strong>passage de messages</strong> : chaque nœud met à jour sa représentation en agrégeant celles de ses voisins, et on répète l'opération sur \(K\) couches — après \(K\) tours, un nœud « voit » son voisinage à distance \(K\).</p>
+    <div style="text-align:center;overflow-x:auto">\[ h_v^{(k+1)} = \phi\Big(h_v^{(k)},\; \bigoplus_{u \in \mathcal{N}(v)} \psi\big(h_v^{(k)}, h_u^{(k)}, e_{uv}\big)\Big) \]</div>
+    <p>où \(\bigoplus\) est une agrégation invariante par permutation (somme, moyenne, max) — c'est ce qui garantit que le résultat ne dépend pas de l'ordre arbitraire des voisins. Les variantes diffèrent par le choix de \(\psi\) et de l'agrégation : <strong>GCN</strong> (moyenne normalisée par les degrés), <strong>GraphSAGE</strong> (échantillonnage des voisins, ce qui permet de passer à l'échelle), <strong>GAT</strong> (pondération des voisins par attention, module 14), <strong>MPNN</strong> (formulation générale avec attributs d'arêtes, la plus utilisée en chimie).</p>
+
+    <div class="code-label">trois niveaux de tâches</div>
+    <div class="code-block"><pre>Nœud     classification ou régression par nœud     détection de fraude, rôle dans un réseau
+Arête    prédiction de lien                       recommandation, complétion de graphe
+                                                  de connaissances, interactions
+Graphe   propriété d'un graphe entier             propriété d'une molécule, d'un circuit,
+                                                  d'une structure — après "pooling" global</pre></div>
+
+    <p>Les applications les plus convaincantes sont scientifiques : prédiction de propriétés moléculaires et de matériaux (où le graphe atomes-liaisons est la représentation naturelle), simulation physique apprise sur maillage — un maillage de calcul <em>est</em> un graphe, et les GNN y apprennent des opérateurs de propagation, ce qui rejoint directement le <a href="project7-m19.html">module 19</a> —, prévision de trafic sur réseau routier, et détection de fraude par anneaux de comptes liés.</p>
+
+    <div class="warning-block">
+      <strong>Trois limites à connaître avant de s'y lancer.</strong> Le <em>lissage excessif</em> : au-delà de trois ou quatre couches, toutes les représentations convergent vers la même valeur et la performance chute — les GNN sont des réseaux <em>peu profonds</em>. Le <em>passage à l'échelle</em> : un nœud très connecté fait exploser le voisinage à agréger, d'où l'échantillonnage (GraphSAGE) ou le découpage en sous-graphes. Le <em>pouvoir d'expression</em> : les GNN standards ne distinguent pas certains graphes non isomorphes (limite du test de Weisfeiler-Lehman). Enfin, la fuite de données prend ici une forme particulière : dans un graphe, découper au hasard laisse des arêtes reliant train et test — il faut un découpage par sous-graphe ou par période.
     </div>
+
+    <h2 id="multimodal">7. Multimodal</h2>
+    <p>Combiner plusieurs modalités se fait de trois façons : <em>fusion précoce</em> (concaténer les données brutes, rarement efficace), <em>fusion tardive</em> (un modèle par modalité, puis combinaison des prédictions — simple et robuste), et <em>fusion intermédiaire</em> (concaténer les représentations apprises, le meilleur compromis en général). Les modèles contrastifs type <strong>CLIP</strong> vont plus loin en alignant deux modalités dans un <em>espace commun</em> : une image et sa description y sont voisines, ce qui permet la recherche d'images par texte et la classification sans exemple étiqueté.</p>
+    <p>En contexte industriel, le cas le plus fréquent est la combinaison d'un tableau de mesures, d'un texte libre (rapport d'intervention) et d'une image ou d'un signal. La recette qui marche : encoder chaque modalité en un vecteur, les concaténer, et laisser un gradient boosting faire la synthèse.</p>
+
+    <h2 id="annotation">8. Annotation et qualité</h2>
+    <p>Sur ces données, la performance est presque toujours limitée par les annotations, pas par le modèle. Quelques principes qui économisent beaucoup de temps :</p>
+    <ul>
+      <li><strong>Écrire un guide d'annotation</strong> avant d'annoter, et le tester sur vingt exemples avec deux annotateurs. Les désaccords révèlent les cas limites que la définition du problème n'avait pas tranchés.</li>
+      <li><strong>Mesurer l'accord inter-annotateurs</strong> (kappa de Cohen, alpha de Krippendorff). Il plafonne la performance atteignable : si deux experts ne sont d'accord qu'à 80 %, aucun modèle n'ira au-delà de façon significative.</li>
+      <li><strong>Annoter en priorité les cas informatifs</strong> plutôt qu'au hasard : c'est l'apprentissage actif du <a href="project7-m11.html">module 11</a>.</li>
+      <li><strong>Vérifier les étiquettes existantes</strong> : les jeux de référence publics contiennent eux-mêmes des erreurs, et un modèle très confiant en désaccord avec l'étiquette est un excellent détecteur d'annotation fautive (<code>cleanlab</code> automatise cette recherche).</li>
+    </ul>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Monte-Carlo converge en \(1/\sqrt{N}\) indépendamment de la dimension ; pour aller plus vite, réduire la variance plutôt qu'augmenter \(N\).</li>
-        <li>LHS ou Sobol pour un plan initial, puis enrichissement adaptatif guidé par l'incertitude (module 9).</li>
-        <li>Les indices de Sobol totaux disent quelles variables on peut fixer ; les calculer sur un métamodèle.</li>
-        <li>Un surrogate se valide hors échantillon, avec l'erreur maximale et la cohérence physique, pas seulement un \(Q^2\) moyen.</li>
-        <li>La décroissance des valeurs singulières des snapshots mesure la réductibilité d'un problème avant tout investissement.</li>
-        <li>Les opérateurs neuronaux échangent de la précision contre plusieurs ordres de grandeur de vitesse ; hybrider vaut mieux que remplacer.</li>
-        <li>Un problème inverse est mal posé par défaut : vérifier l'identifiabilité et fournir une incertitude, jamais un point seul.</li>
+        <li>Sur données non structurées, la représentation compte plus que l'algorithme.</li>
+        <li>TF-IDF et régression logistique restent une baseline honnête ; mesurer l'écart avant de sortir un transformer.</li>
+        <li>En vision, les tâches utiles sont souvent détection et segmentation ; le Dice et l'IoU y remplacent l'accuracy, et l'augmentation doit respecter la physique.</li>
+        <li>L'audio se ramène à une image temps-fréquence ; découper les jeux par locuteur ou appareil.</li>
+        <li>Un graphe s'exploite d'abord par des features structurelles ; les GNN sont peu profonds, sensibles au lissage excessif, et exigent un découpage adapté.</li>
+        <li>La qualité et la cohérence des annotations plafonnent la performance : les mesurer avant de changer de modèle.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m15.html" class="btn btn-secondary">← Module 15 : Données non tabulaires</a>
-  <a href="project7-m17.html" class="btn btn-primary">Module 17 : Apprendre avec peu d'étiquettes →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">Monte-Carlo</span><span class="tag">Sobol</span><span class="tag">Surrogate</span><span class="tag">POD/ROM</span><span class="tag">FNO</span><span class="tag">Assimilation</span></div>
+  <div class="course-nav">
+    <a href="project7-m15.html" class="btn btn-secondary">← Module 15 : Séries temporelles</a>
+    <a href="project7-m17.html" class="btn btn-primary">Module 17 : Processus gaussiens →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">NLP</span><span class="tag">TF-IDF</span><span class="tag">Segmentation</span><span class="tag">Audio</span><span class="tag">Graphes</span><span class="tag">GNN</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -247,51 +226,55 @@ champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ compl
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 16</div>
-    <h1>Machine learning for simulation and engineering</h1>
+    <h1>Non-tabular data: text, images, audio, graphs</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Monte Carlo estimation, its dimension-independent 1/√N rate, and variance reduction (antithetics, control variates, importance sampling, stratification, multilevel) — including rare-event failure probabilities.</li>
-      <li>Quasi-Monte Carlo, Latin hypercube and Sobol designs of numerical experiments, with sizing rules and independent validation sets.</li>
-      <li>Uncertainty propagation and polynomial chaos expansion, where moments read directly off the coefficients.</li>
-      <li>Global sensitivity analysis: first-order and total Sobol indices, how to read them together, and Morris screening.</li>
-      <li>Surrogate models compared (kriging/GP, RBF as implemented in my mdisd project, polynomial chaos, boosting, neural networks) and how to validate one honestly — out-of-sample Q², maximum error, accuracy where the decision happens, physical consistency.</li>
-      <li>Model order reduction: POD as an SVD of snapshots, intrusive vs non-intrusive ROMs, DMD, and using singular value decay to measure reducibility upfront.</li>
-      <li>Scientific ML: DeepONet and Fourier Neural Operators, mesh GNNs, and why hybridising (closure models, multi-fidelity corrections, hard physical constraints) beats replacing the solver.</li>
-      <li>Data assimilation: the 4D-Var cost function as a MAP estimate, adjoint gradients as reverse-mode autodiff, ensemble Kalman filters, differentiable simulators — and identifiability as the question to ask before calibrating.</li>
-      <li>Digital twins and what it takes for a learned model to be defensible in a safety context.</li>
+      <li>Text: TF-IDF and BM25 explained, a strong classical baseline with free interpretability, and an honest test of when it stops being enough.</li>
+      <li>Classical NLP tasks: classification, entity recognition and its entity-level evaluation, structured extraction, topic modelling (LDA, NMF, BERTopic).</li>
+      <li>Vision beyond classification: detection, semantic and instance segmentation, OCR, with IoU and Dice — and the specifics of scientific imaging (tiny annotated datasets, tiling, physical measurements as the real target).</li>
+      <li>Why augmentation must respect the physics of the signal.</li>
+      <li>Audio: mel spectrograms and MFCCs, augmentation on signal and spectrogram, and splitting by speaker or device to avoid leakage.</li>
+      <li>Graphs: structural measures (degree, betweenness, PageRank, communities) and why extracting graph features for a gradient boosting model is often the right first move.</li>
+      <li>Graph neural networks: message passing formalised, GCN/GraphSAGE/GAT/MPNN, node/edge/graph-level tasks, scientific applications including learned simulation on meshes — plus over-smoothing, scalability and expressivity limits, and graph-specific leakage.</li>
+      <li>Multimodal fusion strategies and contrastive alignment (CLIP).</li>
+      <li>Annotation quality: guidelines, inter-annotator agreement as a performance ceiling, and finding label errors.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><strong>Machine learning for simulation and engineering</strong></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><strong>Non-tabular data: text, images, audio, graphs</strong></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

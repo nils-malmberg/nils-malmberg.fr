@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 2 - Données et déploiement : SQL, NoSQL, Docker, Kubernetes, FastAPI - Nils Malmberg</title>
+  <title>Module 2 - Concurrence en Python : GIL, threads, processus, asyncio - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,304 +40,385 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 2</div>
-    <h1>Données et déploiement : SQL, NoSQL, Docker, Kubernetes, FastAPI</h1>
+    <h1>Concurrence en Python : GIL, threads, processus, asyncio</h1>
   </div>
 
-  <div class="project-content">
-    <p>Un modèle n'existe vraiment que s'il est alimenté par des données stockées quelque part et s'il répond à quelqu'un. Ce module couvre les deux extrémités de la chaîne : d'où viennent les données (SQL, NoSQL, bases vectorielles) et comment le modèle sort du portable (conteneur, orchestration, API).</p>
+  <div class="project-content course-content">
+    <p>C'est le point où l'intuition venant du C ou du calcul parallèle classique induit en erreur. Trois modèles de concurrence coexistent en Python, ils ne servent pas aux mêmes problèmes, et choisir le mauvais peut <em>ralentir</em> un programme au lieu de l'accélérer. Ce module part de zéro : ce qu'est un thread, pourquoi le GIL existe, comment savoir lequel des trois modèles s'applique à votre cas, puis chaque outil avec des exemples complets.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#sql">SQL : ce qu'il faut vraiment maîtriser</a></li>
-        <li><a href="#perf-sql">Index, plans d'exécution, OLTP vs OLAP</a></li>
-        <li><a href="#nosql">NoSQL : quatre familles, un compromis</a></li>
-        <li><a href="#vectoriel">Bases vectorielles : premier contact</a></li>
-        <li><a href="#docker">Docker : rendre un projet exécutable ailleurs</a></li>
-        <li><a href="#k8s">Kubernetes : ce qu'il faut en savoir</a></li>
-        <li><a href="#fastapi">FastAPI : exposer un modèle</a></li>
+        <li><a href="#vocabulaire">Processus, thread, concurrence, parallélisme</a></li>
+        <li><a href="#gil">Le GIL, énoncé correctement</a></li>
+        <li><a href="#diagnostic">Diagnostiquer : où passe le temps ?</a></li>
+        <li><a href="#threads">Les threads, pour attendre</a></li>
+        <li><a href="#partage">Partager de l'état entre threads</a></li>
+        <li><a href="#processus">Les processus, pour calculer</a></li>
+        <li><a href="#asyncio">asyncio, pas à pas</a></li>
+        <li><a href="#sursouscription">Le piège de la sursouscription</a></li>
+        <li><a href="#recap">Récapitulatif</a></li>
       </ol>
     </div>
 
-    <h2 id="sql">1. SQL : ce qu'il faut vraiment maîtriser</h2>
-    <p>SQL est <em>déclaratif</em> : on décrit le résultat voulu, le moteur choisit l'algorithme. C'est un changement de posture par rapport à Python, où l'on décrit la marche à suivre. Au-delà du <code>SELECT ... WHERE</code>, quatre constructions couvrent l'essentiel du travail d'analyse.</p>
+    <h2 id="vocabulaire">1. Processus, thread, concurrence, parallélisme</h2>
 
-    <h3>Jointures</h3>
-    <p>Une jointure associe les lignes de deux tables selon une condition. Les quatre types usuels :</p>
-    <ul>
-      <li><code>INNER JOIN</code> — seulement les lignes appariées des deux côtés ;</li>
-      <li><code>LEFT JOIN</code> — toutes les lignes de gauche, complétées par <code>NULL</code> à droite si pas d'appariement ;</li>
-      <li><code>FULL OUTER JOIN</code> — l'union des deux ;</li>
-      <li><code>CROSS JOIN</code> — le produit cartésien, rarement voulu (et souvent le symptôme d'une condition oubliée).</li>
-    </ul>
+    <p>Quatre mots qu'on emploie souvent l'un pour l'autre, et qu'il faut séparer une bonne fois.</p>
 
-    <div class="warning-block">
-      <strong>Le piège n° 1 : l'explosion de cardinalité.</strong> Joindre sur une clé qui n'est unique d'aucun côté multiplie les lignes. Une jointure entre 1 000 commandes et 1 000 lignes de facturation partageant le même <code>client_id</code> peut produire un million de lignes — et fausser silencieusement toutes les agrégations qui suivent. Réflexe : vérifier <code>COUNT(*)</code> avant et après chaque jointure.
-    </div>
+    <p>Un <strong>processus</strong> est un programme en cours d'exécution, avec sa propre zone de mémoire, isolée de celle des autres. Deux processus ne peuvent pas se marcher dessus : pour échanger des données, ils doivent explicitement se les envoyer.</p>
 
-    <h3>Agrégations et fonctions de fenêtre</h3>
-    <p>Un <code>GROUP BY</code> écrase les lignes : une ligne par groupe. Une <strong>fonction de fenêtre</strong> calcule une agrégation <em>sans</em> écraser — chaque ligne conserve son identité tout en voyant son groupe. C'est l'outil décisif pour le feature engineering temporel (module 6), parce qu'il permet de calculer moyennes mobiles, rangs et décalages directement dans la base.</p>
-
-    <div class="code-label">SQL</div>
-    <div class="code-block"><pre>SELECT
-    client_id,
-    date_commande,
-    montant,
-    -- rang de la commande dans l'historique du client
-    ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_commande) AS n_commande,
-    -- montant de la commande précédente : feature de récence
-    LAG(montant) OVER (PARTITION BY client_id ORDER BY date_commande) AS montant_precedent,
-    -- moyenne glissante sur les 3 dernières commandes, celle-ci incluse
-    AVG(montant) OVER (
-        PARTITION BY client_id ORDER BY date_commande
-        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-    ) AS moyenne_3
-FROM commandes
-WHERE date_commande &gt;= DATE '2025-01-01';</pre></div>
-
-    <p>Le <code>ROWS BETWEEN ... AND CURRENT ROW</code> n'est pas cosmétique : il garantit qu'aucune information future n'entre dans la feature. C'est la version SQL de la protection contre la fuite temporelle (module 6).</p>
-
-    <h3>CTE : structurer une requête</h3>
-    <p>Les <em>Common Table Expressions</em> (<code>WITH</code>) découpent une requête en étapes nommées. Une requête de 80 lignes avec quatre sous-requêtes imbriquées devient quatre blocs lisibles, testables séparément.</p>
-
-    <div class="code-label">SQL</div>
-    <div class="code-block"><pre>WITH commandes_2025 AS (
-    SELECT * FROM commandes WHERE date_commande &gt;= DATE '2025-01-01'
-),
-agregats_client AS (
-    SELECT client_id,
-           COUNT(*)                AS n_commandes,
-           SUM(montant)            AS ca_total,
-           MAX(date_commande)      AS derniere_commande
-    FROM commandes_2025
-    GROUP BY client_id
-)
-SELECT c.nom, a.n_commandes, a.ca_total,
-       CURRENT_DATE - a.derniere_commande AS jours_depuis_achat
-FROM agregats_client a
-JOIN clients c USING (client_id)
-WHERE a.ca_total &gt; 1000
-ORDER BY a.ca_total DESC;</pre></div>
+    <p>Un <strong>thread</strong> (ou fil d'exécution) est une ligne d'exécution <em>à l'intérieur</em> d'un processus. Plusieurs threads d'un même processus <strong>partagent la même mémoire</strong> : ils voient les mêmes variables. C'est ce qui les rend légers — créer un thread coûte bien moins cher que créer un processus — et c'est aussi ce qui les rend dangereux, puisque deux threads peuvent modifier la même donnée en même temps (section 5).</p>
 
     <div class="step-block">
-      <h4>Le piège des NULL</h4>
-      <p><code>NULL</code> signifie « inconnu », pas « zéro » ni « vide ». Toute comparaison avec <code>NULL</code> vaut <code>NULL</code> (donc faux) : <code>montant != 100</code> exclut les lignes où <code>montant</code> est <code>NULL</code>, ce qui n'est presque jamais l'intention. De même <code>SUM</code> et <code>AVG</code> ignorent les <code>NULL</code> alors que <code>COUNT(*)</code> les compte : <code>AVG(x)</code> et <code>SUM(x)/COUNT(*)</code> donnent des résultats différents. On teste avec <code>IS NULL</code>, on remplace avec <code>COALESCE(x, 0)</code>.</p>
+      <h4>Une analogie qui tient la route</h4>
+      <p>Un processus, c'est un <strong>appartement</strong> : sa cuisine, ses affaires, une porte fermée. Un thread, c'est un <strong>colocataire</strong> dans cet appartement : plusieurs colocataires partagent le même frigo. Deux appartements ne peuvent pas se voler de la nourriture (il faut se la passer par la porte, ce qui prend du temps). Deux colocataires, si — et s'ils ouvrent le frigo en même temps pour compter les œufs, ils peuvent arriver à des conclusions incohérentes.</p>
     </div>
 
-    <h2 id="perf-sql">2. Index, plans d'exécution, OLTP vs OLAP</h2>
-    <p>Un <strong>index</strong> est une structure annexe (le plus souvent un B-tree) qui évite de parcourir toute la table : il transforme un balayage en <em>O(n)</em> en une recherche en <em>O(log n)</em>. Le prix : de l'espace disque et un ralentissement des écritures, puisque chaque insertion doit mettre l'index à jour. On indexe les colonnes de jointure, celles des <code>WHERE</code> sélectifs, et celles des <code>ORDER BY</code> fréquents — pas tout le reste.</p>
+    <p>La <strong>concurrence</strong>, c'est gérer plusieurs tâches en cours en même temps, sans forcément les exécuter simultanément : un cuisinier qui met l'eau à bouillir, découpe des légumes pendant ce temps, puis revient à sa casserole, est concurrent. Le <strong>parallélisme</strong>, c'est exécuter réellement plusieurs calculs à la même seconde, ce qui exige plusieurs cœurs : deux cuisiniers. La distinction est décisive : pour une tâche qui passe son temps à <em>attendre</em>, la concurrence suffit ; pour une tâche qui <em>calcule</em>, il faut du parallélisme.</p>
 
-    <p>Pour savoir ce que fait réellement le moteur, on lui demande :</p>
+    <h2 id="gil">2. Le GIL, énoncé correctement</h2>
 
-    <div class="code-label">SQL</div>
-    <div class="code-block"><pre>EXPLAIN ANALYZE
-SELECT * FROM commandes WHERE client_id = 42;
+    <h3>Ce que c'est</h3>
+    <p>Le <em>Global Interpreter Lock</em> est un verrou interne à CPython, l'implémentation de référence de Python. Sa règle : <strong>un seul thread exécute du bytecode Python à un instant donné</strong> dans un processus. Les threads existent bien, le système d'exploitation les ordonnance, mais ils se passent ce jeton à tour de rôle au lieu de travailler en même temps.</p>
 
--- Seq Scan on commandes  (cost=0.00..18334.00 rows=1 width=44)
---   → balayage complet : 18 000 pages lues pour 1 ligne
--- après CREATE INDEX idx_cmd_client ON commandes(client_id);
--- Index Scan using idx_cmd_client  (cost=0.42..8.44 rows=1 width=44)</pre></div>
+    <h3>Pourquoi il existe</h3>
+    <p>Python gère la mémoire par comptage de références : chaque objet sait combien de variables pointent vers lui, et il est détruit quand ce compteur tombe à zéro. Si deux threads modifiaient ce compteur simultanément, il deviendrait incohérent — des objets encore utilisés seraient libérés, d'autres ne le seraient jamais. Le GIL est la solution la plus simple à ce problème : un verrou global plutôt qu'un verrou par objet. Il rend l'interpréteur simple, rapide en mono-thread, et facile à interfacer avec du C. Le prix est celui qu'on connaît.</p>
 
-    <p>Un <code>Seq Scan</code> sur une grande table filtrée finement signale un index manquant. Attention : appliquer une fonction à la colonne (<code>WHERE YEAR(date) = 2025</code>) rend l'index inutilisable — il faut réécrire en <code>WHERE date &gt;= '2025-01-01' AND date &lt; '2026-01-01'</code>.</p>
+    <h3>La conséquence, mesurée</h3>
+    <div class="code-label">Python — la démonstration en dix lignes</div>
+    <div class="code-block"><pre>import time
+from concurrent.futures import ThreadPoolExecutor
 
-    <h3>Deux mondes : transactionnel et analytique</h3>
-    <div class="code-label">OLTP vs OLAP</div>
-    <div class="code-block"><pre>                 OLTP (transactionnel)        OLAP (analytique)
-Exemples         PostgreSQL, MySQL            DuckDB, ClickHouse, BigQuery, Snowflake
-Requêtes         beaucoup, très courtes       peu, très lourdes
-Accès            quelques lignes entières     quelques colonnes, millions de lignes
-Stockage         par lignes                   par colonnes
-Optimisé pour    écriture, cohérence (ACID)   lecture, compression, agrégation
-Usage data       la source de vérité          l'analyse et l'entraînement</pre></div>
+def calcul(n=10_000_000):            # boucle Python pure : CPU-bound
+    total = 0
+    for i in range(n):
+        total += i * i
+    return total
 
-    <p>Le stockage en colonnes est la raison pour laquelle un <code>SELECT AVG(montant)</code> sur 100 millions de lignes est instantané en OLAP : seule la colonne <code>montant</code> est lue, et elle se compresse très bien puisque des valeurs voisines se ressemblent. Pour un usage data science local, <strong>DuckDB</strong> est le meilleur rapport puissance/simplicité : pas de serveur, il interroge directement des fichiers Parquet ou des DataFrames.</p>
+debut = time.perf_counter()
+[calcul() for _ in range(4)]                       # séquentiel
+print(f"séquentiel : {time.perf_counter() - debut:.1f} s")     # ≈ 4,0 s
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import duckdb
+debut = time.perf_counter()
+with ThreadPoolExecutor(max_workers=4) as ex:      # 4 threads sur 4 cœurs
+    list(ex.map(lambda _: calcul(), range(4)))
+print(f"4 threads   : {time.perf_counter() - debut:.1f} s")    # ≈ 4,1 s — AUCUN gain</pre></div>
 
-# SQL directement sur des fichiers Parquet, sans import préalable
-df = duckdb.sql("""
-    SELECT client_id, SUM(montant) AS ca
-    FROM 'data/commandes_*.parquet'
-    WHERE date_commande &gt;= '2025-01-01'
-    GROUP BY client_id
-    ORDER BY ca DESC
-    LIMIT 10
-""").df()                      # renvoie un DataFrame pandas</pre></div>
+    <p>Quatre threads sur quatre cœurs ne vont pas plus vite qu'un seul, et sont même légèrement plus lents à cause du coût de bascule entre threads. Voilà l'effet du GIL sur du calcul Python pur.</p>
 
-    <h2 id="nosql">3. NoSQL : quatre familles, un compromis</h2>
-    <p>NoSQL ne veut pas dire « sans SQL » mais « pas seulement relationnel ». Chaque famille abandonne quelque chose (le plus souvent les jointures et la cohérence forte) pour gagner autre chose (débit, souplesse de schéma, distribution).</p>
+    <h3>Les deux exceptions, qui changent tout</h3>
+    <p>Le GIL est <strong>relâché</strong> — c'est-à-dire rendu aux autres threads — dans deux situations :</p>
+    <ul>
+      <li>pendant une <strong>attente d'entrée/sortie</strong> : lecture disque, requête réseau, appel à une base de données. Le thread qui attend une réponse HTTP n'exécute aucun bytecode : il rend le jeton et les autres travaillent.</li>
+      <li>pendant l'exécution de code <strong>natif</strong> qui le relâche explicitement — et c'est exactement ce que font NumPy, SciPy, scikit-learn, PyTorch et polars dans leurs boucles de calcul, écrites en C ou en Rust.</li>
+    </ul>
+    <p>Autrement dit : un produit matriciel NumPy lancé dans quatre threads utilise réellement quatre cœurs, alors que la boucle Python ci-dessus n'en utilise qu'un. Ce n'est pas « les threads sont inutiles en Python », c'est « les threads sont inutiles pour du <em>bytecode</em> Python ».</p>
+    <p>Depuis Python 3.13 existe un mode expérimental <em>free-threaded</em> (PEP 703) qui supprime le GIL, mais l'écosystème scientifique n'y est pas encore entièrement porté. En 2026, on continue de raisonner avec le GIL.</p>
 
-    <div class="code-label">familles et usages</div>
-    <div class="code-block"><pre>Clé-valeur    Redis, DynamoDB     cache, sessions, features en ligne. Accès O(1) par clé.
-Document      MongoDB, Firestore  JSON imbriqué, schéma mouvant. Requêtes riches, jointures pauvres.
-Colonnes      Cassandra, HBase    écriture massive distribuée, séries temporelles, IoT.
-Graphe        Neo4j               relations comme objet premier : fraude, réseaux, recommandation.</pre></div>
+    <h2 id="diagnostic">3. Diagnostiquer : où passe le temps ?</h2>
 
-    <p>Le cadre théorique est le <strong>théorème CAP</strong> : en cas de partition réseau (P, inévitable dans un système distribué), il faut choisir entre cohérence (C — tout le monde voit la même valeur) et disponibilité (A — le système répond quand même). PostgreSQL privilégie C, Cassandra privilégie A avec une cohérence « à terme ». Pour un projet de data science, la position par défaut raisonnable est : <em>commencer en PostgreSQL</em>, et ne migrer une brique en NoSQL que lorsqu'un besoin précis le justifie (latence de cache, volumétrie d'écriture, schéma réellement instable).</p>
+    <p>Avant de choisir un outil, il faut savoir si le programme <em>attend</em> ou s'il <em>calcule</em>. C'est la seule question qui compte, et elle se tranche par la mesure, pas par l'intuition.</p>
 
-    <h2 id="vectoriel">4. Bases vectorielles : premier contact</h2>
-    <p>Une base vectorielle indexe des <em>embeddings</em> — des vecteurs de quelques centaines de dimensions représentant un texte, une image ou un utilisateur — et répond à la question « quels sont les <em>k</em> vecteurs les plus proches de celui-ci ? ». La recherche exacte coûte <em>O(n·d)</em>, prohibitive à grande échelle ; on utilise donc des index approchés (ANN) qui échangent un peu de rappel contre un facteur 100 ou 1000 en latence.</p>
+    <div class="code-label">Python — savoir dans quel régime on est</div>
+    <div class="code-block"><pre>import time, cProfile
 
-    <p>Les options : <strong>pgvector</strong> (extension PostgreSQL — garder une seule base tant que c'est possible), <strong>FAISS</strong> (bibliothèque locale, sans serveur), <strong>Qdrant</strong> ou <strong>Milvus</strong> (services dédiés, filtrage par métadonnées, montée en charge). Le fonctionnement interne des index HNSW et IVF-PQ, ainsi que le pipeline RAG complet, sont traités au <a href="project7-m11.html">module 11</a>.</p>
+debut_mur = time.perf_counter()     # temps réellement écoulé (horloge murale)
+debut_cpu = time.process_time()     # temps de CPU consommé par le processus
 
-    <h2 id="docker">5. Docker : rendre un projet exécutable ailleurs</h2>
-    <p>Le problème que Docker résout est banal et coûteux : « ça marche chez moi ». Une <strong>image</strong> est un système de fichiers figé contenant l'application, ses dépendances système et son interpréteur ; un <strong>conteneur</strong> est une instance en cours d'exécution de cette image, isolée par les <em>namespaces</em> et <em>cgroups</em> du noyau Linux. Contrairement à une machine virtuelle, il n'y a pas de noyau invité : le coût est celui d'un processus ordinaire.</p>
+mon_traitement()
 
-    <p>L'image est faite de <strong>couches</strong> empilées, une par instruction du Dockerfile, mises en cache individuellement. D'où la règle d'or : <em>du plus stable au plus volatil</em>. Les dépendances changent rarement, le code change à chaque commit — les installer avant de copier le code évite de réinstaller tout l'environnement à chaque build.</p>
+mur = time.perf_counter() - debut_mur
+cpu = time.process_time() - debut_cpu
+print(f"mur={mur:.1f}s  cpu={cpu:.1f}s  ratio={cpu/mur:.0%}")
 
-    <div class="code-label">Dockerfile (projet Python + UV, multi-étapes)</div>
-    <div class="code-block"><pre># ── étape 1 : construire l'environnement ──
-FROM python:3.12-slim AS builder
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
-WORKDIR /app
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
-
-# dépendances d'abord : cette couche est réutilisée tant que le lock ne bouge pas
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
-
-# puis le code, qui change à chaque commit
-COPY src/ src/
-RUN uv sync --frozen --no-dev
-
-# ── étape 2 : image finale, sans outils de build ──
-FROM python:3.12-slim
-WORKDIR /app
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/src /app/src
-ENV PATH="/app/.venv/bin:$PATH"
-
-RUN useradd -m app &amp;&amp; chown -R app /app
-USER app                                   # ne jamais tourner en root
-
-EXPOSE 8000
-HEALTHCHECK CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"
-CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000"]</pre></div>
-
-    <p>La construction en deux étapes (<em>multi-stage</em>) laisse les compilateurs et caches dans l'étape jetable : l'image finale passe typiquement de 1,2 Go à 200 Mo. Un <code>.dockerignore</code> excluant <code>data/</code>, <code>.git/</code>, <code>.venv/</code> et <code>notebooks/</code> est indispensable — sans lui, le contexte de build envoie tout le répertoire au démon.</p>
-
-    <div class="warning-block">
-      <strong>Conteneur et état.</strong> Un conteneur est éphémère : tout ce qu'il écrit dans son système de fichiers disparaît à sa destruction. Les données vivent dans des <em>volumes</em> montés, les secrets passent par des variables d'environnement ou un gestionnaire dédié — jamais en dur dans l'image, d'où ils seraient extractibles par quiconque la télécharge.
-    </div>
-
-    <p><strong>docker compose</strong> décrit une pile complète (API + base + cache) dans un fichier, exactement comme pour la stack Ollama + OpenWebUI de mon <a href="project6.html">projet NAS</a>. Pour le GPU, l'accès passe par le <em>NVIDIA Container Toolkit</em> et l'option <code>--gpus all</code> : le pilote reste sur l'hôte, seules les bibliothèques CUDA sont dans l'image.</p>
-
-    <h2 id="k8s">6. Kubernetes : ce qu'il faut en savoir</h2>
-    <p>Docker fait tourner des conteneurs sur une machine. Kubernetes (K8s) les fait tourner sur une <em>flotte</em> de machines, en maintenant en permanence l'état réel égal à l'état déclaré. On lui décrit « je veux trois répliques de cette image, avec un GPU chacune », et il s'occupe du placement, des redémarrages, du remplacement des nœuds morts.</p>
-
-    <div class="code-label">objets essentiels</div>
-    <div class="code-block"><pre>Pod          la plus petite unité déployable : un ou plusieurs conteneurs colocalisés
-Deployment   maintient N répliques d'un Pod, gère les mises à jour progressives
-Service      une IP et un nom stables devant des Pods éphémères ; répartit la charge
-Ingress      l'entrée HTTP depuis l'extérieur (routage, TLS)
-ConfigMap    configuration non sensible          Secret   identifiants, clés d'API
-Job          tâche ponctuelle (entraînement)     CronJob  tâche récurrente (ré-entraînement)
-HPA          autoscaling selon CPU ou métrique personnalisée</pre></div>
-
-    <div class="code-label">deployment.yaml (service d'inférence)</div>
-    <div class="code-block"><pre>apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: model-api
-spec:
-  replicas: 3
-  selector:
-    matchLabels: { app: model-api }
-  template:
-    metadata:
-      labels: { app: model-api }
-    spec:
-      containers:
-        - name: api
-          image: registry.exemple.fr/model-api:1.4.2   # jamais :latest en production
-          ports: [{ containerPort: 8000 }]
-          resources:
-            requests: { cpu: "500m", memory: "1Gi" }   # réservé pour le placement
-            limits:   { cpu: "2",    memory: "4Gi",  nvidia.com/gpu: 1 }
-          readinessProbe:                              # ne reçoit du trafic qu'une fois le modèle chargé
-            httpGet: { path: /health, port: 8000 }
-            initialDelaySeconds: 20</pre></div>
-
-    <p>Le point non évident pour le ML : <code>requests</code> sert au placement, <code>limits</code> au bridage. Un modèle qui charge 3 Go de poids doit le déclarer, sinon il sera tué (<em>OOMKilled</em>) dès le premier pic. Et la <code>readinessProbe</code> est vitale : sans elle, K8s route du trafic vers un pod dont le modèle n'est pas encore en mémoire.</p>
+# ratio proche de 100 % → le CPU travaille : CPU-bound     → processus (section 6)
+# ratio faible (10-20 %) → le programme attend : I/O-bound → threads ou asyncio
+cProfile.run("mon_traitement()", sort="cumtime")   # où exactement, ligne par ligne</pre></div>
 
     <div class="step-block">
-      <h4>Kubernetes, en avez-vous besoin ?</h4>
-      <p>Honnêtement, rarement pour un projet personnel ou un prototype : la complexité opérationnelle est réelle. Un conteneur derrière un reverse proxy couvre la grande majorité des besoins. K8s devient pertinent lorsqu'il faut plusieurs machines, de l'autoscaling, des déploiements sans coupure, ou le partage d'un parc de GPU entre plusieurs équipes. La valeur immédiate est de savoir <em>lire</em> un manifeste : c'est la langue commune des équipes plateforme.</p>
+      <h4>L'arbre de décision</h4>
+      <ol>
+        <li><strong>Le programme attend-il des entrées/sorties ?</strong> (API, base de données, fichiers, scraping) → <code>asyncio</code> pour des milliers d'attentes simultanées, <code>ThreadPoolExecutor</code> si la bibliothèque utilisée est synchrone et bloquante (c'est le cas de <code>requests</code>, de la plupart des pilotes de bases de données classiques, de <code>open()</code>).</li>
+        <li><strong>Calcule-t-il en Python pur ?</strong> (boucles, parsing, logique métier) → <code>ProcessPoolExecutor</code> ou <code>joblib</code> : un processus par cœur, chacun avec son propre GIL.</li>
+        <li><strong>Calcule-t-il dans NumPy, PyTorch ou polars ?</strong> → c'est <em>déjà</em> parallèle, via les bibliothèques natives sous-jacentes. N'ajoutez rien avant d'avoir mesuré : empiler un second niveau de parallélisme dégrade presque toujours les performances (section 8).</li>
+      </ol>
     </div>
 
-    <h2 id="fastapi">7. FastAPI : exposer un modèle</h2>
-    <p>FastAPI combine trois choses utiles : validation des entrées par pydantic (typage vérifié à l'exécution), documentation OpenAPI générée automatiquement, et support natif de l'asynchrone (module 1).</p>
+    <h2 id="threads">4. Les threads, pour attendre</h2>
 
-    <div class="code-label">src/mon_projet/api.py</div>
-    <div class="code-block"><pre>from contextlib import asynccontextmanager
-import anyio, joblib, numpy as np
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+    <p>Le module <code>concurrent.futures</code> fournit une interface uniforme pour les threads comme pour les processus. Le vocabulaire : on soumet des <em>tâches</em> à un <em>pool</em> de workers, et chaque soumission renvoie un <strong>Future</strong> — un objet qui représente « un résultat qui n'existe pas encore ». On l'interroge quand on en a besoin.</p>
 
-etat: dict = {}
+    <div class="code-label">Python — premier exemple, commenté ligne à ligne</div>
+    <div class="code-block"><pre>from concurrent.futures import ThreadPoolExecutor
+import requests
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # chargé UNE fois au démarrage, pas à chaque requête
-    etat["model"] = joblib.load("models/gbm-1.4.2.joblib")
-    yield
-    etat.clear()
+def telecharger(url: str) -&gt; int:
+    r = requests.get(url, timeout=10)      # le GIL est relâché pendant l'attente réseau
+    return len(r.content)
 
-app = FastAPI(title="API de scoring", version="1.4.2", lifespan=lifespan)
+urls = [f"https://exemple.fr/page/{i}" for i in range(200)]
 
-class Requete(BaseModel):
-    surface: float = Field(gt=0, lt=10_000, description="surface en m²")
-    n_pieces: int  = Field(ge=1, le=20)
-    code_postal: str = Field(pattern=r"^\d{5}$")
+with ThreadPoolExecutor(max_workers=16) as ex:   # 16 threads ; le with attend la fin
+    tailles = list(ex.map(telecharger, urls))    # map : garde l'ORDRE des urls
 
-class Reponse(BaseModel):
-    prix_estime: float
-    version_modele: str
+print(sum(tailles))</pre></div>
 
-@app.get("/health")                      # sonde de vivacité pour K8s / le load balancer
-def health() -&gt; dict:
-    return {"status": "ok", "model_loaded": "model" in etat}
+    <p>Deux cents requêtes séquentielles à 100 ms font 20 secondes ; avec seize threads, environ 1,3 seconde. Le gain vient du fait que les threads passent leur temps <em>bloqués</em> en attente réseau, GIL relâché.</p>
 
-@app.post("/predict", response_model=Reponse)
-async def predict(req: Requete) -&gt; Reponse:
-    X = np.array([[req.surface, req.n_pieces, int(req.code_postal)]])
-    try:
-        # prédiction = calcul bloquant : on le sort de la boucle d'événements
-        y = await anyio.to_thread.run_sync(etat["model"].predict, X)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="échec de l'inférence") from exc
-    return Reponse(prix_estime=float(y[0]), version_modele="1.4.2")</pre></div>
+    <p><code>ex.map</code> est le plus simple, mais il renvoie les résultats dans l'ordre des entrées : si la première requête est lente, on attend. Pour traiter chaque résultat dès qu'il arrive, et surtout pour gérer les erreurs proprement, on utilise <code>submit</code> et <code>as_completed</code> :</p>
 
-    <p>Quatre points méritent d'être soulignés, parce qu'ils reviennent systématiquement en production :</p>
-    <ul>
-      <li><strong>Charger le modèle au démarrage</strong> via <code>lifespan</code>. Le charger dans la fonction de prédiction ajoute des centaines de millisecondes à chaque appel.</li>
-      <li><strong>Sortir le calcul de la boucle d'événements.</strong> Un <code>predict</code> scikit-learn est bloquant ; appelé directement dans une coroutine, il gèle tout le serveur pendant son exécution (module 1, section 7.5).</li>
-      <li><strong>Valider strictement les entrées.</strong> Les contraintes pydantic rejettent en 422 les valeurs aberrantes avant qu'elles n'atteignent le modèle — première ligne de défense contre les prédictions absurdes sur données hors domaine.</li>
-      <li><strong>Versionner le modèle dans la réponse.</strong> Sans cela, impossible de relier a posteriori une prédiction contestée à l'artefact qui l'a produite (module 12).</li>
-    </ul>
+    <div class="code-label">Python — la version robuste</div>
+    <div class="code-block"><pre>from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    <p>Pour la montée en charge : <code>uvicorn --workers 4</code> lance quatre processus (contournant le GIL), chacun chargeant sa copie du modèle — attention à la mémoire. Au-delà, on regroupe les requêtes par lots côté serveur (<em>dynamic batching</em>), ce que font Triton ou vLLM (modules 11 et 12).</p>
+resultats, echecs = {}, {}
+
+with ThreadPoolExecutor(max_workers=16) as ex:
+    # on soumet tout, et on garde la correspondance future → url
+    futures = {ex.submit(telecharger, url): url for url in urls}
+
+    for fut in as_completed(futures):          # rend la main dès qu'un résultat arrive
+        url = futures[fut]
+        try:
+            resultats[url] = fut.result()      # l'exception éventuelle surgit ICI
+        except requests.Timeout:
+            echecs[url] = "timeout"
+        except Exception as e:                 # ne jamais laisser une tâche tuer la boucle
+            echecs[url] = repr(e)
+
+print(f"{len(resultats)} réussites, {len(echecs)} échecs")</pre></div>
+
+    <div class="warning-block">
+      <strong>Deux réflexes obligatoires.</strong> D'abord, <strong>toujours un <code>timeout</code></strong> sur un appel réseau : sans lui, un serveur muet immobilise un worker indéfiniment, et le programme finit bloqué sans message d'erreur. Ensuite, <strong>une exception levée dans une tâche reste silencieuse</strong> jusqu'à l'appel de <code>.result()</code> : si l'on ne consulte jamais le futur, l'erreur disparaît sans laisser de trace.
+    </div>
+
+    <p>Combien de threads ? Pour de l'I/O, on peut largement dépasser le nombre de cœurs — quelques dizaines — puisqu'ils attendent la plupart du temps. La limite vient plutôt de ce qu'accepte le service distant : au-delà, on se fait limiter ou bannir. Un ordre de grandeur raisonnable est 8 à 32, en surveillant les codes 429.</p>
+
+    <h2 id="partage">5. Partager de l'état entre threads</h2>
+
+    <p>Puisque les threads partagent la mémoire, ils peuvent modifier les mêmes variables — et c'est là que surgissent les bugs les plus difficiles à reproduire. Une <strong>condition de course</strong> (<em>race condition</em>) apparaît quand le résultat dépend de l'ordre, imprévisible, dans lequel les threads s'intercalent.</p>
+
+    <div class="code-label">Python — un compteur qui perd des incréments</div>
+    <div class="code-block"><pre>compteur = 0
+
+def incrementer(n=100_000):
+    global compteur
+    for _ in range(n):
+        compteur += 1        # PAS atomique : lire, ajouter 1, réécrire — 3 étapes
+
+with ThreadPoolExecutor(max_workers=4) as ex:
+    list(ex.map(lambda _: incrementer(), range(4)))
+
+print(compteur)              # attendu 400 000 ; obtenu 387 412, 400 000, 392 118...</pre></div>
+
+    <p>L'explication : <code>compteur += 1</code> se décompose en trois opérations. Un thread peut lire la valeur 100, être interrompu, puis un autre lit aussi 100, ajoute 1 et écrit 101 ; le premier reprend, écrit lui aussi 101. Un incrément est perdu. Le GIL ne protège pas de cela : il garantit qu'une seule instruction de bytecode s'exécute à la fois, pas qu'une séquence de trois reste indivisible.</p>
+
+    <div class="code-label">Python — les trois façons correctes</div>
+    <div class="code-block"><pre>import threading, queue
+
+# 1. un verrou : une seule section critique à la fois
+verrou = threading.Lock()
+def incrementer_sur(n=100_000):
+    global compteur
+    for _ in range(n):
+        with verrou:          # acquiert, exécute, relâche — même en cas d'exception
+            compteur += 1     # correct, mais le verrou coûte cher s'il est très sollicité
+
+# 2. NE RIEN PARTAGER : chaque thread renvoie son résultat, on agrège à la fin
+def compter(n):
+    total = 0
+    for _ in range(n):
+        total += 1
+    return total              # aucune variable partagée → aucun verrou nécessaire
+with ThreadPoolExecutor(4) as ex:
+    compteur = sum(ex.map(compter, [100_000] * 4))    # exact, et plus rapide
+
+# 3. une file : la structure conçue pour la communication entre threads
+travaux = queue.Queue()       # thread-safe par construction
+resultats = queue.Queue()</pre></div>
+
+    <p>La deuxième approche est presque toujours la bonne : <strong>ne pas partager d'état mutable</strong>. Chaque tâche produit un résultat indépendant, et l'agrégation se fait dans le thread principal. Les verrous n'ont leur place que lorsqu'une ressource est intrinsèquement unique — un fichier de log, une connexion. Et il faut savoir qu'ils apportent leurs propres pièges : deux verrous acquis dans des ordres différents par deux threads produisent un <em>interblocage</em>, où chacun attend indéfiniment l'autre.</p>
+
+    <h2 id="processus">6. Les processus, pour calculer</h2>
+
+    <p>Pour du calcul Python pur, la seule échappatoire au GIL consiste à lancer plusieurs <em>processus</em> : chacun a son propre interpréteur, donc son propre GIL. L'interface est identique à celle des threads, ce qui rend le passage de l'un à l'autre presque gratuit — mais les contraintes, elles, sont très différentes.</p>
+
+    <div class="code-label">Python — ProcessPoolExecutor</div>
+    <div class="code-block"><pre>from concurrent.futures import ProcessPoolExecutor
+import random
+
+def simuler(graine: int) -&gt; float:
+    """Monte-Carlo en Python pur : CPU-bound, donc les threads seraient inutiles."""
+    rng = random.Random(graine)
+    return sum(rng.random() ** 2 for _ in range(1_000_000)) / 1_000_000
+
+if __name__ == "__main__":                 # OBLIGATOIRE — explication ci-dessous
+    with ProcessPoolExecutor(max_workers=8) as ex:
+        resultats = list(ex.map(simuler, range(64), chunksize=4))
+    print(sum(resultats) / len(resultats))</pre></div>
+
+    <p>Ici, le gain est réel : sur huit cœurs, on approche un facteur sept. Trois contraintes expliquent en revanche la plupart des échecs rencontrés avec les processus.</p>
+
+    <h3>a. La sérialisation</h3>
+    <p>Les processus ne partagent pas la mémoire : arguments et résultats doivent donc être <em>sérialisés</em> — convertis en octets par le module <code>pickle</code>, transmis, puis reconstruits de l'autre côté. Conséquences concrètes : envoyer un DataFrame de 3 Go à huit workers, c'est le sérialiser huit fois, et le transfert coûte alors bien plus cher que le calcul. Et tout n'est pas sérialisable — les fonctions anonymes (<code>lambda</code>), les fonctions définies dans une autre fonction, les objets tenant un fichier ouvert ou une connexion échouent avec un message souvent obscur.</p>
+
+    <div class="code-block"><pre># ÉCHOUE : une lambda n'est pas picklable
+ex.map(lambda x: x ** 2, donnees)
+
+# FONCTIONNE : une fonction définie au niveau du module
+def carre(x): return x ** 2
+ex.map(carre, donnees)</pre></div>
+
+    <h3>b. La méthode de démarrage</h3>
+    <p>Deux façons de créer un processus enfant. <strong><code>fork</code></strong> (historique sous Linux) duplique le processus courant : rapide, mais dangereux en présence de threads, car un verrou détenu au moment de la duplication reste verrouillé à jamais dans l'enfant — d'où des blocages inexplicables. <strong><code>spawn</code></strong> (défaut sous Windows et macOS, et sous Linux à partir de Python 3.14) démarre un interpréteur neuf qui <em>réimporte le module</em>.</p>
+    <p>C'est cette réimportation qui explique le fameux <code>if __name__ == "__main__":</code>. Sans lui, le code de lancement du pool serait réexécuté par chaque enfant, qui créerait à son tour un pool, et ainsi de suite — une bombe à fourche qui sature la machine en quelques secondes.</p>
+
+    <h3>c. Le coût fixe</h3>
+    <p>Créer un processus coûte quelques dizaines à quelques centaines de millisecondes. Paralléliser des tâches de 5 ms est donc perdant : le temps passé à distribuer dépasse le temps de calcul. C'est le rôle de <code>chunksize</code>, qui regroupe les tâches en paquets pour amortir ce coût. Règle simple : viser des paquets d'au moins une centaine de millisecondes de travail.</p>
+
+    <h3>Éviter les copies : mémoire partagée et joblib</h3>
+    <div class="code-label">Python — joblib, le plus pratique en data science</div>
+    <div class="code-block"><pre>from joblib import Parallel, delayed
+
+# n_jobs=-1 : tous les cœurs. Les grands tableaux NumPy sont mémoire-mappés
+# sur disque et partagés en lecture, pas copiés dans chaque worker.
+scores = Parallel(n_jobs=-1, backend="loky", verbose=1)(
+    delayed(evaluer_pli)(X, y, pli) for pli in plis
+)</pre></div>
+    <p><code>delayed</code> est un décorateur (module 1) qui transforme un appel en description d'appel : il capture la fonction et ses arguments sans les exécuter, pour que joblib puisse les distribuer. C'est ce backend que scikit-learn utilise sous le capot pour <code>n_jobs</code>.</p>
+    <p>Pour un contrôle plus fin, <code>multiprocessing.shared_memory</code> permet d'exposer un même bloc mémoire à plusieurs processus sans copie — utile pour un grand tableau en lecture seule partagé par tous les workers.</p>
+
+    <h2 id="asyncio">7. asyncio, pas à pas</h2>
+
+    <h3>L'idée</h3>
+    <p>asyncio ne parallélise rien : il <em>entrelace</em>. Tout se passe dans un seul thread, piloté par une <strong>boucle d'événements</strong> — un ordonnanceur qui tient la liste des tâches en attente. Chaque tâche s'exécute jusqu'au moment où elle doit attendre quelque chose ; à cet instant, elle le signale, la boucle la met de côté et donne la main à une autre tâche. Quand la réponse arrive, la tâche reprend là où elle s'était arrêtée.</p>
+    <p>C'est exactement le comportement du cuisinier de la section 1 : il ne va pas plus vite, mais il ne reste jamais planté devant la casserole. Le gain est le même qu'avec des threads pour de l'I/O, sans le coût d'un thread système par tâche — on tient ainsi des dizaines de milliers de connexions simultanées.</p>
+
+    <h3>Le vocabulaire minimal</h3>
+    <div class="code-label">Python — trois mots-clés, trois rôles</div>
+    <div class="code-block"><pre>import asyncio
+
+async def tache(nom, duree):        # "async def" → ce n'est plus une fonction ordinaire,
+    print(f"{nom} démarre")         #    mais une COROUTINE
+    await asyncio.sleep(duree)      # "await" → point de pause : je rends la main
+    print(f"{nom} terminée")        #    la boucle en profite pour faire tourner les autres
+    return nom
+
+async def main():
+    # gather : lancer plusieurs coroutines ENSEMBLE et attendre qu'elles finissent
+    resultats = await asyncio.gather(
+        tache("A", 2),
+        tache("B", 1),
+        tache("C", 3),
+    )
+    return resultats
+
+asyncio.run(main())    # "asyncio.run" → démarre la boucle d'événements et attend main()
+
+# affiche : A démarre, B démarre, C démarre, B terminée, A terminée, C terminée
+# durée totale : 3 s (le maximum), et non 6 s (la somme)</pre></div>
+
+    <p>Le point à retenir : appeler <code>tache("A", 2)</code> ne l'exécute pas, cela crée un objet coroutine. Rien ne se passe tant qu'une boucle ne le prend pas en charge, via <code>await</code>, <code>gather</code> ou <code>create_task</code>. C'est d'ailleurs l'origine d'un avertissement classique — <em>coroutine was never awaited</em> — qui signifie simplement qu'on a oublié le <code>await</code>.</p>
+
+    <h3>Un exemple réaliste</h3>
+    <div class="code-label">Python — 500 requêtes HTTP, avec limitation et reprise</div>
+    <div class="code-block"><pre>import asyncio, httpx          # httpx : l'équivalent asynchrone de requests
+
+async def recuperer(client: httpx.AsyncClient, url: str,
+                    sem: asyncio.Semaphore) -&gt; dict | None:
+    async with sem:                          # au plus N requêtes EN VOL simultanément
+        for essai in range(3):               # petite politique de reprise
+            try:
+                r = await client.get(url, timeout=10)
+                r.raise_for_status()
+                return r.json()
+            except (httpx.TimeoutException, httpx.HTTPStatusError):
+                await asyncio.sleep(2 ** essai)    # attente exponentielle : 1s, 2s, 4s
+        return None
+
+async def main(urls: list[str]) -&gt; list[dict | None]:
+    sem = asyncio.Semaphore(20)              # le garde-fou : 20 requêtes au maximum
+    async with httpx.AsyncClient() as client:     # une seule session, connexions réutilisées
+        taches = [recuperer(client, u, sem) for u in urls]
+        return await asyncio.gather(*taches)
+
+resultats = asyncio.run(main(urls))
+print(sum(r is not None for r in resultats), "réponses valides")</pre></div>
+
+    <p>Le <strong>sémaphore</strong> mérite une explication : c'est un compteur de jetons. <code>async with sem</code> prend un jeton, et le rend à la sortie du bloc ; s'il n'en reste plus, la tâche attend. Sans lui, <code>gather</code> lancerait les 500 requêtes d'un coup, ce qui saturerait le serveur distant et provoquerait des bannissements. C'est la forme asynchrone de la politesse.</p>
+
+    <div class="warning-block">
+      <strong>Le piège n° 1 : un appel bloquant gèle toute la boucle.</strong> Puisque tout vit dans un seul thread, un seul appel synchrone long — un <code>requests.get</code>, un <code>time.sleep</code>, un <code>model.predict</code> — bloque <em>toutes</em> les tâches en cours, y compris celles qui n'ont rien à voir. La porte de sortie est <code>asyncio.to_thread</code>, qui délègue l'appel bloquant à un thread séparé :
+      <div class="code-block"><pre>valeur = await asyncio.to_thread(fonction_bloquante, argument)</pre></div>
+      C'est exactement le mécanisme qui permet à FastAPI de servir un modèle scikit-learn sans bloquer le serveur (<a href="project7-m06.html">module 6</a>).
+    </div>
+
+    <p>Le second inconvénient est la <strong>contagion</strong> : une fonction <code>async</code> ne peut être appelée que depuis du code <code>async</code>. Introduire asyncio dans une base de code synchrone finit par colorer toute la chaîne d'appels, et exige des bibliothèques asynchrones de bout en bout (<code>httpx</code>, <code>asyncpg</code>, <code>aiofiles</code>). C'est la raison pour laquelle, pour deux cents requêtes ponctuelles dans un script, un <code>ThreadPoolExecutor</code> reste souvent le choix le plus raisonnable.</p>
+
+    <h2 id="sursouscription">8. Le piège de la sursouscription</h2>
+
+    <div class="warning-block">
+      <strong>Le diagnostic le plus fréquent, et le plus coûteux.</strong> Un <code>cross_val_score(..., n_jobs=8)</code> sur une machine à huit cœurs, où chaque processus lance un BLAS lui-même configuré sur huit threads : soixante-quatre threads se disputent huit cœurs. Les changements de contexte et la contention de cache font que le résultat est souvent <em>plus lent</em> que la version séquentielle, avec des cœurs pourtant à 100 %. Le remède : brider les threads natifs quand on parallélise au niveau des processus.
+    </div>
+
+    <p>Une précision de vocabulaire : <strong>BLAS</strong> (<em>Basic Linear Algebra Subprograms</em>) désigne les bibliothèques d'algèbre linéaire compilées — OpenBLAS, MKL — sur lesquelles reposent NumPy et scikit-learn. Elles sont déjà multi-threadées, et c'est précisément ce qu'on oublie.</p>
+
+    <div class="code-label">bash / Python</div>
+    <div class="code-block"><pre># à placer AVANT l'import de numpy : ces variables sont lues au chargement
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
+# ou, plus finement, sur un bloc de code précis :
+from threadpoolctl import threadpool_limits
+
+with threadpool_limits(limits=1, user_api="blas"):
+    scores = cross_val_score(modele, X, y, cv=5, n_jobs=8)
+
+# pour vérifier ce qui tourne réellement :
+from threadpoolctl import threadpool_info
+print(threadpool_info())      # liste les bibliothèques natives et leur nombre de threads</pre></div>
+
+    <p>La règle générale : <strong>un seul niveau de parallélisme à la fois</strong>. Soit on parallélise les plis de validation croisée et le BLAS reste mono-thread, soit on laisse le BLAS travailler et on garde <code>n_jobs=1</code>. Le bon réglage se mesure sur le cas réel, il ne se devine pas.</p>
+
+    <h2 id="recap">9. Récapitulatif</h2>
+    <div class="code-label">quoi utiliser quand</div>
+    <div class="code-block"><pre>Type de charge                Outil                       Parallélisme réel ?
+──────────────────────────────────────────────────────────────────────────────
+Requêtes HTTP, base de        asyncio + httpx             oui (entrelacement)
+données async, scraping
+I/O avec une bibliothèque     ThreadPoolExecutor          oui (GIL relâché)
+bloquante (requests, open)
+Boucles Python pures,         ProcessPoolExecutor         oui (N interpréteurs)
+parsing, simulation
+Validation croisée,           joblib / n_jobs             oui (backend loky)
+recherche d'hyperparamètres
+NumPy, PyTorch, polars        ne rien ajouter             oui (BLAS, Rayon)
+Boucle Python + threads       —                           NON : le GIL bloque
+Données plus grosses          Dask (module 3)             oui (out-of-core)
+que la RAM</pre></div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>SQL : jointures maîtrisées (vérifier la cardinalité), fonctions de fenêtre pour les features temporelles, CTE pour la lisibilité, vigilance sur les <code>NULL</code>.</li>
-        <li>Index sur les colonnes de jointure et de filtre ; <code>EXPLAIN ANALYZE</code> pour vérifier plutôt que supposer.</li>
-        <li>OLTP pour la source de vérité, OLAP (DuckDB en local) pour l'analyse.</li>
-        <li>NoSQL seulement quand un besoin précis le justifie ; PostgreSQL couvre beaucoup de cas, y compris vectoriels via pgvector.</li>
-        <li>Docker : couches du stable au volatil, multi-étapes, utilisateur non-root, pas de secret dans l'image.</li>
-        <li>Kubernetes : savoir lire un manifeste et déclarer ses ressources ; ce n'est pas nécessaire pour un prototype.</li>
-        <li>FastAPI : modèle chargé au démarrage, inférence déportée dans un thread, entrées validées, version renvoyée.</li>
+        <li>Processus = mémoire isolée, thread = mémoire partagée ; concurrence ≠ parallélisme.</li>
+        <li>Le GIL empêche deux threads d'exécuter du bytecode Python simultanément, mais il est relâché pendant les entrées/sorties et dans le code natif.</li>
+        <li>Mesurer avant de choisir : ratio temps CPU sur temps écoulé.</li>
+        <li>I/O → threads ou asyncio ; calcul Python pur → processus ; calcul NumPy → déjà parallèle.</li>
+        <li>Entre threads, ne rien partager de mutable ; agréger les résultats dans le thread principal.</li>
+        <li>Avec les processus : arguments picklables, garde <code>if __name__ == "__main__"</code>, <code>chunksize</code> pour amortir le coût de lancement.</li>
+        <li>En asyncio, un seul appel bloquant gèle toute la boucle — <code>asyncio.to_thread</code> est la sortie de secours.</li>
+        <li>Ne jamais empiler deux niveaux de parallélisme : brider les threads BLAS quand on distribue des processus.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m01.html" class="btn btn-secondary">← Module 1 : Fondations Python</a>
-  <a href="project7-m03.html" class="btn btn-primary">Module 3 : Boîte à outils numérique →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">SQL</span><span class="tag">DuckDB</span><span class="tag">NoSQL</span><span class="tag">Docker</span><span class="tag">Kubernetes</span><span class="tag">FastAPI</span></div>
+  <div class="course-nav">
+    <a href="project7-m01.html" class="btn btn-secondary">← Module 1 : Python moderne</a>
+    <a href="project7-m03.html" class="btn btn-primary">Module 3 : Boîte à outils numérique →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">GIL</span><span class="tag">Threads</span><span class="tag">multiprocessing</span><span class="tag">asyncio</span><span class="tag">joblib</span><span class="tag">BLAS</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -358,50 +439,54 @@ async def predict(req: Requete) -&gt; Reponse:
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 2</div>
-    <h1>Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</h1>
+    <h1>Concurrency in Python: the GIL, threads, processes, asyncio</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>SQL that matters for analysis: joins and cardinality blow-ups, window functions for leak-free temporal features, CTEs, NULL semantics.</li>
-      <li>Indexes and execution plans (<code>EXPLAIN ANALYZE</code>), and why a function applied to a column kills an index.</li>
-      <li>OLTP vs OLAP, columnar storage, and DuckDB as the local analytical engine.</li>
-      <li>The four NoSQL families, the CAP trade-off, and when relational is still the right default.</li>
-      <li>Vector databases: first contact (pgvector, FAISS, Qdrant) — detailed in module 11.</li>
-      <li>Docker: layer caching, multi-stage builds with UV, non-root users, volumes and secrets, GPU access.</li>
-      <li>Kubernetes: the objects worth knowing, a deployment manifest for model serving, resource requests vs limits, and an honest take on when it is overkill.</li>
-      <li>FastAPI: loading the model once, keeping blocking inference off the event loop, strict input validation, versioned responses.</li>
+      <li>The vocabulary first: processes versus threads, concurrency versus parallelism, with a flat-share analogy.</li>
+      <li>The GIL: what it is, why CPython has it (reference counting), a ten-line measurement showing four threads gaining nothing, and the two situations where it is released.</li>
+      <li>Diagnosing the regime by comparing wall time to CPU time, and a decision tree.</li>
+      <li>Threads with <code>concurrent.futures</code>: futures, <code>map</code> versus <code>submit</code>/<code>as_completed</code>, mandatory timeouts, exception handling, and how many workers to use.</li>
+      <li>Shared state between threads: a race condition demonstrated on a counter, why the GIL does not prevent it, locks, and why sharing nothing is almost always the better answer.</li>
+      <li>Processes: pickling constraints, spawn versus fork and the <code>if __name__ == "__main__"</code> guard, chunk sizing, shared memory and joblib.</li>
+      <li>asyncio explained step by step: the event loop, coroutines, <code>await</code>, <code>gather</code>, semaphores for rate limiting, retries, and the two pitfalls (a blocking call freezes everything; async colours the whole call stack).</li>
+      <li>Thread oversubscription: why BLAS threads multiplied by process workers makes cross-validation slower, and how to control it.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><strong>Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</strong></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><strong>Concurrency in Python: the GIL, threads, processes, asyncio</strong></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

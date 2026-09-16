@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 19 - Recherche, ranking et recommandation - Nils Malmberg</title>
+  <title>Module 19 - ML pour la simulation et l'ingénierie - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,135 +41,194 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 19</div>
-    <h1>Recherche, ranking et recommandation</h1>
+    <h1>ML pour la simulation et l'ingénierie</h1>
   </div>
 
-  <div class="project-content">
-    <p>Trouver un document, ordonner des résultats, suggérer un article : ces trois problèmes partagent la même architecture — réduire des millions de candidats à quelques dizaines, puis les ordonner finement. C'est l'un des domaines applicatifs les plus répandus de la data science, et celui où l'écart entre l'évaluation hors ligne et la réalité est le plus grand.</p>
+  <div class="project-content course-content">
+    <p>C'est le module où la formation d'ingénieur devient un avantage plutôt qu'un détour. La situation est toujours la même : on dispose d'un code de calcul fiable mais coûteux — CFD, éléments finis, neutronique, Monte-Carlo de transport — et l'on a besoin de milliers d'évaluations pour propager des incertitudes, optimiser une conception ou piloter un système en temps réel. Le machine learning n'y remplace pas la physique : il en construit une approximation utilisable, et il faut savoir exactement dans quelles limites elle reste valide.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#architecture">L'architecture commune</a></li>
-        <li><a href="#recherche">Recherche : lexical, sémantique, hybride</a></li>
-        <li><a href="#ltr">Learning to rank</a></li>
-        <li><a href="#biais-clics">Données de clics et biais de position</a></li>
-        <li><a href="#collaboratif">Filtrage collaboratif et factorisation</a></li>
-        <li><a href="#neuronal">Two-tower et recommandation séquentielle</a></li>
-        <li><a href="#evaluation">Évaluer : hors ligne et en ligne</a></li>
-        <li><a href="#problemes">Démarrage à froid, popularité, boucles</a></li>
+        <li><a href="#monte-carlo">Monte-Carlo et réduction de variance</a></li>
+        <li><a href="#qmc">Quasi-Monte-Carlo et plans d'expériences</a></li>
+        <li><a href="#propagation">Propagation d'incertitude et chaos polynomial</a></li>
+        <li><a href="#sobol">Analyse de sensibilité</a></li>
+        <li><a href="#surrogates">Métamodèles : construire et valider</a></li>
+        <li><a href="#rom">Réduction de modèle : POD, DMD</a></li>
+        <li><a href="#sciml">SciML : opérateurs neuronaux et hybrides</a></li>
+        <li><a href="#assimilation">Assimilation de données et problèmes inverses</a></li>
+        <li><a href="#jumeau">Jumeau numérique et crédibilité</a></li>
       </ol>
     </div>
 
-    <h2 id="architecture">1. L'architecture commune</h2>
-    <div class="code-label">le pipeline en trois étages</div>
-    <div class="code-block"><pre>1. RÉCUPÉRATION (retrieval)     millions → quelques centaines de candidats
-   contraintes : quelques millisecondes, modèles simples et indexables
-   moyens : BM25, index vectoriel ANN (module 11), filtres métier, règles
+    <h2 id="monte-carlo">1. Monte-Carlo et réduction de variance</h2>
+    <p>Estimer \(I = \mathbb{E}[f(X)]\) par tirage aléatoire donne \(\hat I_N = \frac1N\sum f(x_i)\), d'erreur type \(\sigma/\sqrt{N}\). La propriété remarquable — et la raison pour laquelle la méthode domine en grande dimension — est que <strong>cette vitesse ne dépend pas de la dimension</strong>, contrairement à toute quadrature déterministe. Le revers : gagner un chiffre significatif coûte cent fois plus de simulations. D'où l'importance des techniques de réduction de variance, qui s'attaquent au numérateur plutôt qu'au dénominateur.</p>
 
-2. CLASSEMENT (ranking)          centaines → dizaines, ordonnées finement
-   contraintes : dizaines de millisecondes, modèle riche autorisé
-   moyens : gradient boosting de ranking, cross-encoder, réseau profond
-
-3. RE-CLASSEMENT MÉTIER          ce qui est réellement affiché
-   diversité, fraîcheur, stocks, marges, équité entre fournisseurs,
-   exclusions réglementaires, dé-duplication</pre></div>
-
-    <p>Cette séparation est imposée par la latence : on ne peut pas évaluer un modèle coûteux sur un million d'items en 50 ms. Elle a une conséquence souvent négligée : <strong>la qualité du système est plafonnée par l'étage de récupération</strong>. Un bon modèle de classement ne peut pas remonter un item que la récupération n'a pas proposé. Quand un système déçoit, c'est donc le rappel de l'étage 1 qu'il faut mesurer en premier.</p>
-
-    <h2 id="recherche">2. Recherche : lexical, sémantique, hybride</h2>
-    <p>Le module 11 présente la recherche dans le cadre du RAG ; les mêmes briques valent pour une recherche destinée à des humains. <strong>BM25</strong> reste une référence redoutable : il trouve immédiatement les références exactes, les codes produit et les termes rares. La recherche <strong>vectorielle</strong> gère les reformulations et les synonymes mais échoue sur ces mêmes termes rares, qu'elle n'a souvent jamais vus à l'entraînement.</p>
-    <p>La combinaison par <strong>fusion de rangs réciproques</strong> est robuste et sans paramètre à régler :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \text{RRF}(d) = \sum_{s \in \text{systèmes}} \frac{1}{k + \text{rang}_s(d)}, \qquad k \approx 60 \]</div>
-    <p>Elle n'exige aucune normalisation des scores entre systèmes — leur simple rang suffit — ce qui explique sa popularité.</p>
-    <p>Le reste du travail se joue sur la requête et les métadonnées : analyse de la requête (correction orthographique, expansion par synonymes, détection d'intention), filtres (catégorie, date, disponibilité) et gestion des requêtes sans résultat, qui sont le principal motif d'abandon. Sur un corpus technique, un simple dictionnaire de synonymes métier rapporte souvent plus qu'un changement de modèle d'embedding.</p>
-
-    <h2 id="ltr">3. Learning to rank</h2>
-    <p>Classer n'est pas prédire une valeur : seul l'<em>ordre</em> compte, et les premières positions comptent bien plus que les suivantes. Trois formulations :</p>
-    <ul>
-      <li><strong>Pointwise</strong> — prédire un score de pertinence par item, indépendamment des autres. Simple, mais optimise la mauvaise chose : une erreur en position 1 et une erreur en position 50 pèsent pareil.</li>
-      <li><strong>Pairwise</strong> — apprendre, pour chaque paire, lequel doit passer devant (RankNet, LambdaRank). Beaucoup plus proche de l'objectif réel.</li>
-      <li><strong>Listwise</strong> — optimiser directement une métrique de liste comme le NDCG. <strong>LambdaMART</strong> — gradient boosting avec des gradients pondérés par le gain de NDCG qu'échangerait une permutation — reste l'état de l'art pratique, et est disponible directement dans LightGBM et XGBoost (<code>objective="lambdarank"</code>).</li>
-    </ul>
-
-    <p>La métrique de référence est le <strong>NDCG</strong>, qui pondère la pertinence par une remise logarithmique sur le rang :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \text{DCG}@k = \sum_{i=1}^{k}\frac{2^{\text{rel}_i}-1}{\log_2(i+1)}, \qquad \text{NDCG}@k = \frac{\text{DCG}@k}{\text{IDCG}@k} \]</div>
-    <p>La normalisation par le classement idéal rend les requêtes comparables entre elles, ce que ne permettent ni la précision@k ni le MRR.</p>
-
-    <p>Les features d'un modèle de ranking se rangent en trois familles : caractéristiques de la <em>requête</em> (longueur, intention, langue), de l'<em>item</em> (popularité, fraîcheur, qualité, prix) et surtout de l'<em>appariement</em> requête-item (scores BM25 par champ, similarité d'embedding, correspondances exactes, historique de clics sur cette paire). Ce sont ces dernières qui portent l'essentiel du signal.</p>
-
-    <h2 id="biais-clics">4. Données de clics et biais de position</h2>
-    <p>Les clics sont la source d'étiquettes la plus abondante — et la plus traîtresse. Un item est cliqué parce qu'il est pertinent, mais surtout parce qu'il était <em>affiché en première position</em>. Entraîner naïvement sur les clics revient donc à apprendre le classement actuel, et à le figer.</p>
-
-    <div class="code-label">les biais des journaux de clics</div>
-    <div class="code-block"><pre>Biais de position    les premiers résultats sont bien plus cliqués, à pertinence égale
-Biais de sélection   on n'observe QUE ce qui a été affiché par la politique en place
-Biais de confiance   les utilisateurs font confiance au système et cliquent "par défaut"
-Absence de négatif   un non-clic ne signifie pas non pertinent : peut-être non vu
-                     (d'où la distinction entre items VUS et items affichés)</pre></div>
-
-    <p>Les remèdes : pondération inverse de propension (chaque clic est pondéré par l'inverse de la probabilité d'examen à cette position — c'est le <em>counterfactual learning to rank</em>) ; estimation de la courbe de propension par permutations aléatoires contrôlées d'une petite fraction du trafic ; et l'utilisation de signaux moins biaisés que le clic brut — temps de lecture, achat, retour en arrière rapide (qui est un signal <em>négatif</em> fort). Sans cette correction, un système de ranking entraîné sur ses propres journaux se renforce dans ses erreurs.</p>
-
-    <h2 id="collaboratif">5. Filtrage collaboratif et factorisation</h2>
-    <p>L'intuition fondatrice : des utilisateurs qui ont aimé les mêmes choses aimeront les mêmes choses ensuite. Aucune connaissance du contenu n'est nécessaire — seule la matrice d'interactions compte.</p>
-
-    <p>La <strong>factorisation matricielle</strong> approche cette matrice très creuse \(R\) par un produit de faible rang \(R \approx P Q^\top\), où chaque utilisateur et chaque item sont représentés par un vecteur latent de dimension \(k\) (typiquement 32 à 256) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \hat r_{ui} = \mu + b_u + b_i + p_u^\top q_i, \qquad \min \sum_{(u,i)\in\mathcal{K}} \big(r_{ui}-\hat r_{ui}\big)^2 + \lambda\big(\|p_u\|^2+\|q_i\|^2\big) \]</div>
-    <p>C'est l'idée d'approximation de rang faible du module 4, adaptée au cas où la plupart des entrées sont manquantes : on n'ajuste que sur les interactions observées, d'où l'usage de la descente de gradient stochastique ou des moindres carrés alternés (ALS) plutôt que d'une SVD classique. Les termes de biais \(b_u, b_i\) capturent la sévérité d'un utilisateur et la popularité d'un item — ils expliquent à eux seuls une part importante du signal.</p>
-
-    <div class="warning-block">
-      <strong>Retour implicite : l'absence n'est pas un rejet.</strong> Dans la plupart des systèmes réels, on n'a pas de notes mais des vues, clics et achats — uniquement des signaux positifs. Traiter tout le reste comme des zéros est faux : l'utilisateur n'a probablement jamais vu l'item. Les méthodes adaptées traitent ces non-interactions comme des négatifs <em>pondérés par une confiance faible</em> (ALS implicite) ou apprennent un ordre plutôt qu'une valeur — c'est <strong>BPR</strong> (<em>Bayesian Personalised Ranking</em>), qui maximise la probabilité qu'un item vu passe devant un item tiré au hasard. L'échantillonnage de ces négatifs est le détail d'implémentation qui décide de la qualité du résultat.
-    </div>
-
-    <h2 id="neuronal">6. Two-tower et recommandation séquentielle</h2>
-    <p>L'architecture <strong>à deux tours</strong> est devenue le standard industriel de l'étage de récupération : un réseau encode l'utilisateur et son contexte, un autre encode l'item, et la pertinence est le produit scalaire des deux vecteurs. L'intérêt est architectural : les embeddings d'items se calculent <em>hors ligne</em> et s'indexent dans une base vectorielle (module 11), si bien qu'une requête en ligne ne demande qu'un encodage utilisateur et une recherche des plus proches voisins. On retrouve ainsi la souplesse d'un réseau de neurones avec la latence d'un index.</p>
-    <p>La <strong>recommandation séquentielle</strong> (GRU4Rec, SASRec, BERT4Rec) modélise l'historique comme une séquence et prédit l'action suivante — c'est un transformer appliqué à des identifiants d'items (module 8). Elle capture l'intention du moment, ce que la factorisation matricielle, purement statique, ignore complètement : quelqu'un qui vient de consulter trois perceuses n'est pas dans le même état que sa moyenne historique.</p>
-    <p>Un point à connaître : au-delà du prototype, les gains viennent moins de l'architecture que des <em>features</em> et de la fraîcheur des données. Un modèle simple réentraîné toutes les heures bat souvent un modèle sophistiqué réentraîné chaque semaine.</p>
-
-    <h2 id="evaluation">7. Évaluer : hors ligne et en ligne</h2>
-    <div class="code-label">métriques hors ligne</div>
-    <div class="code-block"><pre>Précision@k / Rappel@k   les basiques, faciles à interpréter
-MAP, MRR                 position du premier élément pertinent
-NDCG@k                   pertinence graduée avec remise logarithmique : la référence
-Couverture (catalogue)   quelle part du catalogue est réellement recommandée ?
-Diversité intra-liste    les k items proposés se ressemblent-ils trop ?
-Nouveauté / sérendipité  recommande-t-on autre chose que les best-sellers ?
-Équité                   entre fournisseurs, auteurs, catégories (module 20)</pre></div>
-
-    <p>Le découpage des données mérite une attention particulière : un découpage aléatoire est une fuite (module 6), puisqu'il permet d'entraîner sur le futur d'un utilisateur pour prédire son passé. Il faut découper <strong>par date</strong>, et évaluer sur la période suivante — ou, à défaut, exclure les dernières interactions de chaque utilisateur.</p>
+    <div class="code-label">réduire la variance, pas augmenter N</div>
+    <div class="code-block"><pre>Variables antithétiques   tirer u et 1-u : la corrélation négative annule une partie
+                          de la fluctuation. Gain modeste, coût nul.
+Variable de contrôle      utiliser une grandeur g corrélée à f dont l'espérance est
+                          CONNUE : Î = mean(f) - c·(mean(g) - E[g]). Souvent le
+                          meilleur rapport gain/effort — un modèle simplifié ou un
+                          surrogate fait un excellent contrôle.
+Échantillonnage           tirer selon une loi q qui concentre les tirages là où f
+préférentiel              compte, puis corriger par le poids p/q. INDISPENSABLE pour
+                          les événements rares (probabilité de défaillance à 10⁻⁶).
+Stratification / LHS      découper l'espace et garantir une couverture régulière.
+Multi-niveaux (MLMC)      combiner beaucoup de simulations grossières et peu de
+                          simulations fines : réduit le coût de plusieurs ordres.</pre></div>
 
     <div class="step-block">
-      <h4>Le décalage hors ligne / en ligne</h4>
-      <p>C'est la caractéristique la plus déroutante du domaine : les gains mesurés hors ligne se traduisent mal en gains réels. Trois raisons. Les données historiques ont été produites par l'<em>ancien</em> système, donc un nouveau modèle proposant des items jamais affichés est évalué comme s'il se trompait. Les métriques hors ligne mesurent la reproduction du passé, pas la satisfaction. Et l'effet d'un changement de recommandation met parfois des semaines à se manifester (fidélité, lassitude). La conclusion pratique : l'évaluation hors ligne sert à <em>filtrer</em> les candidats et à éviter les régressions, mais seule une expérience en ligne (module 5) tranche — avec des métriques de garde-fou pour détecter les effets pervers, et une attention aux effets de long terme que l'A/B test court mesure mal.</p>
+      <h4>Le cas des événements rares</h4>
+      <p>Estimer une probabilité de défaillance de \(10^{-6}\) par Monte-Carlo direct demande de l'ordre de \(10^{8}\) simulations pour une précision de 10 % — hors de portée avec un code coûteux. Les méthodes dédiées (échantillonnage préférentiel, <em>subset simulation</em>, FORM/SORM en fiabilité des structures) ramènent cela à quelques milliers d'appels, souvent combinées à un métamodèle raffiné près de la surface d'état limite. C'est exactement l'articulation entre ce module et l'optimisation bayésienne du module 17 : on enrichit le plan là où la décision se joue.</p>
     </div>
 
-    <h2 id="problemes">8. Démarrage à froid, popularité, boucles</h2>
+    <h2 id="qmc">2. Quasi-Monte-Carlo et plans d'expériences</h2>
+    <p>Les suites à faible discordance (Sobol, Halton) remplacent l'aléa par des points délibérément bien répartis. La convergence passe de \(O(N^{-1/2})\) à \(O((\log N)^d/N)\) : bien meilleure en dimension modérée, l'avantage s'érodant quand \(d\) devient grand. Pour un plan d'expériences numériques, les options usuelles :</p>
+
+    <div class="code-label">Python — scipy.stats.qmc</div>
+    <div class="code-block"><pre>from scipy.stats import qmc
+
+# hypercube latin optimisé : projection uniforme sur chaque axe
+plan = qmc.LatinHypercube(d=6, optimization="random-cd", seed=0).random(n=120)
+
+# suite de Sobol : extensible par puissances de 2, excellente uniformité
+sobol = qmc.Sobol(d=6, scramble=True, seed=0).random_base2(m=7)     # 128 points
+
+# mise à l'échelle vers les bornes physiques des paramètres
+X = qmc.scale(plan, l_bounds=[0.1, 300, 1e5, 0.2, 1.0, 0.0],
+                    u_bounds=[0.9, 600, 5e5, 0.8, 3.0, 1.0])
+print(qmc.discrepancy(plan))              # plus c'est bas, mieux l'espace est couvert</pre></div>
+
+    <p>Règle empirique pour un premier plan destiné à construire un métamodèle : environ dix points par dimension d'entrée, puis enrichissement adaptatif (module 17) plutôt qu'un grand plan figé. Et toujours prévoir un jeu de <em>validation</em> tiré indépendamment : valider un surrogate sur les points qui ont servi à le construire n'a aucun sens.</p>
+
+    <h2 id="propagation">3. Propagation d'incertitude et chaos polynomial</h2>
+    <p>Les entrées d'un calcul sont incertaines : propriétés matériaux, conditions aux limites, tolérances géométriques. La propagation consiste à en déduire la loi de la sortie — et pas seulement sa moyenne, car une décision de sûreté porte sur un quantile extrême.</p>
+
+    <p>Le <strong>chaos polynomial</strong> (PCE) développe la sortie sur une base de polynômes orthogonaux des variables aléatoires d'entrée :</p>
+    <div style="text-align:center;overflow-x:auto">\[ Y = f(\xi) \approx \sum_{j=0}^{P} \alpha_j \Psi_j(\xi), \qquad \mathbb{E}[Y] = \alpha_0, \quad \operatorname{Var}(Y) = \sum_{j\geq 1}\alpha_j^2 \]</div>
+    <p>La base est choisie selon la loi des entrées (Hermite pour des gaussiennes, Legendre pour des uniformes). L'intérêt est double : moyenne et variance se lisent <em>directement</em> sur les coefficients, et les indices de sensibilité s'en déduisent analytiquement (section suivante). Les coefficients s'obtiennent par projection ou par régression parcimonieuse (LARS), ce qui en fait un cas particulier remarquable de la régression régularisée du module 12. Limites : la taille de la base explose avec la dimension et le degré, et la méthode suppose une réponse régulière — un comportement discontinu (bifurcation, changement de régime) la met en échec, exactement comme un GP à noyau lisse.</p>
+
+    <h2 id="sobol">4. Analyse de sensibilité</h2>
+    <p>Question centrale en ingénierie : <em>quelle part de la variabilité de la sortie chaque entrée explique-t-elle ?</em> Les dérivées locales ne répondent pas — elles ne valent qu'au point où elles sont calculées. L'analyse de sensibilité <strong>globale</strong> décompose la variance :</p>
+    <div style="text-align:center;overflow-x:auto">\[ S_i = \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_i]\big)}{\operatorname{Var}(Y)}, \qquad S_{T_i} = 1 - \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_{\sim i}]\big)}{\operatorname{Var}(Y)} \]</div>
+    <p>\(S_i\) est l'indice du <em>premier ordre</em> (effet propre de \(X_i\)), \(S_{T_i}\) l'indice <em>total</em> (effet propre plus toutes ses interactions). Leur lecture conjointe est très informative : \(S_{T_i} \approx S_i\) signale une variable qui agit seule ; \(S_{T_i} \gg S_i\) révèle une variable qui n'agit qu'en interaction ; \(S_{T_i} \approx 0\) autorise à <strong>fixer</strong> la variable, ce qui réduit la dimension du problème. Et \(\sum_i S_i \lt 1\) mesure la part due aux interactions.</p>
+
+    <div class="code-label">Python — SALib</div>
+    <div class="code-block"><pre>from SALib.sample import sobol as sobol_sample
+from SALib.analyze import sobol as sobol_analyze
+
+probleme = {"num_vars": 4,
+            "names": ["conductivite", "debit", "epaisseur", "coef_echange"],
+            "bounds": [[10, 25], [0.5, 2.0], [1e-3, 5e-3], [200, 900]]}
+
+X = sobol_sample.sample(probleme, 1024)        # N(2d+2) évaluations
+Y = np.array([simulation(x) for x in X])       # ou le SURROGATE, bien moins cher
+
+Si = sobol_analyze.analyze(probleme, Y)
+print(Si["S1"], Si["ST"])                      # premier ordre / total</pre></div>
+
+    <p>Le coût — \(N(2d+2)\) évaluations — est la raison pour laquelle on calcule presque toujours les indices de Sobol <em>sur un métamodèle</em> plutôt que sur le code direct. Pour un simple criblage préalable en grande dimension, la méthode de Morris identifie les variables négligeables pour quelques dizaines d'évaluations seulement.</p>
+
+    <h2 id="surrogates">5. Métamodèles : construire et valider</h2>
+    <p>Un métamodèle remplace le code de calcul par une fonction bon marché ajustée sur un plan d'expériences. Les familles, et le critère de choix :</p>
+
+    <div class="code-label">choisir un surrogate</div>
+    <div class="code-block"><pre>Krigeage / GP       interpole exactement, fournit une VARIANCE de prédiction.
+(module 17)          Le défaut pour n &lt; quelques milliers de points. Indispensable
+                    si l'on veut enrichir le plan de façon adaptative.
+RBF                 interpolation par fonctions radiales : simple, robuste, très bon
+                    en dimension modérée. Sans incertitude native — c'est exactement
+                    ce que j'ai implémenté dans mdisd (voir le projet).
+Chaos polynomial    moments et indices de Sobol analytiques. Excellent si la réponse
+                    est régulière et la dimension modérée.
+Gradient boosting   robuste aux discontinuités et au bruit numérique, mais N'EXTRAPOLE
+                    PAS (module 12) : dangereux hors du domaine du plan.
+Réseau de neurones  utile quand le plan est très grand (10⁴+) ou la sortie de grande
+                    dimension (un champ complet plutôt qu'un scalaire).</pre></div>
+
+    <div class="warning-block">
+      <strong>Un métamodèle se valide sur des points qu'il n'a jamais vus.</strong> Le critère usuel est le \(Q^2\) (le \(R^2\) calculé sur un jeu de validation indépendant, ou par validation croisée <em>leave-one-out</em>, quasi gratuite pour un krigeage). Un \(Q^2\) de 0,99 sur les points d'apprentissage ne veut rien dire : un interpolateur passe par tous ses points par construction. Trois vérifications supplémentaires valent d'être systématiques : l'erreur maximale (et non seulement moyenne) sur le jeu de validation, la qualité de l'approximation <em>dans la zone qui décide</em> (près d'un seuil de sûreté, la moyenne globale n'a aucun intérêt), et la cohérence physique — monotonie attendue, signe, ordres de grandeur, comportement aux limites.
+    </div>
+
+    <h2 id="rom">6. Réduction de modèle : POD, DMD</h2>
+    <p>Les métamodèles précédents prédisent un scalaire. Quand la sortie est un <em>champ</em> — température en tout point, vitesse sur tout le maillage —, on passe par la réduction de modèle. L'observation fondatrice : les solutions d'un système physique paramétré vivent presque toujours dans un sous-espace de très faible dimension.</p>
+
+    <p>La <strong>POD</strong> (décomposition orthogonale aux valeurs propres) consiste à assembler une matrice de <em>snapshots</em> — chaque colonne est un champ solution pour un jeu de paramètres — et à en calculer la SVD (module 7). Les premiers vecteurs singuliers forment une base de modes, et la décroissance des valeurs singulières indique combien en garder. C'est, mot pour mot, une PCA sur des champs physiques : les modes obtenus ont souvent une interprétation directe (structures cohérentes d'un écoulement, modes propres de vibration).</p>
+
+    <div class="code-label">Python — POD sur des snapshots</div>
+    <div class="code-block"><pre>import numpy as np
+
+S = np.column_stack(snapshots)                 # (n_ddl, n_simulations)
+moyenne = S.mean(axis=1, keepdims=True)
+U, s, Vt = np.linalg.svd(S - moyenne, full_matrices=False)
+
+energie = np.cumsum(s**2) / np.sum(s**2)
+r = int(np.searchsorted(energie, 0.9999) + 1)  # souvent r ≈ 10-30 pour 99,99 %
+Phi = U[:, :r]                                 # base réduite
+
+# coefficients réduits : la cible d'un surrogate (GP, RBF) sur les paramètres
+A = Phi.T @ (S - moyenne)                      # (r, n_simulations)
+champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ complet</pre></div>
+
+    <p>Deux stratégies en découlent. Le ROM <em>non intrusif</em> — celui du code ci-dessus — apprend simplement les coefficients modaux en fonction des paramètres : facile, applicable à un code fermé, sans garantie physique. Le ROM <em>intrusif</em> (projection de Galerkin des équations sur la base réduite) conserve la structure des équations et offre de meilleures garanties, mais exige d'accéder aux opérateurs du solveur, et la non-linéarité impose des techniques d'hyper-réduction (DEIM). La <strong>DMD</strong>, elle, extrait des modes associés à des fréquences et des taux de croissance, ce qui en fait l'outil naturel pour analyser une dynamique et prédire à court terme.</p>
+
+    <p>La limite commune est claire : ces méthodes supposent une <em>faible dimension effective</em>. Un écoulement fortement turbulent, un problème avec chocs ou fronts mobiles, une bifurcation — et le spectre ne décroît plus. C'est d'ailleurs l'information utile : la décroissance des valeurs singulières <em>mesure</em> la réductibilité du problème avant tout investissement.</p>
+
+    <h2 id="sciml">7. SciML : opérateurs neuronaux et hybrides</h2>
+    <p>Le module 14 présente les PINN, qui apprennent <em>une</em> solution sous contrainte d'EDP. Les <strong>opérateurs neuronaux</strong> visent plus haut : apprendre l'application qui envoie une fonction d'entrée (champ de conditions initiales, de coefficients, de géométrie) sur la fonction solution — donc une famille entière de problèmes.</p>
     <ul>
-      <li><strong>Démarrage à froid</strong> — un nouvel utilisateur ou un nouvel item n'a pas d'historique. Solutions : s'appuyer sur le contenu (attributs, embedding du texte ou de l'image, module 15), recommander par popularité contextualisée, poser deux ou trois questions d'amorçage, ou exploiter un bandit pour explorer rapidement (module 18).</li>
-      <li><strong>Biais de popularité</strong> — les modèles entraînés sur des interactions amplifient les items déjà populaires, ce qui pénalise la longue traîne et appauvrit le catalogue utile. Correctifs : échantillonnage négatif pondéré par la popularité, pénalisation explicite, ou contrainte de couverture au re-classement.</li>
-      <li><strong>Boucle de rétroaction</strong> — le système ne voit que les conséquences de ses propres recommandations, ce qui rétrécit progressivement l'exposition (modules 12 et 18). Les parades : conserver une part d'exploration aléatoire, maintenir un groupe témoin permanent, et surveiller la diversité dans le temps comme métrique de santé.</li>
-      <li><strong>Contraintes système</strong> — latence, coût d'indexation, fraîcheur des embeddings, cohérence entre features d'entraînement et features servies (module 12). C'est là, plus que dans le modèle, que se situent les vraies difficultés d'ingénierie.</li>
+      <li><strong>DeepONet</strong> — deux réseaux, l'un encodant la fonction d'entrée échantillonnée, l'autre les coordonnées d'évaluation, combinés par produit scalaire. Fondé sur un théorème d'approximation d'opérateurs.</li>
+      <li><strong>FNO</strong> (<em>Fourier Neural Operator</em>) — effectue la convolution dans l'espace de Fourier en ne gardant que les basses fréquences : le coût passe en \(O(n\log n)\), et le modèle est <em>indépendant de la discrétisation</em>, donc entraînable sur maillage grossier et évaluable sur maillage fin. Très efficace sur les problèmes à géométrie régulière et périodique.</li>
+      <li><strong>GNN sur maillage</strong> (module 16) — la bonne réponse quand la géométrie est complexe et non structurée.</li>
     </ul>
+    <p>Une fois entraînés, ces modèles évaluent une solution en millisecondes contre des heures de calcul — d'où leur intérêt pour l'optimisation de forme, le contrôle en temps réel ou l'exploration paramétrique. Le prix à payer : la précision plafonne bien au-dessus de celle d'un solveur, la généralisation hors du régime d'entraînement est mauvaise, et l'entraînement demande un gros corpus de simulations, donc l'investissement ne se justifie que par un grand nombre d'évaluations futures.</p>
+
+    <div class="step-block">
+      <h4>Hybrider plutôt que remplacer</h4>
+      <p>Les approches qui fonctionnent le mieux en pratique ne substituent pas le ML à la physique, elles le placent là où la physique est mal connue : apprendre une <em>loi de fermeture</em> (turbulence, loi de comportement matériau) tout en conservant les équations de conservation ; apprendre la <em>correction</em> entre un modèle grossier rapide et la réalité expérimentale (<em>multi-fidélité</em>, module 17), ce qui demande beaucoup moins de données qu'apprendre la sortie complète ; imposer des contraintes dures — positivité, conservation de la masse, symétries, équivariance — directement dans l'architecture, ce qui améliore autant la fiabilité que l'efficacité en données. Un modèle qui viole la conservation de l'énergie n'est pas utilisable, quelle que soit son erreur quadratique moyenne.</p>
+    </div>
+
+    <h2 id="assimilation">8. Assimilation de données et problèmes inverses</h2>
+    <p>L'assimilation combine un modèle physique et des mesures pour estimer l'état ou les paramètres d'un système. C'est le cadre de la météorologie opérationnelle, du recalage de modèles et de la surveillance en ligne. Le formalisme variationnel (4D-Var) s'écrit comme la minimisation d'une fonctionnelle :</p>
+    <div style="text-align:center;overflow-x:auto">\[ J(x_0) = \underbrace{\tfrac12 (x_0-x^b)^\top B^{-1}(x_0-x^b)}_{\text{écart à l'ébauche}} + \underbrace{\tfrac12\sum_{k}(\mathcal{H}(x_k)-z_k)^\top R^{-1}(\mathcal{H}(x_k)-z_k)}_{\text{écart aux observations}} \]</div>
+    <p>On reconnaît un MAP (module 9) : \(B\) encode la confiance a priori, \(R\) la précision des capteurs. La minimisation demande le gradient par rapport à l'état initial, obtenu par le modèle <em>adjoint</em> — c'est exactement de la différentiation automatique en mode inverse, la même mécanique que la rétropropagation (module 14). D'où l'intérêt actuel des <strong>simulateurs différentiables</strong> : quand le solveur lui-même est écrit dans un cadre autodifférentiable (JAX, PyTorch), calibrer un paramètre physique devient une optimisation par gradient ordinaire.</p>
+    <p>L'alternative séquentielle est le filtre de Kalman d'ensemble (EnKF), qui propage un ensemble d'états au lieu d'une covariance explicite — indispensable dès que la dimension dépasse quelques milliers (module 15).</p>
+
+    <div class="warning-block">
+      <strong>Identifiabilité : la question à poser avant de calibrer.</strong> Un problème inverse est presque toujours mal posé : plusieurs jeux de paramètres reproduisent les mêmes mesures. Deux paramètres peuvent être <em>compensatoires</em> — seule leur combinaison est identifiable — et un optimiseur retournera alors une valeur précise et arbitraire. Les remèdes : régulariser (Tikhonov, c'est-à-dire un a priori), réduire le nombre de paramètres calibrés à ceux que l'analyse de sensibilité désigne comme influents, et surtout <strong>estimer l'incertitude a posteriori</strong> plutôt qu'un point unique. Un paramètre calibré sans intervalle de crédibilité n'est pas un résultat.
+    </div>
+
+    <h2 id="jumeau">9. Jumeau numérique et crédibilité</h2>
+    <p>Un jumeau numérique n'est pas une simulation 3D animée : c'est un modèle d'un système <em>physique particulier</em>, synchronisé avec ses mesures, et utilisé pour décider. L'architecture typique assemble tout ce module : un modèle réduit ou un surrogate pour tenir la contrainte temps réel, un mécanisme d'assimilation pour se recaler sur les capteurs, une quantification d'incertitude pour assortir chaque prédiction d'une marge, et un module de décision (maintenance, pilotage). Les difficultés réelles sont moins scientifiques qu'opérationnelles : qualité et dérive des capteurs, latence, versionnement du modèle et de ses recalages (module 24), et la question de savoir quand le jumeau doit déclarer qu'il ne sait plus.</p>
+
+    <div class="step-block">
+      <h4>Un modèle appris dans un contexte où la sûreté compte</h4>
+      <p>Les référentiels de vérification et validation (V&amp;V) demandent trois choses distinctes : la <em>vérification</em> (résout-on correctement les équations ?), la <em>validation</em> (les équations décrivent-elles la réalité ?) et la quantification des incertitudes. Un modèle appris s'y insère mal par nature : il n'a pas d'équations à vérifier, et son comportement hors domaine est imprévisible. Les pratiques qui le rendent défendable : déclarer explicitement un <strong>domaine de validité</strong> et refuser de prédire au-delà (la variance épistémique d'un GP ou un détecteur de nouveauté servent de garde-fou, module 9) ; assortir chaque sortie d'un intervalle avec garantie de couverture ; conserver un modèle physique de référence comme arbitre sur les cas critiques ; et tracer chaque prédiction jusqu'aux données et à la version du modèle. Autrement dit : le ML accélère l'exploration, il ne signe pas le dossier de sûreté.</p>
+    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Architecture en trois étages ; la qualité est plafonnée par le rappel de la récupération.</li>
-        <li>Hybride lexical + vectoriel par fusion de rangs : robuste et sans réglage.</li>
-        <li>LambdaMART reste l'état de l'art pratique du ranking ; le NDCG est la métrique de référence.</li>
-        <li>Les clics sont biaisés par la position : corriger par propension, sinon le système fige son propre classement.</li>
-        <li>La factorisation matricielle est une approximation de rang faible sur données manquantes ; en retour implicite, apprendre un ordre (BPR) plutôt qu'une valeur.</li>
-        <li>Two-tower pour la récupération, transformer séquentiel pour l'intention du moment.</li>
-        <li>Découper par date, et ne conclure qu'en ligne : le décalage hors ligne/en ligne est structurel.</li>
+        <li>Monte-Carlo converge en \(1/\sqrt{N}\) indépendamment de la dimension ; pour aller plus vite, réduire la variance plutôt qu'augmenter \(N\).</li>
+        <li>LHS ou Sobol pour un plan initial, puis enrichissement adaptatif guidé par l'incertitude (module 17).</li>
+        <li>Les indices de Sobol totaux disent quelles variables on peut fixer ; les calculer sur un métamodèle.</li>
+        <li>Un surrogate se valide hors échantillon, avec l'erreur maximale et la cohérence physique, pas seulement un \(Q^2\) moyen.</li>
+        <li>La décroissance des valeurs singulières des snapshots mesure la réductibilité d'un problème avant tout investissement.</li>
+        <li>Les opérateurs neuronaux échangent de la précision contre plusieurs ordres de grandeur de vitesse ; hybrider vaut mieux que remplacer.</li>
+        <li>Un problème inverse est mal posé par défaut : vérifier l'identifiabilité et fournir une incertitude, jamais un point seul.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m18.html" class="btn btn-secondary">← Module 18 : Du score à la décision</a>
-  <a href="project7-m20.html" class="btn btn-primary">Module 20 : Équité et robustesse →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">BM25</span><span class="tag">NDCG</span><span class="tag">LambdaMART</span><span class="tag">Factorisation</span><span class="tag">Two-tower</span><span class="tag">Cold start</span></div>
+  <div class="course-nav">
+    <a href="project7-m18.html" class="btn btn-secondary">← Module 18 : Renforcement</a>
+    <a href="project7-m20.html" class="btn btn-primary">Module 20 : LLM et RAG →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Monte-Carlo</span><span class="tag">Sobol</span><span class="tag">Surrogate</span><span class="tag">POD/ROM</span><span class="tag">FNO</span><span class="tag">Assimilation</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -190,51 +249,55 @@ Nouveauté / sérendipité  recommande-t-on autre chose que les best-sellers ?
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 19</div>
-    <h1>Search, ranking and recommendation</h1>
+    <h1>Machine learning for simulation and engineering</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The shared three-stage architecture (retrieval, ranking, business re-ranking) and why system quality is capped by retrieval recall.</li>
-      <li>Search: BM25 versus vector search, reciprocal rank fusion, and the query-side work that often matters more than the model.</li>
-      <li>Learning to rank: pointwise, pairwise and listwise formulations, LambdaMART, NDCG derived, and the three families of ranking features.</li>
-      <li>Click logs and their biases (position, selection, trust, missing negatives), and counterfactual learning to rank with propensity weighting.</li>
-      <li>Collaborative filtering and matrix factorisation as low-rank approximation with missing entries, bias terms, ALS and SGD.</li>
-      <li>Implicit feedback: why absence is not rejection, weighted confidence and Bayesian Personalised Ranking, and the importance of negative sampling.</li>
-      <li>Two-tower retrieval architectures with offline item embeddings, and sequential recommenders that capture present intent.</li>
-      <li>Offline metrics beyond accuracy (coverage, diversity, novelty, fairness), date-based splitting, and the structural offline/online gap.</li>
-      <li>Cold start, popularity bias, feedback loops and the system constraints that dominate real deployments.</li>
+      <li>Monte Carlo estimation, its dimension-independent 1/√N rate, and variance reduction (antithetics, control variates, importance sampling, stratification, multilevel) — including rare-event failure probabilities.</li>
+      <li>Quasi-Monte Carlo, Latin hypercube and Sobol designs of numerical experiments, with sizing rules and independent validation sets.</li>
+      <li>Uncertainty propagation and polynomial chaos expansion, where moments read directly off the coefficients.</li>
+      <li>Global sensitivity analysis: first-order and total Sobol indices, how to read them together, and Morris screening.</li>
+      <li>Surrogate models compared (kriging/GP, RBF as implemented in my mdisd project, polynomial chaos, boosting, neural networks) and how to validate one honestly — out-of-sample Q², maximum error, accuracy where the decision happens, physical consistency.</li>
+      <li>Model order reduction: POD as an SVD of snapshots, intrusive vs non-intrusive ROMs, DMD, and using singular value decay to measure reducibility upfront.</li>
+      <li>Scientific ML: DeepONet and Fourier Neural Operators, mesh GNNs, and why hybridising (closure models, multi-fidelity corrections, hard physical constraints) beats replacing the solver.</li>
+      <li>Data assimilation: the 4D-Var cost function as a MAP estimate, adjoint gradients as reverse-mode autodiff, ensemble Kalman filters, differentiable simulators — and identifiability as the question to ask before calibrating.</li>
+      <li>Digital twins and what it takes for a learned model to be defensible in a safety context.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><strong>Search, ranking and recommendation</strong></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><strong>Machine learning for simulation and engineering</strong></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

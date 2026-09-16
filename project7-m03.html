@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 3 - Boîte à outils numérique : NumPy, pandas, polars, Dask, frameworks - Nils Malmberg</title>
+  <title>Module 3 - Boîte à outils numérique : NumPy, pandas, polars, Dask - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,10 +40,10 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 3</div>
-    <h1>Boîte à outils numérique : NumPy, pandas, polars, Dask, frameworks</h1>
+    <h1>Boîte à outils numérique : NumPy, pandas, polars, Dask</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <p>Ces bibliothèques ne sont pas interchangeables : chacune répond à une contrainte précise de volume, de latence ou de type de calcul. Ce module explique ce qu'elles font réellement sous le capot, parce que c'est ce qui permet de choisir la bonne — et d'écrire du code dix à cent fois plus rapide sans rien changer d'algorithmique.</p>
 
     <div class="tuto-toc">
@@ -159,7 +159,7 @@ stats = (
     </div>
 
     <h2 id="polars">3. polars : expressions et évaluation paresseuse</h2>
-    <p><a href="https://pola.rs" target="_blank">polars</a> est écrit en Rust sur le format mémoire Apache Arrow. Deux différences de fond avec pandas : il est multi-thread par défaut (pas de GIL dans le moteur, cf. module 1), et il propose un mode <strong>paresseux</strong> où la requête est d'abord construite, puis optimisée, puis exécutée — comme un moteur SQL.</p>
+    <p><a href="https://pola.rs" target="_blank">polars</a> est écrit en Rust sur le format mémoire Apache Arrow. Deux différences de fond avec pandas : il est multi-thread par défaut (pas de GIL dans le moteur, cf. module 2), et il propose un mode <strong>paresseux</strong> où la requête est d'abord construite, puis optimisée, puis exécutée — comme un moteur SQL.</p>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>import polars as pl
@@ -232,7 +232,7 @@ GPU               PyTorch, CuPy, cuDF                 si le calcul est massiveme
       <li><code>predict(X)</code> / <code>predict_proba(X)</code> — produit la prédiction.</li>
     </ul>
 
-    <p>La conséquence pratique est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur, donc la validation croisée réajuste <em>toute</em> la chaîne à chaque pli. C'est la protection la plus efficace contre la fuite de données (module 6) : un <code>StandardScaler</code> ajusté hors du pipeline apprendrait la moyenne du jeu de validation.</p>
+    <p>La conséquence pratique est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur, donc la validation croisée réajuste <em>toute</em> la chaîne à chaque pli. C'est la protection la plus efficace contre la fuite de données (module 10) : un <code>StandardScaler</code> ajusté hors du pipeline apprendrait la moyenne du jeu de validation.</p>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>from sklearn.compose import ColumnTransformer
@@ -278,7 +278,7 @@ class ClipOutliers(BaseEstimator, TransformerMixin):
         return np.clip(X, self.lo_, self.hi_)</pre></div>
 
     <h2 id="torch">7. PyTorch, TensorFlow, BoTorch</h2>
-    <p>Un framework de deep learning apporte trois choses : des tenseurs qui vivent sur GPU, la différentiation automatique, et une bibliothèque de couches et d'optimiseurs. La différentiation automatique est le cœur : pendant le calcul, le framework enregistre le graphe des opérations, puis le remonte en appliquant la règle de dérivation composée pour obtenir les gradients — sans que l'on ait à dériver quoi que ce soit à la main (module 4).</p>
+    <p>Un framework de deep learning apporte trois choses : des tenseurs qui vivent sur GPU, la différentiation automatique, et une bibliothèque de couches et d'optimiseurs. La différentiation automatique est le cœur : pendant le calcul, le framework enregistre le graphe des opérations, puis le remonte en appliquant la règle de dérivation composée pour obtenir les gradients — sans que l'on ait à dériver quoi que ce soit à la main (module 7).</p>
 
     <div class="code-label">Python — PyTorch</div>
     <div class="code-block"><pre>import torch
@@ -308,7 +308,7 @@ Compilation         torch.compile                XLA / jit_compile
 
     <p>Pour un apprentissage aujourd'hui, PyTorch est le choix par défaut : c'est la langue de la recherche, donc celle dans laquelle les nouveautés arrivent en premier. <code>torch.compile</code> réconcilie confort et performance en compilant le graphe à la volée. JAX est un troisième acteur, élégant (fonctions pures, <code>grad</code>, <code>vmap</code>, <code>jit</code>) et très utilisé en recherche scientifique.</p>
 
-    <p><strong>BoTorch</strong> est une bibliothèque construite sur PyTorch pour l'optimisation bayésienne : modèles de substitution par processus gaussiens, fonctions d'acquisition différentiables, optimisation multi-objectif. Son intérêt pour un profil ingénieur est direct — optimiser un système dont chaque évaluation coûte cher (une simulation, un essai physique). C'est l'objet du <a href="project7-m09.html">module 9</a>.</p>
+    <p><strong>BoTorch</strong> est une bibliothèque construite sur PyTorch pour l'optimisation bayésienne : modèles de substitution par processus gaussiens, fonctions d'acquisition différentiables, optimisation multi-objectif. Son intérêt pour un profil ingénieur est direct — optimiser un système dont chaque évaluation coûte cher (une simulation, un essai physique). C'est l'objet du <a href="project7-m17.html">module 17</a>.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
@@ -323,9 +323,11 @@ Compilation         torch.compile                XLA / jit_compile
   </div>
 
   <hr class="divider">
-  <a href="project7-m02.html" class="btn btn-secondary">← Module 2 : Données et déploiement</a>
-  <a href="project7-m04.html" class="btn btn-primary">Module 4 : Mathématiques du ML →</a>
-  <br><br>
+  <div class="course-nav">
+    <a href="project7-m02.html" class="btn btn-secondary">← Module 2 : Concurrence</a>
+    <a href="project7-m04.html" class="btn btn-primary">Module 4 : SQL et bases de données →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
   <div class="project-meta"><span class="tag">NumPy</span><span class="tag">pandas</span><span class="tag">polars</span><span class="tag">Dask</span><span class="tag">scikit-learn</span><span class="tag">PyTorch</span></div>
 </div>
   <footer>
@@ -347,10 +349,10 @@ Compilation         torch.compile                XLA / jit_compile
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 3</div>
-    <h1>Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</h1>
+    <h1>Numerical toolbox: NumPy, pandas, polars, Dask</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
@@ -368,28 +370,32 @@ Compilation         torch.compile                XLA / jit_compile
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><strong>Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</strong></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m05.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><strong>Numerical toolbox: NumPy, pandas, polars, Dask</strong></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

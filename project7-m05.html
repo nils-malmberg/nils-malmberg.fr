@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 5 - Statistique inférentielle : estimer, tester, décider - Nils Malmberg</title>
+  <title>Module 5 - Docker, Compose et Kubernetes - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 <header><div class="header-inner">
@@ -41,244 +40,473 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 5</div>
-    <h1>Statistique inférentielle : estimer, tester, décider</h1>
+    <h1>Docker, Compose et Kubernetes</h1>
   </div>
 
-  <div class="project-content">
-    <p>Un modèle donne des nombres ; la statistique inférentielle dit lesquels sont crédibles. C'est ce qui sépare « la variante B a fait +2,3 % » de « la variante B est meilleure ». Ce module traite les p-values et les tests d'hypothèse pour ce qu'ils sont — des outils précis, très souvent mal interprétés — puis la question qui compte vraiment : quand a-t-on le droit de parler de cause ?</p>
+  <div class="project-content course-content">
+    <p>« Ça marche chez moi. » Ce module traite l'outil qui a rendu cette phrase obsolète : le conteneur. On part de ce qu'est réellement un conteneur — et de ce qui le distingue d'une machine virtuelle —, puis on construit une image pour un projet Python, on orchestre une pile complète avec Docker Compose, et on termine par ce qu'il faut savoir de Kubernetes pour lire un manifeste et comprendre ce que fait une équipe plateforme.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cadre">Échantillon, estimateur, variabilité</a></li>
-        <li><a href="#ic">Intervalles de confiance et bootstrap</a></li>
-        <li><a href="#tests">Tests d'hypothèse : mécanique et p-value</a></li>
-        <li><a href="#puissance">Erreurs, puissance, taille d'échantillon</a></li>
-        <li><a href="#catalogue">Catalogue des tests usuels</a></li>
-        <li><a href="#multiple">Comparaisons multiples et p-hacking</a></li>
-        <li><a href="#causalite">Corrélation, causalité, confondants</a></li>
-        <li><a href="#abtest">Un A/B test de bout en bout</a></li>
+        <li><a href="#probleme">Le problème que Docker résout</a></li>
+        <li><a href="#vm">Conteneur ou machine virtuelle ?</a></li>
+        <li><a href="#vocabulaire">Image, conteneur, couche, registre</a></li>
+        <li><a href="#commandes">Les commandes du quotidien</a></li>
+        <li><a href="#dockerfile">Écrire un Dockerfile</a></li>
+        <li><a href="#volumes">Volumes : faire survivre les données</a></li>
+        <li><a href="#reseaux">Réseaux et variables d'environnement</a></li>
+        <li><a href="#compose">Docker Compose</a></li>
+        <li><a href="#k8s">Kubernetes</a></li>
       </ol>
     </div>
 
-    <h2 id="cadre">1. Échantillon, estimateur, variabilité</h2>
-    <p>On veut connaître une quantité \(\theta\) d'une population (une moyenne, une proportion, un écart) mais on n'observe qu'un échantillon de taille \(n\). On calcule alors un <strong>estimateur</strong> \(\hat\theta\), qui est une variable aléatoire : un autre échantillon aurait donné une autre valeur. Toute la statistique inférentielle consiste à quantifier cette variabilité.</p>
+    <h2 id="probleme">1. Le problème que Docker résout</h2>
+    <p>Un projet Python ne dépend pas que de Python. Il dépend d'une version de l'interpréteur, de bibliothèques compilées (BLAS, libpq, ffmpeg), de paquets système, de variables d'environnement, parfois d'un pilote GPU et d'une version de CUDA. Un environnement virtuel (module 1) fige les bibliothèques <em>Python</em> ; il ne fige rien de tout le reste. C'est pourquoi le même code fonctionne sur un portable et échoue sur le serveur.</p>
+    <p>Un <strong>conteneur</strong> emporte tout ce dont l'application a besoin — code, dépendances Python, bibliothèques système, fichiers de configuration — dans une unité qui s'exécute à l'identique partout où tourne un moteur de conteneurs. Le bénéfice ne se limite pas au déploiement : il rend un résultat reproductible dans six mois, ce qui est exactement ce qu'on cherche en data science (module 24).</p>
 
-    <p>Deux résultats suffisent à presque tout. La <strong>loi des grands nombres</strong> garantit que \(\bar X_n \to \mu\). Le <strong>théorème central limite</strong> précise <em>à quelle vitesse</em> et <em>sous quelle forme</em> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \sqrt{n}\,\frac{\bar X_n - \mu}{\sigma} \xrightarrow[n\to\infty]{\mathcal{L}} \mathcal{N}(0,1) \]</div>
-    <p>L'<strong>erreur type</strong> \(\sigma/\sqrt{n}\) décroît en \(1/\sqrt{n}\) : diviser l'incertitude par deux demande <em>quatre</em> fois plus de données. C'est la contrainte économique de fond de toute expérimentation.</p>
+    <h2 id="vm">2. Conteneur ou machine virtuelle ?</h2>
+    <p>Les deux isolent une application, mais à des niveaux très différents.</p>
 
-    <div class="step-block">
-      <h4>Deux distinctions à ne pas confondre</h4>
-      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable — c'est exactement l'argument de la régularisation (module 7).</p>
-    </div>
+    <div class="code-label">deux façons d'isoler</div>
+    <div class="code-block"><pre>        MACHINE VIRTUELLE                       CONTENEUR
+  ┌───────────────────────────┐        ┌───────────────────────────┐
+  │  App A    │    App B      │        │  App A    │    App B      │
+  ├───────────┼───────────────┤        ├───────────┼───────────────┤
+  │ Biblioth. │  Biblioth.    │        │ Biblioth. │  Biblioth.    │
+  ├───────────┼───────────────┤        ├───────────┴───────────────┤
+  │ Noyau OS  │  Noyau OS     │ ←──┐   │   moteur de conteneurs    │
+  │  invité   │   invité      │    │   ├───────────────────────────┤
+  ├───────────┴───────────────┤    │   │   NOYAU OS DE L'HÔTE      │ ← partagé
+  │        Hyperviseur        │    │   ├───────────────────────────┤
+  ├───────────────────────────┤    │   │        Matériel           │
+  │      Noyau OS hôte        │    │   └───────────────────────────┘
+  ├───────────────────────────┤    │
+  │        Matériel           │    └── chaque VM embarque un système
+  └───────────────────────────┘        d'exploitation complet</pre></div>
 
-    <h2 id="ic">2. Intervalles de confiance et bootstrap</h2>
-    <p>Pour une moyenne, l'intervalle de confiance à \(1-\alpha\) s'écrit :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \bar{x} \;\pm\; t_{n-1,\,1-\alpha/2}\,\frac{s}{\sqrt{n}} \]</div>
-    <p>La loi de Student remplace la loi normale parce que \(\sigma\) est estimé par \(s\) ; l'écart n'est appréciable qu'en dessous de \(n \approx 30\).</p>
-
-    <div class="warning-block">
-      <strong>L'interprétation correcte.</strong> Un IC à 95 % ne signifie <em>pas</em> « il y a 95 % de chances que \(\mu\) soit dans cet intervalle ». Dans le cadre fréquentiste, \(\mu\) est une constante : elle y est ou elle n'y est pas. La bonne formulation porte sur la <em>procédure</em> : si on répétait l'expérience un grand nombre de fois, 95 % des intervalles ainsi construits contiendraient \(\mu\). L'énoncé probabiliste direct sur \(\mu\) existe bel et bien, mais il s'appelle un intervalle <em>crédible</em> et relève de l'approche bayésienne.
-    </div>
-
-    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 (il peut sortir de [0,1] et sa couverture réelle chute bien en dessous de 95 %). L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut — c'est celui que renvoie <code>proportion_confint</code> de statsmodels avec <code>method="wilson"</code>.</p>
-
-    <h3>Le bootstrap : quand on ne sait pas calculer</h3>
-    <p>Pour une médiane, un coefficient de Gini, un R², un ratio de métriques — bref dès que la loi de l'estimateur n'a pas de forme analytique commode — on rééchantillonne. L'idée, remarquablement simple : l'échantillon est notre meilleure approximation de la population, alors tirons dedans avec remise et regardons varier la statistique.</p>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import numpy as np
-from scipy import stats
-
-rng = np.random.default_rng(0)
-x = rng.lognormal(mean=1.0, sigma=1.2, size=200)     # très asymétrique
-
-# bootstrap "à la main" : 10 000 rééchantillonnages de la médiane
-idx = rng.integers(0, len(x), size=(10_000, len(x)))
-medianes = np.median(x[idx], axis=1)
-ic_percentile = np.percentile(medianes, [2.5, 97.5])
-
-# version scipy, avec correction BCa (biais + asymétrie) : plus fiable
-res = stats.bootstrap((x,), np.median, confidence_level=0.95,
-                      n_resamples=10_000, method="BCa", random_state=0)
-print(ic_percentile, res.confidence_interval)</pre></div>
-
-    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien), et il ne crée pas d'information — sur 12 observations, il reste 12 observations.</p>
-
-    <h2 id="tests">3. Tests d'hypothèse : mécanique et p-value</h2>
-    <p>La démarche est celle d'un raisonnement par l'absurde probabiliste :</p>
-    <ol>
-      <li>poser une hypothèse nulle \(H_0\) — « aucun effet », « les deux moyennes sont égales » ;</li>
-      <li>choisir une statistique de test \(T\) dont on connaît la loi <em>sous \(H_0\)</em> ;</li>
-      <li>calculer \(t_{\text{obs}}\) sur les données ;</li>
-      <li>évaluer à quel point cette valeur serait surprenante si \(H_0\) était vraie.</li>
-    </ol>
-
-    <p>Cette dernière quantité est la <strong>p-value</strong> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ p = \mathbb{P}\big(|T| \geq |t_{\text{obs}}| \;\big|\; H_0 \text{ vraie}\big) \]</div>
-
-    <div class="warning-block">
-      <strong>Ce que la p-value n'est pas.</strong><br>
-      • Ce n'est <strong>pas</strong> la probabilité que \(H_0\) soit vraie. Elle est calculée <em>en supposant</em> \(H_0\) vraie — c'est \(P(\text{données}\mid H_0)\), jamais \(P(H_0\mid\text{données})\).<br>
-      • Ce n'est <strong>pas</strong> une mesure de la taille de l'effet. Avec \(n = 10^6\), une différence de 0,01 % devient « hautement significative » sans avoir le moindre intérêt pratique.<br>
-      • \(p \gt 0{,}05\) ne <strong>prouve pas</strong> \(H_0\). Absence de preuve n'est pas preuve d'absence : c'est souvent un simple manque de puissance.<br>
-      • Le seuil de 0,05 est une <strong>convention</strong> de Fisher, pas une loi de la nature. Rien ne distingue \(p = 0{,}049\) de \(p = 0{,}051\).
-    </div>
-
-    <p>Le réflexe sain consiste à toujours rapporter <em>trois</em> choses ensemble : la taille d'effet (l'écart observé, dans son unité métier), son intervalle de confiance, et la p-value. L'intervalle contient à lui seul presque toute l'information utile — et un IC qui exclut zéro dit exactement la même chose qu'un test significatif, en plus informatif.</p>
-
-    <h2 id="puissance">4. Erreurs, puissance, taille d'échantillon</h2>
-    <div class="code-label">les deux erreurs</div>
-    <div class="code-block"><pre>                        H0 vraie en réalité      H0 fausse en réalité
-Rejeter H0              erreur de type I (α)     décision correcte (puissance = 1-β)
-Ne pas rejeter H0       décision correcte        erreur de type II (β)</pre></div>
-
-    <p>\(\alpha\) est choisi (5 % par convention) : c'est le taux de faux positifs qu'on accepte. \(\beta\) se subit, sauf si on dimensionne l'expérience. La <strong>puissance</strong> \(1-\beta\) est la probabilité de détecter un effet qui existe réellement ; on la vise à 80 % ou 90 %.</p>
-
-    <p>Pour comparer deux moyennes, en notant \(d = |\mu_1-\mu_2|/\sigma\) la taille d'effet de Cohen, la taille par groupe nécessaire pour \(\alpha=5\%\) et une puissance de 80 % est bien approchée par :</p>
-    <div style="text-align:center;overflow-x:auto">\[ n \approx \frac{16}{d^{2}} \]</div>
-    <p>Un effet « moyen » (\(d=0{,}5\)) demande donc environ 64 observations par groupe ; un petit effet (\(d=0{,}2\)) en demande 400. Cette formule, faite de tête, évite de lancer des expériences qui n'avaient aucune chance de conclure.</p>
-
-    <div class="code-label">Python — dimensionnement et vérification par simulation</div>
-    <div class="code-block"><pre>import numpy as np
-from statsmodels.stats.power import TTestIndPower
-from scipy import stats
-
-# combien d'observations pour détecter d = 0.3 avec 80 % de puissance ?
-n = TTestIndPower().solve_power(effect_size=0.3, alpha=0.05, power=0.8)
-print(f"n = {np.ceil(n):.0f} par groupe")          # 176
-
-# vérification empirique : on simule 10 000 expériences
-rng = np.random.default_rng(0)
-n = 176
-rejets = sum(
-    stats.ttest_ind(rng.normal(0, 1, n), rng.normal(0.3, 1, n)).pvalue &lt; 0.05
-    for _ in range(10_000)
-)
-print(f"puissance simulée = {rejets / 10_000:.2%}")   # ≈ 80 %</pre></div>
-
-    <div class="step-block">
-      <h4>Le piège des études sous-dimensionnées</h4>
-      <p>Une expérience à faible puissance ne se contente pas de « rater » des effets. Quand elle atteint quand même la significativité, c'est nécessairement parce que le hasard a gonflé l'estimation : les effets publiés à partir de petits échantillons sont <em>systématiquement surestimés</em> (on parle d'erreur de type M, pour magnitude). C'est un des moteurs de la crise de reproductibilité.</p>
-    </div>
-
-    <h2 id="catalogue">5. Catalogue des tests usuels</h2>
-    <div class="code-label">quel test pour quelle question</div>
-    <div class="code-block"><pre>Question                              Test                        Fonction scipy/statsmodels
-─────────────────────────────────────────────────────────────────────────────────────────
-Moyenne = valeur de référence ?       t à un échantillon          stats.ttest_1samp
-Deux groupes indépendants ?           t de Welch (défaut !)       stats.ttest_ind(equal_var=False)
-Avant/après sur les mêmes sujets ?    t apparié                   stats.ttest_rel
-Idem, sans hypothèse de normalité ?   Mann-Whitney / Wilcoxon     stats.mannwhitneyu / wilcoxon
-Plus de deux groupes ?                ANOVA / Kruskal-Wallis      stats.f_oneway / kruskal
-Deux variables catégorielles liées ?  chi² d'indépendance         stats.chi2_contingency
-Idem, petits effectifs (&lt; 5) ?        test exact de Fisher        stats.fisher_exact
-Deux proportions (A/B test) ?         test z de proportions       proportions_ztest
-Même distribution ?                   Kolmogorov-Smirnov          stats.ks_2samp
-Distribution normale ?                Shapiro-Wilk                stats.shapiro
-Corrélation linéaire ? monotone ?     Pearson / Spearman          stats.pearsonr / spearmanr</pre></div>
-
-    <p>Trois remarques valent mieux qu'un long tableau. <strong>Le test de Welch doit être le défaut</strong> pour comparer deux groupes : il ne suppose pas l'égalité des variances, et il ne perd presque rien quand celles-ci sont effectivement égales. <strong>Les tests de normalité sont contre-productifs</strong> sur de grands échantillons : ils rejettent systématiquement pour des écarts sans conséquence, alors que le TCL rend justement le test de Student robuste à la non-normalité dès que \(n\) dépasse quelques dizaines. Un histogramme et un QQ-plot informent mieux. Enfin, les <strong>tests non paramétriques</strong> (Mann-Whitney) ne comparent pas des moyennes mais des rangs : ils répondent à « une valeur tirée de A a-t-elle tendance à dépasser une valeur tirée de B ? », ce qui n'est pas la même question.</p>
-
-    <h2 id="multiple">6. Comparaisons multiples et p-hacking</h2>
-    <p>Tester 20 hypothèses au seuil de 5 % alors qu'aucune n'est vraie donne une probabilité \(1 - 0{,}95^{20} \approx 64\%\) d'obtenir au moins un « résultat significatif ». C'est mécanique, et c'est la raison pour laquelle explorer librement un jeu de données produit toujours quelque chose.</p>
-
-    <div class="code-label">corrections</div>
-    <div class="code-block"><pre>Bonferroni        seuil α/m            contrôle le FWER. Simple, très conservateur.
-Holm-Bonferroni   séquentiel           même garantie, uniformément plus puissant.
-Benjamini-Hochberg contrôle le FDR     accepte une proportion q de faux parmi les rejets.
-                                        Le bon choix quand on teste des centaines
-                                        d'hypothèses (génomique, sélection de features).</pre></div>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from statsmodels.stats.multitest import multipletests
-
-rejets, p_corriges, _, _ = multipletests(p_values, alpha=0.05, method="fdr_bh")</pre></div>
-
-    <p>La distinction est importante : Bonferroni et Holm contrôlent la probabilité de commettre <em>ne serait-ce qu'une</em> fausse découverte (FWER), ce qui est adapté quand une erreur coûte cher. Benjamini-Hochberg contrôle la <em>proportion</em> de fausses découvertes parmi les résultats déclarés positifs (FDR) : sur 10 000 gènes testés, on accepte que 5 % des gènes retenus soient des faux positifs, ce qui est infiniment plus puissant et parfaitement raisonnable en phase exploratoire.</p>
-
-    <div class="warning-block">
-      <strong>Le p-hacking n'est pas toujours conscient.</strong> Essayer plusieurs définitions de la variable cible, retirer « les valeurs manifestement aberrantes », tester plusieurs sous-groupes, arrêter la collecte quand le résultat devient significatif, choisir la transformation qui « marche le mieux » : chacune de ces décisions, prise après avoir vu les données, multiplie les tests implicites. Le remède est procédural : <em>écrire l'analyse avant de regarder les résultats</em>, séparer un jeu d'exploration d'un jeu de confirmation, et rapporter tout ce qui a été essayé.
-    </div>
-
-    <h2 id="causalite">7. Corrélation, causalité, confondants</h2>
-    <p>Une corrélation entre \(X\) et \(Y\) admet cinq explications : \(X\) cause \(Y\) ; \(Y\) cause \(X\) ; une variable \(Z\) cause les deux (<strong>confondant</strong>) ; l'échantillon a été sélectionné d'une façon qui crée l'association (<strong>biais de sélection</strong>) ; ou c'est le hasard. Rien dans les données seules ne permet de trancher — il faut une hypothèse sur le mécanisme.</p>
-
-    <div class="step-block">
-      <h4>Le paradoxe de Simpson</h4>
-      <p>Un traitement peut être meilleur dans <em>chaque</em> sous-groupe et pire globalement. Exemple classique : un hôpital de pointe affiche une mortalité supérieure à une clinique de quartier, parce qu'il reçoit les cas graves. La gravité est un confondant ; l'agrégation inverse la conclusion. La leçon n'est pas « il faut toujours stratifier » — conditionner sur la mauvaise variable peut <em>créer</em> un biais — mais « il faut un modèle causal explicite pour savoir sur quoi conditionner ».</p>
-    </div>
-
-    <p>L'outil formel est le <strong>graphe causal</strong> (DAG) : on y dessine les relations supposées, et des règles graphiques disent quelles variables ajuster. Trois structures suffisent à comprendre l'essentiel :</p>
+    <p>Une <strong>machine virtuelle</strong> simule un ordinateur entier : l'hyperviseur lui présente un processeur, de la mémoire et des disques virtuels, sur lesquels on installe un système d'exploitation complet avec son propre noyau. Isolation très forte, mais coût élevé — plusieurs gigaoctets sur disque, plusieurs centaines de mégaoctets de RAM, des dizaines de secondes de démarrage.</p>
+    <p>Un <strong>conteneur</strong> ne simule rien. C'est un processus ordinaire du système hôte, à qui le noyau ment sur ce qu'il voit :</p>
     <ul>
-      <li><strong>Chaîne</strong> \(X \to M \to Y\) : \(M\) est un médiateur. Conditionner dessus <em>supprime</em> l'effet qu'on cherche à mesurer.</li>
-      <li><strong>Fourche</strong> \(X \leftarrow Z \to Y\) : \(Z\) est un confondant. Il <em>faut</em> conditionner dessus (critère de la porte dérobée).</li>
-      <li><strong>Collisionneur</strong> \(X \to C \leftarrow Y\) : \(C\) est un effet commun. Conditionner dessus <strong>crée</strong> une corrélation artificielle entre \(X\) et \(Y\). C'est la source de biais la plus contre-intuitive — et la plus fréquente quand on « contrôle par tout ce qu'on a ».</li>
+      <li>les <strong>namespaces</strong> cloisonnent sa vision — il ne voit que ses propres processus, sa propre arborescence de fichiers, ses propres interfaces réseau ;</li>
+      <li>les <strong>cgroups</strong> (<em>control groups</em>) limitent ce qu'il consomme — tant de CPU, tant de mémoire.</li>
+    </ul>
+    <p>Puisqu'il n'y a pas de noyau invité, le coût est celui d'un processus : quelques mégaoctets, un démarrage en quelques dizaines de millisecondes. L'analogie la plus juste : une VM est une <em>maison individuelle</em> avec ses propres fondations ; un conteneur est un <em>appartement</em> dans un immeuble — murs séparés, mais fondations et structure partagées.</p>
+
+    <div class="warning-block">
+      <strong>La conséquence à connaître.</strong> Le noyau étant partagé, un conteneur Linux ne peut pas tourner nativement sur un noyau Windows ou macOS : Docker Desktop y fait en réalité tourner une petite machine virtuelle Linux, ce qui explique les performances d'accès disque parfois décevantes sur ces systèmes. Autre conséquence : l'isolation d'un conteneur est réelle mais <em>moins forte</em> que celle d'une VM, puisqu'une faille du noyau les concerne tous. Pour exécuter du code non fiable, une VM reste plus sûre.
+    </div>
+
+    <h2 id="vocabulaire">3. Image, conteneur, couche, registre</h2>
+    <ul>
+      <li>Une <strong>image</strong> est un modèle figé, en lecture seule : un système de fichiers complet plus des métadonnées (commande à lancer, variables d'environnement, port exposé). C'est l'équivalent d'une classe.</li>
+      <li>Un <strong>conteneur</strong> est une instance en cours d'exécution de cette image, avec une fine couche inscriptible par-dessus. C'est l'équivalent d'un objet. On peut lancer vingt conteneurs à partir de la même image.</li>
+      <li>Une <strong>couche</strong> (<em>layer</em>) est une strate de l'image, produite par une instruction du Dockerfile. Les couches sont empilées, partagées entre images et mises en cache individuellement — c'est ce qui rend les reconstructions rapides et les téléchargements légers.</li>
+      <li>Un <strong>registre</strong> est un entrepôt d'images : Docker Hub (public), GitHub Container Registry, ou un registre privé d'entreprise.</li>
     </ul>
 
-    <p>La seule méthode qui élimine tous les confondants d'un coup, connus comme inconnus, est la <strong>randomisation</strong> : en tirant l'affectation au hasard, on rend le traitement indépendant de tout le reste. C'est pour cette raison que l'essai contrôlé randomisé — l'A/B test — est l'étalon-or. Quand on ne peut pas randomiser, on s'appuie sur des méthodes quasi-expérimentales : différence-en-différences (deux groupes suivis avant/après), variables instrumentales, régression sur discontinuité, ou appariement sur score de propension. Toutes reposent sur des hypothèses <em>non vérifiables à partir des données seules</em> : elles doivent être argumentées, pas supposées.</p>
+    <h2 id="commandes">4. Les commandes du quotidien</h2>
 
-    <div class="warning-block">
-      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention. L'importance d'une variable dans un modèle (module 7) n'est pas un effet causal.
-    </div>
+    <div class="code-label">bash — lancer et inspecter</div>
+    <div class="code-block"><pre># lancer un conteneur (télécharge l'image si nécessaire)
+docker run hello-world
 
-    <h2 id="abtest">8. Un A/B test de bout en bout</h2>
-    <p>C'est l'exercice qui mobilise tout ce module. La séquence, dans l'ordre :</p>
+# interactif : un shell dans un conteneur Python jetable
+docker run -it --rm python:3.12-slim bash
+#          │   └─ --rm : supprime le conteneur à la sortie (sinon il s'accumule)
+#          └─ -it : mode interactif avec terminal
 
-    <ol>
-      <li><strong>Définir la métrique principale</strong> — une seule, décidée à l'avance. Les autres sont des garde-fous (métriques de non-régression) ou de l'exploration.</li>
-      <li><strong>Fixer l'effet minimal détectable</strong> — quel gain justifierait le changement ? Cette valeur vient du métier, pas des données.</li>
-      <li><strong>Dimensionner</strong> — en déduire \(n\) et la durée. Couvrir des semaines entières : le comportement du lundi n'est pas celui du samedi.</li>
-      <li><strong>Randomiser au bon niveau</strong> — par utilisateur, pas par session, sinon le même individu voit les deux variantes et les observations ne sont plus indépendantes.</li>
-      <li><strong>Vérifier l'équilibre</strong> — un test A/A et un contrôle du ratio de répartition (<em>sample ratio mismatch</em>) détectent les bugs d'assignation, cause n° 1 des résultats invraisemblables.</li>
-      <li><strong>Attendre la fin</strong> — regarder les résultats en continu et s'arrêter dès que \(p \lt 0{,}05\) fait exploser le taux de faux positifs bien au-delà de 5 %. Si l'arrêt anticipé est nécessaire, il faut des méthodes conçues pour cela (tests séquentiels, bornes de O'Brien-Fleming).</li>
-      <li><strong>Analyser</strong> — effet, intervalle de confiance, puis p-value.</li>
-    </ol>
+# en arrière-plan, avec un nom et une redirection de port
+docker run -d --name mon-api -p 8000:8000 mon-image:1.0
+#          │              └─ port 8000 de la MACHINE → port 8000 du CONTENEUR
+#          └─ -d : detached, rend la main immédiatement
 
-    <div class="code-label">Python — analyse d'un test sur un taux de conversion</div>
-    <div class="code-block"><pre>import numpy as np
-from statsmodels.stats.proportion import proportions_ztest, confint_proportions_2indep
+# voir ce qui tourne
+docker ps                    # conteneurs en cours
+docker ps -a                 # y compris ceux qui sont arrêtés
+docker stats                 # consommation CPU / mémoire en direct
 
-conv = np.array([1183, 1279])        # conversions A, B
-n    = np.array([20_143, 20_089])    # visiteurs A, B
+# lire les journaux
+docker logs mon-api          # tout depuis le début
+docker logs -f --tail 50 mon-api    # suivre en direct les 50 dernières lignes
 
-stat, p = proportions_ztest(conv, n)
-lo, hi = confint_proportions_2indep(conv[1], n[1], conv[0], n[0], method="wald")
+# entrer dans un conteneur qui tourne (LE réflexe de débogage)
+docker exec -it mon-api bash
+docker exec mon-api python -c "import torch; print(torch.cuda.is_available())"
 
-taux = conv / n
-print(f"A = {taux[0]:.3%}, B = {taux[1]:.3%}")
-print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p = {p:.4f}")
-# A = 5.873%, B = 6.367%
-# écart absolu = +0.494%  IC95 = [+0.031%, +0.957%]  p = 0.0366</pre></div>
+# inspecter en détail (configuration, réseaux, montages)
+docker inspect mon-api
+docker port mon-api          # quelles redirections de ports sont actives</pre></div>
 
-    <p>La lecture correcte de ce résultat : l'écart estimé est de +0,49 point, et les données sont compatibles avec un gain compris entre +0,03 et +0,96 point. C'est significatif au seuil de 5 %, mais l'intervalle frôle zéro — la décision dépend donc du coût de mise en œuvre et du gain minimal jugé pertinent, pas du seul verdict binaire du test.</p>
+    <div class="code-label">bash — construire, partager, nettoyer</div>
+    <div class="code-block"><pre># construire une image à partir du Dockerfile du répertoire courant
+docker build -t mon-api:1.0 .
+docker build -t mon-api:1.0 --build-arg VERSION=1.0 -f docker/Dockerfile .
+
+# lister, étiqueter, publier
+docker images
+docker tag mon-api:1.0 ghcr.io/nils/mon-api:1.0
+docker login ghcr.io &amp;&amp; docker push ghcr.io/nils/mon-api:1.0
+docker pull postgres:16
+
+# arrêter et supprimer
+docker stop mon-api &amp;&amp; docker rm mon-api
+docker rmi mon-api:1.0
+
+# faire de la place (Docker consomme beaucoup de disque avec le temps)
+docker system df             # ce qui occupe l'espace
+docker container prune       # conteneurs arrêtés
+docker image prune -a        # images non utilisées
+docker system prune -a --volumes    # grand nettoyage — supprime aussi les VOLUMES</pre></div>
+
+    <h2 id="dockerfile">5. Écrire un Dockerfile</h2>
+    <p>Un Dockerfile est une recette : chaque instruction produit une couche. Voici les instructions à connaître, avant l'exemple complet.</p>
+
+    <div class="code-label">les instructions essentielles</div>
+    <div class="code-block"><pre>FROM python:3.12-slim      image de départ ("slim" = sans les outils de compilation)
+WORKDIR /app               répertoire de travail ; le crée si besoin
+COPY source destination    copie depuis la machine vers l'image
+RUN commande               exécute PENDANT LA CONSTRUCTION (installer des paquets…)
+ENV CLE=valeur             variable d'environnement, présente à l'exécution
+ARG CLE=valeur             variable disponible seulement pendant la construction
+EXPOSE 8000                documentation du port utilisé (ne publie rien par lui-même)
+USER app                   change d'utilisateur : ne pas rester root
+HEALTHCHECK …              commande que Docker lance pour vérifier la santé
+CMD ["uvicorn", "…"]       commande lancée AU DÉMARRAGE du conteneur
+ENTRYPOINT ["python"]      exécutable fixe ; CMD fournit alors ses arguments</pre></div>
 
     <div class="step-block">
-      <h4>Et l'approche bayésienne ?</h4>
-      <p>Elle répond à la question qu'on se pose réellement : « quelle est la probabilité que B soit meilleure que A ? ». On pose une loi a priori sur les taux, on la met à jour par les données, on obtient une loi a posteriori d'où se lisent directement \(P(p_B \gt p_A)\) et l'espérance de perte en cas de mauvais choix. Avantages : interprétation naturelle, arrêt anticipé sans pénalité formelle, intégration d'une connaissance préalable. Coûts : il faut assumer un a priori, et la communication d'un résultat bayésien exige un peu de pédagogie. Pour deux proportions, l'implémentation tient en quelques lignes avec des lois Beta conjuguées.</p>
+      <h4>Le cache des couches : la règle qui divise les temps de build par dix</h4>
+      <p>Docker met en cache chaque couche et la réutilise tant que ni l'instruction ni les fichiers qu'elle copie n'ont changé. Dès qu'une couche est invalidée, <strong>toutes les suivantes</strong> le sont aussi. D'où la règle d'or : <em>ordonner du plus stable au plus volatil</em>. Les dépendances changent une fois par mois, le code change à chaque commit. Si l'on copie tout le projet avant d'installer les dépendances, la moindre modification d'une ligne de code réinstalle l'intégralité de l'environnement — plusieurs minutes à chaque build. En copiant d'abord <code>pyproject.toml</code> et <code>uv.lock</code>, cette couche reste valide tant que les dépendances ne bougent pas.</p>
+    </div>
+
+    <div class="code-label">Dockerfile — projet Python avec UV, construction en deux étapes</div>
+    <div class="code-block"><pre># ════════ étape 1 : construire l'environnement ════════
+FROM python:3.12-slim AS builder
+
+# on récupère le binaire uv depuis son image officielle
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+# ── couche STABLE : les dépendances ──
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+#   --frozen : interdit de modifier le lock (échoue si désynchronisé)
+#   --no-dev : pas de pytest/ruff dans l'image de production
+
+# ── couche VOLATILE : le code ──
+COPY src/ src/
+RUN uv sync --frozen --no-dev
+
+# ════════ étape 2 : image finale, sans outils de build ════════
+FROM python:3.12-slim
+
+WORKDIR /app
+# on ne recopie que le résultat : l'environnement et le code
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+ENV PATH="/app/.venv/bin:$PATH"
+
+# un utilisateur non privilégié : si l'application est compromise,
+# l'attaquant n'est pas root dans le conteneur
+RUN useradd --create-home app &amp;&amp; chown -R app /app
+USER app
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000"]</pre></div>
+
+    <p>La <strong>construction en deux étapes</strong> (<em>multi-stage</em>) est le point clé : compilateurs, caches et fichiers intermédiaires restent dans l'étape jetable, et seul le résultat utile est recopié dans l'image finale. On passe typiquement de 1,2 Go à 200 Mo — ce qui accélère les déploiements et réduit la surface d'attaque.</p>
+    <p>Deux détails qui comptent : <code>--host 0.0.0.0</code> est obligatoire, car écouter sur <code>127.0.0.1</code> depuis un conteneur signifie « uniquement depuis l'intérieur du conteneur », et la redirection de port ne verrait rien. Et le fichier <code>.dockerignore</code> est indispensable :</p>
+
+    <div class="code-label">.dockerignore</div>
+    <div class="code-block"><pre>.git
+.venv
+data/
+notebooks/
+models/
+__pycache__/
+*.parquet
+*.csv
+.pytest_cache
+.ruff_cache</pre></div>
+    <p>Sans lui, la commande <code>docker build</code> envoie l'intégralité du répertoire au démon Docker avant même de commencer — y compris les 10 Go de données et l'historique Git.</p>
+
+    <h2 id="volumes">6. Volumes : faire survivre les données</h2>
+    <p>Un conteneur est <strong>éphémère</strong> : tout ce qu'il écrit dans son système de fichiers disparaît quand on le supprime. C'est voulu — un conteneur doit être jetable et remplaçable — mais il faut donc un mécanisme pour les données qui doivent survivre. Deux formes de montage :</p>
+
+    <div class="code-label">bash — volume nommé et bind mount</div>
+    <div class="code-block"><pre># VOLUME NOMMÉ : géré par Docker, stocké dans son espace. Pour les DONNÉES.
+docker volume create donnees-pg
+docker run -d --name pg -v donnees-pg:/var/lib/postgresql/data postgres:16
+#                       └─ le volume survit à la suppression du conteneur
+
+docker volume ls
+docker volume inspect donnees-pg
+docker volume rm donnees-pg          # là seulement, les données disparaissent
+
+# BIND MOUNT : un dossier de la MACHINE est monté dans le conteneur.
+# Pour le DÉVELOPPEMENT : le code modifié est visible immédiatement.
+docker run -it --rm -v "$(pwd)":/app -w /app python:3.12-slim python script.py
+
+# montage en lecture seule : un jeu de données que le conteneur ne doit pas modifier
+docker run -v /data/brut:/data:ro mon-image</pre></div>
+
+    <p>La distinction pratique : <em>volume nommé</em> pour ce que produit l'application (base de données, modèles entraînés, fichiers téléversés) ; <em>bind mount</em> pour ce qui vient de la machine (code source en développement, données brutes en lecture seule). Et attention aux permissions : un fichier créé par le conteneur appartient à l'utilisateur du conteneur, ce qui peut donner des fichiers root sur la machine hôte.</p>
+
+    <h2 id="reseaux">7. Réseaux et variables d'environnement</h2>
+    <p>Chaque conteneur reçoit sa propre interface réseau. Trois choses à savoir :</p>
+
+    <div class="code-label">bash — réseaux</div>
+    <div class="code-block"><pre># créer un réseau : les conteneurs qui y sont attachés se voient PAR LEUR NOM
+docker network create app-net
+
+docker run -d --name base --network app-net postgres:16
+docker run -d --name api  --network app-net -p 8000:8000 mon-api:1.0
+# depuis "api", la base est joignable à l'adresse "base:5432" — Docker fournit
+# une résolution DNS interne, il n'y a aucune adresse IP à connaître
+
+# publier un port vers l'extérieur : -p HOTE:CONTENEUR
+docker run -p 8080:8000 mon-api     # http://localhost:8080 → port 8000 du conteneur
+docker run -p 127.0.0.1:8000:8000 mon-api   # accessible uniquement en local
+
+docker network ls
+docker network inspect app-net</pre></div>
+
+    <p>Sans réseau explicite, les conteneurs sont sur le réseau <code>bridge</code> par défaut, où la résolution par nom ne fonctionne pas : c'est la cause la plus fréquente des « connection refused » entre deux conteneurs.</p>
+
+    <div class="code-label">bash — configuration et secrets</div>
+    <div class="code-block"><pre>docker run -e DATABASE_URL="postgresql://user:pass@base:5432/db" mon-api
+docker run --env-file .env mon-api         # toutes les variables d'un fichier
+
+# GPU (nécessite le NVIDIA Container Toolkit sur l'hôte)
+docker run --gpus all nvidia/cuda:12.4.0-base nvidia-smi</pre></div>
+
+    <div class="warning-block">
+      <strong>Jamais de secret dans une image.</strong> Une clé d'API écrite dans un <code>ENV</code> ou copiée dans un fichier reste dans les couches de l'image : quiconque la télécharge peut l'extraire, même si une instruction ultérieure a « supprimé » le fichier — les couches précédentes sont toujours là. Les secrets passent par des variables d'environnement à l'exécution, un fichier monté, ou un gestionnaire de secrets. Et pour le GPU : le pilote reste sur la machine hôte, seules les bibliothèques CUDA sont dans l'image — c'est ce qui explique les incompatibilités de version entre image et pilote, comme dans mon <a href="project6.html">projet NAS</a>.
+    </div>
+
+    <h2 id="compose">8. Docker Compose</h2>
+
+    <h3>À quoi ça sert</h3>
+    <p>Une application réelle n'est jamais un seul conteneur : une API, une base de données, un cache, parfois un serveur de tâches de fond. Les lancer à la main impose de retenir l'ordre de démarrage, de créer le réseau, de nommer les volumes, de recopier les bonnes variables d'environnement — une longue série de commandes fragiles, à refaire à chaque redémarrage.</p>
+    <p><strong>Docker Compose</strong> décrit toute cette pile dans un fichier unique, versionné avec le code. Une commande démarre l'ensemble, une autre l'arrête. C'est l'outil qui permet à quelqu'un de cloner un dépôt et d'avoir l'application complète qui tourne en une minute — y compris la base de données, avec le bon schéma.</p>
+
+    <div class="code-label">compose.yaml — API + PostgreSQL + cache, commenté</div>
+    <div class="code-block"><pre>services:
+
+  api:
+    build: .                        # construire depuis le Dockerfile local
+    # image: ghcr.io/nils/mon-api:1.0   ← en production, on utilise une image publiée
+    ports:
+      - "8000:8000"                 # exposé sur la machine
+    environment:
+      DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@base:5432/annonces
+      REDIS_URL: redis://cache:6379/0
+      LOG_LEVEL: info
+    depends_on:
+      base:
+        condition: service_healthy  # attend que la base réponde VRAIMENT
+      cache:
+        condition: service_started
+    volumes:
+      - ./src:/app/src              # bind mount : rechargement à chaud en dev
+    restart: unless-stopped         # redémarre en cas de crash, sauf arrêt manuel
+
+  base:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}   # lu dans le fichier .env
+      POSTGRES_DB: annonces
+    volumes:
+      - donnees-pg:/var/lib/postgresql/data     # LES DONNÉES SURVIVENT ICI
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro   # schéma au 1er démarrage
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d annonces"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # pas de "ports:" → la base n'est PAS exposée à l'extérieur, seulement à l'api
+
+  cache:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+
+volumes:
+  donnees-pg:                       # volume nommé, géré par Docker</pre></div>
+
+    <div class="code-label">bash — les commandes de Compose</div>
+    <div class="code-block"><pre>docker compose up -d              # démarre toute la pile en arrière-plan
+docker compose up --build         # reconstruit les images avant de démarrer
+docker compose ps                 # état des services
+docker compose logs -f api        # suivre les journaux d'un service
+docker compose exec api bash      # ouvrir un shell dans le service "api"
+docker compose exec base psql -U app annonces      # un client SQL dans la base
+docker compose restart api
+docker compose stop               # arrête sans supprimer
+docker compose down               # arrête ET supprime conteneurs + réseau
+docker compose down -v            # … et SUPPRIME LES VOLUMES (donc les données)
+
+docker compose run --rm api pytest         # lancer une commande ponctuelle
+docker compose --profile dev up            # démarrer un sous-ensemble de services</pre></div>
+
+    <p>Trois points méritent d'être soulignés dans ce fichier. Le <code>healthcheck</code> combiné à <code>depends_on: condition: service_healthy</code> évite l'erreur la plus courante : l'API démarre avant que PostgreSQL n'accepte les connexions et plante immédiatement. L'absence de section <code>ports</code> sur la base signifie qu'elle n'est joignable que depuis le réseau interne — une bonne pratique de sécurité, et suffisante puisque l'API l'atteint par le nom <code>base</code>. Enfin, le script monté dans <code>/docker-entrypoint-initdb.d/</code> est exécuté automatiquement au tout premier démarrage : c'est ainsi qu'on crée le schéma SQL du module 4 sans intervention manuelle. C'est exactement la structure utilisée dans le projet final (<a href="project7-m26.html">module 26</a>).</p>
+
+    <h2 id="k8s">9. Kubernetes</h2>
+
+    <h3>Le problème que Compose ne résout pas</h3>
+    <p>Compose orchestre des conteneurs <em>sur une machine</em>. Dès qu'il faut plusieurs machines, la question change de nature : que se passe-t-il si un serveur tombe ? Comment répartir la charge ? Comment déployer une nouvelle version sans coupure ? Comment redémarrer automatiquement ce qui a planté à 3 h du matin ?</p>
+    <p><strong>Kubernetes</strong> (souvent abrégé « K8s ») répond à cela par un principe simple à énoncer : on lui décrit l'<strong>état souhaité</strong> — « je veux trois exemplaires de cette image, chacun avec 2 Go de mémoire, accessibles derrière une adresse stable » — et il s'emploie en permanence à faire correspondre l'état réel à cette description. Si un serveur meurt, il replace ailleurs les conteneurs perdus, sans intervention. C'est ce qu'on appelle une approche <em>déclarative</em> : on ne donne pas d'ordres, on décrit une cible.</p>
+
+    <h3>L'architecture, en deux moitiés</h3>
+    <div class="code-label">de quoi est fait un cluster</div>
+    <div class="code-block"><pre>PLAN DE CONTRÔLE (le cerveau)          NŒUDS DE TRAVAIL (les bras)
+┌────────────────────────────┐         ┌──────────────┐  ┌──────────────┐
+│ API server  ← tout passe   │         │   kubelet    │  │   kubelet    │
+│              par lui       │◄───────►│      │       │  │      │       │
+│ etcd        ← l'état       │         │   ┌──┴───┐   │  │   ┌──┴───┐   │
+│              souhaité      │         │   │ Pod  │   │  │   │ Pod  │   │
+│ scheduler   ← place les    │         │   │ Pod  │   │  │   │ Pod  │   │
+│              pods          │         │   └──────┘   │  │   └──────┘   │
+│ controllers ← corrigent    │         │ kube-proxy   │  │ kube-proxy   │
+│              les écarts    │         └──────────────┘  └──────────────┘
+└────────────────────────────┘</pre></div>
+    <p>On parle au cluster via l'<em>API server</em>, presque toujours avec la commande <code>kubectl</code>. L'état souhaité est stocké dans <em>etcd</em>. Le <em>scheduler</em> décide sur quel nœud placer chaque pod en fonction des ressources demandées. Les <em>contrôleurs</em> comparent en boucle l'état réel à l'état souhaité et agissent pour combler l'écart — c'est là que se trouve toute l'intelligence du système.</p>
+
+    <h3>Les objets, du plus petit au plus grand</h3>
+
+    <p><strong>Pod</strong> — la plus petite unité déployable. Un pod contient un ou plusieurs conteneurs qui partagent la même adresse IP et les mêmes volumes ; ils sont toujours placés ensemble sur le même nœud. Dans 90 % des cas, un pod = un conteneur ; les cas à plusieurs conteneurs servent au motif <em>sidecar</em> (un conteneur annexe qui collecte les journaux, par exemple). Point essentiel : <strong>un pod est jetable</strong>. Il n'a pas d'adresse stable, il peut être détruit et recréé ailleurs à tout moment. On ne crée donc jamais un pod à la main.</p>
+
+    <p><strong>ReplicaSet</strong> — maintient un nombre donné de pods identiques. Si l'un disparaît, il en recrée un. On ne le manipule pas directement non plus.</p>
+
+    <p><strong>Deployment</strong> — l'objet que l'on écrit réellement. Il gère un ReplicaSet et, surtout, les <em>mises à jour progressives</em> : lors d'un changement de version, il crée les nouveaux pods, attend qu'ils soient prêts, puis retire les anciens, un par un. Pas de coupure de service, et retour arrière en une commande.</p>
+
+    <p><strong>Service</strong> — puisque les pods vont et viennent avec des adresses changeantes, le Service fournit une <em>adresse et un nom stables</em> devant un groupe de pods, et répartit la charge entre eux. Trois variantes : <code>ClusterIP</code> (joignable uniquement dans le cluster, le défaut), <code>NodePort</code> (ouvre un port sur chaque nœud), <code>LoadBalancer</code> (demande un répartiteur au fournisseur cloud).</p>
+
+    <p><strong>Ingress</strong> — l'entrée HTTP depuis l'extérieur : routage par nom de domaine et par chemin, terminaison TLS. C'est le reverse proxy du cluster.</p>
+
+    <p><strong>ConfigMap</strong> et <strong>Secret</strong> — la configuration, séparée de l'image : paramètres non sensibles pour le premier, identifiants et clés pour le second. Cela permet de déployer la <em>même</em> image en test et en production avec des réglages différents.</p>
+
+    <p><strong>PersistentVolumeClaim</strong> — une demande de stockage durable, l'équivalent du volume nommé de Compose.</p>
+
+    <p><strong>Job</strong> et <strong>CronJob</strong> — une tâche qui se termine (un entraînement, un import) et sa version planifiée (un ré-entraînement hebdomadaire, module 24).</p>
+
+    <p><strong>Namespace</strong> — un cloisonnement logique du cluster, pour séparer les équipes ou les environnements.</p>
+
+    <p><strong>HorizontalPodAutoscaler</strong> — ajuste automatiquement le nombre de répliques selon la charge CPU ou une métrique personnalisée.</p>
+
+    <div class="code-label">deployment.yaml — un service d'inférence, commenté</div>
+    <div class="code-block"><pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api
+  labels: { app: model-api }
+spec:
+  replicas: 3                          # trois exemplaires en permanence
+  selector:
+    matchLabels: { app: model-api }    # quels pods ce Deployment gère-t-il
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                      # au plus 1 pod en trop pendant la mise à jour
+      maxUnavailable: 0                # aucun pod indisponible : zéro coupure
+  template:                            # ── le modèle de pod à créer ──
+    metadata:
+      labels: { app: model-api }       # doit correspondre au selector ci-dessus
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/nils/model-api:1.4.2    # JAMAIS :latest en production
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: db-credentials, key: url }
+          resources:
+            requests:                  # RÉSERVÉ : sert au scheduler pour le placement
+              cpu: "500m"              # 500 millicœurs = 0,5 cœur
+              memory: "1Gi"
+            limits:                    # PLAFOND : au-delà, le conteneur est bridé (CPU)
+              cpu: "2"                 #           ou tué (mémoire : OOMKilled)
+              memory: "4Gi"
+              nvidia.com/gpu: 1        # un GPU entier (non partageable par défaut)
+          readinessProbe:              # "puis-je recevoir du trafic ?"
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 20    # laisse le temps de charger le modèle
+            periodSeconds: 10
+          livenessProbe:               # "suis-je encore vivant ?" sinon → redémarrage
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service                          # l'adresse stable devant les 3 pods
+metadata:
+  name: model-api
+spec:
+  selector: { app: model-api }         # sélectionne les pods par leur étiquette
+  ports:
+    - port: 80                         # port du Service
+      targetPort: 8000                 # port du conteneur
+  type: ClusterIP</pre></div>
+
+    <div class="step-block">
+      <h4>Les trois points qui comptent vraiment pour du ML</h4>
+      <ul>
+        <li><strong><code>requests</code> contre <code>limits</code></strong> — la première est une réservation utilisée pour décider où placer le pod, la seconde un plafond appliqué à l'exécution. Un modèle qui charge 3 Go de poids doit le déclarer, sinon il sera tué (<em>OOMKilled</em>) dès le premier pic de charge.</li>
+        <li><strong><code>readinessProbe</code></strong> — sans elle, Kubernetes envoie du trafic à un pod dont le modèle n'est pas encore chargé en mémoire, et les premières requêtes échouent à chaque déploiement.</li>
+        <li><strong><code>livenessProbe</code></strong> — elle redémarre un conteneur bloqué. Mal réglée (délai trop court), elle redémarre en boucle un service qui démarre lentement : c'est la cause classique du <em>CrashLoopBackOff</em>.</li>
+      </ul>
+    </div>
+
+    <div class="code-label">bash — kubectl, les commandes utiles</div>
+    <div class="code-block"><pre>kubectl apply -f deployment.yaml      # applique l'état souhaité (créé ou mis à jour)
+kubectl get pods                      # lister ; -w pour suivre en direct
+kubectl get all -n mon-namespace
+kubectl describe pod model-api-7d9f   # événements : LA commande de diagnostic
+kubectl logs -f model-api-7d9f        # journaux ; --previous après un crash
+kubectl exec -it model-api-7d9f -- bash
+kubectl port-forward svc/model-api 8080:80    # tester en local sans exposer
+
+kubectl rollout status deploy/model-api       # suivre une mise à jour
+kubectl rollout undo deploy/model-api         # RETOUR ARRIÈRE immédiat
+kubectl scale deploy/model-api --replicas=5
+kubectl top pods                              # consommation réelle
+kubectl delete -f deployment.yaml</pre></div>
+
+    <div class="step-block">
+      <h4>En avez-vous besoin ?</h4>
+      <p>Honnêtement, rarement pour un projet personnel ou un prototype : la complexité opérationnelle est réelle, et un conteneur derrière un reverse proxy couvre la grande majorité des besoins. Kubernetes devient pertinent lorsqu'il faut plusieurs machines, de l'autoscaling, des déploiements sans coupure, ou le partage d'un parc de GPU entre plusieurs équipes. La valeur immédiate, pour un data scientist, est de savoir <em>lire</em> un manifeste et déclarer correctement ses ressources : c'est la langue commune des équipes plateforme. Pour s'exercer sans cluster, <strong>k3s</strong>, <strong>kind</strong> ou <strong>minikube</strong> font tourner un cluster complet sur un portable, et <code>kubectl</code> s'y comporte exactement de la même façon.</p>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>L'erreur type décroît en \(1/\sqrt{n}\) : la précision coûte quadratiquement cher.</li>
-        <li>Un IC porte sur la procédure, pas sur le paramètre ; Wilson pour les proportions, bootstrap quand il n'y a pas de formule.</li>
-        <li>La p-value est \(P(\text{données}\mid H_0)\), rien d'autre. Rapporter effet + IC + p, dans cet ordre.</li>
-        <li>Dimensionner avant de collecter : \(n \approx 16/d^2\). Une étude sous-puissante surestime les effets qu'elle détecte.</li>
-        <li>Welch par défaut ; les tests de normalité sont inutiles sur grand échantillon.</li>
-        <li>Corriger les comparaisons multiples : Holm pour quelques tests, Benjamini-Hochberg pour des centaines.</li>
-        <li>Pas de causalité sans hypothèse causale : confondants, collisionneurs, randomisation.</li>
-        <li>Dans un A/B test : une métrique, une durée fixée à l'avance, une randomisation par utilisateur, pas de coup d'œil anticipé.</li>
+        <li>Un conteneur est un processus isolé par le noyau de l'hôte (namespaces + cgroups) ; une VM embarque un noyau complet.</li>
+        <li>Image = modèle figé, conteneur = instance ; les couches sont mises en cache, d'où l'ordre du plus stable au plus volatil.</li>
+        <li>Construction en deux étapes, utilisateur non root, <code>.dockerignore</code>, jamais de secret dans l'image, <code>--host 0.0.0.0</code>.</li>
+        <li>Volume nommé pour les données produites, bind mount pour le code en développement.</li>
+        <li>Un réseau Docker explicite permet aux conteneurs de se joindre par leur nom.</li>
+        <li>Compose décrit une pile complète dans un fichier ; <code>healthcheck</code> + <code>depends_on</code> évitent les démarrages ratés.</li>
+        <li>Kubernetes maintient un état déclaré : Deployment pour les répliques et les mises à jour, Service pour l'adresse stable, probes et ressources pour un service de modèle qui tient debout.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
-  <a href="project7-m04.html" class="btn btn-secondary">← Module 4 : Mathématiques du ML</a>
-  <a href="project7-m06.html" class="btn btn-primary">Module 6 : Data science en pratique →</a>
-  <br><br>
-  <div class="project-meta"><span class="tag">Inférence</span><span class="tag">p-value</span><span class="tag">Bootstrap</span><span class="tag">Puissance</span><span class="tag">Causalité</span><span class="tag">A/B test</span></div>
+  <div class="course-nav">
+    <a href="project7-m04.html" class="btn btn-secondary">← Module 4 : SQL et bases de données</a>
+    <a href="project7-m06.html" class="btn btn-primary">Module 6 : FastAPI et Pydantic →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Docker</span><span class="tag">Compose</span><span class="tag">Kubernetes</span><span class="tag">Volumes</span><span class="tag">kubectl</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -299,50 +527,55 @@ print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 5</div>
-    <h1>Inferential statistics: estimate, test, decide</h1>
+    <h1>Docker, Compose and Kubernetes</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content course-content">
     <div class="warning-block">
       <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
     </div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Sampling variability, the central limit theorem, and why precision costs quadratically.</li>
-      <li>Confidence intervals: the correct frequentist reading, Wilson intervals for proportions, and the bootstrap (percentile and BCa) with its limitations.</li>
-      <li>Hypothesis testing: the mechanics, a rigorous definition of the p-value, and a list of what it is <em>not</em>.</li>
-      <li>Type I and II errors, statistical power, effect sizes, sample sizing (<em>n ≈ 16/d²</em>) and why underpowered studies overstate the effects they find.</li>
-      <li>A catalogue of the usual tests, why Welch should be the default, and why normality tests are counterproductive on large samples.</li>
-      <li>Multiple comparisons: Bonferroni, Holm, Benjamini-Hochberg (FWER vs FDR), and the many unintentional forms of p-hacking.</li>
-      <li>Correlation vs causation: confounders, Simpson's paradox, DAGs (chains, forks, colliders), randomisation and quasi-experimental designs.</li>
-      <li>A complete A/B test: metric definition, sizing, randomisation unit, sample ratio mismatch, the cost of peeking, and how to read the result.</li>
+      <li>Why containers exist: a virtual environment freezes Python libraries and nothing else.</li>
+      <li>Containers versus virtual machines, with a diagram: namespaces and cgroups, the shared host kernel, and the consequences (performance on macOS/Windows, weaker isolation than a VM).</li>
+      <li>Vocabulary: images, containers, layers and registries.</li>
+      <li>Everyday commands: run, ps, logs, exec, inspect, build, tag, push, and cleaning up disk space.</li>
+      <li>Writing a Dockerfile: every instruction explained, layer caching and the stable-to-volatile ordering rule, a commented multi-stage build with UV, non-root users, healthchecks and <code>.dockerignore</code>.</li>
+      <li>Volumes: named volumes versus bind mounts, read-only mounts, and permission pitfalls.</li>
+      <li>Networking: user-defined networks and DNS resolution by container name, port publishing, environment variables, GPU access, and why secrets never belong in an image.</li>
+      <li>Docker Compose: the problem it solves, a fully commented stack (API, PostgreSQL with healthcheck and init script, Redis), and the complete command set.</li>
+      <li>Kubernetes at length: the declarative model, control plane and worker nodes, every core object explained (Pod, ReplicaSet, Deployment, Service, Ingress, ConfigMap, Secret, PVC, Job, CronJob, Namespace, HPA), a commented deployment manifest for model serving, requests versus limits, readiness and liveness probes, kubectl commands, and an honest take on when it is overkill.</li>
     </ul>
 
     <h2>Course outline</h2>
       <ol>
-        <li><a href="project7-m01.html">Python foundations, tooling and concurrency</a></li>
-        <li><a href="project7-m02.html">Data and deployment: SQL, NoSQL, Docker, Kubernetes, FastAPI</a></li>
-        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask, frameworks</a></li>
-        <li><a href="project7-m04.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><strong>Inferential statistics: estimate, test, decide</strong></li>
-        <li><a href="project7-m06.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m07.html">Classical machine learning</a></li>
-        <li><a href="project7-m08.html">Deep learning</a></li>
-        <li><a href="project7-m09.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m10.html">Reinforcement learning</a></li>
-        <li><a href="project7-m11.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m12.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m13.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m14.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m15.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m16.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m17.html">Learning with few labels</a></li>
-        <li><a href="project7-m18.html">From scores to decisions</a></li>
-        <li><a href="project7-m19.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m20.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m21.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m22.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><strong>Docker, Compose and Kubernetes</strong></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m11.html">Learning with few labels</a></li>
+        <li><a href="project7-m12.html">Classical machine learning</a></li>
+        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m14.html">Deep learning</a></li>
+        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m18.html">Reinforcement learning</a></li>
+        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m22.html">From scores to decisions</a></li>
+        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 
