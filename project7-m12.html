@@ -45,18 +45,19 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Sur données tabulaires — c'est-à-dire l'immense majorité des problèmes industriels — le deep learning ne domine pas. Les méthodes de ce module restent l'état de l'art, s'entraînent en secondes, s'expliquent, et se déploient sans GPU. Ce module les passe en revue par famille, avec pour chacune le mécanisme, les cas d'usage, et les raisons de s'en méfier.</p>
+    <p>Sur données tabulaires — c'est-à-dire l'immense majorité des problèmes industriels — le deep learning ne domine pas. Les méthodes de ce module restent l'état de l'art, s'entraînent en secondes, s'expliquent, et se déploient sans GPU. On les passe en revue par famille, avec pour chacune le mécanisme réel, les cas d'usage, et les raisons de s'en méfier.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
         <li><a href="#biais-variance">Biais, variance et capacité</a></li>
         <li><a href="#lineaires">Modèles linéaires et régularisation</a></li>
+        <li><a href="#logistique">Régression logistique</a></li>
         <li><a href="#svm">SVM et astuce du noyau</a></li>
         <li><a href="#arbres">Arbres de décision</a></li>
         <li><a href="#foret">Bagging et forêts aléatoires</a></li>
         <li><a href="#boosting">Boosting : XGBoost et ses cousins</a></li>
-        <li><a href="#ensembles">Stacking et méthodes d'ensemble</a></li>
+        <li><a href="#ensembles">Stacking</a></li>
         <li><a href="#clustering">Clustering et détection d'anomalies</a></li>
         <li><a href="#hyper">Recherche d'hyperparamètres</a></li>
         <li><a href="#interpret">Interprétabilité</a></li>
@@ -65,153 +66,272 @@
     </div>
 
     <h2 id="biais-variance">1. Biais, variance et capacité</h2>
-    <p>Pour une prédiction en un point \(x\), l'erreur quadratique attendue se décompose en trois termes :</p>
+    <p>Pour une prédiction en un point \(x\), l'erreur quadratique attendue — moyennée sur tous les jeux d'entraînement possibles — se décompose en trois termes :</p>
     <div style="text-align:center;overflow-x:auto">\[ \mathbb{E}\big[(y - \hat{f}(x))^2\big] = \underbrace{\big(\mathbb{E}[\hat f(x)] - f(x)\big)^2}_{\text{biais}^2} + \underbrace{\operatorname{Var}\big(\hat f(x)\big)}_{\text{variance}} + \underbrace{\sigma^2}_{\text{bruit irréductible}} \]</div>
 
-    <p>Le <strong>biais</strong> mesure l'erreur systématique due à l'hypothèse de modèle (une droite ne peut pas épouser une parabole) ; la <strong>variance</strong>, la sensibilité au jeu d'entraînement particulier ; le <strong>bruit</strong> est la part qu'aucun modèle ne peut expliquer. Augmenter la capacité du modèle baisse le biais et monte la variance. Le surapprentissage, c'est le régime où la seconde l'emporte.</p>
+    <p>Le <strong>biais</strong> mesure l'erreur systématique due à l'hypothèse de modèle : une droite ne peut pas épouser une parabole, quel que soit le nombre de points. La <strong>variance</strong> mesure la sensibilité au jeu d'entraînement particulier : un modèle très flexible dessine une courbe différente à chaque échantillon. Le <strong>bruit</strong> est la part qu'aucun modèle ne peut expliquer, parce qu'elle n'est pas dans les données.</p>
+
+    <div class="code-label">l'illustration classique, sur une cible</div>
+    <div class="code-block"><pre>  BIAIS FAIBLE, VARIANCE FAIBLE     BIAIS FAIBLE, VARIANCE FORTE
+  (l'idéal)                          (surapprentissage)
+        ·:·                                ·      ·
+       ·:@:·   groupé, au centre        ·   · @ ·      dispersé autour du centre
+        ·:·                              ·    ·   ·
+
+  BIAIS FORT, VARIANCE FAIBLE        BIAIS FORT, VARIANCE FORTE
+  (sous-apprentissage)               (le pire des deux)
+   ·:·                                ·  ·
+  ·:·      @  groupé, mais à côté      · · ·     @   dispersé ET décalé
+   ·:·                                  ·   ·</pre></div>
+
+    <p>Augmenter la capacité d'un modèle baisse le biais et monte la variance. Le surapprentissage, c'est le régime où la seconde l'emporte : le modèle mémorise le bruit de son échantillon. Le module 13 montre que ce tableau classique se complique en très haute dimension.</p>
 
     <div class="step-block">
       <h4>Diagnostiquer avec les courbes</h4>
-      <p><strong>Erreur d'entraînement élevée et proche de l'erreur de validation</strong> → sous-apprentissage : le modèle manque de capacité, ou il manque des features. <strong>Erreur d'entraînement très basse, erreur de validation bien supérieure</strong> → surapprentissage : régulariser, simplifier, ou ajouter des données. La <em>courbe d'apprentissage</em> (performance en fonction du nombre d'exemples) tranche la dernière question : si les deux courbes se rapprochent encore, collecter plus de données aidera ; si elles ont convergé, non.</p>
+      <p><strong>Erreur d'entraînement élevée, et proche de l'erreur de validation</strong> → sous-apprentissage : le modèle manque de capacité, ou il manque des variables informatives. Inutile de régulariser davantage. <strong>Erreur d'entraînement très basse, erreur de validation bien supérieure</strong> → surapprentissage : régulariser, simplifier, ou ajouter des données. La <em>courbe d'apprentissage</em> (performance en fonction du nombre d'exemples, module 11) tranche cette dernière question : si les deux courbes se rapprochent encore, collecter plus de données aidera ; si elles ont convergé, non.</p>
     </div>
 
     <h2 id="lineaires">2. Modèles linéaires et régularisation</h2>
-    <p>Le modèle \(\hat{y} = \beta_0 + \sum_j \beta_j x_j\) reste le point de départ obligé : rapide, interprétable, statistiquement bien compris, et souvent une baseline difficile à battre quand les variables sont bien construites.</p>
+    <p>Le modèle \(\hat{y} = \beta_0 + \sum_j \beta_j x_j\) reste le point de départ obligé : rapide, interprétable, statistiquement bien compris, et souvent une baseline difficile à battre quand les variables sont bien construites (module 10).</p>
 
     <div class="code-label">les trois régularisations</div>
-    <div class="code-block"><pre>Ridge (L²)        pénalité λ·Σβ²     rétrécit tous les coefficients, n'en annule aucun.
-                                     Idéal en présence de colinéarité.
-Lasso (L¹)        pénalité λ·Σ|β|    annule certains coefficients → sélection automatique.
-                                     Instable si les variables sont très corrélées
-                                     (il en choisit une au hasard parmi un groupe).
-Elastic-Net       combinaison des 2  compromis : sélection ET stabilité sur groupes corrélés.</pre></div>
+    <div class="code-block"><pre>Ridge (L²)     pénalité λ·Σβ²     rétrécit tous les coefficients, n'en annule aucun.
+                                  Idéal en présence de colinéarité : répartit le poids
+                                  entre variables corrélées au lieu d'en choisir une.
+Lasso (L¹)     pénalité λ·Σ|β|    annule certains coefficients → sélection automatique.
+                                  Instable si les variables sont très corrélées : il en
+                                  choisit une presque au hasard dans chaque groupe.
+Elastic-Net    combinaison        compromis : sélection ET stabilité sur groupes corrélés.</pre></div>
 
-    <p>L'intuition géométrique de la différence : on minimise l'erreur sous la contrainte que \(\beta\) reste dans une boule. La boule \(L^2\) est ronde, donc la solution optimale la touche presque toujours en un point où aucune coordonnée n'est nulle. La boule \(L^1\) est un losange à coins pointus <em>sur les axes</em> : le contact se fait fréquemment sur un coin, c'est-à-dire avec des coefficients exactement nuls. Le module 7 en donne la lecture spectrale pour ridge — un filtrage qui écrase les directions de faible variance.</p>
+    <p>L'intuition géométrique de la différence mérite un dessin. On minimise l'erreur sous la contrainte que \(\beta\) reste dans une boule de rayon fixé. La boule \(L^2\) est ronde : la solution optimale la touche presque toujours en un point où aucune coordonnée n'est nulle. La boule \(L^1\) est un losange, avec des <em>coins pointus sur les axes</em> : le contact se fait fréquemment sur un coin, c'est-à-dire avec des coefficients exactement nuls.</p>
 
-    <p>La <strong>régression logistique</strong> transpose cela à la classification en modélisant le logarithme de la cote :</p>
+    <div class="code-block"><pre>        L² (ridge)                      L¹ (lasso)
+   β₂ │    ⌒⌒⌒                     β₂ │      ◆
+      │  ⌒  ●  ⌒  ← contact           │    ◆ ●◆   ← contact SUR L'AXE
+      │ ⌒( )    ⌒    hors des axes    │  ◆  │  ◆     donc β₂ = 0
+      │  ⌒⌒⌒                          │    ◆│◆
+      └──────────── β₁                └──────────── β₁</pre></div>
+
+    <p>Le module 7 en donne la lecture spectrale pour ridge — un filtrage qui écrase les directions de faible variance — et le module 9 la lecture bayésienne : un a priori gaussien pour ridge, laplacien pour le lasso.</p>
+
+    <div class="code-label">Python — ridge, lasso et le choix de λ</div>
+    <div class="code-block"><pre>from sklearn.linear_model import RidgeCV, LassoCV, ElasticNetCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+# la standardisation est OBLIGATOIRE : la pénalité s'applique aux coefficients,
+# donc à des grandeurs qui doivent être comparables (module 7)
+modele = make_pipeline(
+    StandardScaler(),
+    RidgeCV(alphas=np.logspace(-3, 3, 50)),      # λ choisi par validation croisée
+).fit(X, y)
+
+print(modele[-1].alpha_)                          # le λ retenu
+coefs = modele[-1].coef_
+print(sorted(zip(np.abs(coefs), noms), reverse=True)[:10])   # variables les plus pesantes</pre></div>
+
+    <h2 id="logistique">3. Régression logistique</h2>
+    <p>Pour la classification, on ne peut pas prédire directement une probabilité avec un modèle linéaire : celui-ci produirait des valeurs hors de [0, 1]. On modélise donc le logarithme de la <em>cote</em> (le rapport « probabilité de succès sur probabilité d'échec ») :</p>
     <div style="text-align:center;overflow-x:auto">\[ \log\frac{p(x)}{1-p(x)} = \beta_0 + \beta^\top x \qquad \Longleftrightarrow \qquad p(x) = \frac{1}{1+e^{-(\beta_0+\beta^\top x)}} \]</div>
-    <p>Elle s'estime par maximum de vraisemblance (donc minimisation de l'entropie croisée), et ses coefficients s'interprètent en <em>odds ratios</em> : \(e^{\beta_j}\) est le facteur multiplicatif sur la cote quand \(x_j\) augmente d'une unité. C'est le modèle de référence quand l'explication compte autant que la performance — scoring de crédit, épidémiologie — et il produit des probabilités naturellement bien calibrées.</p>
+    <p>La fonction de droite est la <em>sigmoïde</em> : elle écrase toute la droite réelle dans l'intervalle ]0, 1[, de façon monotone et dérivable. L'estimation se fait par maximum de vraisemblance, ce qui revient — module 9 — à minimiser l'entropie croisée.</p>
+
+    <p>L'interprétation des coefficients est directe et c'est ce qui fait la valeur du modèle : \(e^{\beta_j}\) est le facteur multiplicatif sur la cote quand \(x_j\) augmente d'une unité. Un coefficient de 0,7 signifie que la cote est multipliée par \(e^{0{,}7} \approx 2\) : le phénomène devient deux fois plus « probable » au sens de la cote. C'est le modèle de référence quand l'explication compte autant que la performance — scoring de crédit, épidémiologie —, et ses probabilités sont naturellement bien calibrées, ce qui n'est pas le cas d'un gradient boosting.</p>
 
     <div class="warning-block">
-      <strong>Interpréter un coefficient demande des précautions.</strong> Il se lit « toutes choses égales par ailleurs », ce qui perd son sens quand les variables sont corrélées (surface et nombre de pièces). Il dépend de l'échelle : comparer des coefficients exige des variables standardisées. Et il n'est <em>pas</em> un effet causal (module 8) : un coefficient négatif sur « a contacté le support » ne dit pas qu'appeler le support fidélise.
+      <strong>Interpréter un coefficient demande des précautions.</strong> Il se lit « toutes choses égales par ailleurs », ce qui perd son sens quand les variables sont corrélées : le coefficient de la surface, à nombre de pièces fixé, ne décrit pas un bien réel. Il dépend de l'échelle : comparer des coefficients exige des variables standardisées. Et il n'est <em>pas</em> un effet causal (module 8) : un coefficient négatif sur « a contacté le support » ne dit pas qu'appeler le support fidélise.
     </div>
 
-    <h2 id="svm">3. SVM et astuce du noyau</h2>
-    <p>Une machine à vecteurs de support cherche l'hyperplan séparateur qui maximise la <strong>marge</strong>, c'est-à-dire la distance aux points les plus proches. La formulation à marge souple autorise des violations contrôlées par \(C\) :</p>
+    <h2 id="svm">4. SVM et astuce du noyau</h2>
+    <p>Une machine à vecteurs de support cherche l'hyperplan séparateur qui maximise la <strong>marge</strong> — la distance aux points les plus proches de chaque classe. L'idée : parmi toutes les frontières qui séparent correctement les données, celle qui laisse le plus de place de part et d'autre est la plus susceptible de bien généraliser.</p>
+
+    <div class="code-block"><pre>     ○ ○        │        × ×          ── la frontière
+   ○   ○  ┊     │     ┊  ×            ┊  les marges
+    ○  ●──┊─────│─────┊──●  ×         ●  les VECTEURS DE SUPPORT : seuls
+   ○    ○ ┊     │     ┊ ×  ×             ces points déterminent la solution
+     ○      ←── marge ──→   ×            (déplacer les autres ne change rien)</pre></div>
+
+    <p>La formulation à marge souple autorise des violations, pénalisées par un paramètre \(C\) :</p>
     <div style="text-align:center;overflow-x:auto">\[ \min_{w,b}\; \tfrac{1}{2}\|w\|^2 + C\sum_i \max\big(0,\, 1 - y_i(w^\top x_i + b)\big) \]</div>
-    <p>Seuls les points sur ou à l'intérieur de la marge — les <em>vecteurs de support</em> — déterminent la solution : le modèle est insensible aux points éloignés de la frontière, ce qui le rend robuste.</p>
+    <p>Le premier terme maximise la marge (une petite norme de \(w\) donne une large marge), le second compte les violations. Seuls les points sur ou à l'intérieur de la marge — les <em>vecteurs de support</em> — interviennent dans la solution, ce qui rend le modèle insensible aux points éloignés de la frontière.</p>
 
-    <p>L'<strong>astuce du noyau</strong> est l'idée élégante : la solution ne dépend des données qu'à travers des produits scalaires \(x_i^\top x_j\). En les remplaçant par une fonction noyau \(k(x_i,x_j)\), on travaille implicitement dans un espace de dimension bien plus grande — voire infinie pour le noyau RBF \(k(x,x') = \exp(-\gamma\|x-x'\|^2)\) — <em>sans jamais calculer les coordonnées dans cet espace</em>. Une frontière non linéaire dans l'espace d'origine devient linéaire dans l'espace induit. On retrouvera exactement ce mécanisme dans les processus gaussiens (module 17).</p>
+    <p>L'<strong>astuce du noyau</strong> est l'idée élégante. La solution ne dépend des données qu'à travers des produits scalaires \(x_i^\top x_j\). En les remplaçant par une fonction noyau \(k(x_i,x_j)\), on travaille implicitement dans un espace de dimension bien plus grande — voire infinie pour le noyau RBF \(k(x,x') = \exp(-\gamma\|x-x'\|^2)\) — <em>sans jamais calculer les coordonnées dans cet espace</em>. Une frontière non linéaire dans l'espace d'origine devient linéaire dans l'espace induit. On retrouvera exactement ce mécanisme dans les processus gaussiens (module 17).</p>
 
-    <p><strong>Réglages</strong> : \(C\) contrôle le compromis marge/erreurs (grand \(C\) = peu de tolérance = risque de surapprentissage), \(\gamma\) la portée d'influence d'un point (grand \(\gamma\) = influence très locale = frontière tourmentée). <strong>Limites</strong> : le coût est au moins quadratique en nombre d'exemples — au-delà de quelques dizaines de milliers de points, le SVM à noyau devient impraticable ; il exige des variables standardisées ; et il ne fournit pas de probabilités (celles de <code>predict_proba</code> viennent d'une calibration de Platt <em>a posteriori</em>, coûteuse). Il reste excellent en petite dimension d'échantillon avec beaucoup de features — typiquement en chimiométrie ou en bio-informatique.</p>
+    <p><strong>Réglages</strong> : \(C\) contrôle le compromis marge/erreurs (grand \(C\) = peu de tolérance = risque de surapprentissage), \(\gamma\) la portée d'influence d'un point (grand \(\gamma\) = influence très locale = frontière tourmentée). Les deux se règlent ensemble, sur une grille logarithmique.</p>
+    <p><strong>Limites</strong> : le coût est au moins quadratique en nombre d'exemples — au-delà de quelques dizaines de milliers de points, le SVM à noyau devient impraticable ; il exige des variables standardisées (il repose sur des distances) ; et il ne fournit pas de probabilités, celles de <code>predict_proba</code> venant d'une calibration de Platt ajoutée après coup, qui coûte une validation croisée supplémentaire. Il reste excellent quand les exemples sont peu nombreux et les variables nombreuses — chimiométrie, bio-informatique, spectroscopie.</p>
 
-    <h2 id="arbres">4. Arbres de décision</h2>
-    <p>Un arbre CART partitionne récursivement l'espace par des coupes axe-parallèles. À chaque nœud, il choisit la variable et le seuil qui minimisent l'impureté des enfants : indice de Gini \(\sum_k p_k(1-p_k)\) ou entropie en classification, variance en régression.</p>
+    <h2 id="arbres">5. Arbres de décision</h2>
+    <p>Un arbre CART partitionne récursivement l'espace par des coupes perpendiculaires aux axes. À chaque nœud, il teste toutes les variables et tous les seuils possibles, et retient la coupe qui rend les enfants les plus « purs ».</p>
 
-    <p><strong>Avantages</strong> : aucun prétraitement (insensible aux échelles et aux transformations monotones), gestion naturelle des variables catégorielles et des interactions, lecture directe des règles. <strong>Défaut rédhibitoire</strong> : un arbre profond mémorise, un arbre court sous-apprend, et surtout l'arbre est <em>instable</em> — changer quelques points d'entraînement peut produire une structure entièrement différente. Cette instabilité est précisément ce que les méthodes d'ensemble vont transformer en atout.</p>
+    <div class="code-label">le critère d'impureté, sur un exemple</div>
+    <div class="code-block"><pre>Nœud parent : 100 exemples, 50 positifs → Gini = 1 - (0,5² + 0,5²) = 0,500
 
-    <h2 id="foret">5. Bagging et forêts aléatoires</h2>
-    <p>Le <strong>bagging</strong> entraîne \(B\) modèles sur des échantillons bootstrap et moyenne leurs prédictions. Si les modèles étaient indépendants, la variance serait divisée par \(B\) ; en pratique ils sont corrélés puisqu'ils voient presque les mêmes données, et le gain est plus modeste. La <strong>forêt aléatoire</strong> ajoute une seconde source d'aléa pour décorréler davantage : à chaque nœud, seules \(m\) variables tirées au hasard sont candidates (typiquement \(\sqrt{p}\) en classification, \(p/3\) en régression). Chaque arbre devient un peu moins bon, mais l'ensemble s'améliore nettement.</p>
+Coupe candidate A : surface &lt; 60
+  gauche  40 exemples, 10 positifs → Gini = 1 - (0,25² + 0,75²) = 0,375
+  droite  60 exemples, 40 positifs → Gini = 1 - (0,67² + 0,33²) = 0,444
+  impureté pondérée = 0,4×0,375 + 0,6×0,444 = 0,417   → gain 0,083
+
+Coupe candidate B : ville = Lyon
+  gauche  50 exemples, 45 positifs → Gini = 0,180
+  droite  50 exemples,  5 positifs → Gini = 0,180
+  impureté pondérée = 0,180                            → gain 0,320  ← RETENUE</pre></div>
+
+    <p>L'indice de Gini \(\sum_k p_k(1-p_k)\) vaut 0 pour un nœud pur et 0,5 pour un nœud parfaitement mélangé (en binaire). L'entropie donne des résultats très proches ; en régression, on minimise la variance intra-nœud.</p>
+
+    <p><strong>Avantages</strong> : aucun prétraitement (insensible aux échelles et à toute transformation monotone — prendre le logarithme d'une variable ne change strictement rien), gestion naturelle des variables catégorielles et des interactions, lecture directe des règles. <strong>Défaut rédhibitoire</strong> : un arbre profond mémorise, un arbre court sous-apprend, et surtout l'arbre est <em>instable</em> — changer quelques points d'entraînement peut produire une structure entièrement différente. Cette instabilité est précisément ce que les méthodes d'ensemble vont transformer en atout.</p>
+
+    <h2 id="foret">6. Bagging et forêts aléatoires</h2>
+    <p>Le <strong>bagging</strong> (<em>bootstrap aggregating</em>) entraîne \(B\) modèles sur des échantillons bootstrap — tirés avec remise dans les données d'origine — et moyenne leurs prédictions. Si les modèles étaient indépendants, la variance serait divisée par \(B\) ; en pratique ils sont corrélés puisqu'ils voient presque les mêmes données, et le gain est plus modeste.</p>
+    <p>La <strong>forêt aléatoire</strong> ajoute une seconde source d'aléa pour les décorréler davantage : à chaque nœud, seules \(m\) variables tirées au hasard sont candidates (typiquement \(\sqrt{p}\) en classification, \(p/3\) en régression). Chaque arbre devient un peu moins bon individuellement, mais l'ensemble s'améliore nettement — c'est le compromis central de la méthode.</p>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 
 rf = RandomForestClassifier(
-    n_estimators=500,        # plus il y en a, mieux c'est (on sature) — jamais de surapprentissage ici
-    max_features="sqrt",     # la source de décorrélation
+    n_estimators=500,        # plus il y en a, mieux c'est (on sature) — jamais de
+                             # surapprentissage en augmentant ce nombre
+    max_features="sqrt",     # LA source de décorrélation
     min_samples_leaf=5,      # le vrai levier de régularisation
-    oob_score=True,          # évaluation gratuite sur les points hors-bootstrap
+    oob_score=True,          # évaluation gratuite (voir ci-dessous)
     n_jobs=-1, random_state=0,
 ).fit(X_train, y_train)
 
-print(rf.oob_score_)</pre></div>
+print(rf.oob_score_)
 
-    <p>L'échantillonnage bootstrap laisse environ 37 % des points hors de chaque arbre (\(\lim (1-1/n)^n = e^{-1}\)) : ces points <em>out-of-bag</em> fournissent une estimation de performance quasi gratuite, sans validation croisée.</p>
+# importance FIABLE : on mélange une colonne et on mesure la perte de performance
+imp = permutation_importance(rf, X_val, y_val, n_repeats=10, n_jobs=-1)
+for i in imp.importances_mean.argsort()[::-1][:10]:
+    print(f"{noms[i]:25s} {imp.importances_mean[i]:.4f} ± {imp.importances_std[i]:.4f}")</pre></div>
+
+    <p>L'échantillonnage bootstrap laisse environ 37 % des points hors de chaque arbre — c'est la limite de \((1-1/n)^n = e^{-1}\). Ces points <em>out-of-bag</em> fournissent une estimation de performance quasi gratuite, sans validation croisée : chaque observation est évaluée par les arbres qui ne l'ont pas vue.</p>
 
     <div class="warning-block">
-      <strong>L'importance par impureté est trompeuse.</strong> L'attribut <code>feature_importances_</code> (réduction moyenne d'impureté) est biaisé en faveur des variables à forte cardinalité et des variables continues : un identifiant aléatoire peut y figurer en tête. Utiliser <code>permutation_importance</code> sur un jeu de <em>validation</em> — on mesure la dégradation réelle quand on mélange la colonne — ou les valeurs de Shapley (section 10).
+      <strong>L'importance par impureté est trompeuse.</strong> L'attribut <code>feature_importances_</code> (réduction moyenne d'impureté) est biaisé en faveur des variables à forte cardinalité et des variables continues, simplement parce qu'elles offrent plus de coupes possibles : un identifiant aléatoire peut y figurer en tête. Utiliser <code>permutation_importance</code> sur un jeu de <em>validation</em> — comme ci-dessus — ou les valeurs de Shapley (section 11).
     </div>
 
-    <h2 id="boosting">6. Boosting : XGBoost et ses cousins</h2>
-    <p>Là où le bagging construit des modèles en parallèle pour réduire la variance, le boosting les construit <em>en séquence</em> pour réduire le biais : chaque nouveau modèle corrige les erreurs résiduelles des précédents.</p>
+    <h2 id="boosting">7. Boosting : XGBoost et ses cousins</h2>
+    <p>Là où le bagging construit des modèles en parallèle pour réduire la <em>variance</em>, le boosting les construit <strong>en séquence</strong> pour réduire le <em>biais</em> : chaque nouveau modèle corrige ce que les précédents ont raté.</p>
 
-    <p>Le <strong>gradient boosting</strong> formalise cela comme une descente de gradient dans l'espace des fonctions. À l'étape \(m\), on calcule les pseudo-résidus — l'opposé du gradient de la perte par rapport à la prédiction courante — et on ajuste un arbre \(h_m\) dessus :</p>
+    <div class="code-label">le mécanisme, sur trois itérations</div>
+    <div class="code-block"><pre>F₀ = moyenne(y) = 100          résidus : +20, -15, +5, -10
+  ↓ un petit arbre apprend ces RÉSIDUS, pas la cible
+F₁ = F₀ + ν·h₁                 résidus restants : +8, -6, +2, -4   (plus petits)
+  ↓ un nouvel arbre apprend les résidus RESTANTS
+F₂ = F₁ + ν·h₂                 résidus restants : +3, -2, +1, -1
+  ↓ …et ainsi de suite, sur des centaines d'arbres
+                               ν (learning rate) amortit chaque correction :
+                               petit ν = corrections prudentes = plus d'arbres</pre></div>
+
+    <p>Le <strong>gradient boosting</strong> généralise cette idée à n'importe quelle perte dérivable, en remplaçant le résidu par l'opposé du gradient de la perte par rapport à la prédiction courante — d'où le nom :</p>
     <div style="text-align:center;overflow-x:auto">\[ r_i^{(m)} = -\left[\frac{\partial\, \ell(y_i, F(x_i))}{\partial F(x_i)}\right]_{F = F_{m-1}}, \qquad F_m(x) = F_{m-1}(x) + \nu\, h_m(x) \]</div>
-    <p>Le taux d'apprentissage \(\nu\) (<em>shrinkage</em>) amortit chaque correction. Avec la perte quadratique, les pseudo-résidus sont exactement les résidus ordinaires — d'où le nom. XGBoost raffine en utilisant aussi la dérivée seconde (approximation de Newton) et en intégrant la régularisation directement dans le critère de coupe.</p>
+    <p>Avec la perte quadratique, ces pseudo-résidus sont exactement les résidus ordinaires, ce qui fait le lien avec le schéma ci-dessus. XGBoost raffine en utilisant aussi la dérivée seconde (approximation de Newton, module 7) et en intégrant la régularisation directement dans le critère de coupe.</p>
 
     <div class="code-label">Python — les hyperparamètres qui comptent vraiment</div>
     <div class="code-block"><pre>import xgboost as xgb
 
 modele = xgb.XGBClassifier(
     n_estimators=2000,          # volontairement grand : l'early stopping tranchera
-    learning_rate=0.05,         # plus il est bas, plus il faut d'arbres (compromis n°1)
-    max_depth=6,                # 3-8 typiquement ; profondeur = capacité d'interaction
+    learning_rate=0.05,         # plus il est bas, plus il faut d'arbres : compromis n°1
+    max_depth=6,                # 3-8 typiquement ; profondeur = ordre des interactions
+                                # capturées (profondeur 3 = interactions à 3 variables)
     min_child_weight=5,         # poids minimal dans une feuille : anti-surapprentissage
-    subsample=0.8,              # échantillonnage des lignes : bruit utile
-    colsample_bytree=0.8,       # échantillonnage des colonnes : décorrélation
+    subsample=0.8,              # 80 % des LIGNES par arbre : du bruit utile
+    colsample_bytree=0.8,       # 80 % des COLONNES par arbre : décorrélation
     reg_lambda=1.0,             # L² sur les poids des feuilles
     eval_metric="aucpr",
-    early_stopping_rounds=100,
+    early_stopping_rounds=100,  # arrête quand la validation ne progresse plus
 )
 modele.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
-print(modele.best_iteration)</pre></div>
+print(f"meilleur nombre d'arbres : {modele.best_iteration}")</pre></div>
 
     <div class="code-label">les trois implémentations</div>
     <div class="code-block"><pre>XGBoost     la référence, très réglable, excellent support GPU, écosystème mature.
-LightGBM    croissance par feuille (leaf-wise) et binning en histogrammes : nettement
-            plus rapide sur grands jeux. Peut surapprendre si num_leaves est trop grand.
-CatBoost    gère nativement les catégorielles avec un target encoding ordonné (sans fuite),
-            excellents résultats par défaut. Souvent le meilleur choix quand il y a
-            beaucoup de variables catégorielles à forte cardinalité.</pre></div>
+LightGBM    croissance par FEUILLE (leaf-wise) plutôt que par niveau, et binning en
+            histogrammes : nettement plus rapide sur grands jeux. Peut surapprendre
+            si num_leaves est trop grand.
+CatBoost    gère nativement les catégorielles avec un target encoding ordonné (donc
+            sans fuite, module 10), excellents résultats par défaut. Souvent le
+            meilleur choix quand il y a beaucoup de variables catégorielles à
+            forte cardinalité.</pre></div>
 
     <p>Une bonne pratique : commencer par <code>HistGradientBoostingClassifier</code> de scikit-learn — pas de dépendance supplémentaire, gestion native des valeurs manquantes, performances très proches. Le réglage fin des variantes vient après, et rapporte généralement quelques pourcents, pas un changement de nature.</p>
 
     <div class="step-block">
       <h4>Pourquoi le boosting domine le tabulaire</h4>
-      <p>Les données tabulaires sont hétérogènes (échelles et natures différentes), pleines de relations non lisses (effets de seuil) et souvent de taille modeste. Les arbres découpent l'espace sans hypothèse de régularité, sont invariants aux transformations monotones et exploitent naturellement les interactions. Un réseau de neurones doit <em>apprendre</em> tout cela à partir des données, sans le biais inductif qui l'y aiderait. Les comparaisons systématiques publiées depuis 2022 continuent de donner l'avantage au boosting sur ce terrain, malgré les architectures tabulaires spécialisées.</p>
+      <p>Les données tabulaires sont hétérogènes (des échelles et des natures différentes dans la même ligne), pleines de relations non lisses (effets de seuil : « à partir de 3 pièces », « au-delà de 65 ans ») et souvent de taille modeste. Les arbres découpent l'espace sans aucune hypothèse de régularité, sont invariants aux transformations monotones et exploitent naturellement les interactions. Un réseau de neurones doit <em>apprendre</em> tout cela à partir des données, sans le biais inductif qui l'y aiderait (module 13). Les comparaisons systématiques publiées depuis 2022 continuent de donner l'avantage au boosting sur ce terrain, malgré les architectures tabulaires spécialisées.</p>
     </div>
 
-    <h2 id="ensembles">7. Stacking et méthodes d'ensemble</h2>
+    <h2 id="ensembles">8. Stacking</h2>
     <p>Trois façons de combiner des modèles : le <strong>vote</strong> ou la moyenne (simple, robuste), le <strong>blending</strong> pondéré (poids optimisés sur un jeu de validation) et le <strong>stacking</strong>, où un méta-modèle apprend à combiner les prédictions des modèles de base. La condition de réussite est toujours la même : les modèles combinés doivent <em>se tromper différemment</em>. Assembler cinq gradient boosting aux réglages voisins n'apporte rien ; combiner un modèle linéaire, un boosting et un k-NN apporte souvent quelques points.</p>
-    <p>Le stacking impose une précaution stricte : les prédictions servant à entraîner le méta-modèle doivent être produites <strong>hors échantillon</strong> (par validation croisée), sinon le méta-modèle apprend sur des prédictions déjà ajustées et la fuite est garantie. <code>StackingClassifier</code> s'en charge.</p>
+    <p>Le stacking impose une précaution stricte : les prédictions servant à entraîner le méta-modèle doivent être produites <strong>hors échantillon</strong>, par validation croisée. Sinon le méta-modèle apprend sur des prédictions déjà ajustées sur ces points, et la fuite est garantie. <code>StackingClassifier</code> s'en charge automatiquement.</p>
 
-    <h2 id="clustering">8. Clustering et détection d'anomalies</h2>
-    <p><strong>k-means</strong> minimise l'inertie intra-classe \(\sum_k \sum_{x \in C_k}\|x-\mu_k\|^2\) en alternant affectation au centre le plus proche et recalcul des centres. Rapide, simple, mais il suppose des groupes <em>sphériques de tailles comparables</em>, exige de fixer \(k\), dépend de l'initialisation (d'où <code>k-means++</code>) et affecte forcément <em>tous</em> les points, y compris les aberrants.</p>
+    <h2 id="clustering">9. Clustering et détection d'anomalies</h2>
+    <p><strong>k-means</strong> minimise l'inertie intra-classe \(\sum_k \sum_{x \in C_k}\|x-\mu_k\|^2\) en alternant deux étapes jusqu'à stabilisation :</p>
+    <div class="code-block"><pre>1. AFFECTATION : chaque point rejoint le centre le plus proche
+2. MISE À JOUR : chaque centre se replace au barycentre de ses points
+   → répéter. L'inertie décroît à chaque étape, donc l'algorithme converge
+     (vers un optimum LOCAL, qui dépend de l'initialisation → k-means++)</pre></div>
+    <p>Rapide et simple, mais il suppose des groupes <em>sphériques de tailles comparables</em>, exige de fixer \(k\) à l'avance, et affecte forcément <em>tous</em> les points — y compris les aberrants, qui déplacent les centres.</p>
 
-    <div class="code-label">les alternatives</div>
-    <div class="code-block"><pre>DBSCAN     groupes de forme quelconque, détecte le bruit, pas de k à fixer.
-           Mais deux paramètres sensibles (eps, min_samples) et souffre en grande dimension.
-HDBSCAN    version hiérarchique de DBSCAN : plus robuste, un seul paramètre principal.
-           Mon défaut quand la structure des groupes est inconnue.
-Hiérarchique  produit un dendrogramme : on choisit le nombre de groupes APRÈS coup.
-           O(n²) ou O(n³) : réservé aux petits jeux, mais très parlant visuellement.
-GMM        mélange de gaussiennes : affectation probabiliste, groupes ellipsoïdaux,
-           sélection de k par BIC. Le bon choix quand les groupes se chevauchent.</pre></div>
+    <div class="code-label">les alternatives, et quand les préférer</div>
+    <div class="code-block"><pre>DBSCAN        groupes de forme quelconque, détecte le BRUIT (points non affectés),
+              pas de k à fixer. Mais deux paramètres sensibles (eps, min_samples)
+              et souffre en grande dimension.
+HDBSCAN       version hiérarchique de DBSCAN : plus robuste, un seul paramètre
+              principal. Mon défaut quand la structure des groupes est inconnue.
+Hiérarchique  produit un dendrogramme : on choisit le nombre de groupes APRÈS coup,
+              en coupant l'arbre. O(n²) : réservé aux petits jeux, mais très parlant.
+GMM           mélange de gaussiennes : affectation PROBABILISTE, groupes
+              ellipsoïdaux, sélection de k par BIC. Le bon choix quand les groupes
+              se chevauchent.</pre></div>
 
-    <p><strong>Évaluer un clustering</strong> est intrinsèquement ambigu, puisqu'il n'y a pas de vérité terrain. Le coefficient de <em>silhouette</em> (à quel point un point est proche de son groupe comparé au groupe voisin) et l'indice de Davies-Bouldin donnent une indication ; la méthode du coude sur l'inertie est populaire mais souvent illisible. Le vrai critère reste l'utilité : un clustering est bon s'il produit des segments sur lesquels on peut agir différemment.</p>
+    <p><strong>Évaluer un clustering</strong> est intrinsèquement ambigu, puisqu'il n'y a pas de vérité terrain. Le coefficient de <em>silhouette</em> compare, pour chaque point, sa distance moyenne à son groupe et au groupe voisin le plus proche : il varie de −1 à 1, et une valeur négative signale un point probablement mal affecté. La méthode du coude sur l'inertie est populaire mais souvent illisible. Le vrai critère reste l'utilité : un clustering est bon s'il produit des segments sur lesquels on peut agir différemment.</p>
 
-    <p><strong>Détection d'anomalies</strong> : <code>IsolationForest</code> isole les points atypiques par découpes aléatoires (un point anormal s'isole en peu de coupes) — rapide, sans hypothèse de distribution ; <code>LocalOutlierFactor</code> compare la densité locale d'un point à celle de ses voisins ; l'erreur de reconstruction d'une PCA (module 7) ou d'un autoencodeur (module 14) fonctionne très bien quand les données ont une structure de faible rang.</p>
+    <p><strong>Détection d'anomalies</strong> : <code>IsolationForest</code> isole les points atypiques par découpes aléatoires — un point anormal se retrouve seul en peu de coupes, ce qui donne un score directement exploitable ; <code>LocalOutlierFactor</code> compare la densité locale d'un point à celle de ses voisins ; et l'erreur de reconstruction d'une PCA (module 7) ou d'un autoencodeur (module 14) fonctionne très bien quand les données ont une structure de faible rang.</p>
 
-    <h2 id="hyper">9. Recherche d'hyperparamètres</h2>
+    <h2 id="hyper">10. Recherche d'hyperparamètres</h2>
     <div class="code-label">stratégies</div>
-    <div class="code-block"><pre>GridSearchCV            exhaustif sur une grille. Explose combinatoirement ; à réserver
-                        à 2-3 paramètres peu nombreux.
-RandomizedSearchCV      tirage aléatoire. Meilleur que la grille dès 3+ paramètres :
-                        seuls quelques-uns comptent vraiment, et l'aléatoire les explore
-                        sur plus de valeurs distinctes.
-HalvingRandomSearchCV   successive halving : beaucoup de candidats sur peu de données,
-                        puis on élimine et on affine. Excellent rapport coût/résultat.
-Optuna (TPE)            recherche bayésienne : un modèle probabiliste guide les essais.
-                        Le meilleur choix quand chaque entraînement est coûteux (module 17).</pre></div>
+    <div class="code-block"><pre>GridSearchCV           exhaustif sur une grille. Explose combinatoirement ; à réserver
+                       à 2-3 paramètres peu nombreux.
+RandomizedSearchCV     tirage aléatoire. Meilleur que la grille dès 3+ paramètres :
+                       seuls quelques-uns comptent vraiment, et l'aléatoire les
+                       explore sur bien plus de valeurs distinctes.
+HalvingRandomSearchCV  successive halving : beaucoup de candidats sur peu de données,
+                       puis on élimine les pires et on affine. Excellent rapport
+                       coût/résultat.
+Optuna (TPE)           recherche bayésienne : un modèle probabiliste guide les essais.
+                       Le meilleur choix quand chaque entraînement est coûteux (module 17).</pre></div>
 
-    <p>Deux règles pratiques : chercher sur une échelle <em>logarithmique</em> pour les paramètres multiplicatifs (taux d'apprentissage, \(C\), \(\lambda\)), et se rappeler que le gain d'un réglage fin (quelques pourcents) est presque toujours inférieur au gain d'une bonne feature ou de données supplémentaires. Optimiser 200 configurations en regardant le score de test transforme par ailleurs ce test en jeu d'entraînement (module 10).</p>
+    <div class="code-label">Python — Optuna, avec élagage des essais sans espoir</div>
+    <div class="code-block"><pre>import optuna
 
-    <h2 id="interpret">10. Interprétabilité</h2>
+def objectif(essai):
+    params = {
+        # échelle LOGARITHMIQUE pour les paramètres multiplicatifs
+        "learning_rate": essai.suggest_float("learning_rate", 1e-3, 0.3, log=True),
+        "num_leaves":    essai.suggest_int("num_leaves", 15, 255, log=True),
+        "min_child_samples": essai.suggest_int("min_child_samples", 5, 200),
+        "subsample":     essai.suggest_float("subsample", 0.5, 1.0),
+        "reg_lambda":    essai.suggest_float("reg_lambda", 1e-3, 10, log=True),
+    }
+    scores = cross_val_score(LGBMClassifier(**params), X, y, cv=5,
+                             scoring="average_precision")
+    return scores.mean()
+
+etude = optuna.create_study(direction="maximize",
+                            pruner=optuna.pruners.MedianPruner())
+etude.optimize(objectif, n_trials=100, n_jobs=4)
+print(etude.best_params, etude.best_value)
+optuna.visualization.plot_param_importances(etude)   # quels paramètres comptaient</pre></div>
+
+    <p>Deux règles pratiques : chercher sur une échelle <em>logarithmique</em> pour les paramètres multiplicatifs (taux d'apprentissage, \(C\), \(\lambda\)), et se rappeler que le gain d'un réglage fin — quelques pourcents — est presque toujours inférieur au gain d'une bonne variable ou de données supplémentaires. Optimiser 200 configurations en regardant le score de test transforme par ailleurs ce test en jeu d'entraînement (module 10).</p>
+
+    <h2 id="interpret">11. Interprétabilité</h2>
     <ul>
-      <li><strong>Importance par permutation</strong> — mélanger une colonne et mesurer la perte de performance. Global, fiable, agnostique au modèle ; à calculer sur un jeu de validation. Attention aux variables corrélées : mélanger l'une alors que l'autre porte la même information sous-estime les deux.</li>
-      <li><strong>PDP et ICE</strong> — le <em>partial dependence plot</em> montre l'effet moyen d'une variable sur la prédiction ; les courbes ICE font de même individu par individu et révèlent les effets hétérogènes que la moyenne masque.</li>
-      <li><strong>SHAP</strong> — issu de la théorie des jeux, il attribue à chaque feature sa contribution marginale moyenne sur tous les ordres d'inclusion possibles. Seule méthode à satisfaire des axiomes d'équité (efficacité, symétrie, absence d'effet pour une variable inutile), avec une version exacte et rapide pour les arbres (<code>TreeSHAP</code>). Elle fournit à la fois des explications locales (pourquoi <em>cette</em> prédiction ?) et globales.</li>
+      <li><strong>Importance par permutation</strong> — mélanger une colonne et mesurer la perte de performance. Global, fiable, agnostique au modèle ; à calculer sur un jeu de <em>validation</em>. Attention aux variables corrélées : mélanger l'une alors que l'autre porte la même information sous-estime les deux.</li>
+      <li><strong>PDP et ICE</strong> — le <em>partial dependence plot</em> montre l'effet moyen d'une variable sur la prédiction, en faisant varier cette variable pour tous les individus ; les courbes ICE font de même individu par individu et révèlent les effets hétérogènes que la moyenne masque (si la moitié des courbes monte et l'autre descend, le PDP est plat et trompeur).</li>
+      <li><strong>SHAP</strong> — issu de la théorie des jeux, il attribue à chaque variable sa contribution marginale moyenne sur tous les ordres d'inclusion possibles. C'est la seule méthode à satisfaire des axiomes d'équité (efficacité : les contributions somment à l'écart entre la prédiction et la moyenne ; symétrie ; nullité d'une variable inutile), avec une version exacte et rapide pour les arbres.</li>
     </ul>
 
     <div class="code-label">Python</div>
@@ -221,42 +341,44 @@ explainer = shap.TreeExplainer(modele)
 valeurs = explainer(X_val)
 
 shap.plots.beeswarm(valeurs)        # vue globale : importance ET sens de l'effet
-shap.plots.waterfall(valeurs[42])   # explication d'une prédiction individuelle</pre></div>
+shap.plots.waterfall(valeurs[42])   # pourquoi CETTE prédiction : contribution par variable
+shap.plots.scatter(valeurs[:, "surface"], color=valeurs)   # forme de l'effet + interaction</pre></div>
 
     <div class="warning-block">
-      <strong>Expliquer n'est pas comprendre la réalité.</strong> SHAP explique ce que <em>le modèle</em> fait, pas ce que le monde fait. Une contribution SHAP élevée pour une variable ne signifie ni qu'elle cause la cible, ni qu'agir dessus changerait quoi que ce soit (module 8). C'est un outil de débogage et de confiance, pas un instrument d'inférence causale.
+      <strong>Expliquer n'est pas comprendre la réalité.</strong> SHAP explique ce que <em>le modèle</em> fait, pas ce que le monde fait. Une contribution SHAP élevée ne signifie ni que la variable cause la cible, ni qu'agir dessus changerait quoi que ce soit (module 8). C'est un outil de débogage et de confiance — et il est excellent pour cela : une variable inattendue en tête est souvent le signe d'une fuite de données.
     </div>
 
-    <h2 id="comparatif">11. Tableau comparatif et pièges</h2>
+    <h2 id="comparatif">12. Tableau comparatif et pièges</h2>
     <div class="code-label">choisir une famille</div>
-    <div class="code-block"><pre>Famille          Forces                              Faiblesses                      Quand
-─────────────────────────────────────────────────────────────────────────────────────────
-Linéaire/logit   interprétable, rapide, calibré,     suppose la linéarité,           baseline,
-                 fiable en petit n                   sensible à la colinéarité       explication
-Régularisé       gère p &gt; n, sélectionne (lasso)     réglage de λ nécessaire         haute dimension
-k-NN             aucun apprentissage, non linéaire   coûteux en prédiction,          petits jeux,
-                                                     fléau de la dimension           recommandation
-Naive Bayes      très rapide, marche en très         hypothèse d'indépendance        texte,
-                 haute dimension                     irréaliste                      baseline NLP
-SVM noyau        frontières complexes, robuste       O(n²), pas de probas,           n petit,
-                                                     opaque, standardisation         p grand
-Arbre            lisible, sans prétraitement         instable, peu performant seul   explication
-Random Forest    robuste, peu de réglage, OOB        modèle volumineux, moins        défaut solide
-                                                     précis que le boosting
-Gradient boosting meilleur sur tabulaire, gère       plus de réglages, sensible      production
-                 les manquants, early stopping       au bruit des étiquettes         tabulaire
-Clustering       découverte non supervisée           évaluation ambiguë              segmentation</pre></div>
+    <div class="code-block"><pre>Famille           Forces                         Faiblesses                  Quand
+──────────────────────────────────────────────────────────────────────────────────────
+Linéaire/logit    interprétable, rapide,         suppose la linéarité,       baseline,
+                  calibré, fiable en petit n     sensible à la colinéarité   explication
+Régularisé        gère p &gt; n, sélectionne        réglage de λ nécessaire     haute dimension
+k-NN              aucun apprentissage,           coûteux en prédiction,      petits jeux,
+                  non linéaire                   fléau de la dimension       recommandation
+Naive Bayes       très rapide, marche en très    hypothèse d'indépendance    texte,
+                  haute dimension                irréaliste                  baseline NLP
+SVM noyau         frontières complexes, robuste  O(n²), pas de probas,       n petit,
+                                                 opaque, standardisation     p grand
+Arbre             lisible, sans prétraitement    instable, peu performant    explication
+                                                 seul
+Random Forest     robuste, peu de réglage, OOB   modèle volumineux, moins    défaut solide
+                                                 précis que le boosting
+Gradient boosting meilleur sur tabulaire, gère   plus de réglages, sensible  production
+                  les manquants, early stopping  au bruit des étiquettes     tabulaire
+Clustering        découverte non supervisée      évaluation ambiguë          segmentation</pre></div>
 
     <div class="step-block">
       <h4>Les pièges qui reviennent le plus souvent</h4>
       <ul>
         <li><strong>Fuite de données</strong> — la cause n° 1 des scores mirobolants (module 10).</li>
-        <li><strong>Oublier la standardisation</strong> — pour les modèles à distance ou à gradient (k-NN, SVM, linéaires, réseaux). Les arbres, eux, s'en moquent.</li>
-        <li><strong>Seuil laissé à 0,5</strong> — c'est une valeur par défaut, pas une décision.</li>
+        <li><strong>Oublier la standardisation</strong> — pour les modèles à distance ou à gradient (k-NN, SVM, linéaires, réseaux). Les arbres, eux, s'en moquent complètement.</li>
+        <li><strong>Seuil laissé à 0,5</strong> — c'est une valeur par défaut, pas une décision (module 22).</li>
         <li><strong>Optimiser la mauvaise métrique</strong> — accuracy en classes déséquilibrées (module 7).</li>
         <li><strong>Comparer des modèles sur un seul découpage</strong> — l'écart observé est souvent dans le bruit d'échantillonnage.</li>
         <li><strong>Extrapoler</strong> — les modèles à base d'arbres prédisent une constante hors du domaine vu à l'entraînement : ils n'extrapolent <em>pas</em>. Sur une tendance temporelle croissante, c'est fatal, et un modèle linéaire fait mieux.</li>
-        <li><strong>Ignorer la calibration</strong> — nécessaire dès qu'on utilise la probabilité elle-même, et non seulement l'ordre.</li>
+        <li><strong>Ignorer la calibration</strong> — nécessaire dès qu'on utilise la probabilité elle-même, et pas seulement l'ordre.</li>
       </ul>
     </div>
 
@@ -268,7 +390,7 @@ Clustering       découverte non supervisée           évaluation ambiguë     
         <li>Bagging réduit la variance, boosting réduit le biais ; sur tabulaire, le gradient boosting est le défaut raisonnable.</li>
         <li>Se méfier de <code>feature_importances_</code> ; préférer permutation ou SHAP sur un jeu de validation.</li>
         <li>Le clustering n'a pas de vérité terrain : le juger à son utilité.</li>
-        <li>Une bonne feature vaut mieux qu'un réglage fin d'hyperparamètres.</li>
+        <li>Une bonne variable vaut mieux qu'un réglage fin d'hyperparamètres.</li>
       </ul>
     </div>
   </div>
