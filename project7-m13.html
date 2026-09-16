@@ -45,7 +45,7 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Tout le cours repose sur un pari implicite : un modèle ajusté sur \(n\) exemples fonctionnera sur des données jamais vues. Rien ne le garantit a priori — un modèle peut parfaitement mémoriser son jeu d'entraînement sans rien avoir appris. Ce module expose ce que la théorie sait démontrer, ce qu'elle ne sait pas expliquer (notamment le succès des réseaux profonds), et ce qu'un praticien doit en retenir.</p>
+    <p>Tout le cours repose sur un pari implicite : un modèle ajusté sur \(n\) exemples fonctionnera sur des données jamais vues. Rien ne le garantit a priori — un modèle peut parfaitement mémoriser son jeu d'entraînement sans rien avoir appris. Ce module expose ce que la théorie sait démontrer, ce qu'elle n'explique toujours pas (notamment le succès des réseaux profonds), et ce qu'un praticien doit en retenir.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
@@ -62,78 +62,103 @@
     </div>
 
     <h2 id="pac">1. Le cadre PAC</h2>
-    <p>Le cadre <em>probablement approximativement correct</em> (Valiant, 1984) formalise l'objectif : avec une probabilité d'au moins \(1-\delta\) sur le tirage de l'échantillon, l'erreur réelle doit être proche de l'erreur empirique. On veut borner l'écart de généralisation :</p>
+    <p>Le cadre <em>probablement approximativement correct</em> (Valiant, 1984) formalise l'objectif : avec une probabilité d'au moins \(1-\delta\) sur le tirage de l'échantillon (« probablement »), l'erreur réelle doit être proche de l'erreur empirique (« approximativement correct »). On veut donc borner l'écart de généralisation :</p>
     <div style="text-align:center;overflow-x:auto">\[ R(h) - \hat{R}_n(h), \qquad R(h)=\mathbb{E}_{(x,y)\sim\mathcal D}\big[\ell(h(x),y)\big], \quad \hat R_n(h)=\frac1n\sum_{i=1}^n \ell(h(x_i),y_i) \]</div>
 
-    <p>Pour une hypothèse <em>fixée à l'avance</em>, l'inégalité de Hoeffding suffit : l'écart est en \(O(1/\sqrt{n})\). Mais on choisit \(h\) <em>après</em> avoir vu les données, parmi toute une classe \(\mathcal{H}\) — et le maximum d'un grand nombre d'écarts est bien plus grand que chacun d'eux. D'où une borne uniforme, qui pour une classe finie s'écrit :</p>
+    <p>Pour une hypothèse <em>fixée à l'avance</em>, c'est facile : l'erreur empirique est une moyenne de variables aléatoires bornées, et l'inégalité de Hoeffding donne un écart en \(O(1/\sqrt{n})\). Mais c'est justement ce qu'on ne fait pas : on choisit \(h\) <em>après</em> avoir vu les données, en prenant celle qui minimise l'erreur empirique parmi toute une classe \(\mathcal{H}\). Or le maximum d'un grand nombre d'écarts est bien plus grand que chacun d'eux pris isolément — c'est le même phénomène que les comparaisons multiples du module 8. Il faut donc une borne <em>uniforme</em>, valable simultanément pour toutes les hypothèses de la classe :</p>
     <div style="text-align:center;overflow-x:auto">\[ R(h) \;\leq\; \hat R_n(h) + \sqrt{\frac{\log|\mathcal{H}| + \log(1/\delta)}{2n}} \qquad \text{pour tout } h \in \mathcal{H} \]</div>
 
-    <p>La structure de ce résultat est l'essentiel : l'erreur réelle est majorée par l'erreur observée plus un terme de <strong>complexité</strong> divisé par \(\sqrt{n}\). Plus la classe de modèles est riche, plus il faut de données pour que l'erreur empirique reste informative. C'est la formalisation exacte du surapprentissage, et la justification théorique de la régularisation (module 7).</p>
+    <p>La structure de ce résultat est l'essentiel : <strong>erreur réelle ≤ erreur observée + terme de complexité / \(\sqrt{n}\)</strong>. Plus la classe de modèles est riche, plus il faut de données pour que l'erreur empirique reste informative. C'est la formalisation exacte du surapprentissage, et la justification théorique de la régularisation (module 7).</p>
 
     <h2 id="vc">2. Dimension VC et complexité de Rademacher</h2>
-    <p>Pour une classe infinie — tous les hyperplans, tous les réseaux d'une architecture donnée —, \(\log|\mathcal H|\) n'a plus de sens. La <strong>dimension de Vapnik-Chervonenkis</strong> le remplace : c'est le plus grand nombre de points que la classe peut <em>pulvériser</em>, c'est-à-dire séparer selon les \(2^d\) étiquetages possibles. Un hyperplan en dimension \(p\) a une dimension VC de \(p+1\). La borne devient :</p>
+    <p>Pour une classe infinie — tous les hyperplans, tous les réseaux d'une architecture donnée —, \(\log|\mathcal H|\) n'a plus de sens. La <strong>dimension de Vapnik-Chervonenkis</strong> le remplace : c'est le plus grand nombre de points que la classe peut <em>pulvériser</em>, c'est-à-dire séparer correctement quelle que soit la façon de les étiqueter.</p>
+
+    <div class="code-label">l'exemple canonique : une droite dans le plan</div>
+    <div class="code-block"><pre>3 points non alignés : une droite peut réaliser les 2³ = 8 étiquetages possibles
+   ○ ○        ● ○        ● ●        ○ ●
+    ○          ○          ○          ●     … toutes les combinaisons sont
+  possible   possible   possible   possible    séparables par une droite
+
+4 points : l'étiquetage "en diagonale" (XOR) est IMPOSSIBLE
+   ● ○
+   ○ ●    aucune droite ne sépare les ● des ○
+
+→ dimension VC d'une droite dans le plan = 3, soit p + 1 avec p = 2 dimensions</pre></div>
+
+    <p>La borne devient alors :</p>
     <div style="text-align:center;overflow-x:auto">\[ R(h) \leq \hat R_n(h) + O\!\left(\sqrt{\frac{d_{VC}\log(n/d_{VC}) + \log(1/\delta)}{n}}\right) \]</div>
-    <p>La lecture pratique : il faut environ autant d'exemples que de « degrés de liberté effectifs » pour espérer généraliser. La <strong>complexité de Rademacher</strong> raffine en mesurant la capacité de la classe à s'ajuster à du <em>bruit pur</em> (des étiquettes tirées au hasard) — une définition plus fine, dépendante des données et de leur distribution, donc souvent bien moins pessimiste.</p>
+    <p>La lecture pratique : il faut environ autant d'exemples que de « degrés de liberté effectifs » pour espérer généraliser. La <strong>complexité de Rademacher</strong> raffine cette idée en mesurant directement la capacité de la classe à s'ajuster à du <em>bruit pur</em> — on remplace les étiquettes par des tirages à pile ou face et on regarde jusqu'où le modèle parvient à les suivre. C'est une définition plus fine, dépendante des données et de leur distribution, donc souvent bien moins pessimiste.</p>
 
     <div class="step-block">
       <h4>Ce que ces bornes valent réellement</h4>
-      <p>Elles sont <em>pire cas</em>, valables pour toute distribution, et uniformes sur toute la classe. Cela les rend correctes mais très lâches : appliquées à un réseau moderne, dont le nombre de paramètres dépasse largement le nombre d'exemples, elles donnent des bornes supérieures à 1 — donc vides, puisqu'une probabilité d'erreur est déjà inférieure à 1. Leur valeur est <strong>conceptuelle</strong> : elles disent <em>quelles quantités</em> gouvernent la généralisation (complexité effective, taille d'échantillon, marge), pas <em>combien</em> vaut l'erreur. Confondre les deux mène à des conclusions fausses dans les deux sens.</p>
+      <p>Elles sont <em>pire cas</em>, valables pour toute distribution, et uniformes sur toute la classe. Cela les rend correctes mais très lâches : appliquées à un réseau moderne, dont le nombre de paramètres dépasse largement le nombre d'exemples, elles donnent des bornes supérieures à 1 — donc vides, puisqu'une probabilité d'erreur est déjà inférieure à 1. Leur valeur est <strong>conceptuelle</strong> : elles disent <em>quelles quantités</em> gouvernent la généralisation (complexité effective, taille d'échantillon, marge), pas <em>combien</em> vaut l'erreur. Confondre les deux mène à des conclusions fausses dans les deux sens — croire qu'un grand modèle ne peut pas généraliser, ou croire qu'une borne garantit quoi que ce soit en pratique.</p>
     </div>
 
     <h2 id="nfl">3. Pas de repas gratuit : le biais inductif</h2>
-    <p>Le théorème du <em>no free lunch</em> (Wolpert) énonce que, moyenné sur <strong>toutes</strong> les fonctions cibles possibles, tous les algorithmes d'apprentissage ont la même performance. Aucun n'est universellement supérieur. Ce résultat, souvent cité comme une curiosité, dit quelque chose de fondamental : <strong>apprendre est impossible sans hypothèse préalable</strong>. Ce qui fonctionne en pratique fonctionne parce que le monde réel n'est pas un tirage uniforme parmi toutes les fonctions : il est structuré — régularité, localité, hiérarchie, invariances, parcimonie.</p>
-    <p>D'où la notion centrale de <strong>biais inductif</strong> : l'ensemble des hypothèses qu'un modèle incorpore avant de voir les données. Une convolution suppose la localité et l'invariance par translation ; un arbre suppose des effets de seuil ; un noyau RBF suppose une régularité ; un modèle linéaire suppose l'additivité ; une attention suppose des dépendances à longue portée. Choisir un modèle, c'est parier sur la structure du problème — et le module 14 le formulait déjà ainsi. La conséquence pratique est nette : <em>la connaissance du domaine est un gain de performance</em>, pas un supplément d'âme. Imposer une symétrie connue ou une loi de conservation (module 19) vaut souvent mieux que dix fois plus de données.</p>
+    <p>Le théorème du <em>no free lunch</em> (Wolpert) énonce que, moyenné sur <strong>toutes</strong> les fonctions cibles possibles, tous les algorithmes d'apprentissage ont exactement la même performance. Aucun n'est universellement supérieur ; un algorithme qui bat un autre sur une classe de problèmes lui est nécessairement inférieur sur une autre.</p>
+    <p>Souvent cité comme une curiosité, ce résultat dit en réalité quelque chose de fondamental : <strong>apprendre est impossible sans hypothèse préalable</strong>. Si toutes les fonctions étaient également plausibles, observer un million de points ne dirait rien du suivant — n'importe quelle valeur resterait compatible avec les données. Ce qui fonctionne en pratique fonctionne parce que le monde réel n'est pas un tirage uniforme parmi toutes les fonctions : il est structuré — régulier, local, hiérarchique, invariant par certaines transformations, parcimonieux.</p>
+
+    <div class="code-label">le biais inductif de chaque famille</div>
+    <div class="code-block"><pre>Modèle linéaire   l'effet de chaque variable est additif et proportionnel
+Arbre             la réponse est constante par morceaux ; effets de SEUIL
+Noyau RBF         deux points proches ont des valeurs proches ; fonction LISSE
+Convolution       l'information est LOCALE et invariante par translation
+Attention         des dépendances existent entre positions éloignées
+GNN               l'information circule le long des ARÊTES d'un graphe
+PINN / contrainte la solution obéit à une équation physique connue
+physique</pre></div>
+
+    <p>Choisir un modèle, c'est donc parier sur la structure du problème — le module 14 le formule déjà ainsi pour les architectures profondes. La conséquence pratique est nette : <em>la connaissance du domaine est un gain de performance</em>, pas un supplément d'âme. Imposer une symétrie connue, une monotonie ou une loi de conservation (module 19) vaut souvent mieux que dix fois plus de données.</p>
 
     <h2 id="double">4. Double descente et sur-paramétrisation</h2>
-    <p>La théorie classique prédit une courbe en U : l'erreur de test décroît puis remonte quand la capacité augmente. Les réseaux profonds contredisent apparemment ce tableau — un modèle à des milliards de paramètres ajusté à erreur d'entraînement nulle généralise très bien. La <strong>double descente</strong> réconcilie les observations :</p>
+    <p>La théorie classique prédit une courbe en U : l'erreur de test décroît puis remonte quand la capacité augmente. Les réseaux profonds contredisent apparemment ce tableau — un modèle à des milliards de paramètres, ajusté jusqu'à erreur d'entraînement nulle, généralise très bien. La <strong>double descente</strong> réconcilie les observations :</p>
 
     <div class="code-label">l'allure réelle de la courbe</div>
-    <div class="code-block"><pre>Régime SOUS-paramétré    capacité ↑ → erreur de test ↓ puis ↑   (le U classique)
-Seuil d'interpolation    capacité ≈ nombre d'exemples : PIC d'erreur. Le modèle atteint
-                         tout juste l'erreur nulle et n'a AUCUNE marge de manœuvre :
-                         la solution est unique et très instable.
-Régime SUR-paramétré     capacité ≫ n : l'erreur de test REDESCEND, souvent en dessous
-                         du meilleur point du premier régime.</pre></div>
+    <div class="code-block"><pre>  erreur │                    ╱╲  ← pic au SEUIL D'INTERPOLATION
+  de test │  ╲               ╱  ╲     (capacité ≈ nombre d'exemples)
+          │   ╲___╱╲       ╱     ╲
+          │          ╲___╱        ╲________________  ← 2ᵉ descente, souvent
+          │                                            SOUS le minimum classique
+          └────────────────────────────────────────────────► capacité du modèle
+             régime         seuil          régime SUR-paramétré
+             classique                     (l'erreur d'entraînement est nulle
+             (le U)                         partout dans cette zone)</pre></div>
 
-    <p>L'explication tient à l'existence de multiples solutions. Au-delà du seuil d'interpolation, une infinité de paramétrages atteignent une erreur d'entraînement nulle ; l'algorithme d'optimisation en choisit un, et il se trouve qu'il choisit systématiquement une solution « simple » au sens d'une norme. Autrement dit, ce n'est plus la <em>taille</em> de la classe qui gouverne la généralisation, mais la solution que l'optimiseur sélectionne à l'intérieur de cette classe. La complexité pertinente n'est pas le nombre de paramètres.</p>
+    <p>Au seuil d'interpolation, le modèle atteint tout juste l'erreur d'entraînement nulle : il existe une <em>unique</em> solution qui passe par tous les points, et elle est extrêmement contrainte, donc très instable — d'où le pic. Au-delà, une infinité de paramétrages atteignent une erreur nulle, et l'algorithme d'optimisation en choisit un : il se trouve qu'il choisit systématiquement une solution « simple » au sens d'une norme (section suivante). Autrement dit, ce n'est plus la <em>taille</em> de la classe qui gouverne la généralisation, mais la solution que l'optimiseur sélectionne à l'intérieur de cette classe. La complexité pertinente n'est pas le nombre de paramètres.</p>
 
     <h2 id="implicite">5. La régularisation implicite de SGD</h2>
-    <p>Cette sélection a un nom : la régularisation implicite. Dans le cas linéaire séparable, la descente de gradient sur une perte logistique converge vers le <strong>séparateur à marge maximale</strong> — le même que celui du SVM (module 12) — sans qu'aucune régularisation n'ait été écrite. Sur un système sous-déterminé avec perte quadratique, elle converge vers la solution de <strong>norme minimale</strong>, exactement celle que donne la pseudo-inverse (module 7).</p>
-    <p>À cela s'ajoutent des effets bien documentés empiriquement : le bruit stochastique des mini-lots favorise les minima « plats », dont on observe qu'ils généralisent mieux que les minima « pointus » ; un grand taux d'apprentissage empêche de s'installer trop tôt dans une vallée étroite, ce qui explique pourquoi le <em>warmup</em> puis la décroissance (module 7) ne sont pas que des recettes ; et l'arrêt anticipé est lui-même une régularisation, équivalente dans le cas linéaire à une pénalité de type ridge. La conclusion théorique importante : <strong>l'algorithme d'optimisation fait partie du modèle</strong>. On n'entraîne pas « une classe de fonctions », on entraîne un couple architecture-optimiseur, et ce couple porte le biais inductif.</p>
+    <p>Cette sélection a un nom : la régularisation implicite. Deux résultats exacts la caractérisent dans des cas simples.</p>
+    <p>Sur un problème linéaire séparable avec perte logistique, la descente de gradient converge vers le <strong>séparateur à marge maximale</strong> — le même que celui du SVM (module 12) — sans qu'aucune régularisation n'ait été écrite. Sur un système sous-déterminé avec perte quadratique, partant de zéro, elle converge vers la solution de <strong>norme minimale</strong>, exactement celle que donne la pseudo-inverse (module 7).</p>
+    <p>À cela s'ajoutent des effets bien documentés empiriquement. Le bruit stochastique des mini-lots favorise les minima « plats » — ceux dont le fond de vallée est large — dont on observe qu'ils généralisent mieux que les minima « pointus » : intuitivement, une petite perturbation des poids ou des données y change peu la perte. Un grand taux d'apprentissage empêche de s'installer trop tôt dans une vallée étroite, ce qui explique pourquoi le <em>warmup</em> puis la décroissance (module 7) ne sont pas que des recettes. Et l'arrêt anticipé est lui-même une régularisation, équivalente dans le cas linéaire à une pénalité de type ridge.</p>
+    <p>La conclusion théorique importante : <strong>l'algorithme d'optimisation fait partie du modèle</strong>. On n'entraîne pas « une classe de fonctions », on entraîne un couple architecture-optimiseur, et c'est ce couple qui porte le biais inductif.</p>
 
     <h2 id="autres">6. Stabilité, PAC-Bayes, compression</h2>
     <p>Trois approches modernes donnent des bornes plus informatives que la dimension VC :</p>
     <ul>
-      <li><strong>Stabilité algorithmique</strong> — si changer un seul exemple d'entraînement modifie peu la fonction apprise, l'algorithme généralise. Le résultat est élégant car il porte sur l'<em>algorithme</em> et non sur la classe : SGD avec un pas décroissant est stable, ce qui donne directement une borne.</li>
-      <li><strong>PAC-Bayes</strong> — borne l'erreur d'une distribution de prédicteurs par son erreur empirique plus une divergence KL à une distribution a priori. C'est le cadre qui produit aujourd'hui les bornes <em>non vides</em> les plus serrées pour des réseaux de neurones, et il éclaire au passage le lien avec la platitude des minima (un minimum plat tolère du bruit sur les poids, donc une distribution large, donc une faible divergence).</li>
-      <li><strong>Bornes par compression</strong> — si un réseau entraîné peut être fortement compressé (élagage, quantification) sans perte, sa complexité effective est faible, et cela se traduit en borne. Ce point de vue relie généralisation et compressibilité, avec un écho direct aux pratiques du module 23.</li>
+      <li><strong>Stabilité algorithmique</strong> — si changer un seul exemple d'entraînement modifie peu la fonction apprise, alors l'algorithme généralise. Le résultat est élégant car il porte sur l'<em>algorithme</em> et non sur la classe de fonctions : SGD avec un pas décroissant est stable, ce qui fournit directement une borne. L'intuition est simple : un modèle qui change du tout au tout quand on retire un point mémorise ce point.</li>
+      <li><strong>PAC-Bayes</strong> — borne l'erreur d'une <em>distribution</em> de prédicteurs par son erreur empirique plus une divergence KL à une distribution a priori (module 9). C'est le cadre qui produit aujourd'hui les bornes <em>non vides</em> les plus serrées pour des réseaux de neurones réels, et il éclaire au passage le lien avec la platitude des minima : un minimum plat tolère du bruit sur les poids, donc autorise une distribution large, donc une faible divergence à l'a priori, donc une meilleure borne.</li>
+      <li><strong>Bornes par compression</strong> — si un réseau entraîné peut être fortement compressé (élagage, quantification) sans perte de performance, sa complexité effective est faible, et cela se traduit en borne. Ce point de vue relie généralisation et compressibilité, avec un écho direct aux pratiques du module 23.</li>
     </ul>
 
     <h2 id="limites">7. Ce que la théorie n'explique pas</h2>
     <div class="warning-block">
-      <strong>L'état honnête de la question.</strong> Aucune théorie ne prédit aujourd'hui, avant entraînement, la performance de généralisation d'un réseau profond donné sur un problème donné. L'expérience de Zhang et ses coauteurs (2017) l'a montré de façon frappante : les mêmes réseaux qui généralisent parfaitement sur des images réelles peuvent aussi apprendre par cœur les mêmes images avec des <em>étiquettes aléatoires</em>. Leur capacité est donc largement suffisante pour mémoriser ; ce qui les fait généraliser n'est pas une limitation de capacité, mais l'interaction entre la structure des données, l'architecture et l'optimiseur. Ce que la théorie ne couvre pas non plus : les capacités émergentes des grands modèles, l'efficacité du transfert, la robustesse hors distribution, et la raison pour laquelle certaines architectures surpassent les autres. La pratique a plusieurs années d'avance sur la théorie dans ce domaine — et il vaut mieux le dire que de le masquer.
+      <strong>L'état honnête de la question.</strong> Aucune théorie ne prédit aujourd'hui, avant entraînement, la performance de généralisation d'un réseau profond donné sur un problème donné. L'expérience de Zhang et ses coauteurs (2017) l'a montré de façon frappante : les mêmes réseaux qui généralisent parfaitement sur des images réelles peuvent aussi apprendre par cœur ces mêmes images avec des <em>étiquettes tirées au hasard</em>, atteignant une erreur d'entraînement nulle sur un problème sans aucune structure. Leur capacité est donc largement suffisante pour mémoriser ; ce qui les fait généraliser n'est pas une limitation de capacité, mais l'interaction entre la structure des données, l'architecture et l'optimiseur. Ce que la théorie ne couvre pas davantage : les capacités émergentes des grands modèles, l'efficacité du transfert, la robustesse hors distribution, et la raison pour laquelle certaines architectures surpassent les autres. La pratique a plusieurs années d'avance sur la théorie dans ce domaine — et il vaut mieux le dire que de le masquer.
     </div>
 
     <h2 id="pratique">8. Ce qu'on en retient en pratique</h2>
     <ul>
-      <li><strong>La complexité effective compte, pas le nombre de paramètres.</strong> Un grand modèle bien régularisé peut généraliser mieux qu'un petit modèle mal contraint.</li>
+      <li><strong>La complexité effective compte, pas le nombre de paramètres.</strong> Un grand modèle bien régularisé peut généraliser mieux qu'un petit modèle mal contraint — la double descente l'illustre.</li>
       <li><strong>Le biais inductif est une ressource.</strong> Encoder une invariance connue, une contrainte physique ou une structure du domaine vaut souvent mieux que davantage de données.</li>
       <li><strong>L'optimiseur fait partie du modèle.</strong> Taille de lot, taux d'apprentissage et arrêt anticipé changent la solution atteinte, pas seulement la vitesse pour y arriver.</li>
-      <li><strong>Les garanties sont rarement des nombres utilisables.</strong> Pour une estimation chiffrée de la performance, la validation croisée (module 10) et un jeu de test intouché restent les seuls outils fiables ; pour une garantie utilisable en production, la prédiction conforme (module 9) donne une couverture démontrable.</li>
-      <li><strong>Le no free lunch a une conséquence méthodologique.</strong> Comparer des modèles sans tenir compte du domaine n'a pas de sens universel : un benchmark ne transfère pas automatiquement à votre problème.</li>
+      <li><strong>Les garanties théoriques ne sont pas des nombres utilisables.</strong> Pour une estimation chiffrée de la performance, la validation croisée (module 10) et un jeu de test intouché restent les seuls outils fiables ; pour une garantie exploitable en production, la prédiction conforme (module 9) donne une couverture démontrable à échantillon fini.</li>
+      <li><strong>Le no free lunch a une conséquence méthodologique.</strong> Comparer des modèles sans tenir compte du domaine n'a pas de sens universel : un classement sur un benchmark ne transfère pas automatiquement à votre problème, et c'est pourquoi la baseline maison reste la seule référence qui compte.</li>
     </ul>
-
-    <hr class="divider">
-
-    <h2 id="fin">Fin des approfondissements</h2>
-    <p>Ce module referme le second cycle du cours. Les douze premiers modules forment le tronc commun, de l'environnement Python au modèle surveillé en production ; les dix suivants traitent ce que ce tronc laissait de côté — l'incertitude, le temps, les données non tabulaires, la simulation, le budget d'annotation, la décision, la responsabilité, le matériel, et enfin la théorie.</p>
-    <p>S'il fallait retenir une seule idée de l'ensemble : <em>presque tout ce qui décide du succès d'un projet se trouve en dehors de l'algorithme</em> — dans la formulation du problème, la qualité des données, le protocole d'évaluation, la traduction en décision, et la lucidité sur ce que le modèle ne sait pas. Les algorithmes, eux, sont la partie documentée.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
         <li>Les bornes PAC/VC donnent la bonne <em>structure</em> — erreur empirique plus terme de complexité en \(1/\sqrt{n}\) — mais des valeurs numériques inutilisables en deep learning.</li>
-        <li>Sans biais inductif, pas d'apprentissage : le no free lunch en fait une nécessité mathématique.</li>
+        <li>Sans biais inductif, pas d'apprentissage : le no free lunch en fait une nécessité mathématique, pas une préférence esthétique.</li>
         <li>La double descente montre que le nombre de paramètres n'est pas la bonne mesure de complexité.</li>
         <li>SGD régularise implicitement : marge maximale, norme minimale, minima plats.</li>
         <li>Stabilité, PAC-Bayes et compression expliquent mieux le deep learning que la dimension VC.</li>
