@@ -45,7 +45,7 @@
   </div>
 
   <div class="project-content course-content">
-    <p>C'est le module où la formation d'ingénieur devient un avantage plutôt qu'un détour. La situation est toujours la même : on dispose d'un code de calcul fiable mais coûteux — CFD, éléments finis, neutronique, Monte-Carlo de transport — et l'on a besoin de milliers d'évaluations pour propager des incertitudes, optimiser une conception ou piloter un système en temps réel. Le machine learning n'y remplace pas la physique : il en construit une approximation utilisable, et il faut savoir exactement dans quelles limites elle reste valide.</p>
+    <p>C'est le module où la formation d'ingénieur devient un avantage plutôt qu'un détour. La situation est toujours la même : on dispose d'un code de calcul fiable mais coûteux — CFD, éléments finis, neutronique, transport Monte-Carlo — et l'on a besoin de milliers d'évaluations pour propager des incertitudes, optimiser une conception ou piloter un système en temps réel. Le machine learning n'y remplace pas la physique : il en construit une approximation utilisable, et il faut savoir exactement dans quelles limites elle reste valide.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
@@ -53,7 +53,7 @@
         <li><a href="#monte-carlo">Monte-Carlo et réduction de variance</a></li>
         <li><a href="#qmc">Quasi-Monte-Carlo et plans d'expériences</a></li>
         <li><a href="#propagation">Propagation d'incertitude et chaos polynomial</a></li>
-        <li><a href="#sobol">Analyse de sensibilité</a></li>
+        <li><a href="#sobol">Analyse de sensibilité globale</a></li>
         <li><a href="#surrogates">Métamodèles : construire et valider</a></li>
         <li><a href="#rom">Réduction de modèle : POD, DMD</a></li>
         <li><a href="#sciml">SciML : opérateurs neuronaux et hybrides</a></li>
@@ -63,57 +63,71 @@
     </div>
 
     <h2 id="monte-carlo">1. Monte-Carlo et réduction de variance</h2>
-    <p>Estimer \(I = \mathbb{E}[f(X)]\) par tirage aléatoire donne \(\hat I_N = \frac1N\sum f(x_i)\), d'erreur type \(\sigma/\sqrt{N}\). La propriété remarquable — et la raison pour laquelle la méthode domine en grande dimension — est que <strong>cette vitesse ne dépend pas de la dimension</strong>, contrairement à toute quadrature déterministe. Le revers : gagner un chiffre significatif coûte cent fois plus de simulations. D'où l'importance des techniques de réduction de variance, qui s'attaquent au numérateur plutôt qu'au dénominateur.</p>
+    <p>Estimer \(I = \mathbb{E}[f(X)]\) par tirage aléatoire donne \(\hat I_N = \frac1N\sum f(x_i)\), d'erreur type \(\sigma/\sqrt{N}\). La propriété remarquable — et la raison pour laquelle la méthode domine en grande dimension — est que <strong>cette vitesse ne dépend pas de la dimension</strong>, contrairement à toute quadrature déterministe : une grille de 10 points par axe fait \(10^{d}\) évaluations, soit un million en dimension 6 et un milliard en dimension 9. Le revers de Monte-Carlo : gagner un chiffre significatif coûte cent fois plus de simulations. D'où l'importance des techniques de réduction de variance, qui s'attaquent au numérateur plutôt qu'au dénominateur.</p>
 
-    <div class="code-label">réduire la variance, pas augmenter N</div>
-    <div class="code-block"><pre>Variables antithétiques   tirer u et 1-u : la corrélation négative annule une partie
-                          de la fluctuation. Gain modeste, coût nul.
+    <div class="code-label">réduire la variance, plutôt qu'augmenter N</div>
+    <div class="code-block"><pre>Variables antithétiques   tirer u ET 1-u : la corrélation négative entre les deux
+                          annule une partie de la fluctuation. Gain modeste, coût nul.
 Variable de contrôle      utiliser une grandeur g corrélée à f dont l'espérance est
                           CONNUE : Î = mean(f) - c·(mean(g) - E[g]). Souvent le
                           meilleur rapport gain/effort — un modèle simplifié ou un
-                          surrogate fait un excellent contrôle.
+                          métamodèle fait un excellent contrôle.
 Échantillonnage           tirer selon une loi q qui concentre les tirages là où f
 préférentiel              compte, puis corriger par le poids p/q. INDISPENSABLE pour
-                          les événements rares (probabilité de défaillance à 10⁻⁶).
+                          les événements rares.
 Stratification / LHS      découper l'espace et garantir une couverture régulière.
 Multi-niveaux (MLMC)      combiner beaucoup de simulations grossières et peu de
                           simulations fines : réduit le coût de plusieurs ordres.</pre></div>
 
     <div class="step-block">
       <h4>Le cas des événements rares</h4>
-      <p>Estimer une probabilité de défaillance de \(10^{-6}\) par Monte-Carlo direct demande de l'ordre de \(10^{8}\) simulations pour une précision de 10 % — hors de portée avec un code coûteux. Les méthodes dédiées (échantillonnage préférentiel, <em>subset simulation</em>, FORM/SORM en fiabilité des structures) ramènent cela à quelques milliers d'appels, souvent combinées à un métamodèle raffiné près de la surface d'état limite. C'est exactement l'articulation entre ce module et l'optimisation bayésienne du module 17 : on enrichit le plan là où la décision se joue.</p>
+      <p>Estimer une probabilité de défaillance de \(10^{-6}\) par Monte-Carlo direct demande de l'ordre de \(10^{8}\) simulations pour une précision de 10 % — hors de portée avec un code coûteux. La raison est simple : pour observer l'événement une centaine de fois, il faut cent millions de tirages. Les méthodes dédiées (échantillonnage préférentiel, <em>subset simulation</em>, FORM/SORM en fiabilité des structures) ramènent cela à quelques milliers d'appels en déplaçant délibérément la loi de tirage vers la zone de défaillance, puis en corrigeant le biais introduit. Elles se combinent avec un métamodèle raffiné près de la surface d'état limite — c'est exactement l'articulation avec l'optimisation bayésienne du module 17 : on enrichit le plan là où la décision se joue.</p>
     </div>
 
     <h2 id="qmc">2. Quasi-Monte-Carlo et plans d'expériences</h2>
-    <p>Les suites à faible discordance (Sobol, Halton) remplacent l'aléa par des points délibérément bien répartis. La convergence passe de \(O(N^{-1/2})\) à \(O((\log N)^d/N)\) : bien meilleure en dimension modérée, l'avantage s'érodant quand \(d\) devient grand. Pour un plan d'expériences numériques, les options usuelles :</p>
+    <p>Les suites à faible discordance (Sobol, Halton) remplacent l'aléa par des points délibérément bien répartis : là où un tirage aléatoire laisse des trous et des amas, une suite de Sobol remplit l'espace régulièrement. La convergence passe de \(O(N^{-1/2})\) à \(O((\log N)^d/N)\) — bien meilleure en dimension modérée, l'avantage s'érodant quand \(d\) devient grand.</p>
 
     <div class="code-label">Python — scipy.stats.qmc</div>
     <div class="code-block"><pre>from scipy.stats import qmc
 
-# hypercube latin optimisé : projection uniforme sur chaque axe
+# hypercube latin optimisé : projection uniforme sur CHAQUE axe pris séparément
 plan = qmc.LatinHypercube(d=6, optimization="random-cd", seed=0).random(n=120)
 
 # suite de Sobol : extensible par puissances de 2, excellente uniformité
 sobol = qmc.Sobol(d=6, scramble=True, seed=0).random_base2(m=7)     # 128 points
 
-# mise à l'échelle vers les bornes physiques des paramètres
+# mise à l'échelle vers les bornes PHYSIQUES des paramètres
 X = qmc.scale(plan, l_bounds=[0.1, 300, 1e5, 0.2, 1.0, 0.0],
                     u_bounds=[0.9, 600, 5e5, 0.8, 3.0, 1.0])
 print(qmc.discrepancy(plan))              # plus c'est bas, mieux l'espace est couvert</pre></div>
 
-    <p>Règle empirique pour un premier plan destiné à construire un métamodèle : environ dix points par dimension d'entrée, puis enrichissement adaptatif (module 17) plutôt qu'un grand plan figé. Et toujours prévoir un jeu de <em>validation</em> tiré indépendamment : valider un surrogate sur les points qui ont servi à le construire n'a aucun sens.</p>
+    <p>Règle empirique pour un premier plan destiné à construire un métamodèle : environ dix points par dimension d'entrée, puis enrichissement adaptatif (module 17) plutôt qu'un grand plan figé. Et toujours prévoir un jeu de <em>validation</em> tiré indépendamment : valider un métamodèle sur les points qui ont servi à le construire n'a aucun sens, surtout s'il interpole exactement.</p>
 
     <h2 id="propagation">3. Propagation d'incertitude et chaos polynomial</h2>
-    <p>Les entrées d'un calcul sont incertaines : propriétés matériaux, conditions aux limites, tolérances géométriques. La propagation consiste à en déduire la loi de la sortie — et pas seulement sa moyenne, car une décision de sûreté porte sur un quantile extrême.</p>
+    <p>Les entrées d'un calcul sont incertaines : propriétés matériaux, conditions aux limites, tolérances géométriques. La propagation consiste à en déduire la loi de la sortie — et pas seulement sa moyenne, car une décision de sûreté porte sur un quantile extrême, pas sur un comportement typique.</p>
 
     <p>Le <strong>chaos polynomial</strong> (PCE) développe la sortie sur une base de polynômes orthogonaux des variables aléatoires d'entrée :</p>
     <div style="text-align:center;overflow-x:auto">\[ Y = f(\xi) \approx \sum_{j=0}^{P} \alpha_j \Psi_j(\xi), \qquad \mathbb{E}[Y] = \alpha_0, \quad \operatorname{Var}(Y) = \sum_{j\geq 1}\alpha_j^2 \]</div>
-    <p>La base est choisie selon la loi des entrées (Hermite pour des gaussiennes, Legendre pour des uniformes). L'intérêt est double : moyenne et variance se lisent <em>directement</em> sur les coefficients, et les indices de sensibilité s'en déduisent analytiquement (section suivante). Les coefficients s'obtiennent par projection ou par régression parcimonieuse (LARS), ce qui en fait un cas particulier remarquable de la régression régularisée du module 12. Limites : la taille de la base explose avec la dimension et le degré, et la méthode suppose une réponse régulière — un comportement discontinu (bifurcation, changement de régime) la met en échec, exactement comme un GP à noyau lisse.</p>
+    <p>La base est choisie selon la loi des entrées : Hermite pour des gaussiennes, Legendre pour des uniformes — c'est cette correspondance qui rend les polynômes orthogonaux <em>pour le produit scalaire défini par la loi</em>, et donc qui donne les formules de moments ci-dessus.</p>
+    <p>L'intérêt est double : moyenne et variance se lisent <em>directement</em> sur les coefficients, sans simulation supplémentaire, et les indices de sensibilité s'en déduisent analytiquement (section suivante). Les coefficients s'obtiennent par projection ou par régression parcimonieuse (LARS), ce qui en fait un cas particulier remarquable de la régression régularisée du module 12. Limites : la taille de la base explose avec la dimension et le degré, et la méthode suppose une réponse régulière — un comportement discontinu (bifurcation, changement de régime) la met en échec, exactement comme un GP à noyau lisse.</p>
 
-    <h2 id="sobol">4. Analyse de sensibilité</h2>
-    <p>Question centrale en ingénierie : <em>quelle part de la variabilité de la sortie chaque entrée explique-t-elle ?</em> Les dérivées locales ne répondent pas — elles ne valent qu'au point où elles sont calculées. L'analyse de sensibilité <strong>globale</strong> décompose la variance :</p>
+    <h2 id="sobol">4. Analyse de sensibilité globale</h2>
+    <p>Question centrale en ingénierie : <em>quelle part de la variabilité de la sortie chaque entrée explique-t-elle ?</em> Les dérivées partielles ne répondent pas — elles ne valent qu'au point où elles sont calculées, et pour une plage de variation infinitésimale. L'analyse de sensibilité <strong>globale</strong> décompose la variance totale sur tout le domaine de variation :</p>
     <div style="text-align:center;overflow-x:auto">\[ S_i = \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_i]\big)}{\operatorname{Var}(Y)}, \qquad S_{T_i} = 1 - \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_{\sim i}]\big)}{\operatorname{Var}(Y)} \]</div>
-    <p>\(S_i\) est l'indice du <em>premier ordre</em> (effet propre de \(X_i\)), \(S_{T_i}\) l'indice <em>total</em> (effet propre plus toutes ses interactions). Leur lecture conjointe est très informative : \(S_{T_i} \approx S_i\) signale une variable qui agit seule ; \(S_{T_i} \gg S_i\) révèle une variable qui n'agit qu'en interaction ; \(S_{T_i} \approx 0\) autorise à <strong>fixer</strong> la variable, ce qui réduit la dimension du problème. Et \(\sum_i S_i \lt 1\) mesure la part due aux interactions.</p>
+
+    <p>\(S_i\) est l'indice du <em>premier ordre</em> : la part de variance qu'on supprimerait en fixant \(X_i\) à sa vraie valeur. \(S_{T_i}\) est l'indice <em>total</em> : effet propre plus toutes les interactions où \(X_i\) intervient.</p>
+
+    <div class="code-label">comment lire les deux ensemble</div>
+    <div class="code-block"><pre>S_Ti ≈ S_i          la variable agit SEULE, sans interaction → effet additif
+S_Ti ≫ S_i          la variable n'agit qu'EN INTERACTION avec d'autres.
+                    Attention : la fixer ferait perdre plus que S_i ne le suggère.
+S_Ti ≈ 0            la variable n'influence rien → on peut la FIXER, ce qui réduit
+                    la dimension du problème (utile pour le module 17)
+Σ S_i &lt; 1           la part manquante est due aux INTERACTIONS
+
+exemple :  conductivité  S=0,45  S_T=0,52   → effet principal, peu d'interaction
+           débit         S=0,10  S_T=0,44   → agit surtout EN INTERACTION
+           épaisseur     S=0,02  S_T=0,03   → négligeable : à fixer</pre></div>
 
     <div class="code-label">Python — SALib</div>
     <div class="code-block"><pre>from SALib.sample import sobol as sobol_sample
@@ -123,20 +137,20 @@ probleme = {"num_vars": 4,
             "names": ["conductivite", "debit", "epaisseur", "coef_echange"],
             "bounds": [[10, 25], [0.5, 2.0], [1e-3, 5e-3], [200, 900]]}
 
-X = sobol_sample.sample(probleme, 1024)        # N(2d+2) évaluations
-Y = np.array([simulation(x) for x in X])       # ou le SURROGATE, bien moins cher
+X = sobol_sample.sample(probleme, 1024)        # N(2d+2) = 10 240 évaluations
+Y = np.array([surrogate(x) for x in X])        # sur le MÉTAMODÈLE, pas le code direct
 
 Si = sobol_analyze.analyze(probleme, Y)
-print(Si["S1"], Si["ST"])                      # premier ordre / total</pre></div>
+print(Si["S1"], Si["ST"])</pre></div>
 
-    <p>Le coût — \(N(2d+2)\) évaluations — est la raison pour laquelle on calcule presque toujours les indices de Sobol <em>sur un métamodèle</em> plutôt que sur le code direct. Pour un simple criblage préalable en grande dimension, la méthode de Morris identifie les variables négligeables pour quelques dizaines d'évaluations seulement.</p>
+    <p>Le coût — \(N(2d+2)\) évaluations — est la raison pour laquelle on calcule presque toujours les indices de Sobol <em>sur un métamodèle</em> plutôt que sur le code direct. Pour un simple criblage préalable en grande dimension, la méthode de Morris identifie les variables négligeables pour quelques dizaines d'évaluations seulement, et sert à réduire le problème avant l'analyse fine.</p>
 
     <h2 id="surrogates">5. Métamodèles : construire et valider</h2>
     <p>Un métamodèle remplace le code de calcul par une fonction bon marché ajustée sur un plan d'expériences. Les familles, et le critère de choix :</p>
 
     <div class="code-label">choisir un surrogate</div>
     <div class="code-block"><pre>Krigeage / GP       interpole exactement, fournit une VARIANCE de prédiction.
-(module 17)          Le défaut pour n &lt; quelques milliers de points. Indispensable
+(module 17)         Le défaut pour n &lt; quelques milliers de points. Indispensable
                     si l'on veut enrichir le plan de façon adaptative.
 RBF                 interpolation par fonctions radiales : simple, robuste, très bon
                     en dimension modérée. Sans incertitude native — c'est exactement
@@ -149,63 +163,64 @@ Réseau de neurones  utile quand le plan est très grand (10⁴+) ou la sortie d
                     dimension (un champ complet plutôt qu'un scalaire).</pre></div>
 
     <div class="warning-block">
-      <strong>Un métamodèle se valide sur des points qu'il n'a jamais vus.</strong> Le critère usuel est le \(Q^2\) (le \(R^2\) calculé sur un jeu de validation indépendant, ou par validation croisée <em>leave-one-out</em>, quasi gratuite pour un krigeage). Un \(Q^2\) de 0,99 sur les points d'apprentissage ne veut rien dire : un interpolateur passe par tous ses points par construction. Trois vérifications supplémentaires valent d'être systématiques : l'erreur maximale (et non seulement moyenne) sur le jeu de validation, la qualité de l'approximation <em>dans la zone qui décide</em> (près d'un seuil de sûreté, la moyenne globale n'a aucun intérêt), et la cohérence physique — monotonie attendue, signe, ordres de grandeur, comportement aux limites.
+      <strong>Un métamodèle se valide sur des points qu'il n'a jamais vus.</strong> Le critère usuel est le \(Q^2\) — le \(R^2\) calculé sur un jeu de validation indépendant, ou par validation croisée <em>leave-one-out</em>, quasi gratuite pour un krigeage grâce à une formule fermée. Un \(Q^2\) de 0,99 sur les points d'apprentissage ne veut rien dire : un interpolateur passe par tous ses points par construction. Trois vérifications supplémentaires valent d'être systématiques : l'erreur <em>maximale</em> (et non seulement moyenne) sur le jeu de validation, la qualité de l'approximation <em>dans la zone qui décide</em> — près d'un seuil de sûreté, une erreur moyenne faible ne dit rien —, et la cohérence physique : monotonie attendue, signe, ordres de grandeur, comportement aux limites du domaine.
     </div>
 
     <h2 id="rom">6. Réduction de modèle : POD, DMD</h2>
-    <p>Les métamodèles précédents prédisent un scalaire. Quand la sortie est un <em>champ</em> — température en tout point, vitesse sur tout le maillage —, on passe par la réduction de modèle. L'observation fondatrice : les solutions d'un système physique paramétré vivent presque toujours dans un sous-espace de très faible dimension.</p>
+    <p>Les métamodèles précédents prédisent un scalaire. Quand la sortie est un <em>champ</em> — température en tout point, vitesse sur tout le maillage, soit des millions de valeurs —, on passe par la réduction de modèle. L'observation fondatrice : les solutions d'un système physique paramétré, malgré leur taille apparente, vivent presque toujours dans un sous-espace de très faible dimension.</p>
 
-    <p>La <strong>POD</strong> (décomposition orthogonale aux valeurs propres) consiste à assembler une matrice de <em>snapshots</em> — chaque colonne est un champ solution pour un jeu de paramètres — et à en calculer la SVD (module 7). Les premiers vecteurs singuliers forment une base de modes, et la décroissance des valeurs singulières indique combien en garder. C'est, mot pour mot, une PCA sur des champs physiques : les modes obtenus ont souvent une interprétation directe (structures cohérentes d'un écoulement, modes propres de vibration).</p>
+    <p>La <strong>POD</strong> (décomposition orthogonale aux valeurs propres) consiste à assembler une matrice de <em>snapshots</em> — chaque colonne est un champ solution pour un jeu de paramètres — et à en calculer la SVD (module 7). Les premiers vecteurs singuliers forment une base de modes, et la décroissance des valeurs singulières indique combien en garder. C'est, mot pour mot, une PCA appliquée à des champs physiques : les modes obtenus ont souvent une interprétation directe — structures cohérentes d'un écoulement, modes propres de vibration.</p>
 
     <div class="code-label">Python — POD sur des snapshots</div>
     <div class="code-block"><pre>import numpy as np
 
-S = np.column_stack(snapshots)                 # (n_ddl, n_simulations)
+S = np.column_stack(snapshots)                 # (n_degrés_de_liberté, n_simulations)
 moyenne = S.mean(axis=1, keepdims=True)
 U, s, Vt = np.linalg.svd(S - moyenne, full_matrices=False)
 
 energie = np.cumsum(s**2) / np.sum(s**2)
 r = int(np.searchsorted(energie, 0.9999) + 1)  # souvent r ≈ 10-30 pour 99,99 %
-Phi = U[:, :r]                                 # base réduite
+print(f"{S.shape[0]} degrés de liberté réduits à {r} modes")
+Phi = U[:, :r]                                 # la base réduite
 
-# coefficients réduits : la cible d'un surrogate (GP, RBF) sur les paramètres
+# coefficients réduits : LA CIBLE d'un surrogate (GP, RBF) sur les paramètres
 A = Phi.T @ (S - moyenne)                      # (r, n_simulations)
-champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ complet</pre></div>
+champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPLET</pre></div>
 
-    <p>Deux stratégies en découlent. Le ROM <em>non intrusif</em> — celui du code ci-dessus — apprend simplement les coefficients modaux en fonction des paramètres : facile, applicable à un code fermé, sans garantie physique. Le ROM <em>intrusif</em> (projection de Galerkin des équations sur la base réduite) conserve la structure des équations et offre de meilleures garanties, mais exige d'accéder aux opérateurs du solveur, et la non-linéarité impose des techniques d'hyper-réduction (DEIM). La <strong>DMD</strong>, elle, extrait des modes associés à des fréquences et des taux de croissance, ce qui en fait l'outil naturel pour analyser une dynamique et prédire à court terme.</p>
+    <p>Deux stratégies en découlent. Le ROM <em>non intrusif</em> — celui du code ci-dessus — apprend simplement les coefficients modaux en fonction des paramètres : facile, applicable à un code fermé dont on n'a que les sorties, mais sans garantie physique. Le ROM <em>intrusif</em> (projection de Galerkin des équations sur la base réduite) conserve la structure des équations et offre de meilleures garanties, mais exige d'accéder aux opérateurs du solveur, et la non-linéarité impose des techniques d'hyper-réduction (DEIM). La <strong>DMD</strong>, elle, extrait des modes associés à des fréquences et des taux de croissance, ce qui en fait l'outil naturel pour analyser une dynamique et prédire à court terme.</p>
 
-    <p>La limite commune est claire : ces méthodes supposent une <em>faible dimension effective</em>. Un écoulement fortement turbulent, un problème avec chocs ou fronts mobiles, une bifurcation — et le spectre ne décroît plus. C'est d'ailleurs l'information utile : la décroissance des valeurs singulières <em>mesure</em> la réductibilité du problème avant tout investissement.</p>
+    <p>La limite commune est claire : ces méthodes supposent une <em>faible dimension effective</em>. Un écoulement fortement turbulent, un problème avec chocs ou fronts mobiles, une bifurcation — et le spectre ne décroît plus. C'est d'ailleurs l'information utile : <strong>la décroissance des valeurs singulières mesure la réductibilité du problème</strong>, et se calcule avant tout investissement dans un ROM.</p>
 
     <h2 id="sciml">7. SciML : opérateurs neuronaux et hybrides</h2>
-    <p>Le module 14 présente les PINN, qui apprennent <em>une</em> solution sous contrainte d'EDP. Les <strong>opérateurs neuronaux</strong> visent plus haut : apprendre l'application qui envoie une fonction d'entrée (champ de conditions initiales, de coefficients, de géométrie) sur la fonction solution — donc une famille entière de problèmes.</p>
+    <p>Le module 14 présente les PINN, qui apprennent <em>une</em> solution sous contrainte d'EDP. Les <strong>opérateurs neuronaux</strong> visent plus haut : apprendre l'application qui envoie une fonction d'entrée (champ de conditions initiales, de coefficients, de géométrie) sur la fonction solution — donc une famille entière de problèmes, résolue en une seule fois.</p>
     <ul>
-      <li><strong>DeepONet</strong> — deux réseaux, l'un encodant la fonction d'entrée échantillonnée, l'autre les coordonnées d'évaluation, combinés par produit scalaire. Fondé sur un théorème d'approximation d'opérateurs.</li>
-      <li><strong>FNO</strong> (<em>Fourier Neural Operator</em>) — effectue la convolution dans l'espace de Fourier en ne gardant que les basses fréquences : le coût passe en \(O(n\log n)\), et le modèle est <em>indépendant de la discrétisation</em>, donc entraînable sur maillage grossier et évaluable sur maillage fin. Très efficace sur les problèmes à géométrie régulière et périodique.</li>
+      <li><strong>DeepONet</strong> — deux réseaux, l'un encodant la fonction d'entrée échantillonnée (<em>branch</em>), l'autre les coordonnées d'évaluation (<em>trunk</em>), combinés par produit scalaire. Fondé sur un théorème d'approximation d'opérateurs.</li>
+      <li><strong>FNO</strong> (<em>Fourier Neural Operator</em>) — effectue la convolution dans l'espace de Fourier en ne gardant que les basses fréquences : le coût passe en \(O(n\log n)\), et le modèle devient <em>indépendant de la discrétisation</em>, donc entraînable sur maillage grossier et évaluable sur maillage fin. Très efficace sur les problèmes à géométrie régulière et périodique.</li>
       <li><strong>GNN sur maillage</strong> (module 16) — la bonne réponse quand la géométrie est complexe et non structurée.</li>
     </ul>
-    <p>Une fois entraînés, ces modèles évaluent une solution en millisecondes contre des heures de calcul — d'où leur intérêt pour l'optimisation de forme, le contrôle en temps réel ou l'exploration paramétrique. Le prix à payer : la précision plafonne bien au-dessus de celle d'un solveur, la généralisation hors du régime d'entraînement est mauvaise, et l'entraînement demande un gros corpus de simulations, donc l'investissement ne se justifie que par un grand nombre d'évaluations futures.</p>
+    <p>Une fois entraînés, ces modèles évaluent une solution en millisecondes contre des heures de calcul — d'où leur intérêt pour l'optimisation de forme, le contrôle en temps réel ou l'exploration paramétrique. Le prix à payer : la précision plafonne bien au-dessus de celle d'un solveur, la généralisation hors du régime d'entraînement est mauvaise, et l'entraînement demande un gros corpus de simulations. L'investissement ne se justifie donc que par un grand nombre d'évaluations futures.</p>
 
     <div class="step-block">
       <h4>Hybrider plutôt que remplacer</h4>
-      <p>Les approches qui fonctionnent le mieux en pratique ne substituent pas le ML à la physique, elles le placent là où la physique est mal connue : apprendre une <em>loi de fermeture</em> (turbulence, loi de comportement matériau) tout en conservant les équations de conservation ; apprendre la <em>correction</em> entre un modèle grossier rapide et la réalité expérimentale (<em>multi-fidélité</em>, module 17), ce qui demande beaucoup moins de données qu'apprendre la sortie complète ; imposer des contraintes dures — positivité, conservation de la masse, symétries, équivariance — directement dans l'architecture, ce qui améliore autant la fiabilité que l'efficacité en données. Un modèle qui viole la conservation de l'énergie n'est pas utilisable, quelle que soit son erreur quadratique moyenne.</p>
+      <p>Les approches qui fonctionnent le mieux en pratique ne substituent pas le ML à la physique : elles le placent là où la physique est mal connue. Apprendre une <em>loi de fermeture</em> (turbulence, loi de comportement matériau) tout en conservant les équations de conservation. Apprendre la <em>correction</em> entre un modèle grossier rapide et la réalité expérimentale — c'est le multi-fidélité du module 17, et cela demande beaucoup moins de données qu'apprendre la sortie complète. Imposer des contraintes dures — positivité, conservation de la masse, symétries, équivariance — directement dans l'architecture, ce qui améliore autant la fiabilité que l'efficacité en données (module 13). Un modèle qui viole la conservation de l'énergie n'est pas utilisable, quelle que soit son erreur quadratique moyenne.</p>
     </div>
 
     <h2 id="assimilation">8. Assimilation de données et problèmes inverses</h2>
     <p>L'assimilation combine un modèle physique et des mesures pour estimer l'état ou les paramètres d'un système. C'est le cadre de la météorologie opérationnelle, du recalage de modèles et de la surveillance en ligne. Le formalisme variationnel (4D-Var) s'écrit comme la minimisation d'une fonctionnelle :</p>
     <div style="text-align:center;overflow-x:auto">\[ J(x_0) = \underbrace{\tfrac12 (x_0-x^b)^\top B^{-1}(x_0-x^b)}_{\text{écart à l'ébauche}} + \underbrace{\tfrac12\sum_{k}(\mathcal{H}(x_k)-z_k)^\top R^{-1}(\mathcal{H}(x_k)-z_k)}_{\text{écart aux observations}} \]</div>
-    <p>On reconnaît un MAP (module 9) : \(B\) encode la confiance a priori, \(R\) la précision des capteurs. La minimisation demande le gradient par rapport à l'état initial, obtenu par le modèle <em>adjoint</em> — c'est exactement de la différentiation automatique en mode inverse, la même mécanique que la rétropropagation (module 14). D'où l'intérêt actuel des <strong>simulateurs différentiables</strong> : quand le solveur lui-même est écrit dans un cadre autodifférentiable (JAX, PyTorch), calibrer un paramètre physique devient une optimisation par gradient ordinaire.</p>
+    <p>On reconnaît un MAP (module 9) : \(B\) encode la confiance dans l'ébauche a priori, \(R\) la précision des capteurs, et minimiser \(J\) revient à maximiser une densité a posteriori gaussienne. La minimisation demande le gradient par rapport à l'état initial, obtenu par le modèle <em>adjoint</em> — c'est exactement de la différentiation automatique en mode inverse, la même mécanique que la rétropropagation (module 14). D'où l'intérêt actuel des <strong>simulateurs différentiables</strong> : quand le solveur lui-même est écrit dans un cadre autodifférentiable (JAX, PyTorch), calibrer un paramètre physique devient une optimisation par gradient ordinaire, et l'on récupère gratuitement des décennies d'outillage.</p>
     <p>L'alternative séquentielle est le filtre de Kalman d'ensemble (EnKF), qui propage un ensemble d'états au lieu d'une covariance explicite — indispensable dès que la dimension dépasse quelques milliers (module 15).</p>
 
     <div class="warning-block">
-      <strong>Identifiabilité : la question à poser avant de calibrer.</strong> Un problème inverse est presque toujours mal posé : plusieurs jeux de paramètres reproduisent les mêmes mesures. Deux paramètres peuvent être <em>compensatoires</em> — seule leur combinaison est identifiable — et un optimiseur retournera alors une valeur précise et arbitraire. Les remèdes : régulariser (Tikhonov, c'est-à-dire un a priori), réduire le nombre de paramètres calibrés à ceux que l'analyse de sensibilité désigne comme influents, et surtout <strong>estimer l'incertitude a posteriori</strong> plutôt qu'un point unique. Un paramètre calibré sans intervalle de crédibilité n'est pas un résultat.
+      <strong>Identifiabilité : la question à poser avant de calibrer.</strong> Un problème inverse est presque toujours mal posé : plusieurs jeux de paramètres reproduisent exactement les mêmes mesures. Deux paramètres peuvent être <em>compensatoires</em> — seule leur combinaison (un produit, un rapport) est identifiable — et un optimiseur retournera alors une valeur précise et arbitraire, qui changera complètement avec une autre initialisation. Les remèdes : régulariser (Tikhonov, c'est-à-dire un a priori), réduire le nombre de paramètres calibrés à ceux que l'analyse de sensibilité désigne comme influents (section 4), et surtout <strong>estimer l'incertitude a posteriori</strong> plutôt qu'un point unique. Un paramètre calibré sans intervalle de crédibilité n'est pas un résultat.
     </div>
 
     <h2 id="jumeau">9. Jumeau numérique et crédibilité</h2>
-    <p>Un jumeau numérique n'est pas une simulation 3D animée : c'est un modèle d'un système <em>physique particulier</em>, synchronisé avec ses mesures, et utilisé pour décider. L'architecture typique assemble tout ce module : un modèle réduit ou un surrogate pour tenir la contrainte temps réel, un mécanisme d'assimilation pour se recaler sur les capteurs, une quantification d'incertitude pour assortir chaque prédiction d'une marge, et un module de décision (maintenance, pilotage). Les difficultés réelles sont moins scientifiques qu'opérationnelles : qualité et dérive des capteurs, latence, versionnement du modèle et de ses recalages (module 24), et la question de savoir quand le jumeau doit déclarer qu'il ne sait plus.</p>
+    <p>Un jumeau numérique n'est pas une simulation 3D animée : c'est un modèle d'un système <em>physique particulier</em>, synchronisé avec ses mesures, et utilisé pour décider. L'architecture typique assemble tout ce module : un modèle réduit ou un surrogate pour tenir la contrainte temps réel, un mécanisme d'assimilation pour se recaler sur les capteurs, une quantification d'incertitude pour assortir chaque prédiction d'une marge (module 9), et un module de décision (maintenance, pilotage — module 22). Les difficultés réelles sont moins scientifiques qu'opérationnelles : qualité et dérive des capteurs, latence, versionnement du modèle et de ses recalages (module 24), et la question de savoir quand le jumeau doit déclarer qu'il ne sait plus.</p>
 
     <div class="step-block">
       <h4>Un modèle appris dans un contexte où la sûreté compte</h4>
-      <p>Les référentiels de vérification et validation (V&amp;V) demandent trois choses distinctes : la <em>vérification</em> (résout-on correctement les équations ?), la <em>validation</em> (les équations décrivent-elles la réalité ?) et la quantification des incertitudes. Un modèle appris s'y insère mal par nature : il n'a pas d'équations à vérifier, et son comportement hors domaine est imprévisible. Les pratiques qui le rendent défendable : déclarer explicitement un <strong>domaine de validité</strong> et refuser de prédire au-delà (la variance épistémique d'un GP ou un détecteur de nouveauté servent de garde-fou, module 9) ; assortir chaque sortie d'un intervalle avec garantie de couverture ; conserver un modèle physique de référence comme arbitre sur les cas critiques ; et tracer chaque prédiction jusqu'aux données et à la version du modèle. Autrement dit : le ML accélère l'exploration, il ne signe pas le dossier de sûreté.</p>
+      <p>Les référentiels de vérification et validation (V&amp;V) demandent trois choses distinctes : la <em>vérification</em> (résout-on correctement les équations ?), la <em>validation</em> (les équations décrivent-elles la réalité ?) et la quantification des incertitudes. Un modèle appris s'y insère mal par nature : il n'a pas d'équations à vérifier, et son comportement hors domaine est imprévisible. Les pratiques qui le rendent défendable : déclarer explicitement un <strong>domaine de validité</strong> et refuser de prédire au-delà (la variance épistémique d'un GP ou un détecteur de nouveauté servent de garde-fou, module 9) ; assortir chaque sortie d'un intervalle avec garantie de couverture ; conserver un modèle physique de référence comme arbitre sur les cas critiques ; et tracer chaque prédiction jusqu'aux données et à la version du modèle (module 24). Autrement dit : le ML accélère l'exploration, il ne signe pas le dossier de sûreté.</p>
     </div>
 
     <div class="step-block">
