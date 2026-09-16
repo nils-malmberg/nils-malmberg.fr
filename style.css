@@ -563,3 +563,25 @@ footer {
     padding-inline: var(--space-6);
   }
 }
+
+/* ── Cours data science & ML (project7*) ── */
+.course-content { max-width: 800px; }
+.course-content p,
+.course-content li {
+  max-width: 100%;
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+.course-content .code-block,
+.course-content .step-block,
+.course-content .warning-block,
+.course-content .tuto-toc { max-width: 100%; }
+.course-content .tuto-toc li,
+.course-content .code-block,
+.course-content figcaption { text-align: left; }
+.course-content .code-label { text-align: left; }
+.course-nav {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center;
+  margin-bottom: var(--space-6);
+}
