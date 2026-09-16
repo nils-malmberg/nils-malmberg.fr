@@ -45,7 +45,7 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Un modèle ne consomme que des nombres. Tout le travail, sur ces données, consiste donc à construire une représentation — et le choix de cette représentation pèse bien plus lourd que le choix de l'algorithme qui vient après. Ce module traite les quatre modalités que l'on rencontre le plus souvent, avec une insistance particulière sur les graphes, qui sont absents de la plupart des cours généralistes alors qu'ils modélisent naturellement beaucoup de systèmes d'ingénierie.</p>
+    <p>Un modèle ne consomme que des nombres. Tout le travail, sur ces données, consiste donc à construire une représentation — et le choix de cette représentation pèse bien plus lourd que le choix de l'algorithme qui vient après. Ce module traite les quatre modalités que l'on rencontre le plus souvent, avec une insistance particulière sur les graphes, absents de la plupart des cours généralistes alors qu'ils modélisent naturellement beaucoup de systèmes d'ingénierie.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
@@ -62,11 +62,21 @@
     </div>
 
     <h2 id="texte">1. Texte : du TF-IDF aux transformers</h2>
-    <p>Avant d'appeler un modèle de langage, il faut savoir que le pipeline classique reste imbattable sur certaines tâches : il s'entraîne en secondes, tourne sur CPU, et s'explique coefficient par coefficient.</p>
 
-    <p><strong>TF-IDF</strong> pondère chaque terme par sa fréquence dans le document et sa rareté dans le corpus :</p>
+    <h3>Le problème</h3>
+    <p>Un modèle attend un vecteur de nombres ; on lui donne « la pompe P-204 fuit au niveau du presse-étoupe ». La première solution historique, le <em>sac de mots</em>, consiste à compter les occurrences de chaque mot du vocabulaire : chaque document devient un vecteur de la taille du vocabulaire, presque entièrement nul. On perd l'ordre des mots, mais on obtient quelque chose d'exploitable immédiatement.</p>
+
+    <p><strong>TF-IDF</strong> raffine ce comptage en pondérant chaque terme par sa fréquence dans le document et sa <em>rareté</em> dans le corpus :</p>
     <div style="text-align:center;overflow-x:auto">\[ \text{tfidf}(t,d) = \underbrace{f_{t,d}}_{\text{fréquence locale}} \times \underbrace{\log\frac{N}{1+n_t}}_{\text{rareté globale}} \]</div>
-    <p>Un mot fréquent partout (« le », « système ») reçoit un poids quasi nul, un mot rare mais présent porte l'information. <strong>BM25</strong> raffine en saturant la fréquence (le dixième « pompe » n'apporte plus grand-chose) et en normalisant par la longueur du document — c'est la composante lexicale de la recherche hybride du module 20.</p>
+
+    <div class="code-label">l'effet, sur un corpus de rapports de maintenance</div>
+    <div class="code-block"><pre>terme          présent dans      log(N/nₜ)    poids si présent 3 fois
+"le"           9 900 / 10 000    0,01         0,03   → quasi ignoré
+"pompe"        3 000 / 10 000    1,20         3,60   → informatif
+"presse-       12 / 10 000       6,73        20,19   → très discriminant
+ étoupe"</pre></div>
+
+    <p><strong>BM25</strong> va plus loin sur deux points : il <em>sature</em> la fréquence (le dixième « pompe » n'apporte presque rien de plus que le troisième) et normalise par la longueur du document, pour qu'un rapport de dix pages ne domine pas mécaniquement. C'est la composante lexicale de la recherche hybride des modules 20 et 21.</p>
 
     <div class="code-label">Python — baseline de classification de texte</div>
     <div class="code-block"><pre>from sklearn.feature_extraction.text import TfidfVectorizer
@@ -74,28 +84,34 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 
 modele = make_pipeline(
-    TfidfVectorizer(ngram_range=(1, 2), min_df=3, max_df=0.7,
-                    sublinear_tf=True, strip_accents="unicode"),
+    TfidfVectorizer(
+        ngram_range=(1, 2),      # mots seuls ET paires : capture "non conforme"
+        min_df=3,                # ignorer ce qui apparaît moins de 3 fois (bruit)
+        max_df=0.7,              # ignorer ce qui apparaît dans 70 % des documents
+        sublinear_tf=True,       # log(1+tf) : sature les répétitions
+        strip_accents="unicode",
+    ),
     LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced"),
 ).fit(textes_train, y_train)
 
 # interprétabilité gratuite : les n-grammes les plus discriminants
 noms = modele[0].get_feature_names_out()
 poids = modele[-1].coef_[0]
-print([noms[i] for i in poids.argsort()[-15:]])</pre></div>
+print("en faveur :", [noms[i] for i in poids.argsort()[-15:]])
+print("en défaveur :", [noms[i] for i in poids.argsort()[:15]])</pre></div>
 
     <div class="step-block">
       <h4>Quand le classique suffit — et quand il ne suffit plus</h4>
-      <p>TF-IDF + régression logistique reste excellent quand le vocabulaire est <em>discriminant par lui-même</em> : tri de tickets, détection de spam, classification thématique de documents techniques. Il échoue dès que le sens dépend de l'ordre, de la négation ou du contexte (« ce n'est pas un défaut » et « c'est un défaut » ont presque le même sac de mots). C'est là que les embeddings contextuels et les modèles de langage (module 20) deviennent nécessaires. La bonne démarche reste de mesurer l'écart : si la baseline lexicale atteint 95 % de la performance d'un transformer pour un millième du coût, la question est tranchée.</p>
+      <p>TF-IDF et régression logistique restent excellents quand le vocabulaire est <em>discriminant par lui-même</em> : tri de tickets, détection de spam, classification thématique de documents techniques. L'approche échoue dès que le sens dépend de l'ordre, de la négation ou du contexte — « ce n'est pas un défaut » et « c'est un défaut » ont presque le même sac de mots. C'est là que les embeddings contextuels et les modèles de langage (module 20) deviennent nécessaires. La bonne démarche reste de mesurer l'écart : si la baseline lexicale atteint 95 % de la performance d'un transformer pour un millième du coût et avec une explication par mot, la question est tranchée.</p>
     </div>
 
-    <p>Sur le prétraitement, deux remarques. La <strong>lemmatisation</strong> (spaCy) est utile en français, langue fortement fléchie, là où la racinisation brutale dégrade souvent. Et la suppression des <em>stop words</em> n'est pas toujours souhaitable : la négation et les mots-outils portent parfois exactement l'information recherchée.</p>
+    <p>Sur le prétraitement, deux remarques. La <strong>lemmatisation</strong> (ramener « fuyaient » à « fuir », avec spaCy) est utile en français, langue fortement fléchie, là où la racinisation brutale dégrade souvent le sens. Et la suppression des <em>mots vides</em> n'est pas toujours souhaitable : la négation et les mots-outils portent parfois exactement l'information recherchée.</p>
 
     <h2 id="taches-nlp">2. Tâches classiques du NLP</h2>
     <ul>
       <li><strong>Classification</strong> — thématique, sentiment, intention. Métriques du module 7, attention au déséquilibre.</li>
-      <li><strong>Reconnaissance d'entités (NER)</strong> — extraire personnes, dates, références produit, valeurs numériques avec unités. Évaluation par F1 <em>au niveau de l'entité</em> (une entité partiellement détectée est fausse), pas au niveau du jeton.</li>
-      <li><strong>Extraction structurée</strong> — passer d'un rapport libre à un enregistrement exploitable. Historiquement des règles et des expressions régulières, aujourd'hui souvent un LLM à sortie contrainte (module 20) — mais les règles restent supérieures sur les formats rigides, et elles sont déterministes.</li>
+      <li><strong>Reconnaissance d'entités (NER)</strong> — extraire personnes, dates, références produit, valeurs avec unités. Évaluation par F1 <em>au niveau de l'entité</em> : une entité partiellement détectée compte comme fausse, ce qui est bien plus sévère qu'une évaluation par jeton.</li>
+      <li><strong>Extraction structurée</strong> — passer d'un rapport libre à un enregistrement exploitable. Historiquement des règles et des expressions régulières, aujourd'hui souvent un LLM à sortie contrainte (module 20) — mais les règles restent supérieures sur les formats rigides, et elles sont déterministes et gratuites.</li>
       <li><strong>Topic modeling</strong> — LDA (modèle génératif bayésien, module 9), NMF (factorisation à coefficients positifs, plus lisible, module 7) ou BERTopic (embeddings + clustering + c-TF-IDF), qui donne aujourd'hui les regroupements les plus interprétables.</li>
       <li><strong>Résumé, traduction, question-réponse</strong> — domaine des modèles génératifs ; la difficulté s'y déplace entièrement vers l'<em>évaluation</em> (module 20).</li>
     </ul>
@@ -106,36 +122,44 @@ print([noms[i] for i in poids.argsort()[-15:]])</pre></div>
     <div class="code-label">tâches de vision et leurs métriques</div>
     <div class="code-block"><pre>Classification        une étiquette par image                  accuracy, F1
 Détection d'objets    boîtes + classes (YOLO, DETR)            mAP à IoU 0,5 / 0,5:0,95
-Segmentation sém.     une classe par pixel (U-Net, DeepLab)    IoU, Dice
+Segmentation sém.     une classe par PIXEL (U-Net, DeepLab)    IoU, Dice
 Segmentation d'inst.  objets séparés (Mask R-CNN, SAM)         mAP masque
 Estimation de pose    points clés                              PCK, OKS
 OCR                   texte dans l'image (docTR, Tesseract)    CER, WER
 Recherche d'images    similarité par embedding (module 20)     recall@k</pre></div>
 
-    <p>L'<strong>IoU</strong> (intersection sur union) mesure le recouvrement entre prédiction et vérité terrain ; le <strong>Dice</strong> \(2|A\cap B|/(|A|+|B|)\) lui est préféré en imagerie scientifique et médicale, parce qu'il se comporte mieux quand l'objet d'intérêt est petit devant le fond.</p>
+    <div class="code-label">IoU et Dice, sur un exemple</div>
+    <div class="code-block"><pre>  vérité terrain ███████          prédiction  ░░░███████
+                                  intersection = 5 pixels
+                                  union        = 9 pixels
+  IoU  = 5/9 = 0,56               Dice = 2×5/(7+7) = 0,71
 
-    <p>Pour un profil d'ingénieur, les cas d'usage les plus fréquents ne sont d'ailleurs pas les photographies : segmentation de micrographies pour quantifier une microstructure (taille de grains, porosité, fraction de phase), détection de défauts sur des images de contrôle non destructif, analyse d'images de simulation ou de tomographie. Trois particularités y changent la méthode : les jeux d'images annotées sont <em>très</em> petits (d'où le transfer learning et une augmentation agressive), les images sont souvent en niveaux de gris et à haute résolution (d'où le découpage en tuiles), et la sortie attendue est généralement une <em>mesure physique</em> — ce qui déplace l'évaluation du score de segmentation vers l'erreur sur la grandeur mesurée.</p>
+  Le Dice est toujours ≥ l'IoU et pénalise moins durement les petits objets :
+  c'est pourquoi il est préféré en imagerie médicale et scientifique, où
+  l'objet d'intérêt occupe souvent 1 % de l'image.</pre></div>
+
+    <p>Pour un profil d'ingénieur, les cas d'usage les plus fréquents ne sont d'ailleurs pas les photographies : segmentation de micrographies pour quantifier une microstructure (taille de grains, porosité, fraction de phase), détection de défauts sur des images de contrôle non destructif, analyse d'images de simulation ou de tomographie. Trois particularités y changent la méthode : les jeux annotés sont <em>très</em> petits (d'où le transfert et une augmentation agressive, module 11), les images sont souvent en niveaux de gris et à haute résolution (d'où le découpage en tuiles, avec recouvrement pour éviter les artefacts de bord), et la sortie attendue est généralement une <em>mesure physique</em> — ce qui déplace l'évaluation du score de segmentation vers l'erreur sur la grandeur mesurée.</p>
 
     <div class="warning-block">
-      <strong>L'augmentation doit respecter la physique.</strong> Une symétrie horizontale est anodine sur une photo de chat, désastreuse sur un caractère manuscrit ou une image où la chiralité a un sens. De même, une variation de contraste change la valeur de gris qui, en tomographie, <em>code une densité</em>. L'augmentation encode des invariances : elle n'est valide que si l'invariance existe réellement dans le phénomène.
+      <strong>L'augmentation doit respecter la physique.</strong> Une symétrie horizontale est anodine sur une photo de chat, désastreuse sur un caractère manuscrit ou une image où la chiralité a un sens. Une variation de contraste change la valeur de gris qui, en tomographie, <em>code une densité</em>. L'augmentation encode des invariances : elle n'est valide que si l'invariance existe réellement dans le phénomène — et c'est au métier de le dire, pas à la bibliothèque.
     </div>
 
     <h2 id="audio">4. Audio et signaux perceptifs</h2>
-    <p>La chaîne standard transforme le son en image : fenêtrage, FFT à court terme, passage sur l'échelle de Mel (qui reproduit la résolution non linéaire de l'oreille), puis un CNN ou un transformer sur le spectrogramme obtenu (modules 15 et 14). Les <strong>MFCC</strong> — coefficients cepstraux — restent une représentation compacte utile pour les tâches légères sur CPU.</p>
+    <p>La chaîne standard transforme le son en image : découpage en fenêtres qui se recouvrent, FFT sur chaque fenêtre (module 15), passage sur l'échelle de Mel — qui reproduit la résolution non linéaire de l'oreille, plus fine dans les graves —, puis un CNN ou un transformer sur le spectrogramme obtenu. Les <strong>MFCC</strong> (coefficients cepstraux) restent une représentation compacte utile pour les tâches légères sur processeur.</p>
     <p>Trois précautions spécifiques : l'augmentation se fait sur le signal (bruit additif, variation de vitesse, réverbération) <em>et</em> sur le spectrogramme (<em>SpecAugment</em>, qui masque des bandes de temps et de fréquence) ; la découpe train/test doit se faire par <em>locuteur</em> ou par <em>appareil</em>, jamais par extrait, sous peine de fuite (module 10) ; et pour la reconnaissance vocale, un modèle pré-entraîné comme Whisper rend l'entraînement de zéro sans objet dans l'immense majorité des cas.</p>
 
     <h2 id="graphes">5. Graphes : représentation et mesures</h2>
-    <p>Un graphe modélise des entités et leurs relations. Beaucoup de systèmes techniques en sont naturellement : un réseau électrique ou hydraulique, un maillage de calcul, une molécule, un graphe de dépendances logicielles, un circuit, une chaîne d'approvisionnement, un réseau social. Ignorer cette structure et aplatir en tableau revient à jeter l'information la plus spécifique du problème.</p>
+    <p>Un graphe modélise des entités (les <em>nœuds</em>) et leurs relations (les <em>arêtes</em>). Beaucoup de systèmes techniques en sont naturellement : un réseau électrique ou hydraulique, un maillage de calcul, une molécule, un graphe de dépendances logicielles, un circuit, une chaîne d'approvisionnement, un réseau social. Ignorer cette structure et aplatir en tableau revient à jeter l'information la plus spécifique du problème — c'est comme décrire un plan de métro par la seule liste des stations.</p>
 
     <div class="code-label">mesures structurelles et ce qu'elles disent</div>
     <div class="code-block"><pre>Degré                 nombre de voisins : popularité, connectivité locale
-Intermédiarité        fréquence d'apparition sur les plus courts chemins :
-(betweenness)         identifie les points de passage obligés — donc les points de
-                      fragilité d'un réseau technique
-PageRank              importance récursive : est important qui est pointé par des
-                      nœuds importants
-Coefficient de        propension des voisins d'un nœud à être voisins entre eux
-clustering
+Intermédiarité        fréquence d'apparition sur les plus courts chemins entre
+(betweenness)         toutes les paires. Identifie les points de passage obligés,
+                      donc les points de FRAGILITÉ d'un réseau technique.
+PageRank              importance récursive : est important qui est pointé par
+                      des nœuds importants
+Coefficient de        propension des voisins d'un nœud à être voisins entre eux :
+clustering            mesure la "densité locale" du réseau
 Communautés           partition en groupes densément connectés (Louvain, Leiden)
 Composantes           parties déconnectées : souvent la première chose à regarder
 Assortativité         les nœuds semblables se connectent-ils entre eux ?</pre></div>
@@ -145,55 +169,75 @@ Assortativité         les nœuds semblables se connectent-ils entre eux ?</pre>
 
 G = nx.from_pandas_edgelist(df, "source", "cible", edge_attr="poids")
 
-centralite = nx.betweenness_centrality(G, weight="poids")   # points critiques
+print(f"{G.number_of_nodes()} nœuds, {G.number_of_edges()} arêtes, "
+      f"densité {nx.density(G):.4f}, {nx.number_connected_components(G)} composantes")
+
+centralite = nx.betweenness_centrality(G, weight="poids")     # points critiques
 communautes = nx.community.louvain_communities(G, seed=0)
-print(nx.density(G), nx.number_connected_components(G))
 
-# ces mesures deviennent des FEATURES tabulaires pour un modèle classique (module 12)
-df_noeuds["pagerank"] = df_noeuds.index.map(nx.pagerank(G))
-df_noeuds["degre"] = df_noeuds.index.map(dict(G.degree()))</pre></div>
+# CES MESURES DEVIENNENT DES VARIABLES TABULAIRES pour un modèle classique (module 12)
+df_noeuds["pagerank"]     = df_noeuds.index.map(nx.pagerank(G))
+df_noeuds["degre"]        = df_noeuds.index.map(dict(G.degree()))
+df_noeuds["clustering"]   = df_noeuds.index.map(nx.clustering(G))
+df_noeuds["intermediar."] = df_noeuds.index.map(centralite)</pre></div>
 
-    <p>La dernière ligne mérite d'être soulignée : dans bien des projets, la meilleure façon d'exploiter un graphe n'est pas d'entraîner un modèle de graphe, mais d'en <strong>extraire des features</strong> et de les donner à un gradient boosting. C'est simple, robuste, et souvent suffisant. Les plongements de nœuds (<em>node2vec</em>, DeepWalk), qui appliquent l'idée de word2vec à des marches aléatoires sur le graphe, constituent l'étape intermédiaire.</p>
+    <p>Les quatre dernières lignes méritent d'être soulignées : dans bien des projets, la meilleure façon d'exploiter un graphe n'est pas d'entraîner un modèle de graphe, mais d'en <strong>extraire des variables</strong> et de les donner à un gradient boosting. C'est simple, robuste, interprétable, et souvent suffisant. Les plongements de nœuds (<em>node2vec</em>, DeepWalk), qui appliquent l'idée de word2vec à des marches aléatoires sur le graphe, constituent l'étape intermédiaire.</p>
 
     <h2 id="gnn">6. Réseaux de neurones sur graphes</h2>
-    <p>Un GNN généralise la convolution à une structure irrégulière. Le principe, appelé <strong>passage de messages</strong> : chaque nœud met à jour sa représentation en agrégeant celles de ses voisins, et on répète l'opération sur \(K\) couches — après \(K\) tours, un nœud « voit » son voisinage à distance \(K\).</p>
+    <p>Un GNN généralise la convolution à une structure irrégulière. Sur une image, chaque pixel a exactement huit voisins disposés de façon régulière, ce qui permet un noyau fixe ; dans un graphe, un nœud peut avoir deux ou deux mille voisins, sans ordre. Le principe, appelé <strong>passage de messages</strong> : chaque nœud met à jour sa représentation en agrégeant celles de ses voisins.</p>
+
+    <div class="code-label">une couche de passage de messages</div>
+    <div class="code-block"><pre>        ○ B (h_B)
+         ╲                  1. MESSAGE  : chaque voisin envoie ψ(h_A, h_v, e)
+   C ○───● A (h_A)          2. AGRÉGATION : on combine les messages reçus par une
+         ╱                     opération INVARIANTE PAR PERMUTATION (somme, moyenne,
+        ○ D (h_D)               max) — le résultat ne doit pas dépendre de l'ordre
+                              arbitraire des voisins
+   h_A ← φ(h_A, ⊕{messages de B, C, D})
+                           3. MISE À JOUR : on combine avec l'état précédent
+
+   Après K couches, un nœud "voit" son voisinage à distance K.</pre></div>
+
     <div style="text-align:center;overflow-x:auto">\[ h_v^{(k+1)} = \phi\Big(h_v^{(k)},\; \bigoplus_{u \in \mathcal{N}(v)} \psi\big(h_v^{(k)}, h_u^{(k)}, e_{uv}\big)\Big) \]</div>
-    <p>où \(\bigoplus\) est une agrégation invariante par permutation (somme, moyenne, max) — c'est ce qui garantit que le résultat ne dépend pas de l'ordre arbitraire des voisins. Les variantes diffèrent par le choix de \(\psi\) et de l'agrégation : <strong>GCN</strong> (moyenne normalisée par les degrés), <strong>GraphSAGE</strong> (échantillonnage des voisins, ce qui permet de passer à l'échelle), <strong>GAT</strong> (pondération des voisins par attention, module 14), <strong>MPNN</strong> (formulation générale avec attributs d'arêtes, la plus utilisée en chimie).</p>
+
+    <p>Les variantes diffèrent par le choix de \(\psi\) et de l'agrégation : <strong>GCN</strong> (moyenne normalisée par les degrés), <strong>GraphSAGE</strong> (échantillonnage d'un nombre fixe de voisins, ce qui permet de passer à l'échelle), <strong>GAT</strong> (pondération des voisins par attention, module 14), <strong>MPNN</strong> (formulation générale avec attributs d'arêtes, la plus utilisée en chimie).</p>
 
     <div class="code-label">trois niveaux de tâches</div>
-    <div class="code-block"><pre>Nœud     classification ou régression par nœud     détection de fraude, rôle dans un réseau
-Arête    prédiction de lien                       recommandation, complétion de graphe
-                                                  de connaissances, interactions
-Graphe   propriété d'un graphe entier             propriété d'une molécule, d'un circuit,
-                                                  d'une structure — après "pooling" global</pre></div>
+    <div class="code-block"><pre>Nœud     classification ou régression par nœud   détection de fraude, rôle dans
+                                                 un réseau, propriété d'un atome
+Arête    prédiction de lien                      recommandation, complétion de
+                                                 graphe de connaissances
+Graphe   propriété du graphe ENTIER              propriété d'une molécule, d'un
+         (après agrégation globale)              circuit, d'une structure</pre></div>
 
-    <p>Les applications les plus convaincantes sont scientifiques : prédiction de propriétés moléculaires et de matériaux (où le graphe atomes-liaisons est la représentation naturelle), simulation physique apprise sur maillage — un maillage de calcul <em>est</em> un graphe, et les GNN y apprennent des opérateurs de propagation, ce qui rejoint directement le <a href="project7-m19.html">module 19</a> —, prévision de trafic sur réseau routier, et détection de fraude par anneaux de comptes liés.</p>
+    <p>Les applications les plus convaincantes sont scientifiques : prédiction de propriétés moléculaires et de matériaux (le graphe atomes-liaisons est la représentation naturelle), simulation physique apprise sur maillage — un maillage de calcul <em>est</em> un graphe, et les GNN y apprennent des opérateurs de propagation, ce qui rejoint le <a href="project7-m19.html">module 19</a> —, prévision de trafic sur réseau routier, et détection de fraude par anneaux de comptes liés.</p>
 
     <div class="warning-block">
-      <strong>Trois limites à connaître avant de s'y lancer.</strong> Le <em>lissage excessif</em> : au-delà de trois ou quatre couches, toutes les représentations convergent vers la même valeur et la performance chute — les GNN sont des réseaux <em>peu profonds</em>. Le <em>passage à l'échelle</em> : un nœud très connecté fait exploser le voisinage à agréger, d'où l'échantillonnage (GraphSAGE) ou le découpage en sous-graphes. Le <em>pouvoir d'expression</em> : les GNN standards ne distinguent pas certains graphes non isomorphes (limite du test de Weisfeiler-Lehman). Enfin, la fuite de données prend ici une forme particulière : dans un graphe, découper au hasard laisse des arêtes reliant train et test — il faut un découpage par sous-graphe ou par période.
+      <strong>Trois limites à connaître avant de s'y lancer.</strong> Le <em>lissage excessif</em> : à chaque couche, les représentations se mélangent un peu plus, et au-delà de trois ou quatre couches, tous les nœuds finissent par se ressembler — les GNN sont des réseaux <em>peu profonds</em>, contrairement aux CNN. Le <em>passage à l'échelle</em> : un nœud très connecté fait exploser le voisinage à agréger, d'où l'échantillonnage (GraphSAGE) ou le découpage en sous-graphes. Le <em>pouvoir d'expression</em> : les GNN standards ne distinguent pas certains graphes non isomorphes (limite du test de Weisfeiler-Lehman). Enfin, la fuite de données prend ici une forme particulière : découper les nœuds au hasard laisse des arêtes reliant train et test, si bien que l'information circule d'un côté à l'autre pendant l'entraînement — il faut un découpage par sous-graphe ou par période.
     </div>
 
     <h2 id="multimodal">7. Multimodal</h2>
-    <p>Combiner plusieurs modalités se fait de trois façons : <em>fusion précoce</em> (concaténer les données brutes, rarement efficace), <em>fusion tardive</em> (un modèle par modalité, puis combinaison des prédictions — simple et robuste), et <em>fusion intermédiaire</em> (concaténer les représentations apprises, le meilleur compromis en général). Les modèles contrastifs type <strong>CLIP</strong> vont plus loin en alignant deux modalités dans un <em>espace commun</em> : une image et sa description y sont voisines, ce qui permet la recherche d'images par texte et la classification sans exemple étiqueté.</p>
-    <p>En contexte industriel, le cas le plus fréquent est la combinaison d'un tableau de mesures, d'un texte libre (rapport d'intervention) et d'une image ou d'un signal. La recette qui marche : encoder chaque modalité en un vecteur, les concaténer, et laisser un gradient boosting faire la synthèse.</p>
+    <p>Combiner plusieurs modalités se fait de trois façons : <em>fusion précoce</em> (concaténer les données brutes, rarement efficace car les échelles et les structures n'ont rien à voir), <em>fusion tardive</em> (un modèle par modalité, puis combinaison des prédictions — simple et robuste), et <em>fusion intermédiaire</em> (concaténer les représentations apprises, le meilleur compromis en général).</p>
+    <p>Les modèles contrastifs type <strong>CLIP</strong> vont plus loin en alignant deux modalités dans un <em>espace commun</em> : une image et sa description y sont voisines, ce qui permet la recherche d'images par texte et la classification sans aucun exemple étiqueté (module 11). En contexte industriel, le cas le plus fréquent est la combinaison d'un tableau de mesures, d'un texte libre (rapport d'intervention) et d'une image ou d'un signal. La recette qui marche : encoder chaque modalité en un vecteur, les concaténer, et laisser un gradient boosting faire la synthèse.</p>
 
     <h2 id="annotation">8. Annotation et qualité</h2>
     <p>Sur ces données, la performance est presque toujours limitée par les annotations, pas par le modèle. Quelques principes qui économisent beaucoup de temps :</p>
     <ul>
-      <li><strong>Écrire un guide d'annotation</strong> avant d'annoter, et le tester sur vingt exemples avec deux annotateurs. Les désaccords révèlent les cas limites que la définition du problème n'avait pas tranchés.</li>
-      <li><strong>Mesurer l'accord inter-annotateurs</strong> (kappa de Cohen, alpha de Krippendorff). Il plafonne la performance atteignable : si deux experts ne sont d'accord qu'à 80 %, aucun modèle n'ira au-delà de façon significative.</li>
+      <li><strong>Écrire un guide d'annotation</strong> avant d'annoter, et le tester sur vingt exemples avec deux annotateurs. Les désaccords révèlent les cas limites que la définition du problème n'avait pas tranchés — et c'est le vrai livrable de cette étape.</li>
+      <li><strong>Mesurer l'accord inter-annotateurs</strong> (kappa de Cohen, alpha de Krippendorff). Il plafonne la performance atteignable : si deux experts ne sont d'accord qu'à 80 %, aucun modèle n'ira significativement au-delà, et un score de 85 % doit éveiller les soupçons plutôt que la satisfaction.</li>
       <li><strong>Annoter en priorité les cas informatifs</strong> plutôt qu'au hasard : c'est l'apprentissage actif du <a href="project7-m11.html">module 11</a>.</li>
-      <li><strong>Vérifier les étiquettes existantes</strong> : les jeux de référence publics contiennent eux-mêmes des erreurs, et un modèle très confiant en désaccord avec l'étiquette est un excellent détecteur d'annotation fautive (<code>cleanlab</code> automatise cette recherche).</li>
+      <li><strong>Vérifier les étiquettes existantes</strong> : les jeux de référence publics contiennent eux-mêmes des erreurs, et un modèle très confiant en désaccord avec l'étiquette est un excellent détecteur d'annotation fautive (<code>cleanlab</code>, module 11).</li>
     </ul>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
         <li>Sur données non structurées, la représentation compte plus que l'algorithme.</li>
-        <li>TF-IDF et régression logistique restent une baseline honnête ; mesurer l'écart avant de sortir un transformer.</li>
+        <li>TF-IDF et régression logistique restent une baseline honnête, et interprétable mot par mot ; mesurer l'écart avant de sortir un transformer.</li>
         <li>En vision, les tâches utiles sont souvent détection et segmentation ; le Dice et l'IoU y remplacent l'accuracy, et l'augmentation doit respecter la physique.</li>
         <li>L'audio se ramène à une image temps-fréquence ; découper les jeux par locuteur ou appareil.</li>
-        <li>Un graphe s'exploite d'abord par des features structurelles ; les GNN sont peu profonds, sensibles au lissage excessif, et exigent un découpage adapté.</li>
+        <li>Un graphe s'exploite d'abord par des variables structurelles données à un modèle classique.</li>
+        <li>Les GNN agrègent les voisins de façon invariante par permutation ; ils sont peu profonds, sensibles au lissage excessif, et exigent un découpage adapté.</li>
         <li>La qualité et la cohérence des annotations plafonnent la performance : les mesurer avant de changer de modèle.</li>
       </ul>
     </div>
