@@ -45,12 +45,12 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Dans presque tous les projets industriels, les données brutes abondent et les données <em>étiquetées</em> manquent : annoter demande un expert, un essai destructif, ou simplement du temps que personne n'a. Ce module rassemble les stratégies qui permettent d'apprendre quand même — et surtout, comment décider où dépenser le budget d'annotation.</p>
+    <p>Dans presque tous les projets industriels, les données brutes abondent et les données <em>étiquetées</em> manquent : annoter demande un expert, un essai destructif, ou simplement du temps que personne n'a. Ce module rassemble les stratégies qui permettent d'apprendre quand même — et surtout, comment décider où dépenser un budget d'annotation limité.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#taxonomie">Situer le problème</a></li>
+        <li><a href="#taxonomie">Situer son problème</a></li>
         <li><a href="#transfert">Transfert : l'option par défaut</a></li>
         <li><a href="#actif">Apprentissage actif</a></li>
         <li><a href="#semi">Semi-supervisé</a></li>
@@ -62,132 +62,218 @@
       </ol>
     </div>
 
-    <h2 id="taxonomie">1. Situer le problème</h2>
-    <div class="code-label">quelle stratégie selon ce dont on dispose</div>
-    <div class="code-block"><pre>Situation                                        Stratégie
-─────────────────────────────────────────────────────────────────────────────────
-Un modèle pré-entraîné existe sur un domaine     transfert / fine-tuning (section 2)
-proche
-On PEUT annoter, mais c'est cher                 apprentissage actif (section 3)
-Beaucoup de données non annotées disponibles     semi-supervisé (4), auto-supervisé (5)
-Des règles métier ou des heuristiques existent   supervision faible (section 6)
-Les étiquettes existent mais sont bruitées       apprentissage robuste au bruit (6)
-Un simulateur du phénomène est disponible        données synthétiques, sim2real (7)
-Quelques exemples seulement, et un gros modèle   few-shot / zero-shot (section 8)</pre></div>
+    <h2 id="taxonomie">1. Situer son problème</h2>
+    <p>Le point de départ n'est pas « quelle méthode est la plus moderne » mais « de quoi est-ce que je dispose ».</p>
+    <div class="code-label">ce dont vous disposez → la stratégie</div>
+    <div class="code-block"><pre>Un modèle pré-entraîné existe sur un        transfert / fine-tuning       (section 2)
+domaine proche
+On PEUT annoter, mais c'est cher            apprentissage actif           (section 3)
+Beaucoup de données non annotées            semi-supervisé (4),
+disponibles                                 auto-supervisé (5)
+Des règles métier ou des heuristiques       supervision faible            (section 6)
+existent
+Les étiquettes existent mais sont bruitées  apprentissage robuste au bruit (section 6)
+Un simulateur du phénomène est disponible   données synthétiques, sim2real (section 7)
+Quelques exemples seulement, et un gros     few-shot / zero-shot          (section 8)
+modèle de fondation accessible</pre></div>
 
-    <p>Ces approches se combinent, et l'ordre compte : commencer par le transfert, puis récupérer des représentations auto-supervisées sur les données non annotées, puis annoter activement les cas informatifs. C'est le pipeline qui donne le meilleur résultat par euro dépensé.</p>
+    <p>Ces approches se combinent, et l'ordre compte : commencer par le transfert, puis récupérer des représentations auto-supervisées sur les données non annotées dont on dispose, puis annoter activement les cas informatifs. C'est ce pipeline qui donne le meilleur résultat par euro dépensé.</p>
 
     <h2 id="transfert">2. Transfert : l'option par défaut</h2>
-    <p>Réutiliser un modèle pré-entraîné est presque toujours le premier réflexe (modules 14 et 20). Ce qu'il faut savoir pour bien le faire :</p>
-    <ul>
-      <li><strong>Geler puis dégeler</strong> — entraîner d'abord la tête seule, puis affiner les dernières couches avec un taux d'apprentissage 10 à 100 fois plus faible. Affiner tout, tout de suite, détruit les représentations utiles (<em>oubli catastrophique</em>).</li>
-      <li><strong>Extraction de features</strong> — plus radical encore : figer complètement le réseau, extraire les vecteurs de la couche pénultième et entraîner une régression logistique dessus. Avec quelques centaines d'exemples, cela bat souvent un fine-tuning qui surapprend.</li>
-      <li><strong>Distance entre domaines</strong> — le transfert fonctionne d'autant mieux que le domaine source ressemble à la cible. D'ImageNet vers des photographies industrielles, très bien ; vers des images de tomographie ou de microscopie, nettement moins — les statistiques de bas niveau diffèrent. Dans ce cas, un pré-entraînement auto-supervisé sur ses propres images non annotées est supérieur.</li>
-      <li><strong>Adaptation de domaine</strong> — cas où l'on a des étiquettes sur un domaine source et aucune sur le domaine cible. On y aligne les distributions de représentations (CORAL, DANN) ou on recalibre simplement les statistiques de normalisation sur les données cibles, ce qui est souvent étonnamment efficace.</li>
-    </ul>
+    <p>Le principe : un modèle entraîné sur des millions d'images a appris des représentations générales — contours, textures, formes — qui servent bien au-delà de sa tâche d'origine. On récupère ces représentations plutôt que de les réapprendre à partir de 2 000 images.</p>
+
+    <div class="code-label">trois niveaux, du plus léger au plus lourd</div>
+    <div class="code-block"><pre>EXTRACTION DE FEATURES   on fige tout le réseau, on récupère le vecteur de la couche
+                         pénultième, on entraîne une régression logistique dessus.
+                         Quelques centaines d'exemples suffisent. Très rapide, et
+                         souvent MEILLEUR qu'un fine-tuning qui surapprendrait.
+
+FINE-TUNING PARTIEL      on dégèle les dernières couches et on affine avec un taux
+                         d'apprentissage 10 à 100× plus faible que d'habitude.
+                         Le bon compromis à partir de quelques milliers d'exemples.
+
+FINE-TUNING COMPLET      tout le réseau est réentraîné. Demande beaucoup de données,
+                         sous peine d'OUBLI CATASTROPHIQUE : le réseau perd les
+                         représentations générales qui faisaient sa valeur.</pre></div>
+
+    <div class="code-label">Python — extraction de features, la version qui marche avec peu de données</div>
+    <div class="code-block"><pre>import torch, torchvision as tv
+from sklearn.linear_model import LogisticRegression
+
+modele = tv.models.resnet50(weights="IMAGENET1K_V2")
+modele.fc = torch.nn.Identity()          # on retire la tête de classification
+modele.eval()
+
+with torch.no_grad():                    # pas de gradient : on n'entraîne rien ici
+    F = torch.cat([modele(xb) for xb, _ in chargeur])   # (n, 2048) embeddings
+
+clf = LogisticRegression(max_iter=2000, C=1.0).fit(F.numpy(), y)
+# 300 images étiquetées suffisent souvent à dépasser 90 % sur une tâche simple</pre></div>
+
+    <p>Deux points de vigilance. La <strong>distance entre domaines</strong> décide du succès : d'ImageNet vers des photographies industrielles, le transfert fonctionne très bien ; vers des images de tomographie, de microscopie ou de spectrogrammes, nettement moins — les statistiques de bas niveau n'ont rien à voir. Dans ce cas, un pré-entraînement auto-supervisé sur ses propres images non annotées (section 5) est supérieur. Et l'<strong>adaptation de domaine</strong> traite le cas où l'on a des étiquettes sur un domaine source et aucune sur le domaine cible : on y aligne les distributions de représentations (CORAL, DANN), ou l'on recalibre simplement les statistiques de normalisation sur les données cibles — souvent étonnamment efficace pour un effort minime.</p>
 
     <h2 id="actif">3. Apprentissage actif</h2>
-    <p>Principe : plutôt que d'annoter au hasard, laisser le modèle désigner les exemples dont l'annotation lui apprendrait le plus. La boucle est identique à celle de l'optimisation bayésienne (module 17) — un critère d'acquisition, une évaluation coûteuse, une mise à jour.</p>
+    <p>Principe : plutôt que d'annoter au hasard, laisser le modèle désigner les exemples dont l'annotation lui apprendrait le plus. La boucle est identique à celle de l'optimisation bayésienne (module 17) — un critère d'acquisition, une évaluation coûteuse, une mise à jour — et l'intuition est la même : on ne mesure pas là où l'on sait déjà.</p>
 
     <div class="code-label">critères de sélection</div>
-    <div class="code-block"><pre>Moindre confiance      1 - max p(y|x) : les cas où le modèle hésite le plus
-Marge                  écart entre les deux meilleures classes. Souvent le meilleur
-                       critère simple en classification multiclasse.
-Entropie               incertitude globale de la distribution prédite
-Désaccord de comité    plusieurs modèles votent ; on annote là où ils divergent.
-(query-by-committee)   Très bon avec un ensemble profond (module 9).
-Diversité / core-set   couvrir l'espace des représentations plutôt que se concentrer
-                       sur une seule zone ambiguë
+    <div class="code-block"><pre>Moindre confiance       1 - max p(y|x) : les cas où le modèle hésite le plus
+Marge                   écart entre les deux meilleures classes. Souvent le meilleur
+                        critère simple en classification multiclasse.
+Entropie                incertitude globale de la distribution prédite
+Désaccord de comité     plusieurs modèles votent ; on annote là où ils divergent.
+                        Très bon avec un ensemble profond (module 9).
+Diversité / core-set    couvrir l'espace des représentations plutôt que se concentrer
+                        sur une seule zone ambiguë
 Incertitude épistémique cibler ce que le modèle IGNORE plutôt que ce qui est
-                       intrinsèquement bruité — la distinction du module 9 est ici
-                       décisive : annoter du bruit aléatoire n'apporte rien.
-Espérance de gain      critère théoriquement optimal, coûteux à calculer
+                        intrinsèquement bruité — la distinction du module 9 est ici
+                        décisive : annoter du bruit pur n'apporte rien.
+Espérance de gain       critère théoriquement optimal, coûteux à calculer
 d'information</pre></div>
 
-    <div class="code-label">Python — une boucle d'annotation par lots</div>
+    <div class="code-label">Python — une boucle d'annotation par lots, complète</div>
     <div class="code-block"><pre>import numpy as np
+from sklearn.cluster import KMeans
 
+rng = np.random.default_rng(0)
 etiquetes = np.zeros(len(X), dtype=bool)
-etiquetes[rng.choice(len(X), 100, replace=False)] = True    # amorçage ALÉATOIRE
+etiquetes[rng.choice(len(X), 100, replace=False)] = True     # amorçage ALÉATOIRE
 
 for tour in range(10):
     modele.fit(X[etiquetes], y[etiquetes])
 
+    # 1. incertitude : la marge entre les deux classes les plus probables
     P = modele.predict_proba(X[~etiquetes])
     tries = np.sort(P, axis=1)
-    marge = tries[:, -1] - tries[:, -2]                     # petite marge = ambigu
+    marge = tries[:, -1] - tries[:, -2]              # petite marge = cas ambigu
 
-    # diversité : on répartit le lot entre plusieurs groupes de l'espace des features
+    # 2. on présélectionne les 500 plus ambigus…
     candidats = np.where(~etiquetes)[0][np.argsort(marge)[:500]]
-    lot = selection_diversifiee(candidats, k=50)            # k-means sur les embeddings
 
-    y[lot] = annoter(X[lot])                                # l'étape coûteuse
-    etiquetes[lot] = True</pre></div>
+    # 3. …puis on impose la DIVERSITÉ : un représentant par groupe
+    km = KMeans(n_clusters=50, n_init=5, random_state=0).fit(Z[candidats])
+    lot = [candidats[np.argmin(np.linalg.norm(Z[candidats] - c, axis=1))]
+           for c in km.cluster_centers_]
+
+    y[lot] = annoter(X[lot])                          # LA seule étape coûteuse
+    etiquetes[lot] = True
+    print(f"tour {tour}: {etiquetes.sum()} étiquettes, "
+          f"score={modele.score(X_test_aleatoire, y_test_aleatoire):.3f}")</pre></div>
 
     <div class="warning-block">
-      <strong>Trois pièges de l'apprentissage actif.</strong> D'abord, le jeu annoté devient <em>non représentatif</em> : il est concentré près des frontières de décision. Il ne peut donc plus servir à estimer la performance — il faut conserver un jeu de test tiré <strong>aléatoirement</strong> et intouchable. Ensuite, sélectionner un lot par pure incertitude renvoie cinquante exemples quasi identiques : l'ajout d'un critère de diversité n'est pas optionnel. Enfin, le démarrage à froid : avec un modèle initial mauvais, ses scores d'incertitude n'ont aucun sens — les premières centaines d'annotations doivent être tirées au hasard.
+      <strong>Trois pièges de l'apprentissage actif.</strong> D'abord, le jeu annoté devient <em>non représentatif</em> : il est concentré près des frontières de décision. Il ne peut donc plus servir à estimer la performance — il faut conserver un jeu de test tiré <strong>aléatoirement</strong> et intouchable, comme dans le code ci-dessus. Ensuite, sélectionner un lot par pure incertitude renvoie cinquante exemples quasi identiques, et le gain est cinquante fois moindre qu'espéré : le critère de diversité n'est pas optionnel. Enfin, le démarrage à froid : avec un modèle initial mauvais, ses scores d'incertitude n'ont aucun sens — les premières centaines d'annotations doivent être tirées au hasard.
     </div>
 
     <h2 id="semi">4. Semi-supervisé</h2>
-    <p>On exploite les données non étiquetées pour contraindre le modèle, en s'appuyant sur deux hypothèses : les points d'un même groupe dense partagent probablement une étiquette (<em>hypothèse de cluster</em>), et la frontière de décision passe dans les zones de faible densité.</p>
+    <p>On exploite les données non étiquetées pour contraindre le modèle. Deux hypothèses le justifient : les points d'un même groupe dense partagent probablement une étiquette (<em>hypothèse de cluster</em>), et la frontière de décision passe dans les zones de faible densité — elle sépare les paquets plutôt que de les traverser.</p>
     <ul>
-      <li><strong>Pseudo-étiquetage</strong> — le modèle étiquette lui-même les cas où il est très confiant, et se réentraîne dessus. Simple et souvent efficace, mais il <em>amplifie ses propres erreurs</em> : indispensable de fixer un seuil de confiance élevé, de recalibrer les probabilités (module 7) et de vérifier la performance à chaque tour.</li>
-      <li><strong>Régularisation par cohérence</strong> — exiger que deux versions augmentées de la même donnée reçoivent la même prédiction. C'est l'idée de <strong>FixMatch</strong> : une augmentation faible produit la pseudo-étiquette, une augmentation forte doit la reproduire. L'une des méthodes les plus efficaces en vision avec très peu d'étiquettes.</li>
-      <li><strong>Propagation sur graphe</strong> — construire un graphe de voisinage (module 16) et diffuser les étiquettes le long des arêtes.</li>
+      <li><strong>Pseudo-étiquetage</strong> — le modèle étiquette lui-même les cas où il est très confiant, et se réentraîne dessus. Simple et souvent efficace, mais il <em>amplifie ses propres erreurs</em> : une erreur confiante devient une étiquette d'entraînement, donc une erreur encore plus confiante. Indispensable de fixer un seuil de confiance élevé (0,95 et plus), de recalibrer les probabilités (module 7) et de vérifier la performance à chaque tour sur un jeu annoté.</li>
+      <li><strong>Régularisation par cohérence</strong> — exiger que deux versions augmentées de la même donnée reçoivent la même prédiction. C'est l'idée de <strong>FixMatch</strong> : une augmentation <em>faible</em> produit la pseudo-étiquette, une augmentation <em>forte</em> doit la reproduire. Le modèle apprend ainsi ce à quoi il doit être invariant, sans étiquette humaine. L'une des méthodes les plus efficaces en vision avec très peu d'étiquettes.</li>
+      <li><strong>Propagation sur graphe</strong> — construire un graphe de voisinage (module 16) et diffuser les étiquettes le long des arêtes, de proche en proche.</li>
     </ul>
-    <p>Une mise en garde honnête : le semi-supervisé peut <em>dégrader</em> la performance si les hypothèses ne tiennent pas — classes qui se chevauchent fortement, ou données non étiquetées issues d'une distribution différente (des images d'un autre capteur, par exemple). Il faut donc toujours le comparer à la baseline purement supervisée sur le même jeu de test.</p>
+    <p>Une mise en garde honnête : le semi-supervisé peut <em>dégrader</em> la performance si ses hypothèses ne tiennent pas — classes qui se chevauchent fortement, ou données non étiquetées issues d'une distribution différente (un autre capteur, une autre période). Il faut donc toujours le comparer à la baseline purement supervisée sur le même jeu de test, et accepter de l'abandonner.</p>
 
     <h2 id="auto">5. Auto-supervisé</h2>
-    <p>Ici, on fabrique une tâche à partir des données elles-mêmes, sans aucune étiquette humaine, uniquement pour apprendre de bonnes représentations — qu'un petit modèle supervisé exploitera ensuite.</p>
+    <p>Ici, on fabrique une tâche à partir des données elles-mêmes, sans aucune étiquette humaine, dans le seul but d'apprendre de bonnes représentations — qu'un petit modèle supervisé exploitera ensuite. C'est ce qui a permis de pré-entraîner sur des corpus gigantesques non annotés, et c'est à l'origine des grands modèles actuels.</p>
     <ul>
-      <li><strong>Contrastif</strong> (SimCLR, MoCo) — rapprocher deux vues augmentées d'une même donnée, éloigner celles de données différentes. Le choix des augmentations <em>définit</em> les invariances apprises : c'est la décision de conception principale.</li>
+      <li><strong>Contrastif</strong> (SimCLR, MoCo) — rapprocher dans l'espace de représentation deux vues augmentées d'une même donnée, éloigner celles de données différentes. Le choix des augmentations <em>définit</em> les invariances apprises : si l'on inclut des variations de couleur, le modèle apprendra à ignorer la couleur — ce qui est souhaitable pour reconnaître un objet, catastrophique pour trier des composants par code couleur.</li>
       <li><strong>Masquage</strong> (BERT pour le texte, MAE pour l'image) — cacher une partie de l'entrée et la reconstruire. Plus stable que le contrastif, sans besoin de paires négatives.</li>
-      <li><strong>Prédiction de contexte</strong> — prédire la suite d'un signal, l'ordre de fragments, la rotation appliquée.</li>
+      <li><strong>Prédiction de contexte</strong> — prédire la suite d'un signal, l'ordre de fragments, la rotation appliquée à une image.</li>
     </ul>
-    <p>C'est l'approche à privilégier quand on possède beaucoup de données brutes spécifiques (des millions de spectres, d'images de production, de journaux machine) et peu d'annotations : un pré-entraînement sur <em>ses propres</em> données bat généralement un transfert depuis un domaine éloigné.</p>
+    <p>C'est l'approche à privilégier quand on possède beaucoup de données brutes <em>spécifiques</em> — des millions de spectres, d'images de production, de journaux machine — et peu d'annotations : un pré-entraînement sur ses propres données bat généralement un transfert depuis un domaine éloigné.</p>
 
     <h2 id="faible">6. Supervision faible et étiquettes bruitées</h2>
-    <p><strong>Supervision faible</strong> : plutôt que d'annoter un par un, on écrit des <em>fonctions d'étiquetage</em> — des règles, des expressions régulières, des seuils métier, un modèle existant — chacune imprécise et couvrant partiellement les données. Un modèle génératif (approche Snorkel) estime alors la fiabilité de chaque règle à partir de leurs accords et désaccords, et produit des étiquettes probabilistes pour tout le corpus. Trois experts qui écrivent dix règles en une journée produisent souvent l'équivalent de plusieurs semaines d'annotation manuelle.</p>
 
-    <p><strong>Étiquettes bruitées</strong> : elles sont la norme, pas l'exception. Quelques défenses efficaces : privilégier les pertes robustes (MAE, Huber, perte symétrique) plutôt que l'entropie croisée pure, qui sur-pénalise les exemples mal étiquetés ; utiliser le <em>label smoothing</em> ; entraîner en priorité sur les exemples de faible perte (<em>co-teaching</em>) ; et surtout <strong>détecter les erreurs d'annotation</strong> — un modèle entraîné en validation croisée et très confiant en désaccord avec l'étiquette signale un cas à re-vérifier (<code>cleanlab</code>). Corriger 2 % d'étiquettes fausses rapporte souvent davantage que tout le réglage d'hyperparamètres.</p>
+    <h3>Supervision faible</h3>
+    <p>Plutôt que d'annoter exemple par exemple, on écrit des <em>fonctions d'étiquetage</em> : des règles, des expressions régulières, des seuils métier, un modèle existant. Chacune est imprécise et ne couvre qu'une partie des données ; prises ensemble, elles se recoupent. Un modèle génératif (approche Snorkel) estime alors la fiabilité de chaque règle à partir de leurs accords et désaccords — sans connaître la vérité — et produit des étiquettes probabilistes pour tout le corpus.</p>
+
+    <div class="code-label">Python — le principe, en pseudo-code Snorkel</div>
+    <div class="code-block"><pre>from snorkel.labeling import labeling_function, PandasLFApplier, LabelModel
+
+ABSTIEN, NEGATIF, POSITIF = -1, 0, 1
+
+@labeling_function()
+def contient_mot_cle(x):
+    return POSITIF if "remboursement" in x.texte.lower() else ABSTIEN
+
+@labeling_function()
+def montant_eleve(x):
+    return POSITIF if x.montant &gt; 5000 else ABSTIEN
+
+@labeling_function()
+def client_historique(x):
+    return NEGATIF if x.anciennete_ans &gt; 10 else ABSTIEN
+
+L = PandasLFApplier([contient_mot_cle, montant_eleve, client_historique]).apply(df)
+modele_etiquettes = LabelModel(cardinality=2).fit(L)      # estime la fiabilité de chaque règle
+y_probable = modele_etiquettes.predict_proba(L)[:, 1]     # étiquettes PROBABILISTES</pre></div>
+    <p>Trois experts qui écrivent dix règles en une journée produisent souvent l'équivalent de plusieurs semaines d'annotation manuelle — et les règles se documentent, se versionnent et se corrigent, contrairement à des étiquettes figées.</p>
+
+    <h3>Étiquettes bruitées</h3>
+    <p>Elles sont la norme, pas l'exception : les jeux de référence publics eux-mêmes contiennent quelques pour cent d'erreurs. Les défenses efficaces :</p>
+    <ul>
+      <li><strong>Pertes robustes</strong> — MAE, Huber ou perte symétrique plutôt qu'entropie croisée pure, qui sur-pénalise les exemples mal étiquetés (elle tend vers l'infini quand le modèle contredit fortement l'étiquette).</li>
+      <li><strong>Label smoothing</strong> — remplacer la cible 1 par 0,9 : le modèle cesse de chercher une certitude absolue, ce qui limite l'effet des étiquettes fausses.</li>
+      <li><strong>Co-teaching</strong> — entraîner deux réseaux qui s'échangent les exemples de <em>faible</em> perte, considérés comme plus fiables.</li>
+      <li><strong>Détecter les erreurs</strong> — un modèle entraîné en validation croisée et très confiant <em>en désaccord</em> avec l'étiquette signale un cas à re-vérifier. <code>cleanlab</code> automatise cette recherche.</li>
+    </ul>
+
+    <div class="code-label">Python — trouver les étiquettes douteuses</div>
+    <div class="code-block"><pre>from cleanlab.filter import find_label_issues
+from sklearn.model_selection import cross_val_predict
+
+proba = cross_val_predict(modele, X, y, cv=5, method="predict_proba")
+suspects = find_label_issues(labels=y, pred_probs=proba, return_indices_ranked_by="self_confidence")
+print(f"{len(suspects)} étiquettes suspectes sur {len(y)}")
+# relire les 50 premières à la main : c'est souvent l'heure la mieux investie du projet</pre></div>
+    <p>Corriger 2 % d'étiquettes fausses rapporte souvent davantage que tout le réglage d'hyperparamètres — et le gain est <em>permanent</em>, puisqu'il porte sur les données et non sur un modèle.</p>
 
     <h2 id="synthetique">7. Données synthétiques et simulation</h2>
-    <p>Quand un simulateur du phénomène existe — et c'est fréquent en ingénierie (module 19) — il devient une source illimitée de données étiquetées, puisque la vérité terrain est connue par construction. Le problème est le <strong>fossé simulation-réalité</strong> : un modèle entraîné sur des images de synthèse échoue sur des images réelles à cause de différences subtiles de texture, de bruit et d'éclairage.</p>
+    <p>Quand un simulateur du phénomène existe — et c'est fréquent en ingénierie (module 19) — il devient une source illimitée de données étiquetées, puisque la vérité terrain est connue par construction. Le problème est le <strong>fossé simulation-réalité</strong> : un modèle entraîné sur des images de synthèse échoue sur des images réelles à cause de différences subtiles de texture, de bruit et d'éclairage que l'œil humain ne remarque même pas.</p>
     <ul>
-      <li><strong>Randomisation de domaine</strong> — faire varier massivement et exagérément les paramètres non essentiels du simulateur (textures, éclairages, bruits, frottements). Le réel devient alors « un cas parmi d'autres » du domaine d'entraînement. C'est la technique qui a permis les transferts sim2real les plus convaincants en robotique (module 18).</li>
-      <li><strong>Mélange et ajustement</strong> — pré-entraîner sur le synthétique, affiner sur un petit jeu réel : très efficace, et c'est souvent tout ce dont on a besoin.</li>
-      <li><strong>Génération par modèle</strong> — VAE, GAN, modèles de diffusion, ou LLM pour du texte. Utile pour équilibrer des classes rares, mais le modèle génératif n'invente rien : il recombine ce qu'il a vu. Entraîner massivement sur des données générées par un modèle entraîne un appauvrissement progressif de la diversité.</li>
+      <li><strong>Randomisation de domaine</strong> — faire varier massivement, et même de façon exagérée, les paramètres non essentiels du simulateur : textures, éclairages, bruits, frottements, couleurs. Le monde réel devient alors « un cas parmi d'autres » du domaine d'entraînement, et le modèle apprend à ignorer ce qui varie. C'est la technique qui a permis les transferts sim2real les plus convaincants en robotique (module 18).</li>
+      <li><strong>Mélange et ajustement</strong> — pré-entraîner sur le synthétique, affiner sur un petit jeu réel. Très efficace, et souvent tout ce dont on a besoin.</li>
+      <li><strong>Génération par modèle</strong> — VAE, GAN, modèles de diffusion, ou LLM pour du texte. Utile pour équilibrer des classes rares, mais un modèle génératif n'invente rien : il recombine ce qu'il a vu. Entraîner massivement sur des données générées appauvrit progressivement la diversité.</li>
       <li><strong>Confidentialité</strong> — les données synthétiques sont parfois présentées comme une solution au partage de données personnelles. À manier avec prudence : sans garantie formelle (confidentialité différentielle, module 25), un générateur peut mémoriser et restituer des enregistrements réels.</li>
     </ul>
 
     <div class="warning-block">
-      <strong>Évaluer, toujours, sur des données réelles.</strong> Un modèle entraîné sur du synthétique et évalué sur du synthétique affiche des scores excellents et sans signification. Le jeu de test doit provenir du monde réel, dans les conditions d'exploitation visées — c'est la seule mesure qui compte.
+      <strong>Évaluer, toujours, sur des données réelles.</strong> Un modèle entraîné sur du synthétique et évalué sur du synthétique affiche des scores excellents et sans aucune signification. Le jeu de test doit provenir du monde réel, dans les conditions d'exploitation visées — c'est la seule mesure qui compte, et il faut donc réserver une partie du budget d'annotation à sa constitution.
     </div>
 
     <h2 id="fewshot">8. Few-shot et zero-shot</h2>
-    <p>Les grands modèles pré-entraînés ont déplacé la frontière : un LLM (module 20) classe correctement du texte avec trois exemples dans son prompt, CLIP (module 16) reconnaît des catégories décrites en langage naturel sans aucun exemple. Pour un prototype ou une tâche à faible volume, c'est souvent la solution la plus rapide, et elle permet surtout de <em>tester la valeur du projet</em> avant d'investir dans l'annotation.</p>
-    <p>Trois réserves : le coût par prédiction reste élevé (un appel de modèle par exemple, contre quelques microsecondes pour une régression logistique) ; la performance plafonne en dessous de ce qu'atteint un petit modèle spécialisé bien entraîné dès que le domaine est technique ; et la dépendance à un fournisseur externe pose des questions de confidentialité et de reproductibilité. La trajectoire raisonnable : démarrer en zero-shot, utiliser le grand modèle pour <em>pré-annoter</em> (en faisant valider par un expert), puis distiller le tout dans un petit modèle maison qui sera dix mille fois moins cher à l'inférence.</p>
+    <p>Les grands modèles pré-entraînés ont déplacé la frontière : un LLM (module 20) classe correctement du texte avec trois exemples dans son prompt, CLIP (module 16) reconnaît des catégories décrites en langage naturel sans aucun exemple étiqueté. Pour un prototype ou une tâche à faible volume, c'est souvent la solution la plus rapide — et elle permet surtout de <em>tester la valeur du projet</em> avant d'investir dans l'annotation.</p>
+    <p>Trois réserves. Le coût par prédiction reste élevé : un appel de modèle par exemple, contre quelques microsecondes pour une régression logistique. La performance plafonne en dessous de ce qu'atteint un petit modèle spécialisé bien entraîné, dès que le domaine est technique. Et la dépendance à un fournisseur externe pose des questions de confidentialité et de reproductibilité (module 25).</p>
+    <p>La trajectoire raisonnable est donc : démarrer en zero-shot pour valider l'intérêt, utiliser le grand modèle pour <em>pré-annoter</em> en faisant valider par un expert (ce qui divise le temps d'annotation par trois ou quatre), puis distiller le tout dans un petit modèle maison qui sera des milliers de fois moins cher à l'inférence.</p>
 
     <h2 id="budget">9. Décider combien annoter</h2>
-    <p>La question la plus utile du module se pose en euros : faut-il annoter mille exemples de plus, ou changer de modèle ? La <strong>courbe d'apprentissage</strong> y répond empiriquement — on entraîne sur 10 %, 25 %, 50 %, 100 % des étiquettes disponibles et on extrapole.</p>
+    <p>La question la plus utile du module se pose en euros : faut-il annoter mille exemples de plus, ou changer de modèle ? La <strong>courbe d'apprentissage</strong> y répond empiriquement — on entraîne sur des fractions croissantes des étiquettes disponibles et on extrapole.</p>
 
     <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.model_selection import learning_curve
+    <div class="code-block"><pre>import numpy as np
+from sklearn.model_selection import learning_curve
+from scipy.optimize import curve_fit
 
 tailles, score_train, score_val = learning_curve(
     modele, X, y, train_sizes=np.linspace(0.1, 1.0, 8),
     cv=5, scoring="average_precision", n_jobs=-1)
 
 # la performance suit typiquement une loi de puissance : erreur ≈ a·n^(-b) + c
-# l'ajuster permet de PRÉDIRE le gain des 1000 prochaines annotations</pre></div>
+def loi(n, a, b, c): return a * n ** (-b) + c
+(a, b, c), _ = curve_fit(loi, tailles, 1 - score_val.mean(axis=1), p0=[1, 0.5, 0.05])
 
-    <p>La lecture décide de la suite : si la courbe de validation monte encore nettement, annoter davantage est le meilleur investissement ; si elle a plafonné loin du niveau souhaité, le problème est ailleurs — features insuffisantes, étiquettes bruitées, ou tâche intrinsèquement difficile — et mille annotations de plus ne changeront rien. C'est le même raisonnement que le diagnostic biais-variance du module 12, mais exprimé en budget.</p>
+for n in (2_000, 5_000, 10_000):
+    print(f"{n} étiquettes → erreur prédite {loi(n, a, b, c):.3f}")
+# c est l'erreur INCOMPRESSIBLE : si elle est déjà proche du score actuel,
+# annoter davantage ne changera rien.</pre></div>
+
+    <p>La lecture décide de la suite. Si la courbe de validation monte encore nettement, annoter davantage est le meilleur investissement. Si elle a plafonné loin du niveau souhaité, le problème est ailleurs — variables insuffisantes, étiquettes bruitées, ou tâche intrinsèquement difficile — et mille annotations de plus ne changeront rien. C'est le même raisonnement que le diagnostic biais-variance du module 12, mais exprimé en budget.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
         <li>Ordre d'attaque : transfert, puis auto-supervisé sur ses propres données brutes, puis annotation active.</li>
-        <li>L'apprentissage actif cible l'incertitude <em>épistémique</em>, exige de la diversité dans les lots, et impose de garder un test tiré au hasard.</li>
+        <li>Avec très peu d'exemples, l'extraction de features battra souvent un fine-tuning complet.</li>
+        <li>L'apprentissage actif cible l'incertitude <em>épistémique</em>, exige de la diversité dans les lots, et impose de garder un jeu de test tiré au hasard.</li>
         <li>Le semi-supervisé aide quand ses hypothèses tiennent — à vérifier contre la baseline supervisée.</li>
         <li>Des règles métier (supervision faible) valent souvent des semaines d'annotation manuelle.</li>
         <li>Nettoyer 2 % d'étiquettes fausses rapporte plus que tout le réglage d'hyperparamètres.</li>
