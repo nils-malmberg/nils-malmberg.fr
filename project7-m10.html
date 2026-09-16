@@ -45,7 +45,7 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes.</p>
+    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes, et qui décide pourtant du sort du projet.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
@@ -64,87 +64,142 @@
 
     <h2 id="cycle">1. Cycle de vie d'un projet</h2>
     <div class="code-label">les étapes, et leur poids réel en temps</div>
-    <div class="code-block"><pre>1. Cadrage métier          définir la question, la métrique, ce qu'on fera du résultat   ~10 %
-2. Collecte / accès        trouver, extraire, joindre les données                        ~20 %
-3. Exploration            comprendre les données, détecter les anomalies                 ~15 %
-4. Préparation            nettoyage, features, encodages                                 ~25 %
-5. Modélisation           baseline, puis itérations                                      ~10 %
-6. Évaluation             protocole, métriques, analyse d'erreurs                        ~10 %
-7. Déploiement / suivi    mise en production, monitoring, ré-entraînement                ~10 %</pre></div>
+    <div class="code-block"><pre>1. Cadrage métier       définir la question, la métrique, l'usage du résultat    ~10 %
+2. Collecte / accès     trouver, extraire, joindre les données                   ~20 %
+3. Exploration          comprendre les données, détecter les anomalies           ~15 %
+4. Préparation          nettoyage, features, encodages                           ~25 %
+5. Modélisation         baseline, puis itérations                                ~10 %
+6. Évaluation           protocole, métriques, analyse d'erreurs                  ~10 %
+7. Déploiement / suivi  mise en production, monitoring, ré-entraînement          ~10 %</pre></div>
 
-    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique.</p>
+    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique, avec une « livraison » à la fin.</p>
 
     <div class="step-block">
       <h4>La question à poser avant tout le reste</h4>
-      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout le reste : la métrique (un coût d'erreur asymétrique change le seuil), la latence acceptable (temps réel ou lot nocturne), le besoin d'explicabilité (un refus de crédit doit être motivé), et même la faisabilité — certaines décisions ont besoin de causalité, pas de prédiction (module 8).</p>
+      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout : la métrique (un coût d'erreur asymétrique change le seuil, module 22), la latence acceptable (temps réel ou lot nocturne, module 6), le besoin d'explicabilité (un refus de crédit doit être motivé, module 25), et même la faisabilité — certaines décisions ont besoin de <em>causalité</em>, pas de prédiction (module 8).</p>
     </div>
 
     <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
-    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif est-il parti ?). Deux définitions raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables.</p>
+    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif depuis six mois est-il parti ?). Deux définitions également raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables. Écrire la définition en une phrase, et la faire valider par le métier, économise des semaines.</p>
 
-    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8).</p>
+    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8), et il est très coûteux à changer en cours de route.</p>
 
-    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle : la moyenne pour une régression, la classe majoritaire pour une classification, la valeur de la veille pour une série temporelle, ou la règle métier existante. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème. La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, le modèle ne vaut peut-être pas sa complexité opérationnelle.</p>
+    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème.</p>
+    <div class="code-label">Python — les baselines à toujours calculer</div>
+    <div class="code-block"><pre>from sklearn.dummy import DummyRegressor, DummyClassifier
+
+# régression : prédire toujours la moyenne (ou la médiane)
+base = DummyRegressor(strategy="median").fit(X_tr, y_tr)
+
+# classification : prédire toujours la classe majoritaire
+base = DummyClassifier(strategy="most_frequent").fit(X_tr, y_tr)
+
+# série temporelle : la valeur de la veille, ou celle de l'an dernier (module 15)
+pred_naive = y[:-1]
+
+# et surtout : la RÈGLE MÉTIER existante, si elle existe
+pred_regle = np.where(df["anciennete"] &lt; 3, 1, 0)</pre></div>
+    <p>La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, celui-ci ne vaut peut-être pas sa complexité opérationnelle.</p>
 
     <h2 id="eda">3. Exploration : une checklist</h2>
     <div class="code-label">ce que je regarde systématiquement</div>
     <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
-Cible          distribution, taux de positifs, valeurs extrêmes, évolution dans le temps
-Manquants      taux par colonne, structure des manquants (voir section 5)
+Cible          distribution, taux de positifs, extrêmes, évolution dans le temps
+Manquants      taux par colonne, et STRUCTURE des manquants (section 5)
 Doublons       lignes identiques ET doublons sur la clé métier
 Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
-Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix négatif)
-Temps          couverture, trous, saisonnalité, ruptures (changement de collecte ?)
-Relations      corrélations entre features, lien de chaque feature avec la cible
+Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix &lt; 0)
+Temps          couverture, trous, saisonnalité, ruptures de collecte
+Relations      corrélations entre variables, lien de chaque variable avec la cible
 Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
 
-    <div class="code-label">Python</div>
+    <div class="code-label">Python — le tour d'horizon, en quelques lignes</div>
     <div class="code-block"><pre>import polars as pl
 
 df = pl.read_parquet("data/clients.parquet")
 
-print(df.describe())                                    # stats de base par colonne
-print(df.null_count())                                  # manquants par colonne
-print(df.select(pl.all().n_unique()))                   # cardinalités
-print(df.filter(pl.struct(df.columns).is_duplicated())) # doublons exacts
+print(df.shape, df.estimated_size("mb"))
+print(df.describe())                                     # stats par colonne
+print(df.null_count())                                   # manquants par colonne
+print(df.select(pl.all().n_unique()))                    # cardinalités
+print(df.filter(pl.struct(df.columns).is_duplicated()))  # doublons exacts
 
-# valeurs impossibles : toujours confronter aux bornes métier
-print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))</pre></div>
+# valeurs impossibles : toujours confronter aux bornes MÉTIER
+print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))
 
-    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou qu'une valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
+# la cible dans le temps : LE graphique qui révèle les ruptures de collecte
+print(df.group_by_dynamic("date", every="1w").agg(
+          taux=pl.col("cible").mean(), n=pl.len()))
+
+# lien de chaque variable numérique avec la cible
+print(df.select(pl.corr(pl.col(c), pl.col("cible")).alias(c)
+                for c in colonnes_numeriques))</pre></div>
+
+    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou que la valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
 
     <div class="warning-block">
-      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une feature semble trop belle, c'est généralement qu'elle contient une information qui n'existera pas au moment de la prédiction (section 9).
+      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité fortement corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une variable semble trop belle, elle contient généralement une information qui n'existera pas au moment de la prédiction (section 9).
     </div>
 
     <h2 id="viz">4. Visualisation utile</h2>
-    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellent par défaut), <strong>plotly</strong> (interactif, précieux pour explorer un nuage de points dense). Quelques principes qui changent réellement la lisibilité :</p>
+    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellents défauts), <strong>plotly</strong> (interactif, précieux pour explorer un nuage dense). Quelques principes qui changent réellement la lisibilité :</p>
     <ul>
-      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure. Doubler avec un <em>violin plot</em> ou un <em>strip plot</em> quand l'échantillon est petit.</li>
+      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure d'une distribution. Doubler avec un <em>violin plot</em> ou afficher les points quand l'échantillon est petit.</li>
       <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
       <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
       <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 24).</li>
-      <li><strong>Se méfier des moyennes</strong> : le quartet d'Anscombe et le « datasaurus » rappellent que des jeux de données de statistiques identiques peuvent être radicalement différents. Regarder les distributions, pas les résumés.</li>
+      <li><strong>Se méfier des résumés</strong> : le quartet d'Anscombe et le « datasaurus » montrent que des jeux de données de moyennes, variances et corrélations <em>identiques</em> peuvent être radicalement différents. Regarder les distributions, pas seulement les statistiques.</li>
     </ul>
 
+    <div class="code-label">Python — les quatre graphiques que je fais en premier</div>
+    <div class="code-block"><pre>import matplotlib.pyplot as plt, seaborn as sns
+
+fig, ax = plt.subplots(2, 2, figsize=(12, 8))
+
+sns.histplot(df["prix"], log_scale=True, ax=ax[0, 0])          # 1. la cible
+ax[0, 0].set_title("distribution de la cible (échelle log)")
+
+df.set_index("date")["cible"].resample("W").mean().plot(ax=ax[0, 1])   # 2. le temps
+ax[0, 1].set_title("taux de positifs par semaine")
+
+sns.heatmap(df[num].corr(), cmap="RdBu_r", center=0, ax=ax[1, 0])      # 3. corrélations
+ax[1, 0].set_title("corrélations entre variables")
+
+sns.boxplot(data=df, x="segment", y="prix", ax=ax[1, 1])               # 4. par groupe
+ax[1, 1].set_yscale("log")
+plt.tight_layout()</pre></div>
+
     <h2 id="manquantes">5. Données manquantes</h2>
-    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin :</p>
+    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin, qui n'est pas qu'une curiosité théorique :</p>
     <ul>
-      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
-      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est légitime.</li>
+      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : un capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
+      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est alors légitime, puisque l'information nécessaire est disponible.</li>
       <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
     </ul>
+
+    <div class="code-label">Python — diagnostiquer la structure des manquants</div>
+    <div class="code-block"><pre># le taux de manquants dépend-il des autres variables ? (indice de MAR)
+df["revenu_manquant"] = df["revenu"].isna()
+print(df.groupby("revenu_manquant")[["age", "anciennete", "cible"]].mean())
+# si les moyennes diffèrent nettement → le manque est INFORMATIF
+
+# les manquants sont-ils groupés ? (plusieurs colonnes absentes ensemble)
+import missingno as msno
+msno.matrix(df); msno.heatmap(df)     # visualise la co-occurrence des manquants</pre></div>
 
     <div class="code-label">stratégies</div>
     <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
 Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
-Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase les corrélations.
-KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux mais bien meilleur.
-Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres.
-Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement les NaN,
-                          et apprennent la meilleure direction pour les valeurs absentes.
-Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est souvent
-                          lui-même informatif (un client qui ne renseigne pas son revenu...).</pre></div>
+Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase
+                          les corrélations. Acceptable comme baseline.
+KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux, bien meilleur.
+Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres,
+                          qui peuvent isoler cette modalité.
+Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement
+                          les NaN et APPRENNENT la meilleure direction pour eux.
+Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est
+                          souvent informatif (un client qui ne renseigne pas
+                          son revenu n'est pas un client au hasard).</pre></div>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
@@ -153,108 +208,157 @@ from sklearn.impute import IterativeImputer, SimpleImputer
 # imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
 imp = IterativeImputer(max_iter=10, random_state=0)
 
-# conserver l'information "cette valeur manquait"
-imp_simple = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
+# conserver l'information "cette valeur manquait" : ajoute une colonne booléenne
+imp = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
 
     <div class="warning-block">
-      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3).
+      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3), et rien d'autre.
     </div>
 
     <h2 id="features">6. Feature engineering</h2>
-    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne feature bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter.</p>
+    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne variable bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter — un arbre ne « devinera » jamais qu'il faut diviser le prix par la surface.</p>
 
     <h3>Variables catégorielles</h3>
     <div class="code-label">encodages</div>
     <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
-Ordinal          entier par modalité. Uniquement si un ORDRE existe réellement
-                 (S &lt; M &lt; L), ou pour des modèles à base d'arbres qui savent découper.
+Ordinal          un entier par modalité. Uniquement si un ORDRE existe réellement
+                 (S &lt; M &lt; L), ou pour des arbres, qui savent découper n'importe où.
 Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
                  forte cardinalité (code postal, produit) — et très exposé à la fuite.
-Hashing          projette dans un espace fixe. Utile en streaming, perd l'interprétabilité.
-Embeddings       représentation apprise, dense. Pour les réseaux de neurones (module 14).</pre></div>
+Hashing          projette dans un espace de taille fixe. Utile en flux, perd la lisibilité.
+Embeddings       représentation dense apprise. Pour les réseaux (module 14).</pre></div>
 
-    <p>Le <strong>target encoding</strong> mérite un mot, car il est à la fois redoutable et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute mais une moyenne lissée vers la moyenne globale :</p>
+    <p>Le <strong>target encoding</strong> mérite un développement, car il est à la fois redoutablement efficace et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute — qui vaudrait 0 ou 1 pour une modalité vue une seule fois — mais une moyenne lissée vers la moyenne globale :</p>
     <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
-    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> (chaque pli encodé avec les statistiques des autres plis), faute de quoi chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
+    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. C'est exactement le regroupement partiel des modèles hiérarchiques (module 9), en version simplifiée.</p>
+    <p>Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> : chaque pli encodé avec les statistiques des <em>autres</em> plis. Sans cela, chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable en production. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
 
     <h3>Variables numériques et temporelles</h3>
-    <ul>
-      <li><strong>Transformations</strong> — log sur les variables à queue lourde (prix, revenus, durées), Yeo-Johnson si des valeurs négatives ou nulles existent. Cela rend les distributions plus symétriques, ce qui aide les modèles linéaires et les réseaux (pas les arbres, insensibles aux transformations monotones).</li>
-      <li><strong>Discrétisation</strong> — transformer l'âge en tranches capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information.</li>
-      <li><strong>Interactions et ratios</strong> — souvent l'apport décisif : prix au m², revenu par personne du foyer, nombre de connexions par jour d'ancienneté. Les arbres approchent mal les ratios, il faut les fournir explicitement.</li>
-      <li><strong>Features temporelles</strong> — heure, jour de la semaine, mois, jour férié, ancienneté. Les variables cycliques se codent par \(\sin(2\pi t/T)\) et \(\cos(2\pi t/T)\) pour que 23 h soit proche de 0 h.</li>
-      <li><strong>Agrégats à fenêtre</strong> — moyennes, écarts types et comptages sur les 7, 30, 90 derniers jours. C'est le cœur du feature engineering en données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 4). Impérativement calculés avec une fenêtre <em>strictement passée</em>.</li>
-    </ul>
+    <div class="code-label">Python — les transformations qui rapportent</div>
+    <div class="code-block"><pre>import numpy as np, polars as pl
 
-    <h3>Sélection de features</h3>
-    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 12) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées à l'intérieur de la validation croisée.</p>
+df = df.with_columns(
+    # 1. transformations : log pour les queues lourdes (prix, revenus, durées)
+    log_prix=pl.col("prix").log1p(),           # log1p gère la valeur 0
+
+    # 2. RATIOS et interactions : souvent l'apport décisif. Les arbres approchent
+    #    très mal un ratio (il leur faut des dizaines de coupes), il faut le fournir.
+    prix_m2=pl.col("prix") / pl.col("surface"),
+    revenu_par_personne=pl.col("revenu") / pl.col("taille_foyer"),
+    intensite=pl.col("n_connexions") / pl.col("anciennete_jours"),
+
+    # 3. variables de calendrier
+    jour_semaine=pl.col("date").dt.weekday(),
+    mois=pl.col("date").dt.month(),
+    est_weekend=pl.col("date").dt.weekday() &gt;= 6,
+
+    # 4. variables CYCLIQUES : pour que 23 h soit proche de 0 h
+    heure_sin=(2 * np.pi * pl.col("date").dt.hour() / 24).sin(),
+    heure_cos=(2 * np.pi * pl.col("date").dt.hour() / 24).cos(),
+
+    # 5. agrégats à fenêtre STRICTEMENT passée (le shift(1) est essentiel)
+    depense_moy_30j=pl.col("montant").shift(1).rolling_mean(30).over("client_id"),
+    n_achats_7j=pl.col("montant").shift(1).rolling_count(7).over("client_id"),
+)</pre></div>
+
+    <p>Les <strong>agrégats à fenêtre</strong> sont le cœur du feature engineering sur données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 4) — souvent plus efficacement, directement dans la base. La <strong>discrétisation</strong> (transformer l'âge en tranches) capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information ; elle est inutile pour un modèle à base d'arbres, qui la trouve tout seul.</p>
+
+    <h3>Sélection de variables</h3>
+    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 12) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées <em>à l'intérieur</em> de la validation croisée, sinon la sélection elle-même devient une fuite.</p>
 
     <h2 id="desequilibre">7. Classes déséquilibrées</h2>
     <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
     <ol>
       <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 7).</li>
       <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
-      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, pas à 0,5 par défaut.</li>
+      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, jamais laissé à 0,5 par défaut (module 22).</li>
       <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
     </ol>
 
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.metrics import precision_recall_curve
+
+# 1 et 2 : métrique adaptée et pondération
+modele = LGBMClassifier(scale_pos_weight=(y_tr == 0).sum() / (y_tr == 1).sum())
+modele.fit(X_tr, y_tr, eval_metric="average_precision")
+
+# 3 : choisir le seuil sur la courbe précision-rappel, pas à 0,5
+p = modele.predict_proba(X_val)[:, 1]
+prec, rap, seuils = precision_recall_curve(y_val, p)
+# par exemple : le seuil qui garantit au moins 80 % de précision
+i = np.argmax(prec[:-1] &gt;= 0.80)
+print(f"seuil = {seuils[i]:.3f} → précision {prec[i]:.1%}, rappel {rap[i]:.1%}")</pre></div>
+
     <div class="warning-block">
-      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test, lui, doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
+      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion, parfois spectaculaire. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
     </div>
 
     <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
-    <p>Un découpage unique train/test est bruité : le score dépend du tirage. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
+    <p>Un découpage unique train/test est bruité : le score dépend du tirage, et sur un petit jeu l'écart entre deux tirages peut dépasser l'écart entre deux modèles. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
+
+    <div class="code-label">les schémas, visualisés</div>
+    <div class="code-block"><pre>KFold (K=5)                     TimeSeriesSplit
+pli 1  [test][─── train ───]    pli 1  [train][test]·············
+pli 2  [train][test][ train ]   pli 2  [── train ──][test]·······
+pli 3  [── train ─][test][──]   pli 3  [──── train ───][test]····
+pli 4  [─── train ──][test][]   pli 4  [────── train ────][test]·
+pli 5  [──── train ────][test]         ↑ on n'entraîne JAMAIS sur le futur
+
+GroupKFold (groupe = client)
+client A ██  B ██  C ██  D ██  E ██     un client entier va d'un seul côté :
+pli 1    test    train train train      pas de client des deux côtés du découpage</pre></div>
 
     <div class="code-label">quel schéma pour quelle structure de données</div>
-    <div class="code-block"><pre>KFold                  données i.i.d., régression                        K = 5 ou 10
-StratifiedKFold        classification : conserve les proportions         le défaut en classif
-GroupKFold             plusieurs lignes par entité (patient, client)     un groupe = un seul pli
+    <div class="code-block"><pre>KFold                  données i.i.d., régression                 K = 5 ou 10
+StratifiedKFold        classification : conserve les proportions  le défaut en classif
+GroupKFold             plusieurs lignes par entité (patient,      un groupe = un seul pli
+                       client, bien immobilier)
 StratifiedGroupKFold   les deux contraintes à la fois
-TimeSeriesSplit        séries temporelles : entraîner sur le passé,      jamais de mélange
-                       tester sur le futur (fenêtre glissante)
-LeaveOneOut            très peu de données                               coûteux, variance élevée
-Nested CV              quand on optimise DES hyperparamètres ET qu'on    boucle interne = réglage
-                       veut une estimation non biaisée de performance    boucle externe = évaluation</pre></div>
+TimeSeriesSplit        séries temporelles : entraîner sur le      jamais de mélange
+                       passé, tester sur le futur
+LeaveOneOut            très peu de données                        coûteux, variance élevée
+Nested CV              on optimise DES hyperparamètres ET on veut boucle interne = réglage
+                       une estimation non biaisée                 boucle externe = évaluation</pre></div>
 
     <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.model_selection import (GroupKFold, StratifiedKFold,
-                                     TimeSeriesSplit, cross_validate)
+    <div class="code-block"><pre>from sklearn.model_selection import GroupKFold, cross_validate
 
 # données transactionnelles : plusieurs lignes par client → GroupKFold
-cv = GroupKFold(n_splits=5)
 res = cross_validate(pipeline, X, y, groups=df["client_id"],
-                     cv=cv, scoring=["roc_auc", "average_precision"],
-                     return_train_score=True)
+                     cv=GroupKFold(n_splits=5),
+                     scoring=["roc_auc", "average_precision"],
+                     return_train_score=True, n_jobs=-1)
 
 # l'écart train/validation mesure directement le surapprentissage
-print(res["train_roc_auc"].mean(), res["test_roc_auc"].mean())</pre></div>
+print(f"train {res['train_roc_auc'].mean():.3f} | "
+      f"val {res['test_roc_auc'].mean():.3f} ± {res['test_roc_auc'].std():.3f}")</pre></div>
 
     <div class="step-block">
       <h4>Le protocole que je considère comme correct</h4>
       <ol>
         <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
-        <li>Travailler en validation croisée sur le reste : exploration, features, réglages.</li>
+        <li>Travailler en validation croisée sur le reste : exploration, variables, réglages.</li>
         <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
         <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
-        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation.</li>
+        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation, et son score n'est plus une estimation honnête.</li>
       </ol>
     </div>
 
     <h2 id="leakage">9. Fuites de données : le catalogue</h2>
-    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production. Les formes les plus fréquentes :</p>
+    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production, quand plus personne ne sait d'où vient le problème.</p>
 
-    <div class="code-label">formes de fuite</div>
-    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de features ajustés sur TOUT
-                         le jeu avant le découpage.        → tout mettre dans un Pipeline
+    <div class="code-label">les formes de fuite, et leur remède</div>
+    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de variables ajustés sur TOUT
+                         le jeu avant le découpage.    → tout mettre dans un Pipeline
 
-Fuite temporelle         une feature utilise de l'information postérieure à la date de
-                         prédiction (moyenne calculée sur toute la période, statut final
-                         du dossier).                      → figer une date de référence
+Fuite temporelle         une variable utilise de l'information postérieure à la date
+                         de prédiction : moyenne calculée sur toute la période,
+                         statut final du dossier.      → figer une date de référence
 
 Duplication              la même observation (ou quasi) des deux côtés du découpage :
                          doublons, utilisateur présent plusieurs fois.  → GroupKFold
 
-Cible déguisée           une colonne qui n'existe que parce que l'événement a eu lieu :
+Cible déguisée           une colonne qui n'existe QUE parce que l'événement a eu lieu :
                          "date de résiliation", "montant remboursé", "motif de panne".
 
 Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
@@ -267,7 +371,7 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
 
     <div class="step-block">
       <h4>Comment la détecter</h4>
-      <p>Un score anormalement élevé (AUC de 0,99 sur un problème réputé difficile) doit déclencher une suspicion, pas une satisfaction. Deux gestes efficaces : regarder les <em>importances de features</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; et rejouer la chaîne complète sur une période postérieure (validation temporelle) — une fuite y disparaît, et le score s'effondre. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
+      <p>Un score anormalement élevé — une AUC de 0,99 sur un problème réputé difficile — doit déclencher une suspicion, pas une satisfaction. Trois gestes efficaces : regarder les <em>importances de variables</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; rejouer la chaîne complète sur une période postérieure (validation temporelle), où une fuite disparaît et fait s'effondrer le score ; et écrire pour chaque variable, noir sur blanc, <em>à quel instant elle est connue</em>. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
     </div>
 
     <div class="step-block">
@@ -276,7 +380,7 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
         <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
         <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
         <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
-        <li>Le feature engineering paie plus que le choix d'algorithme ; ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
+        <li>Le feature engineering paie plus que le choix d'algorithme : ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
         <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
         <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
         <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
