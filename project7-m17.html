@@ -51,7 +51,8 @@
       <h4>📋 Au programme</h4>
       <ol>
         <li><a href="#probleme">Le problème : une boîte noire coûteuse</a></li>
-        <li><a href="#gp">Processus gaussiens : distribution sur des fonctions</a></li>
+        <li><a href="#gp">Processus gaussiens : une loi sur des fonctions</a></li>
+        <li><a href="#posterieur">Ce que le conditionnement donne</a></li>
         <li><a href="#noyaux">Noyaux et hyperparamètres</a></li>
         <li><a href="#bo">La boucle d'optimisation bayésienne</a></li>
         <li><a href="#acquisition">Fonctions d'acquisition</a></li>
@@ -64,28 +65,39 @@
     <h2 id="probleme">1. Le problème : une boîte noire coûteuse</h2>
     <p>On cherche \(x^\star = \arg\max_{x\in\mathcal{X}} f(x)\) où \(f\) est :</p>
     <ul>
-      <li><strong>coûteuse</strong> — une évaluation demande des heures de calcul, un essai physique, ou une campagne d'entraînement ;</li>
+      <li><strong>coûteuse</strong> — une évaluation demande des heures de calcul, un essai physique, ou une campagne d'entraînement complète ;</li>
       <li><strong>opaque</strong> — pas d'expression analytique, donc pas de gradient exploitable ;</li>
-      <li><strong>possiblement bruitée</strong> — deux mesures au même point diffèrent.</li>
+      <li><strong>possiblement bruitée</strong> — deux mesures au même point ne donnent pas le même résultat.</li>
     </ul>
-    <p>Le budget se compte en dizaines d'évaluations, pas en millions. Une recherche aléatoire gaspille ; une descente de gradient numérique dépenserait tout son budget à estimer une seule direction. La stratégie gagnante consiste à <em>modéliser</em> \(f\) à partir des points déjà évalués, puis à choisir le prochain point en exploitant ce modèle. Ce modèle de substitution s'appelle un <em>surrogate</em>, et le choix naturel est un processus gaussien parce qu'il fournit, en plus d'une prédiction, une <strong>incertitude</strong> — exactement l'information nécessaire pour décider où explorer.</p>
+    <p>Le budget se compte en dizaines d'évaluations, pas en millions. Une recherche par grille gaspille tout sur des zones sans intérêt ; une descente de gradient numérique dépenserait tout son budget à estimer une seule direction (il faut \(d+1\) évaluations pour un seul gradient en dimension \(d\)).</p>
+    <p>La stratégie gagnante consiste à <em>modéliser</em> \(f\) à partir des points déjà évalués, puis à choisir le prochain point en exploitant ce modèle. Ce modèle de substitution s'appelle un <em>surrogate</em>, et le choix naturel est un processus gaussien parce qu'il fournit, en plus d'une prédiction, une <strong>incertitude</strong> — exactement l'information nécessaire pour savoir où l'on ne sait pas encore.</p>
 
-    <h2 id="gp">2. Processus gaussiens : distribution sur des fonctions</h2>
-    <p>Un processus gaussien est une loi de probabilité <em>sur des fonctions</em> : toute collection finie de valeurs \(\big(f(x_1),\dots,f(x_n)\big)\) suit une loi normale multivariée. Il est entièrement déterminé par une fonction moyenne (souvent prise nulle après centrage) et une fonction de covariance, le <strong>noyau</strong> :</p>
+    <h2 id="gp">2. Processus gaussiens : une loi sur des fonctions</h2>
+    <p>L'idée demande un petit effort d'abstraction. Une loi normale ordinaire tire des <em>nombres</em>. Une loi normale multivariée tire des <em>vecteurs</em>, avec des corrélations entre coordonnées. Un processus gaussien tire des <strong>fonctions</strong> : on peut le voir comme une loi normale multivariée de dimension infinie, dont chaque « coordonnée » est la valeur de la fonction en un point.</p>
+    <p>La définition opérationnelle est plus simple : quelle que soit la collection finie de points \(x_1,\dots,x_n\) que l'on choisit, le vecteur \(\big(f(x_1),\dots,f(x_n)\big)\) suit une loi normale multivariée. Le processus est entièrement déterminé par une fonction moyenne (souvent prise nulle après centrage) et une fonction de covariance, le <strong>noyau</strong> :</p>
     <div style="text-align:center;overflow-x:auto">\[ f \sim \mathcal{GP}\big(m(x),\, k(x,x')\big) \]</div>
+    <p>Le noyau dit à quel point deux points se « ressemblent » : \(k(x,x')\) grand signifie que \(f(x)\) et \(f(x')\) sont fortement corrélées, donc proches. C'est la seule hypothèse qu'on injecte, et elle suffit.</p>
 
-    <p>L'intuition est celle de l'interpolation avec mémoire de la confiance : le noyau encode l'idée que deux points proches ont des valeurs proches. Avant toute observation, le GP est une nuée de fonctions plausibles ; chaque observation élimine celles qui ne passent pas par le point mesuré, et l'incertitude se resserre localement.</p>
+    <div class="code-label">avant et après observations</div>
+    <div class="code-block"><pre>  A PRIORI : une nuée de fonctions plausibles      APRÈS 3 OBSERVATIONS
+  ╱‾╲    ╱╲                                        ╱‾╲    ╱╲
+ ╱   ╲╱╲╱  ╲   toutes passent "n'importe où",    ●╱   ╲╱‾╲   ← toutes passent par
+╱  ╱╲ ╲  ╱╲ ╲  l'incertitude est uniforme         ╲╱      ╲●    les points observés
+ ╲╱  ╲ ╲╱   ╲                                      ╱╲    ╱  ╲   et l'incertitude se
+                                                  ●    ╲╱    ╲  resserre AUTOUR d'eux
+  ░░░░░░░░░░░░ bande d'incertitude large       ░░░▒▒░░░▒▒▒░░░░  et reste large LOIN</pre></div>
 
-    <p>Conditionner une loi normale par une partie de ses coordonnées donne encore une loi normale, dont moyenne et covariance sont explicites. Avec \(K = k(X,X) + \sigma_n^2 I\) et \(k_* = k(X,x_*)\) :</p>
+    <h2 id="posterieur">3. Ce que le conditionnement donne</h2>
+    <p>Conditionner une loi normale par une partie de ses coordonnées donne encore une loi normale, dont moyenne et covariance sont explicites. Avec \(K = k(X,X) + \sigma_n^2 I\) la matrice de covariance des points observés et \(k_* = k(X,x_*)\) le vecteur de covariance entre les observations et le point à prédire :</p>
     <div style="text-align:center;overflow-x:auto">\[ \mu_*(x_*) = k_*^\top K^{-1} y, \qquad \sigma_*^2(x_*) = k(x_*,x_*) - k_*^\top K^{-1} k_* \]</div>
 
-    <p>Deux lectures importantes. D'abord, la moyenne prédictive est une <em>combinaison linéaire des observations</em> pondérée par la similarité — c'est exactement une interpolation par fonctions de base radiales (le sujet de mon <a href="project5.html">projet mdisd</a>), mais assortie d'une variance. Ensuite, la variance prédictive <strong>ne dépend pas des valeurs observées</strong>, seulement de la position des points : l'incertitude est grande loin des données et petite près d'elles, ce qui est la propriété dont l'optimisation bayésienne a besoin.</p>
+    <p>Deux lectures importantes. D'abord, la moyenne prédictive est une <em>combinaison linéaire des observations</em> pondérée par la similarité — c'est exactement une interpolation par fonctions de base radiales, le sujet de mon <a href="project5.html">projet mdisd</a>, mais assortie d'une variance. Ensuite, et c'est la propriété décisive : la variance prédictive <strong>ne dépend pas des valeurs observées</strong>, seulement de la <em>position</em> des points. L'incertitude est donc grande là où l'on n'a pas mesuré et petite près des mesures, indépendamment de ce qu'on y a trouvé. C'est précisément ce dont l'optimisation bayésienne a besoin pour décider où explorer.</p>
 
     <div class="warning-block">
-      <strong>Sur l'implémentation.</strong> On n'inverse jamais \(K\) : on factorise par Cholesky \(K = LL^\top\) puis on résout (module 7). Le terme \(\sigma_n^2 I\) n'est pas seulement le bruit de mesure — c'est aussi ce qui rend \(K\) définie positive numériquement. Sans un <em>jitter</em> minimal (typiquement \(10^{-6}\)), la factorisation échoue dès que deux points d'apprentissage sont proches.
+      <strong>Sur l'implémentation.</strong> On n'inverse jamais \(K\) (module 7) : on la factorise par Cholesky puis on résout. Le terme \(\sigma_n^2 I\) n'est pas seulement le bruit de mesure — c'est aussi ce qui rend \(K\) définie positive numériquement. Sans un <em>jitter</em> minimal (typiquement \(10^{-6}\)), la factorisation échoue dès que deux points d'apprentissage sont proches, puisque leurs lignes deviennent quasi identiques.
     </div>
 
-    <h2 id="noyaux">3. Noyaux et hyperparamètres</h2>
+    <h2 id="noyaux">4. Noyaux et hyperparamètres</h2>
     <div class="code-label">les noyaux usuels</div>
     <div class="code-block"><pre>RBF / gaussien      k = σ²·exp(-‖x-x'‖²/2ℓ²)      fonctions infiniment dérivables :
                                                    très (souvent trop) lisse.
@@ -93,65 +105,77 @@ Matérn ν=5/2        polynôme·exp(-√5 r/ℓ)          deux fois dérivable.
                                                    optimisation bayésienne : réaliste
                                                    pour un système physique.
 Matérn ν=3/2                                       une fois dérivable : plus rugueux.
-Périodique          exp(-2sin²(π r/p)/ℓ²)          saisonnalité connue.
+Périodique          exp(-2sin²(π r/p)/ℓ²)          saisonnalité de période connue.
 Linéaire            x·x'                           tendance affine.
 Blanc               σ²·δ(x,x')                     bruit d'observation.
-Somme / produit     k₁+k₂, k₁·k₂                   combiner : tendance + saisonnalité + bruit.</pre></div>
+Somme / produit     k₁+k₂, k₁·k₂                   combiner : tendance + saisonnalité
+                                                   + bruit, chacun avec ses paramètres.</pre></div>
 
-    <p>La <strong>longueur caractéristique</strong> \(\ell\) est l'hyperparamètre décisif : elle dit à quelle distance deux points cessent de s'informer mutuellement. Petite, le GP devient nerveux et l'incertitude explose entre les points ; grande, il lisse tout. Avec une longueur par dimension (<em>Automatic Relevance Determination</em>), le modèle apprend lui-même quelles variables comptent — une grande longueur signifie que la sortie est insensible à cette entrée, ce qui constitue au passage une analyse de sensibilité gratuite.</p>
+    <p>La <strong>longueur caractéristique</strong> \(\ell\) est l'hyperparamètre décisif : elle dit à quelle distance deux points cessent de s'informer mutuellement. Petite, le GP devient nerveux et l'incertitude explose entre les points ; grande, il lisse tout et manque les variations réelles. Avec une longueur par dimension (<em>Automatic Relevance Determination</em>), le modèle apprend lui-même quelles variables comptent — une grande longueur signifie que la sortie est insensible à cette entrée, ce qui constitue au passage une analyse de sensibilité gratuite (module 19).</p>
 
     <p>Les hyperparamètres (\(\ell\), \(\sigma^2\), \(\sigma_n^2\)) s'ajustent en maximisant la <strong>vraisemblance marginale</strong> :</p>
     <div style="text-align:center;overflow-x:auto">\[ \log p(y\mid X,\theta) = -\tfrac{1}{2}y^\top K^{-1}y \;-\; \tfrac{1}{2}\log|K| \;-\; \tfrac{n}{2}\log 2\pi \]</div>
-    <p>Le premier terme récompense l'ajustement aux données, le second pénalise la complexité du modèle (une matrice de covariance « permissive » a un grand déterminant). Le rasoir d'Occam est ici <em>automatique</em>, sans validation croisée — c'est un des grands attraits du cadre bayésien.</p>
+    <p>Le premier terme récompense l'ajustement aux données, le second pénalise la complexité du modèle — une matrice de covariance « permissive », qui autorise beaucoup de fonctions, a un grand déterminant. Le rasoir d'Occam est ici <em>automatique</em>, sans validation croisée : c'est l'un des grands attraits du cadre bayésien (module 9).</p>
 
     <div class="code-label">Python — régression GP avec scikit-learn</div>
     <div class="code-block"><pre>import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel
 
-noyau = ConstantKernel(1.0) * Matern(length_scale=np.ones(3), nu=2.5) \
-        + WhiteKernel(noise_level=1e-3)         # ARD : une longueur par dimension
+noyau = (ConstantKernel(1.0)                          # amplitude σ²
+         * Matern(length_scale=np.ones(3), nu=2.5)    # ARD : une longueur par dimension
+         + WhiteKernel(noise_level=1e-3))             # bruit d'observation
 
 gp = GaussianProcessRegressor(kernel=noyau, normalize_y=True, n_restarts_optimizer=10)
-gp.fit(X, y)                                    # optimise les hyperparamètres par MLE
+gp.fit(X, y)                       # optimise les hyperparamètres par vraisemblance
 
 mu, sigma = gp.predict(X_test, return_std=True)
-print(gp.kernel_)                               # longueurs apprises = sensibilité par variable</pre></div>
+print(gp.kernel_)                  # les longueurs apprises = sensibilité par variable
+# une longueur très grande sur une dimension → cette variable n'influence pas la sortie</pre></div>
 
     <p><strong>Le coût</strong> est la limite structurelle : la factorisation de \(K\) est en \(O(n^3)\) et la mémoire en \(O(n^2)\). Au-delà de quelques milliers de points, il faut des approximations creuses (points inducteurs, <em>variational GP</em> dans GPyTorch). Pour l'optimisation bayésienne, où \(n\) dépasse rarement quelques centaines, ce n'est pas un obstacle.</p>
 
-    <h2 id="bo">4. La boucle d'optimisation bayésienne</h2>
+    <h2 id="bo">5. La boucle d'optimisation bayésienne</h2>
     <div class="code-label">l'algorithme</div>
-    <div class="code-block"><pre>1. Évaluer f sur un plan initial (Latin Hypercube ou Sobol, 5 à 10 points par dimension)
+    <div class="code-block"><pre>1. Évaluer f sur un plan initial (Latin Hypercube ou Sobol, ~10 points par dimension)
 2. Répéter jusqu'à épuisement du budget :
-      a. ajuster le GP sur toutes les observations
+      a. ajuster le GP sur TOUTES les observations disponibles
       b. maximiser la fonction d'acquisition α(x) sur le domaine
-         (α est peu coûteuse : on peut y lancer un optimiseur classique multi-départs)
+         (α est bon marché : on peut y lancer un optimiseur classique multi-départs)
       c. évaluer f au point trouvé — LA seule opération coûteuse
       d. ajouter (x, y) aux observations
 3. Renvoyer le meilleur point observé</pre></div>
 
-    <p>Le déplacement conceptuel est là : on remplace l'optimisation d'une fonction coûteuse par une suite d'optimisations d'une fonction bon marché (l'acquisition, calculée à partir du GP). Consommer quelques secondes de calcul pour choisir intelligemment un point vaut largement le coup quand ce point coûte six heures de simulation.</p>
+    <p>Le déplacement conceptuel est là : on remplace l'optimisation d'une fonction coûteuse par une <em>suite</em> d'optimisations d'une fonction bon marché, construite à partir du GP. Consommer quelques secondes de calcul pour choisir intelligemment un point vaut largement le coup quand ce point coûte six heures de simulation.</p>
 
-    <h2 id="acquisition">5. Fonctions d'acquisition</h2>
+    <h2 id="acquisition">6. Fonctions d'acquisition</h2>
     <p>L'acquisition traduit le compromis <strong>exploitation</strong> (aller là où le modèle prédit une bonne valeur) / <strong>exploration</strong> (aller là où il ne sait rien). En notant \(f^+\) le meilleur résultat observé, \(Z = (\mu(x)-f^+-\xi)/\sigma(x)\), \(\Phi\) et \(\varphi\) les fonctions de répartition et de densité normales :</p>
-
     <div style="text-align:center;overflow-x:auto">\[ \text{EI}(x) = \big(\mu(x)-f^+-\xi\big)\Phi(Z) + \sigma(x)\,\varphi(Z) \]</div>
 
-    <p>L'<strong>amélioration espérée</strong> (EI) est l'espérance du gain par rapport au meilleur point connu. Sa structure est parlante : le premier terme récompense une moyenne élevée, le second une forte incertitude. C'est le choix par défaut — pas de paramètre à régler (\(\xi\) vaut typiquement 0,01), et un bon équilibre empirique.</p>
+    <p>L'<strong>amélioration espérée</strong> (EI) est l'espérance du gain par rapport au meilleur point connu, sachant que l'on ne perd rien si le nouveau point est moins bon. Sa structure est parlante : le premier terme récompense une moyenne élevée, le second une forte incertitude. C'est le choix par défaut — pas de paramètre à régler (\(\xi\) vaut typiquement 0,01) et un bon équilibre empirique.</p>
+
+    <div class="code-label">où chaque critère envoie le prochain point</div>
+    <div class="code-block"><pre>      μ(x) prédite        ╱‾‾╲                    ●  points déjà évalués
+   ●            ╱‾╲     ╱     ╲       ●          ░  incertitude σ(x)
+  ░░░░       ░░╱   ╲░░░╱       ╲░░░░░░░
+             ▲              ▲
+             │              └── EXPLORATION : zone mal connue, σ grand
+             └── EXPLOITATION : moyenne élevée près d'un bon point
+  EI équilibre les deux ; UCB laisse régler le curseur par β.</pre></div>
 
     <div class="code-label">les alternatives</div>
-    <div class="code-block"><pre>UCB    μ(x) + β·σ(x)        exploration réglable explicitement par β. Garanties théoriques
+    <div class="code-block"><pre>UCB       μ(x) + β·σ(x)     exploration réglable explicitement. Garanties théoriques
                             de regret (GP-UCB). β ≈ 2 en pratique.
-PI     P(f(x) &gt; f⁺)         probabilité d'amélioration : trop exploitante, converge
+PI        P(f(x) &gt; f⁺)      probabilité d'amélioration : trop exploitante, converge
                             souvent vers un optimum local.
-Thompson  tirer une fonction du postérieur et l'optimiser. Naturellement parallélisable :
-          k tirages donnent k points distincts à évaluer en batch.
-Entropy search  maximise l'information gagnée SUR LA POSITION de l'optimum plutôt que sur
-                la valeur. Plus coûteux, souvent plus efficace en nombre d'évaluations.
-Knowledge gradient  anticipe le gain sur la meilleure valeur atteignable après l'évaluation.</pre></div>
+Thompson  tirer une fonction du postérieur et l'optimiser. Naturellement
+          parallélisable : k tirages donnent k points distincts.
+Entropy search  maximise l'information gagnée SUR LA POSITION de l'optimum plutôt
+                que sur sa valeur. Plus coûteux, souvent plus efficace.
+Knowledge gradient  anticipe le gain sur la meilleure valeur atteignable après
+                    l'évaluation.</pre></div>
 
-    <h2 id="botorch">6. BoTorch en pratique</h2>
+    <h2 id="botorch">7. BoTorch en pratique</h2>
     <p><a href="https://botorch.org" target="_blank">BoTorch</a> (Meta) est construit sur PyTorch et GPyTorch. Son atout : les acquisitions y sont <em>différentiables</em> et estimées par Monte-Carlo, ce qui permet de les maximiser par gradient et d'en construire des variantes (batch, contraintes, multi-objectif) sans dériver de nouvelles formules analytiques. <strong>Ax</strong> est la surcouche qui gère la campagne complète.</p>
 
     <div class="code-label">Python — une boucle complète</div>
@@ -166,7 +190,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 bornes = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=torch.double)
 
 X = draw_sobol_samples(bounds=bornes, n=10, q=1).squeeze(1)   # plan initial
-Y = simulation_couteuse(X).unsqueeze(-1)                      # à maximiser
+Y = simulation_couteuse(X).unsqueeze(-1)                      # à MAXIMISER
 
 for iteration in range(40):
     gp  = SingleTaskGP(X, Y)                       # normalisation gérée en interne
@@ -176,8 +200,8 @@ for iteration in range(40):
     acq = qLogExpectedImprovement(model=gp, best_f=Y.max())
     candidat, _ = optimize_acqf(
         acq, bounds=bornes,
-        q=4,                                       # 4 points en parallèle : batch BO
-        num_restarts=20, raw_samples=512,
+        q=4,                                       # 4 points EN PARALLÈLE
+        num_restarts=20, raw_samples=512,          # multi-départs sur l'acquisition
     )
 
     X = torch.cat([X, candidat])
@@ -187,10 +211,10 @@ print("meilleur point :", X[Y.argmax()], "valeur :", Y.max().item())</pre></div>
 
     <p>Le paramètre <code>q=4</code> illustre un cas fréquent en ingénierie : si quatre simulations peuvent tourner en parallèle sur un cluster, on veut quatre points <em>complémentaires</em>, pas quatre fois le même. Les acquisitions « q » de BoTorch traitent cela correctement, en pénalisant la redondance à l'intérieur du lot.</p>
 
-    <h2 id="extensions">7. Contraintes, multi-objectif, multi-fidélité</h2>
+    <h2 id="extensions">8. Contraintes, multi-objectif, multi-fidélité</h2>
     <ul>
-      <li><strong>Contraintes coûteuses</strong> — quand la faisabilité elle-même doit être simulée (une contrainte mécanique, une température maximale), on modélise chaque contrainte par son propre GP et on pondère l'acquisition par la probabilité de faisabilité.</li>
-      <li><strong>Multi-objectif</strong> — rendement <em>et</em> coût, précision <em>et</em> latence. On ne cherche plus un optimum mais un <strong>front de Pareto</strong>. L'acquisition de référence est qEHVI (<em>expected hypervolume improvement</em>), qui mesure le gain de volume dominé par le front.</li>
+      <li><strong>Contraintes coûteuses</strong> — quand la faisabilité elle-même doit être simulée (une contrainte mécanique, une température maximale), on modélise chaque contrainte par son propre GP et l'on pondère l'acquisition par la probabilité de faisabilité. Le point proposé est alors celui qui maximise le gain <em>attendu et réalisable</em>.</li>
+      <li><strong>Multi-objectif</strong> — rendement <em>et</em> coût, précision <em>et</em> latence. On ne cherche plus un optimum mais un <strong>front de Pareto</strong> : l'ensemble des compromis qu'aucun autre point ne domine sur tous les critères à la fois. L'acquisition de référence est qEHVI (<em>expected hypervolume improvement</em>), qui mesure le gain de volume dominé.</li>
       <li><strong>Espaces mixtes</strong> — variables continues, entières et catégorielles mélangées (un choix de matériau, un nombre de couches). Traitées par des noyaux dédiés ou par relaxation continue.</li>
       <li><strong>Multi-fidélité</strong> — souvent le gain le plus spectaculaire : on dispose d'un simulateur grossier rapide et d'un simulateur fin coûteux. Un GP multi-tâche apprend la corrélation entre les deux niveaux et n'appelle le coûteux que lorsque c'est décisif. Le même principe s'applique au réglage d'hyperparamètres, où « peu d'époques » est une fidélité basse — c'est l'idée de Hyperband, croisée avec la modélisation bayésienne dans BOHB.</li>
     </ul>
@@ -198,40 +222,44 @@ print("meilleur point :", X[Y.argmax()], "valeur :", Y.max().item())</pre></div>
     <div class="code-label">comparaison des stratégies de réglage</div>
     <div class="code-block"><pre>Méthode              Évaluations nécessaires   Parallélisme   Quand l'utiliser
 ──────────────────────────────────────────────────────────────────────────────────
-Grid search          très nombreuses           parfait        2-3 paramètres, jamais au-delà
-Random search        nombreuses                parfait        baseline honnête, très robuste
+Grid search          très nombreuses           parfait        2-3 paramètres, pas plus
+Random search        nombreuses                parfait        baseline honnête, robuste
 Hyperband / ASHA     moyennes                  bon            entraînements interruptibles
 TPE (Optuna)         peu                       bon            défaut pratique en ML
-GP + EI (BoTorch)    très peu                  bon (batch)    évaluations RÉELLEMENT coûteuses,
-                                                              dimension modérée (&lt; 20)</pre></div>
+GP + EI (BoTorch)    très peu                  bon (batch)    évaluations RÉELLEMENT
+                                                              coûteuses, dimension &lt; 20</pre></div>
 
-    <p>Un repère honnête : en dessous de 20 ou 30 évaluations disponibles et en dimension modérée, l'optimisation bayésienne par GP domine nettement. Pour régler les hyperparamètres d'un gradient boosting qui s'entraîne en dix secondes, Optuna (TPE) est plus simple et suffisant. Et la recherche aléatoire reste une baseline étonnamment solide, qu'il faut toujours inclure dans la comparaison.</p>
+    <p>Un repère honnête : en dessous de 20 ou 30 évaluations disponibles et en dimension modérée, l'optimisation bayésienne par GP domine nettement. Pour régler les hyperparamètres d'un gradient boosting qui s'entraîne en dix secondes, Optuna (TPE) est plus simple et suffisant (module 12). Et la recherche aléatoire reste une baseline étonnamment solide, qu'il faut toujours inclure dans la comparaison.</p>
 
-    <h2 id="usages">8. Cas d'usage et limites</h2>
+    <h2 id="usages">9. Cas d'usage et limites</h2>
     <div class="code-label">où c'est réellement utile</div>
-    <div class="code-block"><pre>Plans d'expériences      choisir les essais physiques suivants (chimie, matériaux, procédés)
-Calibration de modèle    identifier les paramètres d'un modèle physique à partir de mesures
+    <div class="code-block"><pre>Plans d'expériences      choisir les essais physiques suivants (chimie, matériaux,
+                         procédés) — chaque essai coûte des jours et des matières
+Calibration de modèle    identifier les paramètres d'un modèle physique à partir
+                         de mesures (module 19)
 Conception assistée      optimiser une géométrie évaluée par CFD ou éléments finis
-Réglage coûteux          hyperparamètres d'un gros réseau (des heures par entraînement)
-Contrôle / robotique     réglage de contrôleurs sur système réel, où chaque essai a un coût
-A/B testing adaptatif    allocation séquentielle, à la frontière des bandits</pre></div>
+Réglage coûteux          hyperparamètres d'un gros réseau (des heures par essai)
+Contrôle / robotique     réglage de contrôleurs sur système réel, où chaque essai
+                         a un coût et un risque
+A/B testing adaptatif    allocation séquentielle, à la frontière des bandits (module 22)</pre></div>
 
     <div class="warning-block">
       <strong>Les limites, sans détour.</strong><br>
-      • <strong>Dimension</strong> — au-delà de 20 à 30 variables, le GP peine : le volume à explorer croît exponentiellement et l'incertitude ne se réduit plus nulle part. Remèdes : sous-espaces aléatoires (ALEBO, TuRBO), hypothèses d'additivité, réduction préalable.<br>
-      • <strong>Coût du surrogate</strong> — \(O(n^3)\) : au-delà de quelques milliers d'évaluations, l'ajustement du GP devient lui-même coûteux.<br>
-      • <strong>Hypothèse de régularité</strong> — le noyau suppose une certaine continuité. Sur une fonction discontinue ou fractale, le modèle est faux, donc les décisions le sont aussi.<br>
-      • <strong>Bruit hétéroscédastique</strong> — un bruit dont l'amplitude varie selon \(x\) demande un modèle dédié ; sinon le GP le confond avec du signal.<br>
-      • <strong>Sensibilité au noyau</strong> — c'est le vrai choix de modélisation. Un RBF sur un phénomène rugueux produit des prédictions trop lisses et une incertitude sous-estimée. Matérn 5/2 est le défaut raisonnable.
+      • <strong>Dimension</strong> — au-delà de 20 à 30 variables, le GP peine : le volume à explorer croît exponentiellement et l'incertitude ne se réduit plus nulle part. Remèdes : sous-espaces aléatoires (ALEBO, TuRBO), hypothèses d'additivité, réduction préalable par analyse de sensibilité.<br>
+      • <strong>Coût du surrogate</strong> — \(O(n^3)\) : au-delà de quelques milliers d'évaluations, l'ajustement du GP devient lui-même le goulot.<br>
+      • <strong>Hypothèse de régularité</strong> — le noyau suppose une certaine continuité. Sur une fonction discontinue, fractale ou à bifurcation, le modèle est faux, donc les décisions le sont aussi.<br>
+      • <strong>Bruit hétéroscédastique</strong> — un bruit dont l'amplitude varie selon \(x\) demande un modèle dédié ; sinon le GP le confond avec du signal et va explorer là où ça remue.<br>
+      • <strong>Sensibilité au noyau</strong> — c'est le vrai choix de modélisation. Un RBF sur un phénomène rugueux produit des prédictions trop lisses et une incertitude sous-estimée : les deux erreurs se combinent. Matérn 5/2 est le défaut raisonnable.
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
         <li>Un GP est une loi sur des fonctions : il fournit une prédiction <em>et</em> une incertitude calibrée, ce que ne font ni les arbres ni les réseaux.</li>
+        <li>La variance prédictive ne dépend que de la position des points observés : grande loin des données, petite près d'elles.</li>
         <li>Le noyau encode l'hypothèse de régularité ; Matérn 5/2 avec ARD est le défaut ; la vraisemblance marginale règle les hyperparamètres avec une pénalité de complexité intégrée.</li>
         <li>L'optimisation bayésienne remplace une fonction coûteuse par une suite d'optimisations bon marché de l'acquisition.</li>
-        <li>EI par défaut, UCB si l'on veut piloter l'exploration explicitement, Thompson ou acquisitions « q » pour le parallèle.</li>
+        <li>EI par défaut, UCB pour piloter l'exploration explicitement, acquisitions « q » pour le parallèle.</li>
         <li>Le domaine d'excellence : évaluations réellement coûteuses, dimension modérée, budget de quelques dizaines de points. Ailleurs, random search ou TPE suffisent.</li>
       </ul>
     </div>
