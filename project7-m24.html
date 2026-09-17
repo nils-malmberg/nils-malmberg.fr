@@ -45,7 +45,7 @@
   </div>
 
   <div class="project-content course-content">
-    <p>Un modèle en production n'est pas un artefact figé : c'est un système vivant, dont les entrées dérivent, dont les performances se dégradent en silence, et qui doit rester reproductible et réversible. Ce dernier module traite de tout ce qui commence après le notebook — et qui détermine si le projet produit de la valeur ou de la dette.</p>
+    <p>Un modèle en production n'est pas un artefact figé : c'est un système vivant, dont les entrées dérivent, dont les performances se dégradent en silence, et qui doit rester reproductible et réversible. Ce module traite de tout ce qui commence après le notebook — et qui détermine si le projet produit de la valeur ou de la dette.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
@@ -64,142 +64,190 @@
     </div>
 
     <h2 id="dette">1. La dette technique du ML</h2>
-    <p>L'article de Sculley et al. (Google, 2015), <em>Hidden Technical Debt in Machine Learning Systems</em>, reste la meilleure entrée en matière. Son constat : le code du modèle représente une fraction minuscule d'un système de ML en production ; tout le reste — collecte, vérification des données, infrastructure de servage, gestion de configuration, monitoring — l'entoure et le dépasse largement en volume comme en coût de maintenance.</p>
+    <p>L'article de Sculley et al. (Google, 2015), <em>Hidden Technical Debt in Machine Learning Systems</em>, reste la meilleure entrée en matière. Son constat, resté célèbre par son schéma : le code du modèle occupe une petite boîte au milieu d'un ensemble bien plus vaste — collecte, vérification des données, infrastructure de servage, gestion de configuration, outillage d'analyse, monitoring, gestion des ressources. Tout ce qui entoure le modèle le dépasse largement en volume comme en coût de maintenance.</p>
 
-    <p>Deux formes de dette y sont propres au ML. Les <strong>frontières floues</strong> d'abord : un modèle crée des dépendances non déclarées entre toutes ses entrées — modifier une source de données change le comportement du modèle sans qu'aucune interface ne le signale (les auteurs parlent de <em>CACE</em>, <em>Changing Anything Changes Everything</em>). Les <strong>boucles de rétroaction</strong> ensuite : un modèle de recommandation influence ce que les utilisateurs voient, donc ce qu'ils cliquent, donc les données de son prochain entraînement. Le système apprend alors de ses propres sorties, et la dérive devient auto-entretenue.</p>
+    <p>Deux formes de dette sont propres au ML.</p>
+    <p>Les <strong>frontières floues</strong> d'abord. En génie logiciel classique, une interface bien définie isole un module : on peut le modifier sans toucher au reste. Un modèle, lui, crée des dépendances non déclarées entre <em>toutes</em> ses entrées : modifier une source de données change son comportement sans qu'aucune interface ne le signale. Les auteurs résument cela par l'acronyme <em>CACE</em> — <em>Changing Anything Changes Everything</em>. Ajouter une variable modifie les poids de toutes les autres ; retirer une catégorie déplace toutes les frontières de décision.</p>
+    <p>Les <strong>boucles de rétroaction</strong> ensuite : un modèle de recommandation influence ce que les utilisateurs voient, donc ce qu'ils cliquent, donc les données de son prochain entraînement (modules 21 et 22). Le système apprend alors de ses propres sorties, et toute dérive devient auto-entretenue.</p>
 
     <h2 id="repro">2. Reproductibilité</h2>
-    <p>Reproductible signifie : à partir du dépôt, on peut régénérer <em>exactement</em> le même modèle. Cela demande de figer quatre choses.</p>
+    <p>Reproductible signifie : à partir du dépôt, on peut régénérer <em>exactement</em> le même modèle. Cela demande de figer quatre choses, et il suffit d'en oublier une pour perdre la propriété.</p>
     <div class="code-label">les quatre niveaux</div>
-    <div class="code-block"><pre>Code          commit Git précis (et non "la branche main")
-Environnement uv.lock + image Docker taguée par digest (modules 1 et 5)
-Données       version ou empreinte du jeu utilisé (hash, snapshot, requête figée)
-Aléa          graines fixées : Python, NumPy, framework, et ordre de chargement</pre></div>
+    <div class="code-block"><pre>Code           un commit Git PRÉCIS (et non "la branche main", qui bouge)
+Environnement  uv.lock + image Docker taguée par DIGEST (modules 1 et 5)
+               — un tag comme :latest ne fige rien
+Données        version ou empreinte du jeu utilisé (hash, snapshot, requête figée
+               avec sa date). "la table clients" n'est pas une version.
+Aléa           graines fixées : Python, NumPy, framework, ET ordre de chargement
+               (un DataLoader mélange aussi)</pre></div>
 
     <div class="code-label">Python</div>
     <div class="code-block"><pre>import os, random, numpy as np, torch
 
 def figer_alea(seed: int = 42) -&gt; None:
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    random.seed(seed); np.random.seed(seed)
-    torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True    # au prix d'un peu de vitesse
-    torch.backends.cudnn.benchmark = False</pre></div>
+    os.environ["PYTHONHASHSEED"] = str(seed)      # hachage des chaînes, lu au démarrage
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True     # au prix d'un peu de vitesse
+    torch.backends.cudnn.benchmark = False        # sinon cuDNN choisit l'algo le plus
+                                                  # rapide, qui varie d'une exécution
+                                                  # à l'autre — et change les résultats</pre></div>
 
-    <p>Le déterminisme complet sur GPU reste hors d'atteinte pour certaines opérations (réductions atomiques dont l'ordre varie). L'objectif réaliste est donc un modèle <em>équivalent</em> aux fluctuations numériques près, et une traçabilité complète : à partir d'une prédiction, pouvoir remonter au modèle, à son entraînement, à ses données et à son code.</p>
+    <p>Le déterminisme complet sur GPU reste hors d'atteinte pour certaines opérations : les réductions atomiques additionnent les contributions dans un ordre qui dépend de l'ordonnancement des threads, et l'addition flottante n'est pas associative. L'objectif réaliste est donc un modèle <em>équivalent</em> aux fluctuations numériques près, et surtout une traçabilité complète : à partir d'une prédiction, pouvoir remonter au modèle, à son entraînement, à ses données et à son code.</p>
 
     <h2 id="versioning">3. Versionner code, données et modèles</h2>
-    <p>Git gère le code, mais pas des fichiers de plusieurs gigaoctets (module 1). <strong>DVC</strong> résout cela élégamment : le fichier de données part sur un stockage distant (S3, disque réseau, NAS) et Git ne conserve qu'un petit fichier <code>.dvc</code> contenant son empreinte. Revenir à un commit d'il y a six mois restaure le code <em>et</em> permet de récupérer exactement les données correspondantes.</p>
+    <p>Git gère le code, mais pas des fichiers de plusieurs gigaoctets (module 1). <strong>DVC</strong> résout cela élégamment : le fichier de données part sur un stockage distant (S3, disque réseau, NAS) et Git ne conserve qu'un petit fichier texte contenant son empreinte et son emplacement.</p>
 
-    <div class="code-label">bash</div>
-    <div class="code-block"><pre>dvc add data/raw/transactions.parquet   # crée le .dvc versionné dans Git
+    <div class="code-label">bash — le principe en quatre commandes</div>
+    <div class="code-block"><pre>dvc add data/raw/transactions.parquet   # crée transactions.parquet.dvc (quelques lignes)
+git add data/raw/transactions.parquet.dvc .gitignore   # Git suit le POINTEUR
 dvc remote add -d stockage s3://mon-bucket/dvc
-dvc push                                # envoie les données sur le stockage distant
+dvc push                                # envoie les DONNÉES sur le stockage distant
 
-git checkout v1.2 &amp;&amp; dvc checkout       # code ET données d'il y a six mois</pre></div>
+# six mois plus tard, pour retrouver un état exact :
+git checkout v1.2 &amp;&amp; dvc checkout       # le code ET les données correspondantes</pre></div>
 
     <p>Pour les <strong>modèles</strong>, un <em>registry</em> (MLflow Model Registry, ou un simple bucket versionné avec convention de nommage) associe à chaque version : l'artefact, ses métriques de validation, le commit qui l'a produit, les données utilisées et un état (<em>staging</em>, <em>production</em>, <em>archivé</em>). C'est ce qui rend un retour arrière possible en quelques minutes — la capacité opérationnelle la plus précieuse quand un déploiement se passe mal.</p>
 
     <h2 id="tracking">4. Tracking d'expériences</h2>
-    <p>Après deux semaines d'itérations, personne ne se souvient de la configuration qui a produit le meilleur score. Un outil de tracking (<strong>MLflow</strong> en auto-hébergé, <strong>Weights &amp; Biases</strong> en service) enregistre automatiquement chaque exécution.</p>
+    <p>Après deux semaines d'itérations, personne ne se souvient de la configuration qui a produit le meilleur score. Le pire scénario — un excellent résultat qu'on ne sait plus reproduire — disparaît pour quelques lignes de code.</p>
 
-    <div class="code-label">Python</div>
+    <div class="code-label">Python — MLflow</div>
     <div class="code-block"><pre>import mlflow
 
 mlflow.set_experiment("prevision-prix")
 
 with mlflow.start_run(run_name="gbm-features-v3"):
-    mlflow.log_params({"max_depth": 6, "learning_rate": 0.05, "n_features": X.shape[1]})
-    mlflow.log_param("git_sha", sha_courant())
-    mlflow.log_param("data_version", "dvc:8f3a91c")
+    # ── ce qui DÉFINIT l'expérience ──
+    mlflow.log_params({"max_depth": 6, "learning_rate": 0.05,
+                       "n_features": X.shape[1], "n_train": len(X_train)})
+    mlflow.log_param("git_sha", sha_courant())          # le code exact
+    mlflow.log_param("data_version", "dvc:8f3a91c")     # les données exactes
 
     modele.fit(X_train, y_train)
 
+    # ── ce qu'on en retient ──
     mlflow.log_metrics({"rmse_cv": rmse_cv, "rmse_test": rmse_test, "mae_test": mae_test})
-    mlflow.log_artifact("figures/residus.png")
+    mlflow.log_metric("duree_entrainement_s", duree)
+    mlflow.log_artifact("figures/residus.png")          # l'analyse d'erreurs
     mlflow.sklearn.log_model(modele, "modele", registered_model_name="prix-immo")</pre></div>
 
-    <p>Ce qu'il faut consigner systématiquement : hyperparamètres, <em>version du code et des données</em>, métriques de validation <em>et</em> de test, durée et coût d'entraînement, et les quelques graphiques d'analyse d'erreurs. Le pire scénario — un excellent score dont on ne sait plus le reproduire — disparaît pour quelques lignes de code.</p>
+    <p>Ce qu'il faut consigner systématiquement : hyperparamètres, <em>version du code et des données</em>, métriques de validation <em>et</em> de test, durée et coût d'entraînement, et les quelques graphiques d'analyse d'erreurs. L'outil importe peu — <strong>MLflow</strong> en auto-hébergé, <strong>Weights &amp; Biases</strong> en service — mais commencer dès le premier jour est essentiel : le tracking est impossible à reconstituer rétroactivement.</p>
 
     <h2 id="serving">5. Packaging et servage</h2>
     <div class="code-label">modes de servage</div>
-    <div class="code-block"><pre>Batch          scoring périodique, résultats écrits en base. Le plus simple, le plus robuste.
-               Suffit dans une large majorité des cas : personne n'a besoin d'un score
-               de churn à la milliseconde.
-Online         API synchrone (FastAPI, module 2). Contrainte de latence, mise à l'échelle,
-               disponibilité. À ne choisir que si la fraîcheur l'exige vraiment.
-Streaming      scoring sur flux (Kafka), pour la détection de fraude en temps réel.
-Embarqué       ONNX, TFLite, CoreML : inférence sur l'appareil, sans réseau.</pre></div>
+    <div class="code-block"><pre>Batch      scoring périodique, résultats écrits en base. Le plus simple, le plus
+           robuste, et SUFFISANT dans une large majorité des cas : personne n'a
+           besoin d'un score de churn à la milliseconde.
+Online     API synchrone (module 6). Contrainte de latence, mise à l'échelle,
+           disponibilité. À ne choisir que si la fraîcheur l'exige vraiment.
+Streaming  scoring sur flux (Kafka), pour la détection de fraude en temps réel.
+Embarqué   ONNX, TFLite, CoreML : inférence sur l'appareil, sans réseau.</pre></div>
 
-    <p>Quelques points techniques qui font gagner du temps. <strong>ONNX</strong> est un format d'échange neutre : on exporte le modèle une fois, on l'exécute partout (C++, Java, navigateur) sans dépendre de Python — utile à la fois pour la performance et pour la longévité. La <strong>quantification</strong> (module 20) divise taille et latence. Le <strong>cache</strong> de prédictions est trivial et souvent très rentable quand les mêmes entrées reviennent. Et toute réponse doit porter la <strong>version du modèle</strong> qui l'a produite — sans cela, l'analyse d'un incident est impossible.</p>
+    <p>Quelques points techniques qui font gagner du temps. <strong>ONNX</strong> est un format d'échange neutre : on exporte le modèle une fois, on l'exécute partout (C++, Java, navigateur) sans dépendre de Python — utile à la fois pour la performance et pour la longévité, un modèle exporté restant lisible quand la version de scikit-learn qui l'a produit aura disparu. La <strong>quantification</strong> (module 20) divise taille et latence. Le <strong>cache</strong> de prédictions est trivial et souvent très rentable quand les mêmes entrées reviennent. Et toute réponse doit porter la <strong>version du modèle</strong> qui l'a produite.</p>
 
     <div class="warning-block">
-      <strong>Le décalage entraînement/servage.</strong> C'est le bug le plus fréquent et le plus coûteux en production : le prétraitement appliqué à l'inférence diffère légèrement de celui de l'entraînement (une moyenne recalculée, un encodage de catégorie inconnue traité autrement, un fuseau horaire). Le modèle reçoit alors des entrées qu'il n'a jamais vues sous cette forme. La parade : sérialiser le <em>pipeline complet</em> (module 3), jamais l'estimateur seul, et tester l'égalité des prédictions entre le code d'entraînement et le service sur un échantillon de référence.
+      <strong>Le décalage entraînement/servage.</strong> C'est le bug le plus fréquent et le plus coûteux en production : le prétraitement appliqué à l'inférence diffère légèrement de celui de l'entraînement — une moyenne recalculée sur d'autres données, une catégorie inconnue traitée autrement, un fuseau horaire, un arrondi. Le modèle reçoit alors des entrées qu'il n'a jamais vues sous cette forme, et se dégrade sans qu'aucune alerte ne se déclenche. La parade : sérialiser le <em>pipeline complet</em> (module 3), jamais l'estimateur seul, et tester l'égalité des prédictions entre le code d'entraînement et le service sur un échantillon de référence — c'est un test automatisé à part entière.
     </div>
 
     <h2 id="tests">6. Tester un système de ML</h2>
     <p>Aux tests logiciels classiques (module 1) s'ajoutent trois familles propres au ML :</p>
     <ul>
       <li><strong>Tests de données</strong> — schéma, types, bornes, taux de valeurs manquantes, cardinalités, distributions attendues. Des outils comme <em>Great Expectations</em> ou <em>pandera</em> déclarent ces attentes et cassent le pipeline quand elles sont violées. C'est la protection la plus rentable de tout le dispositif : l'immense majorité des incidents de production vient des données, pas du modèle.</li>
-      <li><strong>Tests de modèle</strong> — performance minimale sur un jeu de référence figé, comportement attendu sur des cas connus (tests de type <em>behavioral</em> : invariance à une reformulation, monotonie « à surface égale, plus de pièces ne baisse pas le prix »), absence de régression par rapport à la version en production, équité entre sous-groupes.</li>
+      <li><strong>Tests de modèle</strong> — performance minimale sur un jeu de référence figé, comportements attendus sur des cas connus (tests <em>behavioral</em> : invariance à une reformulation, monotonie « à surface égale, plus de pièces ne baisse pas le prix »), absence de régression par rapport à la version en production, équité entre sous-groupes (module 25).</li>
       <li><strong>Tests d'intégration</strong> — la chaîne complète, de la donnée brute à la réponse de l'API, sur un mini-jeu versionné dans le dépôt.</li>
     </ul>
+
+    <div class="code-label">Python — un test de données déclaratif</div>
+    <div class="code-block"><pre>import pandera.polars as pa
+
+schema = pa.DataFrameSchema({
+    "prix":        pa.Column(float, pa.Check.in_range(10_000, 5_000_000)),
+    "surface":     pa.Column(float, pa.Check.in_range(8, 1000)),
+    "code_postal": pa.Column(str,   pa.Check.str_matches(r"^\d{5}$")),
+    "n_pieces":    pa.Column(int,   pa.Check.in_range(1, 20), nullable=True),
+})
+
+df_valide = schema.validate(df)          # lève une erreur DÉTAILLÉE si le contrat
+                                         # n'est pas respecté — et arrête le pipeline
+                                         # AVANT d'entraîner sur des données corrompues</pre></div>
 
     <div class="code-label">CI/CD pour le ML</div>
     <div class="code-block"><pre>À chaque commit        lint, types, tests unitaires, tests d'intégration rapides
 Sur la branche main    entraînement complet, validation sur jeu figé,
-                       comparaison à la version en production
+                       COMPARAISON à la version en production
 Si validation OK       enregistrement dans le registry en "staging"
-Promotion              manuelle ou automatique selon le risque, puis déploiement progressif
+Promotion              manuelle ou automatique selon le risque, puis déploiement
+                       progressif (section 7)
 Toujours               possibilité de revenir en arrière en une commande</pre></div>
 
     <h2 id="deploiement">7. Déploiement progressif</h2>
-    <p>Un modèle validé hors ligne peut échouer en ligne. On ne bascule donc jamais 100 % du trafic d'un coup.</p>
+    <p>Un modèle validé hors ligne peut échouer en ligne — décalage de prétraitement, latence, distribution réelle différente. On ne bascule donc jamais 100 % du trafic d'un coup.</p>
     <ul>
-      <li><strong>Shadow</strong> — le nouveau modèle reçoit le trafic réel et ses prédictions sont enregistrées, mais non utilisées. Aucun risque, et l'on vérifie latence, taux d'erreur et cohérence sur les vraies données. C'est l'étape que l'on saute le plus souvent à tort.</li>
-      <li><strong>Canary</strong> — 1 %, puis 5 %, puis 25 % du trafic, avec surveillance des métriques techniques et métier à chaque palier.</li>
-      <li><strong>A/B test</strong> — la seule façon de mesurer l'effet <em>causal</em> du nouveau modèle sur l'indicateur métier (module 8). Un meilleur RMSE hors ligne ne garantit en rien un meilleur résultat en ligne.</li>
-      <li><strong>Retour arrière</strong> — préparé, testé, exécutable en une commande. Si le retour arrière n'a jamais été essayé, il ne fonctionne pas.</li>
+      <li><strong>Shadow</strong> — le nouveau modèle reçoit le trafic réel et ses prédictions sont enregistrées, mais <em>non utilisées</em>. Aucun risque, et l'on vérifie latence, taux d'erreur et cohérence sur les vraies données. C'est l'étape que l'on saute le plus souvent à tort, alors qu'elle coûte presque rien.</li>
+      <li><strong>Canary</strong> — 1 %, puis 5 %, puis 25 % du trafic, avec surveillance des métriques techniques et métier à chaque palier, et une règle d'arrêt définie <em>à l'avance</em>.</li>
+      <li><strong>A/B test</strong> — la seule façon de mesurer l'effet <em>causal</em> du nouveau modèle sur l'indicateur métier (module 8). Un meilleur RMSE hors ligne ne garantit en rien un meilleur résultat en ligne (module 21).</li>
+      <li><strong>Retour arrière</strong> — préparé, testé, exécutable en une commande. Si le retour arrière n'a jamais été essayé, il ne fonctionne pas : c'est une certitude empirique.</li>
     </ul>
 
     <h2 id="monitoring">8. Monitoring et dérive</h2>
-    <p>La performance d'un modèle se dégrade avec le temps : c'est la règle, pas l'exception. On distingue trois phénomènes :</p>
+    <p>La performance d'un modèle se dégrade avec le temps : c'est la règle, pas l'exception. On distingue trois phénomènes, qui appellent des réponses différentes :</p>
     <ul>
-      <li><strong>Dérive des données</strong> (<em>covariate shift</em>) — la distribution des entrées \(P(X)\) change : nouvelle clientèle, capteur remplacé, changement d'interface.</li>
-      <li><strong>Dérive du concept</strong> — la relation \(P(Y\mid X)\) elle-même change : les comportements évoluent, une réglementation modifie les règles du jeu. Plus grave, car même un réentraînement sur des données récentes ne rattrape le retard qu'après coup.</li>
+      <li><strong>Dérive des données</strong> (<em>covariate shift</em>) — la distribution des entrées \(P(X)\) change : nouvelle clientèle, capteur remplacé, changement d'interface qui modifie les saisies. Le modèle reste valide, mais il est utilisé hors de son domaine habituel.</li>
+      <li><strong>Dérive du concept</strong> — la relation \(P(Y\mid X)\) elle-même change : les comportements évoluent, une réglementation modifie les règles du jeu. Plus grave, car même un réentraînement ne rattrape le retard qu'après coup, une fois les nouvelles étiquettes disponibles.</li>
       <li><strong>Dérive des étiquettes</strong> — la distribution de la cible change (le taux de fraude double).</li>
     </ul>
 
     <p>Pour détecter une dérive sans attendre les étiquettes — qui arrivent souvent avec des semaines de retard —, on surveille les distributions d'entrée. L'indice de stabilité de population compare les proportions par intervalle entre référence et période courante :</p>
     <div style="text-align:center;overflow-x:auto">\[ \text{PSI} = \sum_{i=1}^{B} (p_i - q_i)\,\ln\!\frac{p_i}{q_i} \]</div>
-    <p>Lecture usuelle : PSI &lt; 0,1 stable ; 0,1 – 0,25 dérive modérée à surveiller ; &gt; 0,25 dérive significative. On complète par un test de Kolmogorov-Smirnov pour les variables continues et un chi² pour les catégorielles (module 8), en se rappelant que sur de gros volumes, ces tests détectent des écarts statistiquement significatifs mais opérationnellement négligeables : c'est l'<em>ampleur</em> qui doit déclencher l'alerte, pas la p-value.</p>
+
+    <div class="code-label">Python — calculer et interpréter un PSI</div>
+    <div class="code-block"><pre>import numpy as np
+
+def psi(reference, courant, n_bins=10):
+    # les bornes viennent de la RÉFÉRENCE : on mesure le déplacement par rapport à elle
+    bornes = np.percentile(reference, np.linspace(0, 100, n_bins + 1))
+    bornes[0], bornes[-1] = -np.inf, np.inf
+    p = np.histogram(reference, bins=bornes)[0] / len(reference)
+    q = np.histogram(courant,   bins=bornes)[0] / len(courant)
+    p, q = np.clip(p, 1e-6, None), np.clip(q, 1e-6, None)   # éviter log(0)
+    return float(np.sum((q - p) * np.log(q / p)))
+
+# lecture usuelle :  &lt; 0,1 stable | 0,1–0,25 à surveiller | &gt; 0,25 dérive significative
+for col in colonnes:
+    v = psi(ref[col], prod[col])
+    if v &gt; 0.25:
+        print(f"ALERTE dérive sur {col} : PSI = {v:.3f}")</pre></div>
+
+    <p>On complète par un test de Kolmogorov-Smirnov pour les variables continues et un chi² pour les catégorielles (module 8) — en se rappelant que sur de gros volumes, ces tests détectent des écarts statistiquement significatifs mais opérationnellement négligeables. C'est l'<em>ampleur</em> qui doit déclencher l'alerte, pas la p-value.</p>
 
     <div class="code-label">ce qu'il faut surveiller, par ordre de priorité</div>
     <div class="code-block"><pre>1. Santé technique      latence (p50, p95, p99), taux d'erreur, disponibilité, coût
 2. Qualité des entrées  taux de manquants, valeurs hors domaine, catégories inconnues
-3. Distribution         PSI par feature, dérive des embeddings pour les données non tabulaires
-4. Sorties du modèle    distribution des scores, taux de prédictions positives, confiance
-5. Performance réelle   dès que les étiquettes arrivent : métriques par segment
+3. Distribution         PSI par variable, dérive des embeddings pour le non-tabulaire
+4. Sorties du modèle    distribution des scores, taux de prédictions positives
+5. Performance réelle   dès que les étiquettes arrivent : métriques PAR SEGMENT
 6. Impact métier        LA mesure qui compte : conversion, coût évité, satisfaction</pre></div>
 
     <p>Les couches 1 à 4 sont disponibles immédiatement ; la 5 arrive en différé ; la 6 exige souvent une expérimentation. Un tableau de bord qui ne montre que la couche 1 donne une fausse impression de contrôle — un modèle peut répondre en 20 ms avec une disponibilité parfaite tout en étant devenu complètement faux.</p>
 
     <h2 id="orchestration">9. Orchestration et ré-entraînement</h2>
-    <p>Les pipelines (extraction, features, entraînement, validation, déploiement) sont décrits comme des graphes de tâches et planifiés par un orchestrateur : <strong>Airflow</strong> (le standard historique, très répandu), <strong>Prefect</strong> ou <strong>Dagster</strong> (plus modernes, Dagster étant construit autour des <em>actifs de données</em>, ce qui correspond bien au ML), ou <strong>Kubeflow</strong> si l'on vit déjà dans Kubernetes (module 5).</p>
+    <p>Les pipelines (extraction, variables, entraînement, validation, déploiement) sont décrits comme des graphes de tâches et planifiés par un orchestrateur : <strong>Airflow</strong> (le standard historique, très répandu), <strong>Prefect</strong> ou <strong>Dagster</strong> (plus modernes, Dagster étant construit autour des <em>actifs de données</em>, ce qui correspond bien au ML), ou <strong>Kubeflow</strong> si l'on vit déjà dans Kubernetes (module 5).</p>
 
     <div class="code-label">quand ré-entraîner</div>
     <div class="code-block"><pre>Périodique         chaque semaine ou chaque mois. Simple, prévisible, souvent suffisant.
-Sur déclenchement  quand le monitoring détecte une dérive au-delà d'un seuil.
-Sur volume         quand N nouvelles observations étiquetées sont disponibles.
+Sur déclenchement  quand le monitoring détecte une dérive au-delà d'un seuil (section 8)
+Sur volume         quand N nouvelles observations ÉTIQUETÉES sont disponibles
 En continu         apprentissage en ligne. Réservé aux cas qui l'exigent vraiment :
-                   difficile à déboguer, et très exposé aux boucles de rétroaction.</pre></div>
+                   difficile à déboguer, très exposé aux boucles de rétroaction.</pre></div>
 
-    <p>Un ré-entraînement automatique n'est acceptable qu'avec des <strong>garde-fous</strong> : validation sur un jeu figé, comparaison obligatoire avec le modèle en place, et refus automatique de promotion si la performance recule. Sans cela, un pipeline automatisé propage en production un modèle entraîné sur des données corrompues — plus vite qu'un humain ne l'aurait fait.</p>
+    <p>Un ré-entraînement automatique n'est acceptable qu'avec des <strong>garde-fous</strong> : validation sur un jeu figé, comparaison obligatoire avec le modèle en place, et refus automatique de promotion si la performance recule. Sans cela, un pipeline automatisé propage en production un modèle entraîné sur des données corrompues — plus vite et plus sûrement qu'un humain ne l'aurait fait.</p>
 
     <h2 id="gouvernance">10. Gouvernance et checklist</h2>
     <p>La <em>model card</em> documente, en une page : l'usage prévu et les usages exclus, les données d'entraînement et leurs biais connus, les performances globales <em>et par sous-groupe</em>, les limites, et le contact responsable. Ce n'est pas de la bureaucratie : c'est ce qui permet à quelqu'un d'autre — ou à soi-même dans un an — de savoir si le modèle peut être utilisé dans un contexte donné.</p>
-
-    <p>Le cadre réglementaire européen ajoute des obligations concrètes : le RGPD encadre les données personnelles et prévoit un droit à l'explication pour les décisions automatisées ; l'AI Act classe les systèmes par niveau de risque et impose documentation, traçabilité et supervision humaine pour les usages à haut risque (crédit, emploi, santé). Ces exigences se traitent en amont — journalisation des prédictions, explicabilité, tests d'équité — bien plus facilement qu'après coup.</p>
+    <p>Le cadre réglementaire européen ajoute des obligations concrètes, détaillées au module 25 : le RGPD encadre les données personnelles et prévoit un droit à l'explication pour les décisions automatisées ; l'AI Act classe les systèmes par niveau de risque et impose documentation, traçabilité et supervision humaine pour les usages à haut risque. Ces exigences se traitent en amont — journalisation des prédictions, explicabilité, tests d'équité — bien plus facilement qu'après coup.</p>
 
     <div class="step-block">
       <h4>Checklist avant mise en production</h4>
@@ -230,13 +278,6 @@ En continu         apprentissage en ligne. Réservé aux cas qui l'exigent vraim
         <li>Le ré-entraînement automatique exige des garde-fous, sinon il automatise l'erreur.</li>
       </ul>
     </div>
-
-    <hr class="divider">
-
-    <h2 id="fin">Fin du tronc commun</h2>
-    <p>Douze modules plus tard, la boucle est complète : de l'environnement Python au modèle surveillé en production. Si je devais résumer ce que ce cours m'a fait comprendre en une idée, ce serait celle-ci : <em>la difficulté du machine learning n'est presque jamais l'algorithme</em>. Elle est dans la formulation du problème, dans la qualité des données, dans la rigueur du protocole d'évaluation, et dans l'honnêteté avec laquelle on regarde ce que le modèle ne sait pas faire.</p>
-    <p>Les <strong>modules 9 à 13</strong> prolongent ce tronc commun sur ce qu'il laissait de côté : l'inférence bayésienne et la quantification d'incertitude, les séries temporelles et les durées de vie, les données non tabulaires, le couplage avec la simulation numérique, l'apprentissage à faible budget d'annotation, la traduction d'un score en décision, la recherche et la recommandation, la responsabilité d'un modèle qui décide, le matériel, et la théorie. Le <a href="project7.html">sommaire</a> propose un ordre de lecture par parties.</p>
-    <p>Ce cours continuera d'évoluer au fil de ce que j'apprends et de ce que je mets réellement en pratique.</p>
   </div>
 
   <hr class="divider">
