@@ -124,6 +124,18 @@
       "FastAPI",
       "Kubernetes",
       "UV",
-      "SQL"
+      "SQL",
+      "Data Engineering",
+      "Ingénierie des données",
+      "Parquet",
+      "Apache Arrow",
+      "Kafka",
+      "Airflow",
+      "dbt",
+      "Causal Inference",
+      "Inférence causale",
+      "A/B testing",
+      "Propensity Score",
+      "Double Machine Learning"
     ]
 }  
