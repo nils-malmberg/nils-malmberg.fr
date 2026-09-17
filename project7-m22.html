@@ -62,9 +62,20 @@
     </div>
 
     <h2 id="utilite">1. Théorie de la décision et seuil optimal</h2>
-    <p>Décider, c'est choisir l'action qui maximise l'utilité espérée. Pour une décision binaire avec un coût \(C_{FP}\) de fausse alerte et \(C_{FN}\) de non-détection, le seuil optimal sur la probabilité prédite s'écrit :</p>
+    <p>Décider, c'est choisir l'action qui maximise l'utilité espérée. Pour une décision binaire, écrivons le coût attendu de chacune des deux options en fonction de la probabilité \(p\) que l'événement se produise :</p>
+
+    <div class="code-label">le raisonnement, en quatre lignes</div>
+    <div class="code-block"><pre>si J'AGIS (j'envoie un technicien) :       coût = C_FP × (1-p)     (intervention inutile)
+si JE N'AGIS PAS :                          coût = C_FN × p         (panne subie)
+
+agir est préférable quand    C_FP × (1-p)  &lt;  C_FN × p
+                    ⟺        C_FP          &lt;  p × (C_FN + C_FP)
+                    ⟺        p             &gt;  C_FP / (C_FP + C_FN)</pre></div>
+
     <div style="text-align:center;overflow-x:auto">\[ p^\star = \frac{C_{FP}}{C_{FP}+C_{FN}} \]</div>
-    <p>La formule vaut mieux qu'un long discours : si rater une panne coûte cent fois plus qu'une inspection inutile, le seuil optimal est à 1 % — et non à 50 %. Le seuil par défaut de 0,5 n'est justifié que dans le cas très particulier où les deux erreurs coûtent exactement pareil, ce qui n'arrive presque jamais. La conséquence pratique : <strong>obtenir de l'interlocuteur métier le rapport des coûts</strong> est une étape de modélisation à part entière, et elle n'exige pas des chiffres exacts — un ordre de grandeur suffit à déplacer le seuil de manière décisive.</p>
+
+    <p>La formule vaut mieux qu'un long discours : si rater une panne coûte cent fois plus qu'une inspection inutile, le seuil optimal est à 1 % — et non à 50 %. Le seuil par défaut de 0,5 n'est justifié que dans le cas très particulier où les deux erreurs coûtent exactement pareil, ce qui n'arrive presque jamais.</p>
+    <p>La conséquence pratique : <strong>obtenir de l'interlocuteur métier le rapport des coûts</strong> est une étape de modélisation à part entière. Elle n'exige pas des chiffres exacts — un ordre de grandeur suffit à déplacer le seuil de façon décisive, et la question « est-ce dix fois pire, ou cent fois pire ? » est presque toujours répondable, là où « combien exactement ? » ne l'est pas.</p>
 
     <div class="code-label">Python — seuil choisi sur le gain, pas sur le F1</div>
     <div class="code-block"><pre>import numpy as np
@@ -73,19 +84,33 @@ cout_fp, cout_fn = 50.0, 4_000.0      # inspection inutile / panne subie
 p = modele.predict_proba(X_val)[:, 1]
 
 seuils = np.linspace(0.001, 0.5, 500)
-cout = [( (p &gt;= s) &amp; (y_val == 0)).sum() * cout_fp +
-        ((p &lt;  s) &amp; (y_val == 1)).sum() * cout_fn for s in seuils]
+cout = [(((p &gt;= s) &amp; (y_val == 0)).sum() * cout_fp +
+         ((p &lt;  s) &amp; (y_val == 1)).sum() * cout_fn) for s in seuils]
 
 s_opt = seuils[int(np.argmin(cout))]
-print(f"seuil optimal = {s_opt:.3f}  (théorique = {cout_fp/(cout_fp+cout_fn):.3f})")</pre></div>
+print(f"seuil optimal empirique = {s_opt:.3f}")
+print(f"seuil théorique         = {cout_fp / (cout_fp + cout_fn):.3f}")
+print(f"économie vs seuil 0,5   = {cout[np.argmin(np.abs(seuils - 0.5))] - min(cout):.0f} €")</pre></div>
 
     <div class="warning-block">
-      <strong>Décider avec des probabilités exige qu'elles soient calibrées.</strong> Toute cette arithmétique suppose que « 0,012 » signifie réellement 1,2 % de chances. Un gradient boosting ou un réseau de neurones produisent des scores mal calibrés (modules 12 et 7) : le seuil calculé serait alors faux. Calibrer (Platt, isotonique) sur un jeu dédié <em>avant</em> de raisonner en coûts — et vérifier par un diagramme de fiabilité.
+      <strong>Décider avec des probabilités exige qu'elles soient calibrées.</strong> Toute cette arithmétique suppose que « 0,012 » signifie réellement 1,2 % de chances. Or un gradient boosting ou un réseau de neurones produisent des scores mal calibrés (modules 7 et 12) : le seuil calculé serait alors faux, et d'autant plus faux qu'il est extrême. Calibrer (Platt, isotonique) sur un jeu dédié <em>avant</em> de raisonner en coûts, et vérifier par un diagramme de fiabilité — qui trace la fréquence observée en fonction de la probabilité annoncée, et doit suivre la diagonale.
     </div>
 
     <h2 id="capacite">2. Décider sous contrainte de capacité</h2>
-    <p>Dans la réalité, le seuil n'est souvent même pas le bon objet : une équipe de maintenance peut traiter vingt interventions par semaine, un service client rappeler cent clients par jour. La décision devient un problème de <strong>sélection sous budget</strong> — choisir les \(k\) meilleurs, ou maximiser le gain espéré sous contrainte de ressource.</p>
-    <p>Quand chaque action a un coût et un gain variables, c'est un problème de sac à dos : on classe par <em>ratio gain espéré sur coût</em> plutôt que par score brut. Et l'évaluation change de métrique : ni AUC ni F1, mais la <strong>courbe de gain cumulé</strong> (combien de valeur capturée en traitant les \(k\) premiers) et le <em>lift</em> aux rangs qui correspondent à la capacité réelle. Un modèle avec une AUC inférieure peut très bien être meilleur sur les 2 % de cas que l'on traitera effectivement — et c'est cela qu'il faut optimiser.</p>
+    <p>Dans la réalité, le seuil n'est souvent même pas le bon objet : une équipe de maintenance peut traiter vingt interventions par semaine, un service client rappeler cent clients par jour. Peu importe alors que trois mille cas dépassent le seuil — on en traitera vingt. La décision devient un problème de <strong>sélection sous budget</strong>.</p>
+    <p>Quand chaque action a un coût et un gain variables, c'est un problème de sac à dos : on classe par <em>ratio gain espéré sur coût</em> plutôt que par score brut. Un cas à 80 % de risque coûtant trois jours d'intervention peut passer après deux cas à 50 % coûtant une heure chacun.</p>
+    <p>Et l'évaluation change de métrique : ni AUC ni F1, mais la <strong>courbe de gain cumulé</strong> — combien de valeur capturée en traitant les \(k\) premiers — et le <em>lift</em> aux rangs qui correspondent à la capacité réelle.</p>
+
+    <div class="code-label">Python — la seule courbe qui compte sous contrainte</div>
+    <div class="code-block"><pre>ordre = np.argsort(-p)                       # du plus risqué au moins risqué
+gain_cumule = np.cumsum(gain_reel[ordre])    # valeur réellement capturée
+cout_cumule = np.cumsum(cout_action[ordre])
+
+capacite = 20                                # ce qu'on peut traiter par semaine
+print(f"gain sur les {capacite} premiers : {gain_cumule[capacite-1]:.0f} €")
+print(f"lift@{capacite} = "
+      f"{gain_cumule[capacite-1] / (capacite * gain_reel.mean()):.1f}× le hasard")</pre></div>
+    <p>Un modèle avec une AUC inférieure peut très bien être meilleur sur les 2 % de cas que l'on traitera effectivement — et c'est cela qu'il faut optimiser, pas une métrique globale qui pondère également des cas qu'on ne regardera jamais.</p>
 
     <h2 id="uplift">3. Uplift : agir sur les bonnes personnes</h2>
     <p>Voici l'erreur de raisonnement la plus coûteuse du domaine. Un modèle de churn identifie les clients qui vont partir ; on leur envoie une offre de rétention. Mais certains partiront quoi qu'on fasse, d'autres restaient de toute façon, et certains — c'est documenté — <em>partent parce que</em> l'offre leur rappelle qu'ils peuvent partir. Cibler la probabilité d'événement, c'est confondre prédiction et effet d'une action (module 8).</p>
@@ -94,35 +119,63 @@ print(f"seuil optimal = {s_opt:.3f}  (théorique = {cout_fp/(cout_fp+cout_fn):.3
     <div style="text-align:center;overflow-x:auto">\[ \tau(x) = \mathbb{E}\big[Y \mid T=1, X=x\big] - \mathbb{E}\big[Y \mid T=0, X=x\big] \]</div>
 
     <div class="code-label">les quatre populations</div>
-    <div class="code-block"><pre>                        Réagit si traité       Ne réagit pas si traité
-Réagit si non traité    Causes perdues         SÛRS — ne rien faire, gain nul
-Ne réagit pas si        PERSUADABLES —         À NE PAS DÉRANGER — le traitement
-non traité              la seule cible utile   NUIT : uplift négatif</pre></div>
+    <div class="code-block"><pre>                          Reste si TRAITÉ          Part si TRAITÉ
+  Reste si NON traité     SÛRS                     À NE PAS DÉRANGER
+                          (gain nul, coût réel)    (l'action NUIT : uplift négatif)
+  Part si NON traité      PERSUADABLES             CAUSES PERDUES
+                          ← LA SEULE CIBLE UTILE   (gain nul, coût réel)
 
-    <p>Estimer \(\tau\) demande des données expérimentales (un A/B test, module 8) ou des hypothèses causales fortes. Les approches usuelles : <em>T-learner</em> (un modèle par bras, différence des prédictions — simple, bruité), <em>S-learner</em> (un seul modèle avec le traitement comme variable — risque de le sous-pondérer), <em>X-learner</em> (meilleur quand les groupes sont déséquilibrés) et les <strong>forêts causales</strong> (<code>econml</code>, <code>causalml</code>), qui partitionnent l'espace pour maximiser l'hétérogénéité de l'effet. L'évaluation se fait par courbe d'uplift ou coefficient de <strong>Qini</strong> : on ordonne par uplift décroissant et on vérifie que le gain incrémental réel suit.</p>
+  Un modèle de churn classique cible "part si non traité", donc il mélange
+  les PERSUADABLES et les CAUSES PERDUES — et ignore complètement le fait que
+  les "à ne pas déranger" font perdre de l'argent DEUX fois.</pre></div>
 
-    <p>Le raisonnement vaut au-delà du marketing : traiter préventivement un équipement, envoyer un technicien, accorder une remise, prioriser un contrôle — dans tous ces cas, la question utile n'est jamais « que va-t-il se passer ? » mais « qu'est-ce que <em>mon action</em> change ? ».</p>
+    <p>Estimer \(\tau\) demande des données expérimentales — un A/B test où une partie de la population n'a pas été traitée (module 8) — ou des hypothèses causales fortes. Les approches usuelles : <em>T-learner</em> (un modèle par bras, différence des prédictions — simple, mais la différence de deux modèles bruités est très bruitée), <em>S-learner</em> (un seul modèle avec le traitement comme variable — risque de le sous-pondérer parmi cent autres), <em>X-learner</em> (meilleur quand les groupes sont déséquilibrés) et les <strong>forêts causales</strong> (<code>econml</code>, <code>causalml</code>), qui partitionnent l'espace pour maximiser l'<em>hétérogénéité de l'effet</em> plutôt que la pureté de la cible.</p>
+
+    <div class="code-label">Python — estimer et évaluer un uplift</div>
+    <div class="code-block"><pre>from causalml.inference.tree import UpliftRandomForestClassifier
+from causalml.metrics import plot_qini, qini_score
+
+modele = UpliftRandomForestClassifier(control_name="controle", n_estimators=300)
+modele.fit(X_train, treatment=t_train, y=y_train)      # t = "traite" / "controle"
+
+uplift = modele.predict(X_test)
+
+# évaluation : on ordonne par uplift décroissant et on vérifie que le gain
+# INCRÉMENTAL réel suit. Une courbe plate = le modèle ne trouve rien.
+print(qini_score(df_test, outcome_col="y", treatment_col="t"))
+plot_qini(df_test, outcome_col="y", treatment_col="t")</pre></div>
+
+    <p>Le raisonnement vaut bien au-delà du marketing : traiter préventivement un équipement, envoyer un technicien, accorder une remise, prioriser un contrôle. Dans tous ces cas, la question utile n'est jamais « que va-t-il se passer ? » mais « qu'est-ce que <em>mon action</em> change ? ».</p>
 
     <h2 id="bandits">4. Bandits contextuels</h2>
-    <p>Quand plusieurs actions sont possibles et que l'on observe le résultat immédiatement, on peut apprendre <em>en agissant</em> plutôt que de figer un test A/B. Un bandit contextuel choisit une action selon le contexte, observe la récompense, et met à jour sa politique — c'est le cas particulier du RL (module 18) sans transition d'état, donc bien plus simple, plus stable et plus sûr.</p>
+    <p>Quand plusieurs actions sont possibles et que l'on observe le résultat immédiatement, on peut apprendre <em>en agissant</em> plutôt que de figer un test A/B pendant trois semaines. Un bandit contextuel choisit une action selon le contexte, observe la récompense, et met à jour sa politique — c'est le cas particulier du RL (module 18) <em>sans transition d'état</em> : l'action d'aujourd'hui ne change pas la situation de demain. D'où une méthode bien plus simple, plus stable et plus sûre.</p>
 
     <div class="code-label">stratégies et positionnement</div>
     <div class="code-block"><pre>ε-greedy          trivial à implémenter, exploration non ciblée
-LinUCB            borne supérieure de confiance sur un modèle linéaire du contexte
+LinUCB            borne supérieure de confiance sur un modèle linéaire du contexte :
+                  on essaie ce qui est soit bon, soit mal connu (module 17)
 Thompson sampling échantillonner dans le postérieur (module 9) : excellent en pratique,
-                  naturellement parallélisable, peu de réglage
+                  naturellement parallélisable, presque aucun réglage
 Bandit + coût     intégrer le coût de chaque action dans la récompense
 
 A/B test          quand il faut une MESURE causale propre à communiquer
 Bandit            quand il faut MAXIMISER le résultat pendant l'apprentissage
                   (moins de trafic gaspillé sur les mauvaises variantes)</pre></div>
 
-    <p>Deux précautions : un bandit crée des données <em>biaisées par sa propre politique</em>, ce qui complique toute analyse a posteriori — il faut journaliser les probabilités de sélection pour permettre une évaluation hors ligne non biaisée (<em>inverse propensity scoring</em>). Et la non-stationnarité doit être traitée explicitement (oubli exponentiel), sinon le bandit reste bloqué sur une action devenue mauvaise.</p>
+    <p>Deux précautions. Un bandit crée des données <em>biaisées par sa propre politique</em> — les bonnes actions sont sur-représentées — ce qui complique toute analyse a posteriori : il faut journaliser les <em>probabilités de sélection</em> pour permettre une évaluation hors ligne non biaisée par pondération inverse (même mécanique qu'au module 21). Et la non-stationnarité doit être traitée explicitement (oubli exponentiel des observations anciennes), sinon le bandit reste bloqué sur une action devenue mauvaise.</p>
 
     <h2 id="stock">5. Décision sous incertitude : le vendeur de journaux</h2>
-    <p>Le problème du <em>newsvendor</em> illustre parfaitement pourquoi une prévision ponctuelle ne suffit pas. On commande une quantité \(q\) avant de connaître la demande \(D\) ; le surstock coûte \(c_o\) par unité, la rupture \(c_u\). La quantité optimale n'est pas la demande moyenne, mais un <strong>quantile</strong> :</p>
+    <p>Le problème du <em>newsvendor</em> illustre parfaitement pourquoi une prévision ponctuelle ne suffit pas. On commande une quantité \(q\) avant de connaître la demande \(D\) ; le surstock coûte \(c_o\) par unité, la rupture \(c_u\).</p>
+
+    <div class="code-label">le raisonnement marginal</div>
+    <div class="code-block"><pre>Commander une unité de plus est rentable tant que :
+   (probabilité qu'elle SERVE) × c_u   >   (probabilité qu'elle reste) × c_o
+              P(D ≥ q) × c_u           >          P(D &lt; q) × c_o
+À l'optimum, égalité :  P(D &lt; q*) = c_u / (c_u + c_o)</pre></div>
+
     <div style="text-align:center;overflow-x:auto">\[ q^\star = F_D^{-1}\!\left(\frac{c_u}{c_u + c_o}\right) \]</div>
-    <p>Si une rupture coûte trois fois un surstock, il faut commander le quantile 75 % et non la moyenne. C'est ce qui justifie la prévision probabiliste du module 15 : la distribution complète est l'entrée de la décision, la moyenne n'en est qu'un résumé souvent inadapté. Le même raisonnement gouverne le dimensionnement d'une marge de sécurité, d'une réserve d'énergie, d'un effectif de garde ou d'un stock de pièces de rechange.</p>
+
+    <p>La quantité optimale n'est donc pas la demande moyenne, mais un <strong>quantile</strong> de sa distribution. Si une rupture coûte trois fois un surstock, il faut commander le quantile 75 %. C'est ce qui justifie la prévision probabiliste du module 15 : la distribution complète est l'<em>entrée</em> de la décision, la moyenne n'en est qu'un résumé souvent inadapté. Le même raisonnement gouverne le dimensionnement d'une marge de sécurité, d'une réserve d'énergie, d'un effectif de garde ou d'un stock de pièces de rechange.</p>
 
     <h2 id="ro">6. Recherche opérationnelle</h2>
     <p>Beaucoup de décisions industrielles ne sont pas des prédictions mais des <em>allocations sous contraintes</em> : planifier une production, affecter des équipes, optimiser des tournées, choisir un plan de maintenance. Le ML estime des paramètres (durées, demandes, probabilités de panne) ; la recherche opérationnelle décide. Ignorer cette seconde moitié conduit à livrer des prédictions que personne ne sait transformer en planning.</p>
@@ -130,33 +183,50 @@ Bandit            quand il faut MAXIMISER le résultat pendant l'apprentissage
     <div class="code-label">Python — affectation sous contraintes avec OR-Tools</div>
     <div class="code-block"><pre>from ortools.linear_solver import pywraplp
 
-s = pywraplp.Solver.CreateSolver("SCIP")               # MILP
+s = pywraplp.Solver.CreateSolver("SCIP")               # solveur MILP
 
-x = {(i, j): s.BoolVar(f"x_{i}_{j}")                   # équipe i sur intervention j
-     for i in equipes for j in interventions}
+# VARIABLES DE DÉCISION : x[i,j] = 1 si l'équipe i traite l'intervention j
+x = {(i, j): s.BoolVar(f"x_{i}_{j}") for i in equipes for j in interventions}
 
+# CONTRAINTES
 for j in interventions:                                # chaque intervention couverte
-    s.Add(sum(x[i, j] for i in equipes) == 1)
+    s.Add(sum(x[i, j] for i in equipes) == 1)          #   exactement une fois
 for i in equipes:                                      # capacité hebdomadaire
     s.Add(sum(duree[j] * x[i, j] for j in interventions) &lt;= capacite[i])
+for j in urgentes:                                     # les urgences sont prioritaires
+    s.Add(sum(x[i, j] for i in equipes_qualifiees) == 1)
 
-# maximiser le risque évité, estimé par le modèle de survie du module 15
+# OBJECTIF : maximiser le risque évité, estimé par le modèle de survie (module 15)
 s.Maximize(sum(risque_evite[j] * x[i, j] for i in equipes for j in interventions))
 
-s.Solve()</pre></div>
+statut = s.Solve()
+if statut == pywraplp.Solver.OPTIMAL:
+    print(f"valeur optimale : {s.Objective().Value():.0f}")
+    plan = [(i, j) for (i, j), v in x.items() if v.solution_value() &gt; 0.5]</pre></div>
 
-    <p>Les outils : <strong>OR-Tools</strong> (Google — solveurs LP/MILP, programmation par contraintes, tournées de véhicules), <strong>PuLP</strong> ou <strong>Pyomo</strong> pour la modélisation, <strong>HiGHS</strong> comme solveur libre performant, Gurobi ou CPLEX en commercial. Ce qu'il faut retenir du fonctionnement : un problème <em>linéaire continu</em> se résout en temps polynomial, l'ajout de variables <em>entières</em> le rend NP-difficile — d'où l'importance de la formulation. Une bonne formulation résout en secondes ce qu'une mauvaise ne résout jamais. Et quand l'exactitude n'est pas nécessaire, les métaheuristiques (recuit simulé, tabou, algorithmes génétiques) donnent de bonnes solutions rapidement.</p>
+    <p>Les outils : <strong>OR-Tools</strong> (Google — solveurs LP/MILP, programmation par contraintes, tournées de véhicules), <strong>PuLP</strong> ou <strong>Pyomo</strong> pour la modélisation, <strong>HiGHS</strong> comme solveur libre performant, Gurobi ou CPLEX en commercial.</p>
+    <p>Ce qu'il faut retenir du fonctionnement : un problème <em>linéaire continu</em> se résout en temps polynomial, mais l'ajout de variables <em>entières</em> le rend NP-difficile — d'où l'importance de la formulation. Une bonne formulation résout en secondes ce qu'une mauvaise ne résout jamais, parce qu'elle donne au solveur des bornes plus serrées pour élaguer son arbre de recherche. Et quand l'optimalité exacte n'est pas nécessaire, les métaheuristiques (recuit simulé, tabou, algorithmes génétiques) donnent de bonnes solutions rapidement.</p>
 
     <h2 id="spo">7. Prédire puis optimiser : le piège</h2>
-    <p>La démarche standard entraîne le modèle à minimiser une erreur de prédiction, puis optimise la décision à partir des prédictions. Le problème : <strong>ces deux objectifs ne sont pas alignés</strong>. Une erreur de prédiction peut être sans conséquence sur la décision (elle ne change pas le classement des options) ou catastrophique (elle inverse le choix optimal). Minimiser le RMSE traite ces deux erreurs de la même façon.</p>
+    <p>La démarche standard entraîne le modèle à minimiser une erreur de prédiction, puis optimise la décision à partir des prédictions. Le problème : <strong>ces deux objectifs ne sont pas alignés</strong>.</p>
+
+    <div class="code-label">le même RMSE, deux conséquences opposées</div>
+    <div class="code-block"><pre>Deux routes, coûts réels : A = 10, B = 12. Le modèle doit choisir la moins chère.
+
+modèle 1 : prédit A = 11, B = 13     erreur = 1 sur chaque       → choisit A ✓ CORRECT
+modèle 2 : prédit A = 11, B =  9     erreur = 1 sur chaque       → choisit B ✗ FAUX
+
+Même RMSE, décisions opposées. Le RMSE ne voit pas que la seule chose qui
+compte est l'ORDRE des deux prédictions, pas leur exactitude absolue.</pre></div>
+
     <p>L'<em>apprentissage orienté décision</em> (SPO+, optimisation différentiable) intègre le problème d'optimisation dans l'entraînement, de sorte que le modèle apprenne à bien prédire <em>là où cela change la décision</em>. C'est un domaine encore jeune, mais l'idée est immédiatement exploitable même sans ces méthodes : <strong>évaluer toute chaîne prédiction-décision sur le résultat final</strong> — coût total, risque évité, valeur capturée — et non sur la métrique intermédiaire du modèle. C'est le prolongement exact du principe du module 10 : la métrique doit venir de la décision.</p>
 
     <h2 id="humain">8. Humain dans la boucle et effets de bord</h2>
     <ul>
-      <li><strong>Déléguer partiellement</strong> — la bonne architecture est souvent à trois zones : décision automatique quand le modèle est confiant et l'enjeu faible, transmission à un humain quand il hésite (les ensembles conformes du module 9 formalisent exactement ce « je ne sais pas trancher »), et procédure de référence quand l'entrée est hors domaine.</li>
+      <li><strong>Déléguer partiellement</strong> — la bonne architecture est souvent à trois zones : décision automatique quand le modèle est confiant et l'enjeu faible, transmission à un humain quand il hésite, procédure de référence quand l'entrée est hors domaine. Les ensembles conformes du module 9 formalisent exactement ce « je ne sais pas trancher » : quand l'ensemble prédit contient plusieurs classes, on transmet.</li>
       <li><strong>Mesurer le système, pas le modèle</strong> — ce qui compte est la performance de l'ensemble humain + modèle. Un modèle un peu moins performant mais dont les erreurs sont <em>détectables</em> par l'opérateur produit un meilleur système qu'un modèle opaque légèrement plus précis.</li>
-      <li><strong>Anticiper les boucles de rétroaction</strong> (module 24) — un modèle qui déclenche des inspections ne verra plus jamais les pannes qu'il a évitées : ses futures données d'entraînement sont modifiées par ses propres décisions. Conserver une petite fraction de cas traités <em>aléatoirement</em> (un groupe témoin permanent) est ce qui permet de continuer à mesurer honnêtement.</li>
-      <li><strong>Prévoir le détournement</strong> — dès qu'une décision a des conséquences, les personnes concernées s'adaptent à la règle. Un critère devenu cible cesse d'être un bon critère ; les variables les plus faciles à manipuler doivent être écartées des modèles qui décident.</li>
+      <li><strong>Anticiper les boucles de rétroaction</strong> (module 24) — un modèle qui déclenche des inspections ne verra plus jamais les pannes qu'il a évitées : ses futures données d'entraînement sont modifiées par ses propres décisions, et il finit par « apprendre » que les cas qu'il signale ne tombent jamais en panne. Conserver une petite fraction de cas traités <em>aléatoirement</em> — un groupe témoin permanent — est ce qui permet de continuer à mesurer honnêtement.</li>
+      <li><strong>Prévoir le détournement</strong> — dès qu'une décision a des conséquences, les personnes concernées s'adaptent à la règle. Un critère devenu cible cesse d'être un bon critère ; les variables les plus faciles à manipuler doivent donc être écartées des modèles qui décident. C'est le même mécanisme que le détournement de récompense en RL (module 18).</li>
     </ul>
 
     <div class="step-block">
