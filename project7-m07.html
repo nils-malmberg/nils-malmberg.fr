@@ -279,7 +279,7 @@ print(f"k={k} : {taux:.1%} des coefficients d'origine, 95 % de l'énergie conser
 
     <div class="step-block">
       <h4>Coût et passage à l'échelle</h4>
-      <p>La SVD complète coûte \(O(\min(mn^2, m^2n))\) — impraticable sur une grande matrice. Deux issues : la SVD tronquée par méthode de Lanczos (<code>scipy.sparse.linalg.svds</code>), efficace sur les matrices creuses, et surtout la <strong>SVD randomisée</strong> (<code>sklearn.utils.extmath.randomized_svd</code>), qui projette d'abord les données sur un sous-espace aléatoire de dimension \(k+p\) et coûte \(O(mnk)\). Sur une matrice 100 000 × 10 000 dont on veut 50 composantes, c'est la différence entre quelques secondes et plusieurs heures. L'idée sous-jacente est remarquable : une projection aléatoire préserve approximativement les distances (lemme de Johnson-Lindenstrauss), donc capture l'essentiel du sous-espace dominant.</p>
+      <p>La SVD complète coûte \(O(\min(mn^2, m^2n))\) — impraticable sur une grande matrice. Deux issues : la SVD tronquée par méthode de Lanczos (<code>scipy.sparse.linalg.svds</code>), efficace sur les matrices creuses, et surtout la <strong>SVD randomisée</strong> (la fonction <code>randomized_svd</code> de <code>sklearn.utils.extmath</code>), qui projette d'abord les données sur un sous-espace aléatoire de dimension \(k+p\) et coûte \(O(mnk)\). Sur une matrice 100 000 × 10 000 dont on veut 50 composantes, c'est la différence entre quelques secondes et plusieurs heures. L'idée sous-jacente est remarquable : une projection aléatoire préserve approximativement les distances (lemme de Johnson-Lindenstrauss), donc capture l'essentiel du sous-espace dominant.</p>
     </div>
 
     <h3>Où la SVD apparaît</h3>
