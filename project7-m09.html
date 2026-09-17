@@ -89,7 +89,7 @@ print(f"étendue              : {moyennes.min():.1f} à {moyennes.max():.1f}")
 
     <div class="step-block">
       <h4>Deux distinctions à ne pas confondre</h4>
-      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente — les gens ne se ressemblent pas davantage parce qu'on en observe plus —, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable. C'est exactement l'argument de la régularisation (module 13).</p>
+      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente — les gens ne se ressemblent pas davantage parce qu'on en observe plus —, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable. C'est exactement l'argument de la régularisation (module 14).</p>
     </div>
 
     <h2 id="ic">2. Intervalles de confiance</h2>
@@ -138,7 +138,7 @@ res = stats.bootstrap((x,), np.median, confidence_level=0.95,
                       n_resamples=10_000, method="BCa", random_state=0)
 print(ic_percentile, res.confidence_interval)</pre></div>
 
-    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs — module 16), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien, puisqu'aucun tirage ne peut dépasser la valeur observée), et il ne crée pas d'information : sur douze observations, il reste douze observations.</p>
+    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs — module 17), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien, puisqu'aucun tirage ne peut dépasser la valeur observée), et il ne crée pas d'information : sur douze observations, il reste douze observations.</p>
 
     <h2 id="tests">4. Tests d'hypothèse et p-value</h2>
     <p>La démarche est celle d'un raisonnement par l'absurde probabiliste :</p>
@@ -290,7 +290,7 @@ COLLISIONNEUR X ──► C ◄── Y        C est un EFFET COMMUN
     <p>Quand on ne peut pas randomiser, on s'appuie sur des méthodes quasi-expérimentales : différence-en-différences (deux groupes suivis avant et après), variables instrumentales, régression sur discontinuité, appariement sur score de propension. Toutes reposent sur des hypothèses <em>non vérifiables à partir des données seules</em> : elles doivent être argumentées explicitement, pas supposées silencieusement.</p>
 
     <div class="warning-block">
-      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention — peut-être que ceux qui appellent sont simplement ceux qui étaient déjà attachés au service. L'importance d'une variable dans un modèle (module 13) n'est pas un effet causal, et le module 23 montre comment poser correctement la question de l'effet d'une action.
+      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention — peut-être que ceux qui appellent sont simplement ceux qui étaient déjà attachés au service. L'importance d'une variable dans un modèle (module 14) n'est pas un effet causal, et le module 24 montre comment poser correctement la question de l'effet d'une action.
     </div>
 
     <h2 id="abtest">9. Un A/B test de bout en bout</h2>
@@ -402,23 +402,24 @@ print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><strong>Inferential statistics: estimate, test, decide</strong></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

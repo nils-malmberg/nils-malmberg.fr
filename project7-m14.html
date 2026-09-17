@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 14 - Théorie de l'apprentissage : pourquoi ça généralise - Nils Malmberg</title>
+  <title>Module 14 - Machine learning classique - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,139 +41,367 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 14</div>
-    <h1>Théorie de l'apprentissage : pourquoi ça généralise</h1>
+    <h1>Machine learning classique</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Tout le cours repose sur un pari implicite : un modèle ajusté sur \(n\) exemples fonctionnera sur des données jamais vues. Rien ne le garantit a priori — un modèle peut parfaitement mémoriser son jeu d'entraînement sans rien avoir appris. Ce module expose ce que la théorie sait démontrer, ce qu'elle n'explique toujours pas (notamment le succès des réseaux profonds), et ce qu'un praticien doit en retenir.</p>
+    <p>Sur données tabulaires — c'est-à-dire l'immense majorité des problèmes industriels — le deep learning ne domine pas. Les méthodes de ce module restent l'état de l'art, s'entraînent en secondes, s'expliquent, et se déploient sans GPU. On les passe en revue par famille, avec pour chacune le mécanisme réel, les cas d'usage, et les raisons de s'en méfier.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#pac">Le cadre PAC</a></li>
-        <li><a href="#vc">Dimension VC et complexité de Rademacher</a></li>
-        <li><a href="#nfl">Pas de repas gratuit : le biais inductif</a></li>
-        <li><a href="#double">Double descente et sur-paramétrisation</a></li>
-        <li><a href="#implicite">La régularisation implicite de SGD</a></li>
-        <li><a href="#autres">Stabilité, PAC-Bayes, compression</a></li>
-        <li><a href="#limites">Ce que la théorie n'explique pas</a></li>
-        <li><a href="#pratique">Ce qu'on en retient en pratique</a></li>
+        <li><a href="#biais-variance">Biais, variance et capacité</a></li>
+        <li><a href="#lineaires">Modèles linéaires et régularisation</a></li>
+        <li><a href="#logistique">Régression logistique</a></li>
+        <li><a href="#svm">SVM et astuce du noyau</a></li>
+        <li><a href="#arbres">Arbres de décision</a></li>
+        <li><a href="#foret">Bagging et forêts aléatoires</a></li>
+        <li><a href="#boosting">Boosting : XGBoost et ses cousins</a></li>
+        <li><a href="#ensembles">Stacking</a></li>
+        <li><a href="#clustering">Clustering et détection d'anomalies</a></li>
+        <li><a href="#hyper">Recherche d'hyperparamètres</a></li>
+        <li><a href="#interpret">Interprétabilité</a></li>
+        <li><a href="#comparatif">Tableau comparatif et pièges</a></li>
       </ol>
     </div>
 
-    <h2 id="pac">1. Le cadre PAC</h2>
-    <p>Le cadre <em>probablement approximativement correct</em> (Valiant, 1984) formalise l'objectif : avec une probabilité d'au moins \(1-\delta\) sur le tirage de l'échantillon (« probablement »), l'erreur réelle doit être proche de l'erreur empirique (« approximativement correct »). On veut donc borner l'écart de généralisation :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(h) - \hat{R}_n(h), \qquad R(h)=\mathbb{E}_{(x,y)\sim\mathcal D}\big[\ell(h(x),y)\big], \quad \hat R_n(h)=\frac1n\sum_{i=1}^n \ell(h(x_i),y_i) \]</div>
+    <h2 id="biais-variance">1. Biais, variance et capacité</h2>
+    <p>Pour une prédiction en un point \(x\), l'erreur quadratique attendue — moyennée sur tous les jeux d'entraînement possibles — se décompose en trois termes :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mathbb{E}\big[(y - \hat{f}(x))^2\big] = \underbrace{\big(\mathbb{E}[\hat f(x)] - f(x)\big)^2}_{\text{biais}^2} + \underbrace{\operatorname{Var}\big(\hat f(x)\big)}_{\text{variance}} + \underbrace{\sigma^2}_{\text{bruit irréductible}} \]</div>
 
-    <p>Pour une hypothèse <em>fixée à l'avance</em>, c'est facile : l'erreur empirique est une moyenne de variables aléatoires bornées, et l'inégalité de Hoeffding donne un écart en \(O(1/\sqrt{n})\). Mais c'est justement ce qu'on ne fait pas : on choisit \(h\) <em>après</em> avoir vu les données, en prenant celle qui minimise l'erreur empirique parmi toute une classe \(\mathcal{H}\). Or le maximum d'un grand nombre d'écarts est bien plus grand que chacun d'eux pris isolément — c'est le même phénomène que les comparaisons multiples du module 9. Il faut donc une borne <em>uniforme</em>, valable simultanément pour toutes les hypothèses de la classe :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(h) \;\leq\; \hat R_n(h) + \sqrt{\frac{\log|\mathcal{H}| + \log(1/\delta)}{2n}} \qquad \text{pour tout } h \in \mathcal{H} \]</div>
+    <p>Le <strong>biais</strong> mesure l'erreur systématique due à l'hypothèse de modèle : une droite ne peut pas épouser une parabole, quel que soit le nombre de points. La <strong>variance</strong> mesure la sensibilité au jeu d'entraînement particulier : un modèle très flexible dessine une courbe différente à chaque échantillon. Le <strong>bruit</strong> est la part qu'aucun modèle ne peut expliquer, parce qu'elle n'est pas dans les données.</p>
 
-    <p>La structure de ce résultat est l'essentiel : <strong>erreur réelle ≤ erreur observée + terme de complexité / \(\sqrt{n}\)</strong>. Plus la classe de modèles est riche, plus il faut de données pour que l'erreur empirique reste informative. C'est la formalisation exacte du surapprentissage, et la justification théorique de la régularisation (module 8).</p>
+    <div class="code-label">l'illustration classique, sur une cible</div>
+    <div class="code-block"><pre>  BIAIS FAIBLE, VARIANCE FAIBLE     BIAIS FAIBLE, VARIANCE FORTE
+  (l'idéal)                          (surapprentissage)
+        ·:·                                ·      ·
+       ·:@:·   groupé, au centre        ·   · @ ·      dispersé autour du centre
+        ·:·                              ·    ·   ·
 
-    <h2 id="vc">2. Dimension VC et complexité de Rademacher</h2>
-    <p>Pour une classe infinie — tous les hyperplans, tous les réseaux d'une architecture donnée —, \(\log|\mathcal H|\) n'a plus de sens. La <strong>dimension de Vapnik-Chervonenkis</strong> le remplace : c'est le plus grand nombre de points que la classe peut <em>pulvériser</em>, c'est-à-dire séparer correctement quelle que soit la façon de les étiqueter.</p>
+  BIAIS FORT, VARIANCE FAIBLE        BIAIS FORT, VARIANCE FORTE
+  (sous-apprentissage)               (le pire des deux)
+   ·:·                                ·  ·
+  ·:·      @  groupé, mais à côté      · · ·     @   dispersé ET décalé
+   ·:·                                  ·   ·</pre></div>
 
-    <div class="code-label">l'exemple canonique : une droite dans le plan</div>
-    <div class="code-block"><pre>3 points non alignés : une droite peut réaliser les 2³ = 8 étiquetages possibles
-   ○ ○        ● ○        ● ●        ○ ●
-    ○          ○          ○          ●     … toutes les combinaisons sont
-  possible   possible   possible   possible    séparables par une droite
-
-4 points : l'étiquetage "en diagonale" (XOR) est IMPOSSIBLE
-   ● ○
-   ○ ●    aucune droite ne sépare les ● des ○
-
-→ dimension VC d'une droite dans le plan = 3, soit p + 1 avec p = 2 dimensions</pre></div>
-
-    <p>La borne devient alors :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(h) \leq \hat R_n(h) + O\!\left(\sqrt{\frac{d_{VC}\log(n/d_{VC}) + \log(1/\delta)}{n}}\right) \]</div>
-    <p>La lecture pratique : il faut environ autant d'exemples que de « degrés de liberté effectifs » pour espérer généraliser. La <strong>complexité de Rademacher</strong> raffine cette idée en mesurant directement la capacité de la classe à s'ajuster à du <em>bruit pur</em> — on remplace les étiquettes par des tirages à pile ou face et on regarde jusqu'où le modèle parvient à les suivre. C'est une définition plus fine, dépendante des données et de leur distribution, donc souvent bien moins pessimiste.</p>
+    <p>Augmenter la capacité d'un modèle baisse le biais et monte la variance. Le surapprentissage, c'est le régime où la seconde l'emporte : le modèle mémorise le bruit de son échantillon. Le module 15 montre que ce tableau classique se complique en très haute dimension.</p>
 
     <div class="step-block">
-      <h4>Ce que ces bornes valent réellement</h4>
-      <p>Elles sont <em>pire cas</em>, valables pour toute distribution, et uniformes sur toute la classe. Cela les rend correctes mais très lâches : appliquées à un réseau moderne, dont le nombre de paramètres dépasse largement le nombre d'exemples, elles donnent des bornes supérieures à 1 — donc vides, puisqu'une probabilité d'erreur est déjà inférieure à 1. Leur valeur est <strong>conceptuelle</strong> : elles disent <em>quelles quantités</em> gouvernent la généralisation (complexité effective, taille d'échantillon, marge), pas <em>combien</em> vaut l'erreur. Confondre les deux mène à des conclusions fausses dans les deux sens — croire qu'un grand modèle ne peut pas généraliser, ou croire qu'une borne garantit quoi que ce soit en pratique.</p>
+      <h4>Diagnostiquer avec les courbes</h4>
+      <p><strong>Erreur d'entraînement élevée, et proche de l'erreur de validation</strong> → sous-apprentissage : le modèle manque de capacité, ou il manque des variables informatives. Inutile de régulariser davantage. <strong>Erreur d'entraînement très basse, erreur de validation bien supérieure</strong> → surapprentissage : régulariser, simplifier, ou ajouter des données. La <em>courbe d'apprentissage</em> (performance en fonction du nombre d'exemples, module 13) tranche cette dernière question : si les deux courbes se rapprochent encore, collecter plus de données aidera ; si elles ont convergé, non.</p>
     </div>
 
-    <h2 id="nfl">3. Pas de repas gratuit : le biais inductif</h2>
-    <p>Le théorème du <em>no free lunch</em> (Wolpert) énonce que, moyenné sur <strong>toutes</strong> les fonctions cibles possibles, tous les algorithmes d'apprentissage ont exactement la même performance. Aucun n'est universellement supérieur ; un algorithme qui bat un autre sur une classe de problèmes lui est nécessairement inférieur sur une autre.</p>
-    <p>Souvent cité comme une curiosité, ce résultat dit en réalité quelque chose de fondamental : <strong>apprendre est impossible sans hypothèse préalable</strong>. Si toutes les fonctions étaient également plausibles, observer un million de points ne dirait rien du suivant — n'importe quelle valeur resterait compatible avec les données. Ce qui fonctionne en pratique fonctionne parce que le monde réel n'est pas un tirage uniforme parmi toutes les fonctions : il est structuré — régulier, local, hiérarchique, invariant par certaines transformations, parcimonieux.</p>
+    <h2 id="lineaires">2. Modèles linéaires et régularisation</h2>
+    <p>Le modèle \(\hat{y} = \beta_0 + \sum_j \beta_j x_j\) reste le point de départ obligé : rapide, interprétable, statistiquement bien compris, et souvent une baseline difficile à battre quand les variables sont bien construites (module 12).</p>
 
-    <div class="code-label">le biais inductif de chaque famille</div>
-    <div class="code-block"><pre>Modèle linéaire   l'effet de chaque variable est additif et proportionnel
-Arbre             la réponse est constante par morceaux ; effets de SEUIL
-Noyau RBF         deux points proches ont des valeurs proches ; fonction LISSE
-Convolution       l'information est LOCALE et invariante par translation
-Attention         des dépendances existent entre positions éloignées
-GNN               l'information circule le long des ARÊTES d'un graphe
-PINN / contrainte la solution obéit à une équation physique connue
-physique</pre></div>
+    <div class="code-label">les trois régularisations</div>
+    <div class="code-block"><pre>Ridge (L²)     pénalité λ·Σβ²     rétrécit tous les coefficients, n'en annule aucun.
+                                  Idéal en présence de colinéarité : répartit le poids
+                                  entre variables corrélées au lieu d'en choisir une.
+Lasso (L¹)     pénalité λ·Σ|β|    annule certains coefficients → sélection automatique.
+                                  Instable si les variables sont très corrélées : il en
+                                  choisit une presque au hasard dans chaque groupe.
+Elastic-Net    combinaison        compromis : sélection ET stabilité sur groupes corrélés.</pre></div>
 
-    <p>Choisir un modèle, c'est donc parier sur la structure du problème — le module 15 le formule déjà ainsi pour les architectures profondes. La conséquence pratique est nette : <em>la connaissance du domaine est un gain de performance</em>, pas un supplément d'âme. Imposer une symétrie connue, une monotonie ou une loi de conservation (module 20) vaut souvent mieux que dix fois plus de données.</p>
+    <p>L'intuition géométrique de la différence mérite un dessin. On minimise l'erreur sous la contrainte que \(\beta\) reste dans une boule de rayon fixé. La boule \(L^2\) est ronde : la solution optimale la touche presque toujours en un point où aucune coordonnée n'est nulle. La boule \(L^1\) est un losange, avec des <em>coins pointus sur les axes</em> : le contact se fait fréquemment sur un coin, c'est-à-dire avec des coefficients exactement nuls.</p>
 
-    <h2 id="double">4. Double descente et sur-paramétrisation</h2>
-    <p>La théorie classique prédit une courbe en U : l'erreur de test décroît puis remonte quand la capacité augmente. Les réseaux profonds contredisent apparemment ce tableau — un modèle à des milliards de paramètres, ajusté jusqu'à erreur d'entraînement nulle, généralise très bien. La <strong>double descente</strong> réconcilie les observations :</p>
+    <div class="code-block"><pre>        L² (ridge)                      L¹ (lasso)
+   β₂ │    ⌒⌒⌒                     β₂ │      ◆
+      │  ⌒  ●  ⌒  ← contact           │    ◆ ●◆   ← contact SUR L'AXE
+      │ ⌒( )    ⌒    hors des axes    │  ◆  │  ◆     donc β₂ = 0
+      │  ⌒⌒⌒                          │    ◆│◆
+      └──────────── β₁                └──────────── β₁</pre></div>
 
-    <div class="code-label">l'allure réelle de la courbe</div>
-    <div class="code-block"><pre>  erreur │                    ╱╲  ← pic au SEUIL D'INTERPOLATION
-  de test │  ╲               ╱  ╲     (capacité ≈ nombre d'exemples)
-          │   ╲___╱╲       ╱     ╲
-          │          ╲___╱        ╲________________  ← 2ᵉ descente, souvent
-          │                                            SOUS le minimum classique
-          └────────────────────────────────────────────────► capacité du modèle
-             régime         seuil          régime SUR-paramétré
-             classique                     (l'erreur d'entraînement est nulle
-             (le U)                         partout dans cette zone)</pre></div>
+    <p>Le module 8 en donne la lecture spectrale pour ridge — un filtrage qui écrase les directions de faible variance — et le module 10 la lecture bayésienne : un a priori gaussien pour ridge, laplacien pour le lasso.</p>
 
-    <p>Au seuil d'interpolation, le modèle atteint tout juste l'erreur d'entraînement nulle : il existe une <em>unique</em> solution qui passe par tous les points, et elle est extrêmement contrainte, donc très instable — d'où le pic. Au-delà, une infinité de paramétrages atteignent une erreur nulle, et l'algorithme d'optimisation en choisit un : il se trouve qu'il choisit systématiquement une solution « simple » au sens d'une norme (section suivante). Autrement dit, ce n'est plus la <em>taille</em> de la classe qui gouverne la généralisation, mais la solution que l'optimiseur sélectionne à l'intérieur de cette classe. La complexité pertinente n'est pas le nombre de paramètres.</p>
+    <div class="code-label">Python — ridge, lasso et le choix de λ</div>
+    <div class="code-block"><pre>from sklearn.linear_model import RidgeCV, LassoCV, ElasticNetCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+import numpy as np
 
-    <h2 id="implicite">5. La régularisation implicite de SGD</h2>
-    <p>Cette sélection a un nom : la régularisation implicite. Deux résultats exacts la caractérisent dans des cas simples.</p>
-    <p>Sur un problème linéaire séparable avec perte logistique, la descente de gradient converge vers le <strong>séparateur à marge maximale</strong> — le même que celui du SVM (module 13) — sans qu'aucune régularisation n'ait été écrite. Sur un système sous-déterminé avec perte quadratique, partant de zéro, elle converge vers la solution de <strong>norme minimale</strong>, exactement celle que donne la pseudo-inverse (module 8).</p>
-    <p>À cela s'ajoutent des effets bien documentés empiriquement. Le bruit stochastique des mini-lots favorise les minima « plats » — ceux dont le fond de vallée est large — dont on observe qu'ils généralisent mieux que les minima « pointus » : intuitivement, une petite perturbation des poids ou des données y change peu la perte. Un grand taux d'apprentissage empêche de s'installer trop tôt dans une vallée étroite, ce qui explique pourquoi le <em>warmup</em> puis la décroissance (module 8) ne sont pas que des recettes. Et l'arrêt anticipé est lui-même une régularisation, équivalente dans le cas linéaire à une pénalité de type ridge.</p>
-    <p>La conclusion théorique importante : <strong>l'algorithme d'optimisation fait partie du modèle</strong>. On n'entraîne pas « une classe de fonctions », on entraîne un couple architecture-optimiseur, et c'est ce couple qui porte le biais inductif.</p>
+# la standardisation est OBLIGATOIRE : la pénalité s'applique aux coefficients,
+# donc à des grandeurs qui doivent être comparables (module 8)
+modele = make_pipeline(
+    StandardScaler(),
+    RidgeCV(alphas=np.logspace(-3, 3, 50)),      # λ choisi par validation croisée
+).fit(X, y)
 
-    <h2 id="autres">6. Stabilité, PAC-Bayes, compression</h2>
-    <p>Trois approches modernes donnent des bornes plus informatives que la dimension VC :</p>
-    <ul>
-      <li><strong>Stabilité algorithmique</strong> — si changer un seul exemple d'entraînement modifie peu la fonction apprise, alors l'algorithme généralise. Le résultat est élégant car il porte sur l'<em>algorithme</em> et non sur la classe de fonctions : SGD avec un pas décroissant est stable, ce qui fournit directement une borne. L'intuition est simple : un modèle qui change du tout au tout quand on retire un point mémorise ce point.</li>
-      <li><strong>PAC-Bayes</strong> — borne l'erreur d'une <em>distribution</em> de prédicteurs par son erreur empirique plus une divergence KL à une distribution a priori (module 10). C'est le cadre qui produit aujourd'hui les bornes <em>non vides</em> les plus serrées pour des réseaux de neurones réels, et il éclaire au passage le lien avec la platitude des minima : un minimum plat tolère du bruit sur les poids, donc autorise une distribution large, donc une faible divergence à l'a priori, donc une meilleure borne.</li>
-      <li><strong>Bornes par compression</strong> — si un réseau entraîné peut être fortement compressé (élagage, quantification) sans perte de performance, sa complexité effective est faible, et cela se traduit en borne. Ce point de vue relie généralisation et compressibilité, avec un écho direct aux pratiques du module 24.</li>
-    </ul>
+print(modele[-1].alpha_)                          # le λ retenu
+coefs = modele[-1].coef_
+print(sorted(zip(np.abs(coefs), noms), reverse=True)[:10])   # variables les plus pesantes</pre></div>
 
-    <h2 id="limites">7. Ce que la théorie n'explique pas</h2>
+    <h2 id="logistique">3. Régression logistique</h2>
+    <p>Pour la classification, on ne peut pas prédire directement une probabilité avec un modèle linéaire : celui-ci produirait des valeurs hors de [0, 1]. On modélise donc le logarithme de la <em>cote</em> (le rapport « probabilité de succès sur probabilité d'échec ») :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \log\frac{p(x)}{1-p(x)} = \beta_0 + \beta^\top x \qquad \Longleftrightarrow \qquad p(x) = \frac{1}{1+e^{-(\beta_0+\beta^\top x)}} \]</div>
+    <p>La fonction de droite est la <em>sigmoïde</em> : elle écrase toute la droite réelle dans l'intervalle ]0, 1[, de façon monotone et dérivable. L'estimation se fait par maximum de vraisemblance, ce qui revient — module 10 — à minimiser l'entropie croisée.</p>
+
+    <p>L'interprétation des coefficients est directe et c'est ce qui fait la valeur du modèle : \(e^{\beta_j}\) est le facteur multiplicatif sur la cote quand \(x_j\) augmente d'une unité. Un coefficient de 0,7 signifie que la cote est multipliée par \(e^{0{,}7} \approx 2\) : le phénomène devient deux fois plus « probable » au sens de la cote. C'est le modèle de référence quand l'explication compte autant que la performance — scoring de crédit, épidémiologie —, et ses probabilités sont naturellement bien calibrées, ce qui n'est pas le cas d'un gradient boosting.</p>
+
     <div class="warning-block">
-      <strong>L'état honnête de la question.</strong> Aucune théorie ne prédit aujourd'hui, avant entraînement, la performance de généralisation d'un réseau profond donné sur un problème donné. L'expérience de Zhang et ses coauteurs (2017) l'a montré de façon frappante : les mêmes réseaux qui généralisent parfaitement sur des images réelles peuvent aussi apprendre par cœur ces mêmes images avec des <em>étiquettes tirées au hasard</em>, atteignant une erreur d'entraînement nulle sur un problème sans aucune structure. Leur capacité est donc largement suffisante pour mémoriser ; ce qui les fait généraliser n'est pas une limitation de capacité, mais l'interaction entre la structure des données, l'architecture et l'optimiseur. Ce que la théorie ne couvre pas davantage : les capacités émergentes des grands modèles, l'efficacité du transfert, la robustesse hors distribution, et la raison pour laquelle certaines architectures surpassent les autres. La pratique a plusieurs années d'avance sur la théorie dans ce domaine — et il vaut mieux le dire que de le masquer.
+      <strong>Interpréter un coefficient demande des précautions.</strong> Il se lit « toutes choses égales par ailleurs », ce qui perd son sens quand les variables sont corrélées : le coefficient de la surface, à nombre de pièces fixé, ne décrit pas un bien réel. Il dépend de l'échelle : comparer des coefficients exige des variables standardisées. Et il n'est <em>pas</em> un effet causal (module 9) : un coefficient négatif sur « a contacté le support » ne dit pas qu'appeler le support fidélise.
     </div>
 
-    <h2 id="pratique">8. Ce qu'on en retient en pratique</h2>
+    <h2 id="svm">4. SVM et astuce du noyau</h2>
+    <p>Une machine à vecteurs de support cherche l'hyperplan séparateur qui maximise la <strong>marge</strong> — la distance aux points les plus proches de chaque classe. L'idée : parmi toutes les frontières qui séparent correctement les données, celle qui laisse le plus de place de part et d'autre est la plus susceptible de bien généraliser.</p>
+
+    <div class="code-block"><pre>     ○ ○        │        × ×          ── la frontière
+   ○   ○  ┊     │     ┊  ×            ┊  les marges
+    ○  ●──┊─────│─────┊──●  ×         ●  les VECTEURS DE SUPPORT : seuls
+   ○    ○ ┊     │     ┊ ×  ×             ces points déterminent la solution
+     ○      ←── marge ──→   ×            (déplacer les autres ne change rien)</pre></div>
+
+    <p>La formulation à marge souple autorise des violations, pénalisées par un paramètre \(C\) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \min_{w,b}\; \tfrac{1}{2}\|w\|^2 + C\sum_i \max\big(0,\, 1 - y_i(w^\top x_i + b)\big) \]</div>
+    <p>Le premier terme maximise la marge (une petite norme de \(w\) donne une large marge), le second compte les violations. Seuls les points sur ou à l'intérieur de la marge — les <em>vecteurs de support</em> — interviennent dans la solution, ce qui rend le modèle insensible aux points éloignés de la frontière.</p>
+
+    <p>L'<strong>astuce du noyau</strong> est l'idée élégante. La solution ne dépend des données qu'à travers des produits scalaires \(x_i^\top x_j\). En les remplaçant par une fonction noyau \(k(x_i,x_j)\), on travaille implicitement dans un espace de dimension bien plus grande — voire infinie pour le noyau RBF \(k(x,x') = \exp(-\gamma\|x-x'\|^2)\) — <em>sans jamais calculer les coordonnées dans cet espace</em>. Une frontière non linéaire dans l'espace d'origine devient linéaire dans l'espace induit. On retrouvera exactement ce mécanisme dans les processus gaussiens (module 19).</p>
+
+    <p><strong>Réglages</strong> : \(C\) contrôle le compromis marge/erreurs (grand \(C\) = peu de tolérance = risque de surapprentissage), \(\gamma\) la portée d'influence d'un point (grand \(\gamma\) = influence très locale = frontière tourmentée). Les deux se règlent ensemble, sur une grille logarithmique.</p>
+    <p><strong>Limites</strong> : le coût est au moins quadratique en nombre d'exemples — au-delà de quelques dizaines de milliers de points, le SVM à noyau devient impraticable ; il exige des variables standardisées (il repose sur des distances) ; et il ne fournit pas de probabilités, celles de <code>predict_proba</code> venant d'une calibration de Platt ajoutée après coup, qui coûte une validation croisée supplémentaire. Il reste excellent quand les exemples sont peu nombreux et les variables nombreuses — chimiométrie, bio-informatique, spectroscopie.</p>
+
+    <h2 id="arbres">5. Arbres de décision</h2>
+    <p>Un arbre CART partitionne récursivement l'espace par des coupes perpendiculaires aux axes. À chaque nœud, il teste toutes les variables et tous les seuils possibles, et retient la coupe qui rend les enfants les plus « purs ».</p>
+
+    <div class="code-label">le critère d'impureté, sur un exemple</div>
+    <div class="code-block"><pre>Nœud parent : 100 exemples, 50 positifs → Gini = 1 - (0,5² + 0,5²) = 0,500
+
+Coupe candidate A : surface &lt; 60
+  gauche  40 exemples, 10 positifs → Gini = 1 - (0,25² + 0,75²) = 0,375
+  droite  60 exemples, 40 positifs → Gini = 1 - (0,67² + 0,33²) = 0,444
+  impureté pondérée = 0,4×0,375 + 0,6×0,444 = 0,417   → gain 0,083
+
+Coupe candidate B : ville = Lyon
+  gauche  50 exemples, 45 positifs → Gini = 0,180
+  droite  50 exemples,  5 positifs → Gini = 0,180
+  impureté pondérée = 0,180                            → gain 0,320  ← RETENUE</pre></div>
+
+    <p>L'indice de Gini \(\sum_k p_k(1-p_k)\) vaut 0 pour un nœud pur et 0,5 pour un nœud parfaitement mélangé (en binaire). L'entropie donne des résultats très proches ; en régression, on minimise la variance intra-nœud.</p>
+
+    <p><strong>Avantages</strong> : aucun prétraitement (insensible aux échelles et à toute transformation monotone — prendre le logarithme d'une variable ne change strictement rien), gestion naturelle des variables catégorielles et des interactions, lecture directe des règles. <strong>Défaut rédhibitoire</strong> : un arbre profond mémorise, un arbre court sous-apprend, et surtout l'arbre est <em>instable</em> — changer quelques points d'entraînement peut produire une structure entièrement différente. Cette instabilité est précisément ce que les méthodes d'ensemble vont transformer en atout.</p>
+
+    <h2 id="foret">6. Bagging et forêts aléatoires</h2>
+    <p>Le <strong>bagging</strong> (<em>bootstrap aggregating</em>) entraîne \(B\) modèles sur des échantillons bootstrap — tirés avec remise dans les données d'origine — et moyenne leurs prédictions. Si les modèles étaient indépendants, la variance serait divisée par \(B\) ; en pratique ils sont corrélés puisqu'ils voient presque les mêmes données, et le gain est plus modeste.</p>
+    <p>La <strong>forêt aléatoire</strong> ajoute une seconde source d'aléa pour les décorréler davantage : à chaque nœud, seules \(m\) variables tirées au hasard sont candidates (typiquement \(\sqrt{p}\) en classification, \(p/3\) en régression). Chaque arbre devient un peu moins bon individuellement, mais l'ensemble s'améliore nettement — c'est le compromis central de la méthode.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import permutation_importance
+
+rf = RandomForestClassifier(
+    n_estimators=500,        # plus il y en a, mieux c'est (on sature) — jamais de
+                             # surapprentissage en augmentant ce nombre
+    max_features="sqrt",     # LA source de décorrélation
+    min_samples_leaf=5,      # le vrai levier de régularisation
+    oob_score=True,          # évaluation gratuite (voir ci-dessous)
+    n_jobs=-1, random_state=0,
+).fit(X_train, y_train)
+
+print(rf.oob_score_)
+
+# importance FIABLE : on mélange une colonne et on mesure la perte de performance
+imp = permutation_importance(rf, X_val, y_val, n_repeats=10, n_jobs=-1)
+for i in imp.importances_mean.argsort()[::-1][:10]:
+    print(f"{noms[i]:25s} {imp.importances_mean[i]:.4f} ± {imp.importances_std[i]:.4f}")</pre></div>
+
+    <p>L'échantillonnage bootstrap laisse environ 37 % des points hors de chaque arbre — c'est la limite de \((1-1/n)^n = e^{-1}\). Ces points <em>out-of-bag</em> fournissent une estimation de performance quasi gratuite, sans validation croisée : chaque observation est évaluée par les arbres qui ne l'ont pas vue.</p>
+
+    <div class="warning-block">
+      <strong>L'importance par impureté est trompeuse.</strong> L'attribut <code>feature_importances_</code> (réduction moyenne d'impureté) est biaisé en faveur des variables à forte cardinalité et des variables continues, simplement parce qu'elles offrent plus de coupes possibles : un identifiant aléatoire peut y figurer en tête. Utiliser <code>permutation_importance</code> sur un jeu de <em>validation</em> — comme ci-dessus — ou les valeurs de Shapley (section 11).
+    </div>
+
+    <h2 id="boosting">7. Boosting : XGBoost et ses cousins</h2>
+    <p>Là où le bagging construit des modèles en parallèle pour réduire la <em>variance</em>, le boosting les construit <strong>en séquence</strong> pour réduire le <em>biais</em> : chaque nouveau modèle corrige ce que les précédents ont raté.</p>
+
+    <div class="code-label">le mécanisme, sur trois itérations</div>
+    <div class="code-block"><pre>F₀ = moyenne(y) = 100          résidus : +20, -15, +5, -10
+  ↓ un petit arbre apprend ces RÉSIDUS, pas la cible
+F₁ = F₀ + ν·h₁                 résidus restants : +8, -6, +2, -4   (plus petits)
+  ↓ un nouvel arbre apprend les résidus RESTANTS
+F₂ = F₁ + ν·h₂                 résidus restants : +3, -2, +1, -1
+  ↓ …et ainsi de suite, sur des centaines d'arbres
+                               ν (learning rate) amortit chaque correction :
+                               petit ν = corrections prudentes = plus d'arbres</pre></div>
+
+    <p>Le <strong>gradient boosting</strong> généralise cette idée à n'importe quelle perte dérivable, en remplaçant le résidu par l'opposé du gradient de la perte par rapport à la prédiction courante — d'où le nom :</p>
+    <div style="text-align:center;overflow-x:auto">\[ r_i^{(m)} = -\left[\frac{\partial\, \ell(y_i, F(x_i))}{\partial F(x_i)}\right]_{F = F_{m-1}}, \qquad F_m(x) = F_{m-1}(x) + \nu\, h_m(x) \]</div>
+    <p>Avec la perte quadratique, ces pseudo-résidus sont exactement les résidus ordinaires, ce qui fait le lien avec le schéma ci-dessus. XGBoost raffine en utilisant aussi la dérivée seconde (approximation de Newton, module 8) et en intégrant la régularisation directement dans le critère de coupe.</p>
+
+    <div class="code-label">Python — les hyperparamètres qui comptent vraiment</div>
+    <div class="code-block"><pre>import xgboost as xgb
+
+modele = xgb.XGBClassifier(
+    n_estimators=2000,          # volontairement grand : l'early stopping tranchera
+    learning_rate=0.05,         # plus il est bas, plus il faut d'arbres : compromis n°1
+    max_depth=6,                # 3-8 typiquement ; profondeur = ordre des interactions
+                                # capturées (profondeur 3 = interactions à 3 variables)
+    min_child_weight=5,         # poids minimal dans une feuille : anti-surapprentissage
+    subsample=0.8,              # 80 % des LIGNES par arbre : du bruit utile
+    colsample_bytree=0.8,       # 80 % des COLONNES par arbre : décorrélation
+    reg_lambda=1.0,             # L² sur les poids des feuilles
+    eval_metric="aucpr",
+    early_stopping_rounds=100,  # arrête quand la validation ne progresse plus
+)
+modele.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+print(f"meilleur nombre d'arbres : {modele.best_iteration}")</pre></div>
+
+    <div class="code-label">les trois implémentations</div>
+    <div class="code-block"><pre>XGBoost     la référence, très réglable, excellent support GPU, écosystème mature.
+LightGBM    croissance par FEUILLE (leaf-wise) plutôt que par niveau, et binning en
+            histogrammes : nettement plus rapide sur grands jeux. Peut surapprendre
+            si num_leaves est trop grand.
+CatBoost    gère nativement les catégorielles avec un target encoding ordonné (donc
+            sans fuite, module 12), excellents résultats par défaut. Souvent le
+            meilleur choix quand il y a beaucoup de variables catégorielles à
+            forte cardinalité.</pre></div>
+
+    <p>Une bonne pratique : commencer par <code>HistGradientBoostingClassifier</code> de scikit-learn — pas de dépendance supplémentaire, gestion native des valeurs manquantes, performances très proches. Le réglage fin des variantes vient après, et rapporte généralement quelques pourcents, pas un changement de nature.</p>
+
+    <div class="step-block">
+      <h4>Pourquoi le boosting domine le tabulaire</h4>
+      <p>Les données tabulaires sont hétérogènes (des échelles et des natures différentes dans la même ligne), pleines de relations non lisses (effets de seuil : « à partir de 3 pièces », « au-delà de 65 ans ») et souvent de taille modeste. Les arbres découpent l'espace sans aucune hypothèse de régularité, sont invariants aux transformations monotones et exploitent naturellement les interactions. Un réseau de neurones doit <em>apprendre</em> tout cela à partir des données, sans le biais inductif qui l'y aiderait (module 15). Les comparaisons systématiques publiées depuis 2022 continuent de donner l'avantage au boosting sur ce terrain, malgré les architectures tabulaires spécialisées.</p>
+    </div>
+
+    <h2 id="ensembles">8. Stacking</h2>
+    <p>Trois façons de combiner des modèles : le <strong>vote</strong> ou la moyenne (simple, robuste), le <strong>blending</strong> pondéré (poids optimisés sur un jeu de validation) et le <strong>stacking</strong>, où un méta-modèle apprend à combiner les prédictions des modèles de base. La condition de réussite est toujours la même : les modèles combinés doivent <em>se tromper différemment</em>. Assembler cinq gradient boosting aux réglages voisins n'apporte rien ; combiner un modèle linéaire, un boosting et un k-NN apporte souvent quelques points.</p>
+    <p>Le stacking impose une précaution stricte : les prédictions servant à entraîner le méta-modèle doivent être produites <strong>hors échantillon</strong>, par validation croisée. Sinon le méta-modèle apprend sur des prédictions déjà ajustées sur ces points, et la fuite est garantie. <code>StackingClassifier</code> s'en charge automatiquement.</p>
+
+    <h2 id="clustering">9. Clustering et détection d'anomalies</h2>
+    <p><strong>k-means</strong> minimise l'inertie intra-classe \(\sum_k \sum_{x \in C_k}\|x-\mu_k\|^2\) en alternant deux étapes jusqu'à stabilisation :</p>
+    <div class="code-block"><pre>1. AFFECTATION : chaque point rejoint le centre le plus proche
+2. MISE À JOUR : chaque centre se replace au barycentre de ses points
+   → répéter. L'inertie décroît à chaque étape, donc l'algorithme converge
+     (vers un optimum LOCAL, qui dépend de l'initialisation → k-means++)</pre></div>
+    <p>Rapide et simple, mais il suppose des groupes <em>sphériques de tailles comparables</em>, exige de fixer \(k\) à l'avance, et affecte forcément <em>tous</em> les points — y compris les aberrants, qui déplacent les centres.</p>
+
+    <div class="code-label">les alternatives, et quand les préférer</div>
+    <div class="code-block"><pre>DBSCAN        groupes de forme quelconque, détecte le BRUIT (points non affectés),
+              pas de k à fixer. Mais deux paramètres sensibles (eps, min_samples)
+              et souffre en grande dimension.
+HDBSCAN       version hiérarchique de DBSCAN : plus robuste, un seul paramètre
+              principal. Mon défaut quand la structure des groupes est inconnue.
+Hiérarchique  produit un dendrogramme : on choisit le nombre de groupes APRÈS coup,
+              en coupant l'arbre. O(n²) : réservé aux petits jeux, mais très parlant.
+GMM           mélange de gaussiennes : affectation PROBABILISTE, groupes
+              ellipsoïdaux, sélection de k par BIC. Le bon choix quand les groupes
+              se chevauchent.</pre></div>
+
+    <p><strong>Évaluer un clustering</strong> est intrinsèquement ambigu, puisqu'il n'y a pas de vérité terrain. Le coefficient de <em>silhouette</em> compare, pour chaque point, sa distance moyenne à son groupe et au groupe voisin le plus proche : il varie de −1 à 1, et une valeur négative signale un point probablement mal affecté. La méthode du coude sur l'inertie est populaire mais souvent illisible. Le vrai critère reste l'utilité : un clustering est bon s'il produit des segments sur lesquels on peut agir différemment.</p>
+
+    <p><strong>Détection d'anomalies</strong> : <code>IsolationForest</code> isole les points atypiques par découpes aléatoires — un point anormal se retrouve seul en peu de coupes, ce qui donne un score directement exploitable ; <code>LocalOutlierFactor</code> compare la densité locale d'un point à celle de ses voisins ; et l'erreur de reconstruction d'une PCA (module 8) ou d'un autoencodeur (module 16) fonctionne très bien quand les données ont une structure de faible rang.</p>
+
+    <h2 id="hyper">10. Recherche d'hyperparamètres</h2>
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>GridSearchCV           exhaustif sur une grille. Explose combinatoirement ; à réserver
+                       à 2-3 paramètres peu nombreux.
+RandomizedSearchCV     tirage aléatoire. Meilleur que la grille dès 3+ paramètres :
+                       seuls quelques-uns comptent vraiment, et l'aléatoire les
+                       explore sur bien plus de valeurs distinctes.
+HalvingRandomSearchCV  successive halving : beaucoup de candidats sur peu de données,
+                       puis on élimine les pires et on affine. Excellent rapport
+                       coût/résultat.
+Optuna (TPE)           recherche bayésienne : un modèle probabiliste guide les essais.
+                       Le meilleur choix quand chaque entraînement est coûteux (module 19).</pre></div>
+
+    <div class="code-label">Python — Optuna, avec élagage des essais sans espoir</div>
+    <div class="code-block"><pre>import optuna
+
+def objectif(essai):
+    params = {
+        # échelle LOGARITHMIQUE pour les paramètres multiplicatifs
+        "learning_rate": essai.suggest_float("learning_rate", 1e-3, 0.3, log=True),
+        "num_leaves":    essai.suggest_int("num_leaves", 15, 255, log=True),
+        "min_child_samples": essai.suggest_int("min_child_samples", 5, 200),
+        "subsample":     essai.suggest_float("subsample", 0.5, 1.0),
+        "reg_lambda":    essai.suggest_float("reg_lambda", 1e-3, 10, log=True),
+    }
+    scores = cross_val_score(LGBMClassifier(**params), X, y, cv=5,
+                             scoring="average_precision")
+    return scores.mean()
+
+etude = optuna.create_study(direction="maximize",
+                            pruner=optuna.pruners.MedianPruner())
+etude.optimize(objectif, n_trials=100, n_jobs=4)
+print(etude.best_params, etude.best_value)
+optuna.visualization.plot_param_importances(etude)   # quels paramètres comptaient</pre></div>
+
+    <p>Deux règles pratiques : chercher sur une échelle <em>logarithmique</em> pour les paramètres multiplicatifs (taux d'apprentissage, \(C\), \(\lambda\)), et se rappeler que le gain d'un réglage fin — quelques pourcents — est presque toujours inférieur au gain d'une bonne variable ou de données supplémentaires. Optimiser 200 configurations en regardant le score de test transforme par ailleurs ce test en jeu d'entraînement (module 12).</p>
+
+    <h2 id="interpret">11. Interprétabilité</h2>
     <ul>
-      <li><strong>La complexité effective compte, pas le nombre de paramètres.</strong> Un grand modèle bien régularisé peut généraliser mieux qu'un petit modèle mal contraint — la double descente l'illustre.</li>
-      <li><strong>Le biais inductif est une ressource.</strong> Encoder une invariance connue, une contrainte physique ou une structure du domaine vaut souvent mieux que davantage de données.</li>
-      <li><strong>L'optimiseur fait partie du modèle.</strong> Taille de lot, taux d'apprentissage et arrêt anticipé changent la solution atteinte, pas seulement la vitesse pour y arriver.</li>
-      <li><strong>Les garanties théoriques ne sont pas des nombres utilisables.</strong> Pour une estimation chiffrée de la performance, la validation croisée (module 11) et un jeu de test intouché restent les seuls outils fiables ; pour une garantie exploitable en production, la prédiction conforme (module 10) donne une couverture démontrable à échantillon fini.</li>
-      <li><strong>Le no free lunch a une conséquence méthodologique.</strong> Comparer des modèles sans tenir compte du domaine n'a pas de sens universel : un classement sur un benchmark ne transfère pas automatiquement à votre problème, et c'est pourquoi la baseline maison reste la seule référence qui compte.</li>
+      <li><strong>Importance par permutation</strong> — mélanger une colonne et mesurer la perte de performance. Global, fiable, agnostique au modèle ; à calculer sur un jeu de <em>validation</em>. Attention aux variables corrélées : mélanger l'une alors que l'autre porte la même information sous-estime les deux.</li>
+      <li><strong>PDP et ICE</strong> — le <em>partial dependence plot</em> montre l'effet moyen d'une variable sur la prédiction, en faisant varier cette variable pour tous les individus ; les courbes ICE font de même individu par individu et révèlent les effets hétérogènes que la moyenne masque (si la moitié des courbes monte et l'autre descend, le PDP est plat et trompeur).</li>
+      <li><strong>SHAP</strong> — issu de la théorie des jeux, il attribue à chaque variable sa contribution marginale moyenne sur tous les ordres d'inclusion possibles. C'est la seule méthode à satisfaire des axiomes d'équité (efficacité : les contributions somment à l'écart entre la prédiction et la moyenne ; symétrie ; nullité d'une variable inutile), avec une version exacte et rapide pour les arbres.</li>
     </ul>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import shap
+
+explainer = shap.TreeExplainer(modele)
+valeurs = explainer(X_val)
+
+shap.plots.beeswarm(valeurs)        # vue globale : importance ET sens de l'effet
+shap.plots.waterfall(valeurs[42])   # pourquoi CETTE prédiction : contribution par variable
+shap.plots.scatter(valeurs[:, "surface"], color=valeurs)   # forme de l'effet + interaction</pre></div>
+
+    <div class="warning-block">
+      <strong>Expliquer n'est pas comprendre la réalité.</strong> SHAP explique ce que <em>le modèle</em> fait, pas ce que le monde fait. Une contribution SHAP élevée ne signifie ni que la variable cause la cible, ni qu'agir dessus changerait quoi que ce soit (module 9). C'est un outil de débogage et de confiance — et il est excellent pour cela : une variable inattendue en tête est souvent le signe d'une fuite de données.
+    </div>
+
+    <h2 id="comparatif">12. Tableau comparatif et pièges</h2>
+    <div class="code-label">choisir une famille</div>
+    <div class="code-block"><pre>Famille           Forces                         Faiblesses                  Quand
+──────────────────────────────────────────────────────────────────────────────────────
+Linéaire/logit    interprétable, rapide,         suppose la linéarité,       baseline,
+                  calibré, fiable en petit n     sensible à la colinéarité   explication
+Régularisé        gère p &gt; n, sélectionne        réglage de λ nécessaire     haute dimension
+k-NN              aucun apprentissage,           coûteux en prédiction,      petits jeux,
+                  non linéaire                   fléau de la dimension       recommandation
+Naive Bayes       très rapide, marche en très    hypothèse d'indépendance    texte,
+                  haute dimension                irréaliste                  baseline NLP
+SVM noyau         frontières complexes, robuste  O(n²), pas de probas,       n petit,
+                                                 opaque, standardisation     p grand
+Arbre             lisible, sans prétraitement    instable, peu performant    explication
+                                                 seul
+Random Forest     robuste, peu de réglage, OOB   modèle volumineux, moins    défaut solide
+                                                 précis que le boosting
+Gradient boosting meilleur sur tabulaire, gère   plus de réglages, sensible  production
+                  les manquants, early stopping  au bruit des étiquettes     tabulaire
+Clustering        découverte non supervisée      évaluation ambiguë          segmentation</pre></div>
+
+    <div class="step-block">
+      <h4>Les pièges qui reviennent le plus souvent</h4>
+      <ul>
+        <li><strong>Fuite de données</strong> — la cause n° 1 des scores mirobolants (module 12).</li>
+        <li><strong>Oublier la standardisation</strong> — pour les modèles à distance ou à gradient (k-NN, SVM, linéaires, réseaux). Les arbres, eux, s'en moquent complètement.</li>
+        <li><strong>Seuil laissé à 0,5</strong> — c'est une valeur par défaut, pas une décision (module 24).</li>
+        <li><strong>Optimiser la mauvaise métrique</strong> — accuracy en classes déséquilibrées (module 8).</li>
+        <li><strong>Comparer des modèles sur un seul découpage</strong> — l'écart observé est souvent dans le bruit d'échantillonnage.</li>
+        <li><strong>Extrapoler</strong> — les modèles à base d'arbres prédisent une constante hors du domaine vu à l'entraînement : ils n'extrapolent <em>pas</em>. Sur une tendance temporelle croissante, c'est fatal, et un modèle linéaire fait mieux.</li>
+        <li><strong>Ignorer la calibration</strong> — nécessaire dès qu'on utilise la probabilité elle-même, et pas seulement l'ordre.</li>
+      </ul>
+    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Les bornes PAC/VC donnent la bonne <em>structure</em> — erreur empirique plus terme de complexité en \(1/\sqrt{n}\) — mais des valeurs numériques inutilisables en deep learning.</li>
-        <li>Sans biais inductif, pas d'apprentissage : le no free lunch en fait une nécessité mathématique, pas une préférence esthétique.</li>
-        <li>La double descente montre que le nombre de paramètres n'est pas la bonne mesure de complexité.</li>
-        <li>SGD régularise implicitement : marge maximale, norme minimale, minima plats.</li>
-        <li>Stabilité, PAC-Bayes et compression expliquent mieux le deep learning que la dimension VC.</li>
-        <li>Pour un chiffre fiable, mesurer ; pour une garantie utilisable, conformaliser.</li>
+        <li>Capacité, biais et variance : les courbes d'apprentissage disent quoi faire ensuite.</li>
+        <li>Toujours commencer par un modèle linéaire régularisé comme baseline.</li>
+        <li>Bagging réduit la variance, boosting réduit le biais ; sur tabulaire, le gradient boosting est le défaut raisonnable.</li>
+        <li>Se méfier de <code>feature_importances_</code> ; préférer permutation ou SHAP sur un jeu de validation.</li>
+        <li>Le clustering n'a pas de vérité terrain : le juger à son utilité.</li>
+        <li>Une bonne variable vaut mieux qu'un réglage fin d'hyperparamètres.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m13.html" class="btn btn-secondary">← Module 13 : ML classique</a>
-    <a href="project7-m15.html" class="btn btn-primary">Module 15 : Deep learning →</a>
+    <a href="project7-m13.html" class="btn btn-secondary">← Module 13 : Peu d'étiquettes</a>
+    <a href="project7-m15.html" class="btn btn-primary">Module 15 : Théorie de l'apprentissage →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">PAC</span><span class="tag">Dimension VC</span><span class="tag">No free lunch</span><span class="tag">Double descente</span><span class="tag">PAC-Bayes</span></div>
+  <div class="project-meta"><span class="tag">Régularisation</span><span class="tag">SVM</span><span class="tag">Random Forest</span><span class="tag">XGBoost</span><span class="tag">Clustering</span><span class="tag">SHAP</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -194,7 +422,7 @@ physique</pre></div>
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 14</div>
-    <h1>Learning theory: why generalisation happens</h1>
+    <h1>Classical machine learning</h1>
   </div>
 
   <div class="project-content course-content">
@@ -204,14 +432,16 @@ physique</pre></div>
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The PAC framework: bounding the generalisation gap, and why choosing a hypothesis after seeing the data requires uniform bounds.</li>
-      <li>VC dimension and Rademacher complexity, with an honest account of how loose these bounds are for modern networks — and why they are still conceptually valuable.</li>
-      <li>The no free lunch theorem and inductive bias: learning is impossible without prior assumptions, which makes domain knowledge a performance lever rather than a nicety.</li>
-      <li>Double descent and over-parameterisation: the interpolation threshold, and why parameter count is not the right complexity measure.</li>
-      <li>Implicit regularisation of gradient descent: maximum-margin and minimum-norm solutions, flat minima, early stopping as regularisation — and the conclusion that the optimiser is part of the model.</li>
-      <li>Modern approaches that explain deep learning better: algorithmic stability, PAC-Bayes (the source of today's tightest non-vacuous bounds) and compression bounds.</li>
-      <li>What theory still cannot explain, including the random-label experiment that shows capacity is not what limits memorisation.</li>
-      <li>Practical takeaways, and the closing note of the whole course.</li>
+      <li>The bias-variance decomposition and how learning curves tell you what to do next.</li>
+      <li>Linear and logistic regression, ridge / lasso / elastic-net and the geometry behind sparsity, and how to read coefficients without overclaiming.</li>
+      <li>SVMs: margins, the kernel trick, the role of <em>C</em> and <em>gamma</em>, and the scaling limits that rule them out on large datasets.</li>
+      <li>Decision trees, bagging and random forests, out-of-bag estimates, and why impurity-based feature importance is misleading.</li>
+      <li>Gradient boosting as functional gradient descent, the hyperparameters that matter, and XGBoost vs LightGBM vs CatBoost — plus why boosting still wins on tabular data.</li>
+      <li>Stacking done without leakage.</li>
+      <li>Clustering (k-means, DBSCAN/HDBSCAN, hierarchical, GMM), evaluation without ground truth, and anomaly detection.</li>
+      <li>Hyperparameter search strategies, from grid to successive halving to Optuna.</li>
+      <li>Interpretability: permutation importance, PDP/ICE and SHAP — and why explaining a model is not causal inference.</li>
+      <li>A comparison table of model families and a list of the traps that recur most often.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -226,23 +456,24 @@ physique</pre></div>
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><strong>Learning theory: why generalisation happens</strong></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><strong>Classical machine learning</strong></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

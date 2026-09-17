@@ -65,7 +65,7 @@
     </div>
 
     <h2 id="probleme">1. Le problème : le modèle n'est que la partie visible</h2>
-    <p>Une étude souvent citée de Google sur la dette technique du machine learning — on y revient au module 25 — résume la situation par un schéma : dans un système de ML en production, le code du modèle occupe une petite boîte au centre, entourée de boîtes bien plus grosses qui s'appellent collecte, vérification, transformation, stockage, service, surveillance. Le rapport de taille n'est pas une métaphore : c'est le rapport des efforts réels.</p>
+    <p>Une étude souvent citée de Google sur la dette technique du machine learning — on y revient au module 26 — résume la situation par un schéma : dans un système de ML en production, le code du modèle occupe une petite boîte au centre, entourée de boîtes bien plus grosses qui s'appellent collecte, vérification, transformation, stockage, service, surveillance. Le rapport de taille n'est pas une métaphore : c'est le rapport des efforts réels.</p>
 
     <p>La raison est simple. Un fichier CSV posé sur un bureau se charge en une ligne de pandas. Une source de données vivante, elle, arrive en continu, change de schéma sans prévenir, contient des doublons, arrive parfois en retard, parfois deux fois, et doit être relue entièrement le jour où l'on découvre un bug dans une transformation d'il y a trois mois. Tout ce module traite de ces quatre difficultés :</p>
     <ul>
@@ -269,7 +269,7 @@ print(extrait.astype({"surface": int, "prix": int}))
 # 2      140  495000</pre></div>
 
     <div class="warning-block">
-      <strong>Les limites, qu'il faut connaître avant d'y perdre une journée.</strong> Une expression régulière décrit un motif <em>régulier</em> : elle ne sait pas compter les imbrications. Analyser du HTML ou du JSON avec une expression régulière finit toujours mal — utilisez un analyseur syntaxique (module 27 pour le HTML). Par ailleurs, un motif comportant plusieurs quantificateurs imbriqués, comme <code>(a+)+b</code>, peut exploser en temps exponentiel sur une entrée bien choisie : c'est une faille de déni de service connue. Préférez des motifs simples, ancrés, testés sur des cas réels.
+      <strong>Les limites, qu'il faut connaître avant d'y perdre une journée.</strong> Une expression régulière décrit un motif <em>régulier</em> : elle ne sait pas compter les imbrications. Analyser du HTML ou du JSON avec une expression régulière finit toujours mal — utilisez un analyseur syntaxique (module 28 pour le HTML). Par ailleurs, un motif comportant plusieurs quantificateurs imbriqués, comme <code>(a+)+b</code>, peut exploser en temps exponentiel sur une entrée bien choisie : c'est une faille de déni de service connue. Préférez des motifs simples, ancrés, testés sur des cas réels.
     </div>
 
     <h2 id="elt">5. ETL, ELT, et pourquoi l'ordre s'est inversé</h2>
@@ -364,7 +364,7 @@ ORDER BY prix_m2_median DESC;</pre></div>
         <li><strong>Type 2 — on ajoute une ligne.</strong> Chaque version du client devient une ligne avec <code>valide_du</code>, <code>valide_au</code> et un indicateur <code>est_actuel</code>. Le fait pointe vers la version en vigueur à sa date. C'est la réponse correcte dans la grande majorité des cas.</li>
         <li><strong>Type 3 — on garde la valeur précédente</strong> dans une colonne dédiée. Utile quand une seule étape d'historique suffit.</li>
       </ul>
-      <p>Ce point n'est pas qu'une subtilité d'entrepôt : c'est exactement le même piège que la fuite de données en ML (module 11). Utiliser la ville actuelle pour expliquer un achat passé, c'est faire entrer dans le modèle une information qui n'existait pas encore.</p>
+      <p>Ce point n'est pas qu'une subtilité d'entrepôt : c'est exactement le même piège que la fuite de données en ML (module 12). Utiliser la ville actuelle pour expliquer un achat passé, c'est faire entrer dans le modèle une information qui n'existait pas encore.</p>
     </div>
 
     <h2 id="dbt">7. dbt : du SQL versionné, testé, documenté</h2>
@@ -654,7 +654,7 @@ propre = Annonce.validate(df, lazy=True)   # lazy : TOUTES les erreurs d'un coup
         <li><strong>Schéma</strong> — les colonnes et leurs types sont-ils ceux attendus ?</li>
         <li><strong>Unicité</strong> — la clé primaire est-elle réellement unique ? Détecte une double ingestion.</li>
         <li><strong>Valeurs manquantes</strong> — le taux de <code>NULL</code> par colonne a-t-il bougé ?</li>
-        <li><strong>Distribution</strong> — la moyenne et les quantiles sont-ils comparables à hier ? C'est la détection de dérive du module 25, appliquée aux données brutes.</li>
+        <li><strong>Distribution</strong> — la moyenne et les quantiles sont-ils comparables à hier ? C'est la détection de dérive du module 26, appliquée aux données brutes.</li>
       </ol>
     </div>
 
@@ -669,7 +669,7 @@ propre = Annonce.validate(df, lazy=True)   # lazy : TOUTES les erreurs d'un coup
     <p>Un <em>feature store</em> (Feast, Tecton) résout cela en imposant <strong>une seule définition</strong>, servie de deux façons : en lot pour construire le jeu d'entraînement — en respectant la date, donc sans fuite —, et à la milliseconde pour l'API. Utile à partir de plusieurs modèles partageant des variables ; superflu avant, où une fonction Python unique appelée des deux côtés suffit.</p>
 
     <h3>Lakehouse : le compromis actuel</h3>
-    <p>Le lac de données (des fichiers, souple, pas cher) et l'entrepôt (structuré, transactionnel, cher) ont longtemps coexisté, avec des copies dans les deux sens. Les formats de table ouverts — Delta Lake, Apache Iceberg, Apache Hudi — apportent aux fichiers Parquet ce qui leur manquait : des transactions, l'évolution de schéma, et surtout le <em>voyage dans le temps</em>, c'est-à-dire la possibilité d'interroger la table telle qu'elle était il y a deux semaines. Pour la reproductibilité d'un entraînement (module 25), c'est décisif : « ce modèle a été entraîné sur la version 47 de cette table » devient une phrase vérifiable.</p>
+    <p>Le lac de données (des fichiers, souple, pas cher) et l'entrepôt (structuré, transactionnel, cher) ont longtemps coexisté, avec des copies dans les deux sens. Les formats de table ouverts — Delta Lake, Apache Iceberg, Apache Hudi — apportent aux fichiers Parquet ce qui leur manquait : des transactions, l'évolution de schéma, et surtout le <em>voyage dans le temps</em>, c'est-à-dire la possibilité d'interroger la table telle qu'elle était il y a deux semaines. Pour la reproductibilité d'un entraînement (module 26), c'est décisif : « ce modèle a été entraîné sur la version 47 de cette table » devient une phrase vérifiable.</p>
 
     <div class="code-label">choisir selon l'échelle, pas selon la mode</div>
     <div class="code-block"><pre>&lt; 10 Go, une personne
@@ -702,7 +702,7 @@ propre = Annonce.validate(df, lazy=True)   # lazy : TOUTES les erreurs d'un coup
       </ul>
     </div>
 
-    <p>La suite du cours quitte la plomberie pour les mathématiques : le module 8 reprend l'optimisation et l'algèbre linéaire dont tout le machine learning découle. On retrouvera l'ingénierie des données au module 27, où le projet de bout en bout construit un pipeline complet — scraping, validation, base PostgreSQL, ingestion idempotente — en appliquant chacune des règles ci-dessus.</p>
+    <p>La suite du cours quitte la plomberie pour les mathématiques : le module 8 reprend l'optimisation et l'algèbre linéaire dont tout le machine learning découle. On retrouvera l'ingénierie des données au module 28, où le projet de bout en bout construit un pipeline complet — scraping, validation, base PostgreSQL, ingestion idempotente — en appliquant chacune des règles ci-dessus.</p>
   </div>
 
   <hr class="divider">
@@ -768,23 +768,24 @@ propre = Annonce.validate(df, lazy=True)   # lazy : TOUTES les erreurs d'un coup
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

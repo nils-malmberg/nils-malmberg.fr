@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 18 - Processus gaussiens et optimisation bayésienne - Nils Malmberg</title>
+  <title>Module 18 - Données non tabulaires : texte, images, audio, graphes - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,237 +41,215 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 18</div>
-    <h1>Processus gaussiens et optimisation bayésienne</h1>
+    <h1>Données non tabulaires : texte, images, audio, graphes</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Comment optimiser une fonction dont chaque évaluation prend six heures de simulation ou détruit une éprouvette ? La descente de gradient est inutilisable — pas de gradient, et un budget de quelques dizaines d'essais. C'est le domaine de l'optimisation bayésienne, qui construit un modèle probabiliste de la fonction et s'en sert pour décider où essayer ensuite. Pour un profil d'ingénieur, c'est probablement le module dont l'application est la plus immédiate.</p>
+    <p>Un modèle ne consomme que des nombres. Tout le travail, sur ces données, consiste donc à construire une représentation — et le choix de cette représentation pèse bien plus lourd que le choix de l'algorithme qui vient après. Ce module traite les quatre modalités que l'on rencontre le plus souvent, avec une insistance particulière sur les graphes, absents de la plupart des cours généralistes alors qu'ils modélisent naturellement beaucoup de systèmes d'ingénierie.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#probleme">Le problème : une boîte noire coûteuse</a></li>
-        <li><a href="#gp">Processus gaussiens : une loi sur des fonctions</a></li>
-        <li><a href="#posterieur">Ce que le conditionnement donne</a></li>
-        <li><a href="#noyaux">Noyaux et hyperparamètres</a></li>
-        <li><a href="#bo">La boucle d'optimisation bayésienne</a></li>
-        <li><a href="#acquisition">Fonctions d'acquisition</a></li>
-        <li><a href="#botorch">BoTorch en pratique</a></li>
-        <li><a href="#extensions">Contraintes, multi-objectif, multi-fidélité</a></li>
-        <li><a href="#usages">Cas d'usage et limites</a></li>
+        <li><a href="#texte">Texte : du TF-IDF aux transformers</a></li>
+        <li><a href="#taches-nlp">Tâches classiques du NLP</a></li>
+        <li><a href="#images">Images : au-delà de la classification</a></li>
+        <li><a href="#audio">Audio et signaux perceptifs</a></li>
+        <li><a href="#graphes">Graphes : représentation et mesures</a></li>
+        <li><a href="#gnn">Réseaux de neurones sur graphes</a></li>
+        <li><a href="#multimodal">Multimodal</a></li>
+        <li><a href="#annotation">Annotation et qualité</a></li>
       </ol>
     </div>
 
-    <h2 id="probleme">1. Le problème : une boîte noire coûteuse</h2>
-    <p>On cherche \(x^\star = \arg\max_{x\in\mathcal{X}} f(x)\) où \(f\) est :</p>
-    <ul>
-      <li><strong>coûteuse</strong> — une évaluation demande des heures de calcul, un essai physique, ou une campagne d'entraînement complète ;</li>
-      <li><strong>opaque</strong> — pas d'expression analytique, donc pas de gradient exploitable ;</li>
-      <li><strong>possiblement bruitée</strong> — deux mesures au même point ne donnent pas le même résultat.</li>
-    </ul>
-    <p>Le budget se compte en dizaines d'évaluations, pas en millions. Une recherche par grille gaspille tout sur des zones sans intérêt ; une descente de gradient numérique dépenserait tout son budget à estimer une seule direction (il faut \(d+1\) évaluations pour un seul gradient en dimension \(d\)).</p>
-    <p>La stratégie gagnante consiste à <em>modéliser</em> \(f\) à partir des points déjà évalués, puis à choisir le prochain point en exploitant ce modèle. Ce modèle de substitution s'appelle un <em>surrogate</em>, et le choix naturel est un processus gaussien parce qu'il fournit, en plus d'une prédiction, une <strong>incertitude</strong> — exactement l'information nécessaire pour savoir où l'on ne sait pas encore.</p>
+    <h2 id="texte">1. Texte : du TF-IDF aux transformers</h2>
 
-    <h2 id="gp">2. Processus gaussiens : une loi sur des fonctions</h2>
-    <p>L'idée demande un petit effort d'abstraction. Une loi normale ordinaire tire des <em>nombres</em>. Une loi normale multivariée tire des <em>vecteurs</em>, avec des corrélations entre coordonnées. Un processus gaussien tire des <strong>fonctions</strong> : on peut le voir comme une loi normale multivariée de dimension infinie, dont chaque « coordonnée » est la valeur de la fonction en un point.</p>
-    <p>La définition opérationnelle est plus simple : quelle que soit la collection finie de points \(x_1,\dots,x_n\) que l'on choisit, le vecteur \(\big(f(x_1),\dots,f(x_n)\big)\) suit une loi normale multivariée. Le processus est entièrement déterminé par une fonction moyenne (souvent prise nulle après centrage) et une fonction de covariance, le <strong>noyau</strong> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ f \sim \mathcal{GP}\big(m(x),\, k(x,x')\big) \]</div>
-    <p>Le noyau dit à quel point deux points se « ressemblent » : \(k(x,x')\) grand signifie que \(f(x)\) et \(f(x')\) sont fortement corrélées, donc proches. C'est la seule hypothèse qu'on injecte, et elle suffit.</p>
+    <h3>Le problème</h3>
+    <p>Un modèle attend un vecteur de nombres ; on lui donne « la pompe P-204 fuit au niveau du presse-étoupe ». La première solution historique, le <em>sac de mots</em>, consiste à compter les occurrences de chaque mot du vocabulaire : chaque document devient un vecteur de la taille du vocabulaire, presque entièrement nul. On perd l'ordre des mots, mais on obtient quelque chose d'exploitable immédiatement.</p>
 
-    <div class="code-label">avant et après observations</div>
-    <div class="code-block"><pre>  A PRIORI : une nuée de fonctions plausibles      APRÈS 3 OBSERVATIONS
-  ╱‾╲    ╱╲                                        ╱‾╲    ╱╲
- ╱   ╲╱╲╱  ╲   toutes passent "n'importe où",    ●╱   ╲╱‾╲   ← toutes passent par
-╱  ╱╲ ╲  ╱╲ ╲  l'incertitude est uniforme         ╲╱      ╲●    les points observés
- ╲╱  ╲ ╲╱   ╲                                      ╱╲    ╱  ╲   et l'incertitude se
-                                                  ●    ╲╱    ╲  resserre AUTOUR d'eux
-  ░░░░░░░░░░░░ bande d'incertitude large       ░░░▒▒░░░▒▒▒░░░░  et reste large LOIN</pre></div>
+    <p><strong>TF-IDF</strong> raffine ce comptage en pondérant chaque terme par sa fréquence dans le document et sa <em>rareté</em> dans le corpus :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{tfidf}(t,d) = \underbrace{f_{t,d}}_{\text{fréquence locale}} \times \underbrace{\log\frac{N}{1+n_t}}_{\text{rareté globale}} \]</div>
 
-    <h2 id="posterieur">3. Ce que le conditionnement donne</h2>
-    <p>Conditionner une loi normale par une partie de ses coordonnées donne encore une loi normale, dont moyenne et covariance sont explicites. Avec \(K = k(X,X) + \sigma_n^2 I\) la matrice de covariance des points observés et \(k_* = k(X,x_*)\) le vecteur de covariance entre les observations et le point à prédire :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \mu_*(x_*) = k_*^\top K^{-1} y, \qquad \sigma_*^2(x_*) = k(x_*,x_*) - k_*^\top K^{-1} k_* \]</div>
+    <div class="code-label">l'effet, sur un corpus de rapports de maintenance</div>
+    <div class="code-block"><pre>terme          présent dans      log(N/nₜ)    poids si présent 3 fois
+"le"           9 900 / 10 000    0,01         0,03   → quasi ignoré
+"pompe"        3 000 / 10 000    1,20         3,60   → informatif
+"presse-       12 / 10 000       6,73        20,19   → très discriminant
+ étoupe"</pre></div>
 
-    <p>Deux lectures importantes. D'abord, la moyenne prédictive est une <em>combinaison linéaire des observations</em> pondérée par la similarité — c'est exactement une interpolation par fonctions de base radiales, le sujet de mon <a href="project5.html">projet mdisd</a>, mais assortie d'une variance. Ensuite, et c'est la propriété décisive : la variance prédictive <strong>ne dépend pas des valeurs observées</strong>, seulement de la <em>position</em> des points. L'incertitude est donc grande là où l'on n'a pas mesuré et petite près des mesures, indépendamment de ce qu'on y a trouvé. C'est précisément ce dont l'optimisation bayésienne a besoin pour décider où explorer.</p>
+    <p><strong>BM25</strong> va plus loin sur deux points : il <em>sature</em> la fréquence (le dixième « pompe » n'apporte presque rien de plus que le troisième) et normalise par la longueur du document, pour qu'un rapport de dix pages ne domine pas mécaniquement. C'est la composante lexicale de la recherche hybride des modules 22 et 23.</p>
 
-    <div class="warning-block">
-      <strong>Sur l'implémentation.</strong> On n'inverse jamais \(K\) (module 8) : on la factorise par Cholesky puis on résout. Le terme \(\sigma_n^2 I\) n'est pas seulement le bruit de mesure — c'est aussi ce qui rend \(K\) définie positive numériquement. Sans un <em>jitter</em> minimal (typiquement \(10^{-6}\)), la factorisation échoue dès que deux points d'apprentissage sont proches, puisque leurs lignes deviennent quasi identiques.
+    <div class="code-label">Python — baseline de classification de texte</div>
+    <div class="code-block"><pre>from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+
+modele = make_pipeline(
+    TfidfVectorizer(
+        ngram_range=(1, 2),      # mots seuls ET paires : capture "non conforme"
+        min_df=3,                # ignorer ce qui apparaît moins de 3 fois (bruit)
+        max_df=0.7,              # ignorer ce qui apparaît dans 70 % des documents
+        sublinear_tf=True,       # log(1+tf) : sature les répétitions
+        strip_accents="unicode",
+    ),
+    LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced"),
+).fit(textes_train, y_train)
+
+# interprétabilité gratuite : les n-grammes les plus discriminants
+noms = modele[0].get_feature_names_out()
+poids = modele[-1].coef_[0]
+print("en faveur :", [noms[i] for i in poids.argsort()[-15:]])
+print("en défaveur :", [noms[i] for i in poids.argsort()[:15]])</pre></div>
+
+    <div class="step-block">
+      <h4>Quand le classique suffit — et quand il ne suffit plus</h4>
+      <p>TF-IDF et régression logistique restent excellents quand le vocabulaire est <em>discriminant par lui-même</em> : tri de tickets, détection de spam, classification thématique de documents techniques. L'approche échoue dès que le sens dépend de l'ordre, de la négation ou du contexte — « ce n'est pas un défaut » et « c'est un défaut » ont presque le même sac de mots. C'est là que les embeddings contextuels et les modèles de langage (module 22) deviennent nécessaires. La bonne démarche reste de mesurer l'écart : si la baseline lexicale atteint 95 % de la performance d'un transformer pour un millième du coût et avec une explication par mot, la question est tranchée.</p>
     </div>
 
-    <h2 id="noyaux">4. Noyaux et hyperparamètres</h2>
-    <div class="code-label">les noyaux usuels</div>
-    <div class="code-block"><pre>RBF / gaussien      k = σ²·exp(-‖x-x'‖²/2ℓ²)      fonctions infiniment dérivables :
-                                                   très (souvent trop) lisse.
-Matérn ν=5/2        polynôme·exp(-√5 r/ℓ)          deux fois dérivable. LE DÉFAUT en
-                                                   optimisation bayésienne : réaliste
-                                                   pour un système physique.
-Matérn ν=3/2                                       une fois dérivable : plus rugueux.
-Périodique          exp(-2sin²(π r/p)/ℓ²)          saisonnalité de période connue.
-Linéaire            x·x'                           tendance affine.
-Blanc               σ²·δ(x,x')                     bruit d'observation.
-Somme / produit     k₁+k₂, k₁·k₂                   combiner : tendance + saisonnalité
-                                                   + bruit, chacun avec ses paramètres.</pre></div>
+    <p>Sur le prétraitement, deux remarques. La <strong>lemmatisation</strong> (ramener « fuyaient » à « fuir », avec spaCy) est utile en français, langue fortement fléchie, là où la racinisation brutale dégrade souvent le sens. Et la suppression des <em>mots vides</em> n'est pas toujours souhaitable : la négation et les mots-outils portent parfois exactement l'information recherchée.</p>
 
-    <p>La <strong>longueur caractéristique</strong> \(\ell\) est l'hyperparamètre décisif : elle dit à quelle distance deux points cessent de s'informer mutuellement. Petite, le GP devient nerveux et l'incertitude explose entre les points ; grande, il lisse tout et manque les variations réelles. Avec une longueur par dimension (<em>Automatic Relevance Determination</em>), le modèle apprend lui-même quelles variables comptent — une grande longueur signifie que la sortie est insensible à cette entrée, ce qui constitue au passage une analyse de sensibilité gratuite (module 20).</p>
-
-    <p>Les hyperparamètres (\(\ell\), \(\sigma^2\), \(\sigma_n^2\)) s'ajustent en maximisant la <strong>vraisemblance marginale</strong> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \log p(y\mid X,\theta) = -\tfrac{1}{2}y^\top K^{-1}y \;-\; \tfrac{1}{2}\log|K| \;-\; \tfrac{n}{2}\log 2\pi \]</div>
-    <p>Le premier terme récompense l'ajustement aux données, le second pénalise la complexité du modèle — une matrice de covariance « permissive », qui autorise beaucoup de fonctions, a un grand déterminant. Le rasoir d'Occam est ici <em>automatique</em>, sans validation croisée : c'est l'un des grands attraits du cadre bayésien (module 10).</p>
-
-    <div class="code-label">Python — régression GP avec scikit-learn</div>
-    <div class="code-block"><pre>import numpy as np
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel
-
-noyau = (ConstantKernel(1.0)                          # amplitude σ²
-         * Matern(length_scale=np.ones(3), nu=2.5)    # ARD : une longueur par dimension
-         + WhiteKernel(noise_level=1e-3))             # bruit d'observation
-
-gp = GaussianProcessRegressor(kernel=noyau, normalize_y=True, n_restarts_optimizer=10)
-gp.fit(X, y)                       # optimise les hyperparamètres par vraisemblance
-
-mu, sigma = gp.predict(X_test, return_std=True)
-print(gp.kernel_)                  # les longueurs apprises = sensibilité par variable
-# une longueur très grande sur une dimension → cette variable n'influence pas la sortie</pre></div>
-
-    <p><strong>Le coût</strong> est la limite structurelle : la factorisation de \(K\) est en \(O(n^3)\) et la mémoire en \(O(n^2)\). Au-delà de quelques milliers de points, il faut des approximations creuses (points inducteurs, <em>variational GP</em> dans GPyTorch). Pour l'optimisation bayésienne, où \(n\) dépasse rarement quelques centaines, ce n'est pas un obstacle.</p>
-
-    <h2 id="bo">5. La boucle d'optimisation bayésienne</h2>
-    <div class="code-label">l'algorithme</div>
-    <div class="code-block"><pre>1. Évaluer f sur un plan initial (Latin Hypercube ou Sobol, ~10 points par dimension)
-2. Répéter jusqu'à épuisement du budget :
-      a. ajuster le GP sur TOUTES les observations disponibles
-      b. maximiser la fonction d'acquisition α(x) sur le domaine
-         (α est bon marché : on peut y lancer un optimiseur classique multi-départs)
-      c. évaluer f au point trouvé — LA seule opération coûteuse
-      d. ajouter (x, y) aux observations
-3. Renvoyer le meilleur point observé</pre></div>
-
-    <p>Le déplacement conceptuel est là : on remplace l'optimisation d'une fonction coûteuse par une <em>suite</em> d'optimisations d'une fonction bon marché, construite à partir du GP. Consommer quelques secondes de calcul pour choisir intelligemment un point vaut largement le coup quand ce point coûte six heures de simulation.</p>
-
-    <h2 id="acquisition">6. Fonctions d'acquisition</h2>
-    <p>L'acquisition traduit le compromis <strong>exploitation</strong> (aller là où le modèle prédit une bonne valeur) / <strong>exploration</strong> (aller là où il ne sait rien). En notant \(f^+\) le meilleur résultat observé, \(Z = (\mu(x)-f^+-\xi)/\sigma(x)\), \(\Phi\) et \(\varphi\) les fonctions de répartition et de densité normales :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \text{EI}(x) = \big(\mu(x)-f^+-\xi\big)\Phi(Z) + \sigma(x)\,\varphi(Z) \]</div>
-
-    <p>L'<strong>amélioration espérée</strong> (EI) est l'espérance du gain par rapport au meilleur point connu, sachant que l'on ne perd rien si le nouveau point est moins bon. Sa structure est parlante : le premier terme récompense une moyenne élevée, le second une forte incertitude. C'est le choix par défaut — pas de paramètre à régler (\(\xi\) vaut typiquement 0,01) et un bon équilibre empirique.</p>
-
-    <div class="code-label">où chaque critère envoie le prochain point</div>
-    <div class="code-block"><pre>      μ(x) prédite        ╱‾‾╲                    ●  points déjà évalués
-   ●            ╱‾╲     ╱     ╲       ●          ░  incertitude σ(x)
-  ░░░░       ░░╱   ╲░░░╱       ╲░░░░░░░
-             ▲              ▲
-             │              └── EXPLORATION : zone mal connue, σ grand
-             └── EXPLOITATION : moyenne élevée près d'un bon point
-  EI équilibre les deux ; UCB laisse régler le curseur par β.</pre></div>
-
-    <div class="code-label">les alternatives</div>
-    <div class="code-block"><pre>UCB       μ(x) + β·σ(x)     exploration réglable explicitement. Garanties théoriques
-                            de regret (GP-UCB). β ≈ 2 en pratique.
-PI        P(f(x) &gt; f⁺)      probabilité d'amélioration : trop exploitante, converge
-                            souvent vers un optimum local.
-Thompson  tirer une fonction du postérieur et l'optimiser. Naturellement
-          parallélisable : k tirages donnent k points distincts.
-Entropy search  maximise l'information gagnée SUR LA POSITION de l'optimum plutôt
-                que sur sa valeur. Plus coûteux, souvent plus efficace.
-Knowledge gradient  anticipe le gain sur la meilleure valeur atteignable après
-                    l'évaluation.</pre></div>
-
-    <h2 id="botorch">7. BoTorch en pratique</h2>
-    <p><a href="https://botorch.org" target="_blank">BoTorch</a> (Meta) est construit sur PyTorch et GPyTorch. Son atout : les acquisitions y sont <em>différentiables</em> et estimées par Monte-Carlo, ce qui permet de les maximiser par gradient et d'en construire des variantes (batch, contraintes, multi-objectif) sans dériver de nouvelles formules analytiques. <strong>Ax</strong> est la surcouche qui gère la campagne complète.</p>
-
-    <div class="code-label">Python — une boucle complète</div>
-    <div class="code-block"><pre>import torch
-from botorch.models import SingleTaskGP
-from botorch.fit import fit_gpytorch_mll
-from botorch.acquisition import qLogExpectedImprovement
-from botorch.optim import optimize_acqf
-from botorch.utils.sampling import draw_sobol_samples
-from gpytorch.mlls import ExactMarginalLogLikelihood
-
-bornes = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=torch.double)
-
-X = draw_sobol_samples(bounds=bornes, n=10, q=1).squeeze(1)   # plan initial
-Y = simulation_couteuse(X).unsqueeze(-1)                      # à MAXIMISER
-
-for iteration in range(40):
-    gp  = SingleTaskGP(X, Y)                       # normalisation gérée en interne
-    mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-    fit_gpytorch_mll(mll)                          # hyperparamètres par vraisemblance
-
-    acq = qLogExpectedImprovement(model=gp, best_f=Y.max())
-    candidat, _ = optimize_acqf(
-        acq, bounds=bornes,
-        q=4,                                       # 4 points EN PARALLÈLE
-        num_restarts=20, raw_samples=512,          # multi-départs sur l'acquisition
-    )
-
-    X = torch.cat([X, candidat])
-    Y = torch.cat([Y, simulation_couteuse(candidat).unsqueeze(-1)])
-
-print("meilleur point :", X[Y.argmax()], "valeur :", Y.max().item())</pre></div>
-
-    <p>Le paramètre <code>q=4</code> illustre un cas fréquent en ingénierie : si quatre simulations peuvent tourner en parallèle sur un cluster, on veut quatre points <em>complémentaires</em>, pas quatre fois le même. Les acquisitions « q » de BoTorch traitent cela correctement, en pénalisant la redondance à l'intérieur du lot.</p>
-
-    <h2 id="extensions">8. Contraintes, multi-objectif, multi-fidélité</h2>
+    <h2 id="taches-nlp">2. Tâches classiques du NLP</h2>
     <ul>
-      <li><strong>Contraintes coûteuses</strong> — quand la faisabilité elle-même doit être simulée (une contrainte mécanique, une température maximale), on modélise chaque contrainte par son propre GP et l'on pondère l'acquisition par la probabilité de faisabilité. Le point proposé est alors celui qui maximise le gain <em>attendu et réalisable</em>.</li>
-      <li><strong>Multi-objectif</strong> — rendement <em>et</em> coût, précision <em>et</em> latence. On ne cherche plus un optimum mais un <strong>front de Pareto</strong> : l'ensemble des compromis qu'aucun autre point ne domine sur tous les critères à la fois. L'acquisition de référence est qEHVI (<em>expected hypervolume improvement</em>), qui mesure le gain de volume dominé.</li>
-      <li><strong>Espaces mixtes</strong> — variables continues, entières et catégorielles mélangées (un choix de matériau, un nombre de couches). Traitées par des noyaux dédiés ou par relaxation continue.</li>
-      <li><strong>Multi-fidélité</strong> — souvent le gain le plus spectaculaire : on dispose d'un simulateur grossier rapide et d'un simulateur fin coûteux. Un GP multi-tâche apprend la corrélation entre les deux niveaux et n'appelle le coûteux que lorsque c'est décisif. Le même principe s'applique au réglage d'hyperparamètres, où « peu d'époques » est une fidélité basse — c'est l'idée de Hyperband, croisée avec la modélisation bayésienne dans BOHB.</li>
+      <li><strong>Classification</strong> — thématique, sentiment, intention. Métriques du module 8, attention au déséquilibre.</li>
+      <li><strong>Reconnaissance d'entités (NER)</strong> — extraire personnes, dates, références produit, valeurs avec unités. Évaluation par F1 <em>au niveau de l'entité</em> : une entité partiellement détectée compte comme fausse, ce qui est bien plus sévère qu'une évaluation par jeton.</li>
+      <li><strong>Extraction structurée</strong> — passer d'un rapport libre à un enregistrement exploitable. Historiquement des règles et des expressions régulières, aujourd'hui souvent un LLM à sortie contrainte (module 22) — mais les règles restent supérieures sur les formats rigides, et elles sont déterministes et gratuites.</li>
+      <li><strong>Topic modeling</strong> — LDA (modèle génératif bayésien, module 10), NMF (factorisation à coefficients positifs, plus lisible, module 8) ou BERTopic (embeddings + clustering + c-TF-IDF), qui donne aujourd'hui les regroupements les plus interprétables.</li>
+      <li><strong>Résumé, traduction, question-réponse</strong> — domaine des modèles génératifs ; la difficulté s'y déplace entièrement vers l'<em>évaluation</em> (module 22).</li>
     </ul>
 
-    <div class="code-label">comparaison des stratégies de réglage</div>
-    <div class="code-block"><pre>Méthode              Évaluations nécessaires   Parallélisme   Quand l'utiliser
-──────────────────────────────────────────────────────────────────────────────────
-Grid search          très nombreuses           parfait        2-3 paramètres, pas plus
-Random search        nombreuses                parfait        baseline honnête, robuste
-Hyperband / ASHA     moyennes                  bon            entraînements interruptibles
-TPE (Optuna)         peu                       bon            défaut pratique en ML
-GP + EI (BoTorch)    très peu                  bon (batch)    évaluations RÉELLEMENT
-                                                              coûteuses, dimension &lt; 20</pre></div>
+    <h2 id="images">3. Images : au-delà de la classification</h2>
+    <p>Le module 16 traite les CNN et la classification. En pratique, les tâches utiles sont souvent d'un autre type :</p>
 
-    <p>Un repère honnête : en dessous de 20 ou 30 évaluations disponibles et en dimension modérée, l'optimisation bayésienne par GP domine nettement. Pour régler les hyperparamètres d'un gradient boosting qui s'entraîne en dix secondes, Optuna (TPE) est plus simple et suffisant (module 13). Et la recherche aléatoire reste une baseline étonnamment solide, qu'il faut toujours inclure dans la comparaison.</p>
+    <div class="code-label">tâches de vision et leurs métriques</div>
+    <div class="code-block"><pre>Classification        une étiquette par image                  accuracy, F1
+Détection d'objets    boîtes + classes (YOLO, DETR)            mAP à IoU 0,5 / 0,5:0,95
+Segmentation sém.     une classe par PIXEL (U-Net, DeepLab)    IoU, Dice
+Segmentation d'inst.  objets séparés (Mask R-CNN, SAM)         mAP masque
+Estimation de pose    points clés                              PCK, OKS
+OCR                   texte dans l'image (docTR, Tesseract)    CER, WER
+Recherche d'images    similarité par embedding (module 22)     recall@k</pre></div>
 
-    <h2 id="usages">9. Cas d'usage et limites</h2>
-    <div class="code-label">où c'est réellement utile</div>
-    <div class="code-block"><pre>Plans d'expériences      choisir les essais physiques suivants (chimie, matériaux,
-                         procédés) — chaque essai coûte des jours et des matières
-Calibration de modèle    identifier les paramètres d'un modèle physique à partir
-                         de mesures (module 20)
-Conception assistée      optimiser une géométrie évaluée par CFD ou éléments finis
-Réglage coûteux          hyperparamètres d'un gros réseau (des heures par essai)
-Contrôle / robotique     réglage de contrôleurs sur système réel, où chaque essai
-                         a un coût et un risque
-A/B testing adaptatif    allocation séquentielle, à la frontière des bandits (module 23)</pre></div>
+    <div class="code-label">IoU et Dice, sur un exemple</div>
+    <div class="code-block"><pre>  vérité terrain ███████          prédiction  ░░░███████
+                                  intersection = 5 pixels
+                                  union        = 9 pixels
+  IoU  = 5/9 = 0,56               Dice = 2×5/(7+7) = 0,71
+
+  Le Dice est toujours ≥ l'IoU et pénalise moins durement les petits objets :
+  c'est pourquoi il est préféré en imagerie médicale et scientifique, où
+  l'objet d'intérêt occupe souvent 1 % de l'image.</pre></div>
+
+    <p>Pour un profil d'ingénieur, les cas d'usage les plus fréquents ne sont d'ailleurs pas les photographies : segmentation de micrographies pour quantifier une microstructure (taille de grains, porosité, fraction de phase), détection de défauts sur des images de contrôle non destructif, analyse d'images de simulation ou de tomographie. Trois particularités y changent la méthode : les jeux annotés sont <em>très</em> petits (d'où le transfert et une augmentation agressive, module 13), les images sont souvent en niveaux de gris et à haute résolution (d'où le découpage en tuiles, avec recouvrement pour éviter les artefacts de bord), et la sortie attendue est généralement une <em>mesure physique</em> — ce qui déplace l'évaluation du score de segmentation vers l'erreur sur la grandeur mesurée.</p>
 
     <div class="warning-block">
-      <strong>Les limites, sans détour.</strong><br>
-      • <strong>Dimension</strong> — au-delà de 20 à 30 variables, le GP peine : le volume à explorer croît exponentiellement et l'incertitude ne se réduit plus nulle part. Remèdes : sous-espaces aléatoires (ALEBO, TuRBO), hypothèses d'additivité, réduction préalable par analyse de sensibilité.<br>
-      • <strong>Coût du surrogate</strong> — \(O(n^3)\) : au-delà de quelques milliers d'évaluations, l'ajustement du GP devient lui-même le goulot.<br>
-      • <strong>Hypothèse de régularité</strong> — le noyau suppose une certaine continuité. Sur une fonction discontinue, fractale ou à bifurcation, le modèle est faux, donc les décisions le sont aussi.<br>
-      • <strong>Bruit hétéroscédastique</strong> — un bruit dont l'amplitude varie selon \(x\) demande un modèle dédié ; sinon le GP le confond avec du signal et va explorer là où ça remue.<br>
-      • <strong>Sensibilité au noyau</strong> — c'est le vrai choix de modélisation. Un RBF sur un phénomène rugueux produit des prédictions trop lisses et une incertitude sous-estimée : les deux erreurs se combinent. Matérn 5/2 est le défaut raisonnable.
+      <strong>L'augmentation doit respecter la physique.</strong> Une symétrie horizontale est anodine sur une photo de chat, désastreuse sur un caractère manuscrit ou une image où la chiralité a un sens. Une variation de contraste change la valeur de gris qui, en tomographie, <em>code une densité</em>. L'augmentation encode des invariances : elle n'est valide que si l'invariance existe réellement dans le phénomène — et c'est au métier de le dire, pas à la bibliothèque.
     </div>
+
+    <h2 id="audio">4. Audio et signaux perceptifs</h2>
+    <p>La chaîne standard transforme le son en image : découpage en fenêtres qui se recouvrent, FFT sur chaque fenêtre (module 17), passage sur l'échelle de Mel — qui reproduit la résolution non linéaire de l'oreille, plus fine dans les graves —, puis un CNN ou un transformer sur le spectrogramme obtenu. Les <strong>MFCC</strong> (coefficients cepstraux) restent une représentation compacte utile pour les tâches légères sur processeur.</p>
+    <p>Trois précautions spécifiques : l'augmentation se fait sur le signal (bruit additif, variation de vitesse, réverbération) <em>et</em> sur le spectrogramme (<em>SpecAugment</em>, qui masque des bandes de temps et de fréquence) ; la découpe train/test doit se faire par <em>locuteur</em> ou par <em>appareil</em>, jamais par extrait, sous peine de fuite (module 12) ; et pour la reconnaissance vocale, un modèle pré-entraîné comme Whisper rend l'entraînement de zéro sans objet dans l'immense majorité des cas.</p>
+
+    <h2 id="graphes">5. Graphes : représentation et mesures</h2>
+    <p>Un graphe modélise des entités (les <em>nœuds</em>) et leurs relations (les <em>arêtes</em>). Beaucoup de systèmes techniques en sont naturellement : un réseau électrique ou hydraulique, un maillage de calcul, une molécule, un graphe de dépendances logicielles, un circuit, une chaîne d'approvisionnement, un réseau social. Ignorer cette structure et aplatir en tableau revient à jeter l'information la plus spécifique du problème — c'est comme décrire un plan de métro par la seule liste des stations.</p>
+
+    <div class="code-label">mesures structurelles et ce qu'elles disent</div>
+    <div class="code-block"><pre>Degré                 nombre de voisins : popularité, connectivité locale
+Intermédiarité        fréquence d'apparition sur les plus courts chemins entre
+(betweenness)         toutes les paires. Identifie les points de passage obligés,
+                      donc les points de FRAGILITÉ d'un réseau technique.
+PageRank              importance récursive : est important qui est pointé par
+                      des nœuds importants
+Coefficient de        propension des voisins d'un nœud à être voisins entre eux :
+clustering            mesure la "densité locale" du réseau
+Communautés           partition en groupes densément connectés (Louvain, Leiden)
+Composantes           parties déconnectées : souvent la première chose à regarder
+Assortativité         les nœuds semblables se connectent-ils entre eux ?</pre></div>
+
+    <div class="code-label">Python — NetworkX</div>
+    <div class="code-block"><pre>import networkx as nx
+
+G = nx.from_pandas_edgelist(df, "source", "cible", edge_attr="poids")
+
+print(f"{G.number_of_nodes()} nœuds, {G.number_of_edges()} arêtes, "
+      f"densité {nx.density(G):.4f}, {nx.number_connected_components(G)} composantes")
+
+centralite = nx.betweenness_centrality(G, weight="poids")     # points critiques
+communautes = nx.community.louvain_communities(G, seed=0)
+
+# CES MESURES DEVIENNENT DES VARIABLES TABULAIRES pour un modèle classique (module 14)
+df_noeuds["pagerank"]     = df_noeuds.index.map(nx.pagerank(G))
+df_noeuds["degre"]        = df_noeuds.index.map(dict(G.degree()))
+df_noeuds["clustering"]   = df_noeuds.index.map(nx.clustering(G))
+df_noeuds["intermediar."] = df_noeuds.index.map(centralite)</pre></div>
+
+    <p>Les quatre dernières lignes méritent d'être soulignées : dans bien des projets, la meilleure façon d'exploiter un graphe n'est pas d'entraîner un modèle de graphe, mais d'en <strong>extraire des variables</strong> et de les donner à un gradient boosting. C'est simple, robuste, interprétable, et souvent suffisant. Les plongements de nœuds (<em>node2vec</em>, DeepWalk), qui appliquent l'idée de word2vec à des marches aléatoires sur le graphe, constituent l'étape intermédiaire.</p>
+
+    <h2 id="gnn">6. Réseaux de neurones sur graphes</h2>
+    <p>Un GNN généralise la convolution à une structure irrégulière. Sur une image, chaque pixel a exactement huit voisins disposés de façon régulière, ce qui permet un noyau fixe ; dans un graphe, un nœud peut avoir deux ou deux mille voisins, sans ordre. Le principe, appelé <strong>passage de messages</strong> : chaque nœud met à jour sa représentation en agrégeant celles de ses voisins.</p>
+
+    <div class="code-label">une couche de passage de messages</div>
+    <div class="code-block"><pre>        ○ B (h_B)
+         ╲                  1. MESSAGE  : chaque voisin envoie ψ(h_A, h_v, e)
+   C ○───● A (h_A)          2. AGRÉGATION : on combine les messages reçus par une
+         ╱                     opération INVARIANTE PAR PERMUTATION (somme, moyenne,
+        ○ D (h_D)               max) — le résultat ne doit pas dépendre de l'ordre
+                              arbitraire des voisins
+   h_A ← φ(h_A, ⊕{messages de B, C, D})
+                           3. MISE À JOUR : on combine avec l'état précédent
+
+   Après K couches, un nœud "voit" son voisinage à distance K.</pre></div>
+
+    <div style="text-align:center;overflow-x:auto">\[ h_v^{(k+1)} = \phi\Big(h_v^{(k)},\; \bigoplus_{u \in \mathcal{N}(v)} \psi\big(h_v^{(k)}, h_u^{(k)}, e_{uv}\big)\Big) \]</div>
+
+    <p>Les variantes diffèrent par le choix de \(\psi\) et de l'agrégation : <strong>GCN</strong> (moyenne normalisée par les degrés), <strong>GraphSAGE</strong> (échantillonnage d'un nombre fixe de voisins, ce qui permet de passer à l'échelle), <strong>GAT</strong> (pondération des voisins par attention, module 16), <strong>MPNN</strong> (formulation générale avec attributs d'arêtes, la plus utilisée en chimie).</p>
+
+    <div class="code-label">trois niveaux de tâches</div>
+    <div class="code-block"><pre>Nœud     classification ou régression par nœud   détection de fraude, rôle dans
+                                                 un réseau, propriété d'un atome
+Arête    prédiction de lien                      recommandation, complétion de
+                                                 graphe de connaissances
+Graphe   propriété du graphe ENTIER              propriété d'une molécule, d'un
+         (après agrégation globale)              circuit, d'une structure</pre></div>
+
+    <p>Les applications les plus convaincantes sont scientifiques : prédiction de propriétés moléculaires et de matériaux (le graphe atomes-liaisons est la représentation naturelle), simulation physique apprise sur maillage — un maillage de calcul <em>est</em> un graphe, et les GNN y apprennent des opérateurs de propagation, ce qui rejoint le <a href="project7-m21.html">module 21</a> —, prévision de trafic sur réseau routier, et détection de fraude par anneaux de comptes liés.</p>
+
+    <div class="warning-block">
+      <strong>Trois limites à connaître avant de s'y lancer.</strong> Le <em>lissage excessif</em> : à chaque couche, les représentations se mélangent un peu plus, et au-delà de trois ou quatre couches, tous les nœuds finissent par se ressembler — les GNN sont des réseaux <em>peu profonds</em>, contrairement aux CNN. Le <em>passage à l'échelle</em> : un nœud très connecté fait exploser le voisinage à agréger, d'où l'échantillonnage (GraphSAGE) ou le découpage en sous-graphes. Le <em>pouvoir d'expression</em> : les GNN standards ne distinguent pas certains graphes non isomorphes (limite du test de Weisfeiler-Lehman). Enfin, la fuite de données prend ici une forme particulière : découper les nœuds au hasard laisse des arêtes reliant train et test, si bien que l'information circule d'un côté à l'autre pendant l'entraînement — il faut un découpage par sous-graphe ou par période.
+    </div>
+
+    <h2 id="multimodal">7. Multimodal</h2>
+    <p>Combiner plusieurs modalités se fait de trois façons : <em>fusion précoce</em> (concaténer les données brutes, rarement efficace car les échelles et les structures n'ont rien à voir), <em>fusion tardive</em> (un modèle par modalité, puis combinaison des prédictions — simple et robuste), et <em>fusion intermédiaire</em> (concaténer les représentations apprises, le meilleur compromis en général).</p>
+    <p>Les modèles contrastifs type <strong>CLIP</strong> vont plus loin en alignant deux modalités dans un <em>espace commun</em> : une image et sa description y sont voisines, ce qui permet la recherche d'images par texte et la classification sans aucun exemple étiqueté (module 13). En contexte industriel, le cas le plus fréquent est la combinaison d'un tableau de mesures, d'un texte libre (rapport d'intervention) et d'une image ou d'un signal. La recette qui marche : encoder chaque modalité en un vecteur, les concaténer, et laisser un gradient boosting faire la synthèse.</p>
+
+    <h2 id="annotation">8. Annotation et qualité</h2>
+    <p>Sur ces données, la performance est presque toujours limitée par les annotations, pas par le modèle. Quelques principes qui économisent beaucoup de temps :</p>
+    <ul>
+      <li><strong>Écrire un guide d'annotation</strong> avant d'annoter, et le tester sur vingt exemples avec deux annotateurs. Les désaccords révèlent les cas limites que la définition du problème n'avait pas tranchés — et c'est le vrai livrable de cette étape.</li>
+      <li><strong>Mesurer l'accord inter-annotateurs</strong> (kappa de Cohen, alpha de Krippendorff). Il plafonne la performance atteignable : si deux experts ne sont d'accord qu'à 80 %, aucun modèle n'ira significativement au-delà, et un score de 85 % doit éveiller les soupçons plutôt que la satisfaction.</li>
+      <li><strong>Annoter en priorité les cas informatifs</strong> plutôt qu'au hasard : c'est l'apprentissage actif du <a href="project7-m13.html">module 13</a>.</li>
+      <li><strong>Vérifier les étiquettes existantes</strong> : les jeux de référence publics contiennent eux-mêmes des erreurs, et un modèle très confiant en désaccord avec l'étiquette est un excellent détecteur d'annotation fautive (<code>cleanlab</code>, module 13).</li>
+    </ul>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Un GP est une loi sur des fonctions : il fournit une prédiction <em>et</em> une incertitude calibrée, ce que ne font ni les arbres ni les réseaux.</li>
-        <li>La variance prédictive ne dépend que de la position des points observés : grande loin des données, petite près d'elles.</li>
-        <li>Le noyau encode l'hypothèse de régularité ; Matérn 5/2 avec ARD est le défaut ; la vraisemblance marginale règle les hyperparamètres avec une pénalité de complexité intégrée.</li>
-        <li>L'optimisation bayésienne remplace une fonction coûteuse par une suite d'optimisations bon marché de l'acquisition.</li>
-        <li>EI par défaut, UCB pour piloter l'exploration explicitement, acquisitions « q » pour le parallèle.</li>
-        <li>Le domaine d'excellence : évaluations réellement coûteuses, dimension modérée, budget de quelques dizaines de points. Ailleurs, random search ou TPE suffisent.</li>
+        <li>Sur données non structurées, la représentation compte plus que l'algorithme.</li>
+        <li>TF-IDF et régression logistique restent une baseline honnête, et interprétable mot par mot ; mesurer l'écart avant de sortir un transformer.</li>
+        <li>En vision, les tâches utiles sont souvent détection et segmentation ; le Dice et l'IoU y remplacent l'accuracy, et l'augmentation doit respecter la physique.</li>
+        <li>L'audio se ramène à une image temps-fréquence ; découper les jeux par locuteur ou appareil.</li>
+        <li>Un graphe s'exploite d'abord par des variables structurelles données à un modèle classique.</li>
+        <li>Les GNN agrègent les voisins de façon invariante par permutation ; ils sont peu profonds, sensibles au lissage excessif, et exigent un découpage adapté.</li>
+        <li>La qualité et la cohérence des annotations plafonnent la performance : les mesurer avant de changer de modèle.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m17.html" class="btn btn-secondary">← Module 17 : Données non tabulaires</a>
-    <a href="project7-m19.html" class="btn btn-primary">Module 19 : Renforcement →</a>
+    <a href="project7-m17.html" class="btn btn-secondary">← Module 17 : Séries temporelles</a>
+    <a href="project7-m19.html" class="btn btn-primary">Module 19 : Processus gaussiens →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Gaussian Process</span><span class="tag">Noyaux</span><span class="tag">Bayesian Optimization</span><span class="tag">BoTorch</span><span class="tag">DoE</span></div>
+  <div class="project-meta"><span class="tag">NLP</span><span class="tag">TF-IDF</span><span class="tag">Segmentation</span><span class="tag">Audio</span><span class="tag">Graphes</span><span class="tag">GNN</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -292,7 +270,7 @@ A/B testing adaptatif    allocation séquentielle, à la frontière des bandits 
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 18</div>
-    <h1>Gaussian processes and Bayesian optimisation</h1>
+    <h1>Non-tabular data: text, images, audio, graphs</h1>
   </div>
 
   <div class="project-content course-content">
@@ -302,14 +280,15 @@ A/B testing adaptatif    allocation séquentielle, à la frontière des bandits 
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The expensive black-box optimisation problem, and why gradient methods do not apply.</li>
-      <li>Gaussian processes as distributions over functions: the posterior mean and variance derived from conditioning, why the predictive variance ignores observed values, and the Cholesky-based implementation.</li>
-      <li>Kernels (RBF, Matérn, periodic, composite), length scales and ARD as free sensitivity analysis, and hyperparameter fitting by marginal likelihood with its built-in Occam penalty.</li>
-      <li>The Bayesian optimisation loop: replacing one expensive optimisation with many cheap ones.</li>
-      <li>Acquisition functions: expected improvement derived and explained, UCB, probability of improvement, Thompson sampling, entropy search and knowledge gradient.</li>
-      <li>A complete BoTorch loop, including batch acquisition for parallel simulations.</li>
-      <li>Extensions: expensive constraints, multi-objective optimisation and Pareto fronts (qEHVI), mixed spaces, and multi-fidelity modelling.</li>
-      <li>A comparison of tuning strategies (grid, random, Hyperband, TPE, GP-based) and an honest account of where Bayesian optimisation breaks down.</li>
+      <li>Text: TF-IDF and BM25 explained, a strong classical baseline with free interpretability, and an honest test of when it stops being enough.</li>
+      <li>Classical NLP tasks: classification, entity recognition and its entity-level evaluation, structured extraction, topic modelling (LDA, NMF, BERTopic).</li>
+      <li>Vision beyond classification: detection, semantic and instance segmentation, OCR, with IoU and Dice — and the specifics of scientific imaging (tiny annotated datasets, tiling, physical measurements as the real target).</li>
+      <li>Why augmentation must respect the physics of the signal.</li>
+      <li>Audio: mel spectrograms and MFCCs, augmentation on signal and spectrogram, and splitting by speaker or device to avoid leakage.</li>
+      <li>Graphs: structural measures (degree, betweenness, PageRank, communities) and why extracting graph features for a gradient boosting model is often the right first move.</li>
+      <li>Graph neural networks: message passing formalised, GCN/GraphSAGE/GAT/MPNN, node/edge/graph-level tasks, scientific applications including learned simulation on meshes — plus over-smoothing, scalability and expressivity limits, and graph-specific leakage.</li>
+      <li>Multimodal fusion strategies and contrastive alignment (CLIP).</li>
+      <li>Annotation quality: guidelines, inter-annotator agreement as a performance ceiling, and finding label errors.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -324,23 +303,24 @@ A/B testing adaptatif    allocation séquentielle, à la frontière des bandits 
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><strong>Gaussian processes and Bayesian optimisation</strong></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><strong>Non-tabular data: text, images, audio, graphs</strong></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

@@ -280,7 +280,7 @@ async def predire_lot(annonces: list[Annonce]) -&gt; list[Prediction]:
         <li><strong>Charger le modèle au démarrage</strong>, via <code>lifespan</code>. Le charger dans la fonction de prédiction ajouterait des centaines de millisecondes à chaque appel, et multiplierait la mémoire utilisée.</li>
         <li><strong>Sortir le calcul de la boucle d'événements.</strong> Un <code>predict</code> scikit-learn est bloquant ; appelé directement dans une coroutine, il gèle tout le serveur pendant son exécution (module 2). <code>anyio.to_thread.run_sync</code> le délègue à un thread.</li>
         <li><strong>Valider strictement les entrées.</strong> Les contraintes Pydantic rejettent les valeurs aberrantes avant qu'elles n'atteignent le modèle : c'est la première ligne de défense contre les prédictions absurdes sur des données hors domaine.</li>
-        <li><strong>Renvoyer la version du modèle.</strong> Sans cela, impossible de relier a posteriori une prédiction contestée à l'artefact qui l'a produite (module 25).</li>
+        <li><strong>Renvoyer la version du modèle.</strong> Sans cela, impossible de relier a posteriori une prédiction contestée à l'artefact qui l'a produite (module 26).</li>
         <li><strong>Prévoir une route par lot.</strong> Cent appels unitaires paient cent fois le coût du réseau et de la conversion ; un appel pour cent annonces est souvent dix fois plus rapide.</li>
       </ol>
     </div>
@@ -403,7 +403,7 @@ uv run uvicorn mon_projet.api:app --host 0.0.0.0 --port 8000 --workers 4
 # dans un conteneur, la commande du Dockerfile (module 5)
 CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]</pre></div>
 
-    <p>Chaque worker charge <em>sa propre copie</em> du modèle : quatre workers avec un modèle de 2 Go consomment 8 Go de RAM. C'est l'arbitrage principal à faire, entre débit et mémoire. Au-delà, on regroupe les requêtes par lots côté serveur (<em>dynamic batching</em>), ce que font Triton ou vLLM (modules 21 et 24).</p>
+    <p>Chaque worker charge <em>sa propre copie</em> du modèle : quatre workers avec un modèle de 2 Go consomment 8 Go de RAM. C'est l'arbitrage principal à faire, entre débit et mémoire. Au-delà, on regroupe les requêtes par lots côté serveur (<em>dynamic batching</em>), ce que font Triton ou vLLM (modules 22 et 25).</p>
 
     <div class="code-label">Python — les garde-fous minimaux</div>
     <div class="code-block"><pre>from fastapi.middleware.cors import CORSMiddleware
@@ -432,7 +432,7 @@ async def journaliser(request, call_next):
     reponse.headers["X-Request-ID"] = rid
     return reponse</pre></div>
 
-    <p>S'y ajoutent, selon le contexte : une limitation de débit (<em>rate limiting</em>) pour éviter qu'un client ne sature le service, et l'exposition de métriques au format Prometheus pour le suivi (module 25). Le <code>Depends</code> utilisé ci-dessus est le système d'<em>injection de dépendances</em> de FastAPI : une fonction déclarée comme dépendance est exécutée avant la route, et son résultat est fourni à celle-ci — c'est le mécanisme standard pour l'authentification, l'ouverture d'une session de base de données ou la lecture de la configuration.</p>
+    <p>S'y ajoutent, selon le contexte : une limitation de débit (<em>rate limiting</em>) pour éviter qu'un client ne sature le service, et l'exposition de métriques au format Prometheus pour le suivi (module 26). Le <code>Depends</code> utilisé ci-dessus est le système d'<em>injection de dépendances</em> de FastAPI : une fonction déclarée comme dépendance est exécutée avant la route, et son résultat est fourni à celle-ci — c'est le mécanisme standard pour l'authentification, l'ouverture d'une session de base de données ou la lecture de la configuration.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
@@ -508,23 +508,24 @@ async def journaliser(request, call_next):
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

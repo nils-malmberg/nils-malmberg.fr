@@ -76,7 +76,7 @@ Binomiale négative      comptage SURDISPERSÉ (variance &gt; espérance) : le c
 Exponentielle           temps d'attente entre événements poissoniens. SANS MÉMOIRE :
                         avoir attendu 10 min ne change pas l'attente restante.
 Weibull                 durée de vie à taux de défaillance variable : LA loi de la
-                        fiabilité (k &lt; 1 mortalité infantile, k &gt; 1 usure) — module 16
+                        fiabilité (k &lt; 1 mortalité infantile, k &gt; 1 usure) — module 17
 Gamma                   somme d'exponentielles ; temps de service ; a priori de précision
 Beta                    une proportion inconnue dans [0,1] : l'a priori naturel d'un taux
 Normale                 SOMME de nombreux effets indépendants (TCL, module 9)
@@ -107,7 +107,7 @@ Laplace                          → -log p ∝ |y - ŷ|         = MAE</pre></di
     <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MAP}} = \arg\max_\theta \big[\log p(y\mid\theta) + \log p(\theta)\big] \]</div>
 
     <div class="warning-block">
-      <strong>La régularisation est un a priori déguisé.</strong> Avec un a priori gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un a priori de Laplace (pic en zéro, queues lourdes), on retrouve exactement le lasso. Les modules 8 et 13 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
+      <strong>La régularisation est un a priori déguisé.</strong> Avec un a priori gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un a priori de Laplace (pic en zéro, queues lourdes), on retrouve exactement le lasso. Les modules 8 et 14 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
     </div>
 
     <h2 id="bayes">3. Bayes, avec un exemple chiffré</h2>
@@ -145,7 +145,7 @@ print(f"gain relatif médian          = {np.median((tb - ta) / ta):+.2%}")
 print(f"P(gain &gt; 5 %)                = {((tb - ta) / ta &gt; 0.05).mean():.3f}")
 print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")</pre></div>
 
-    <p>La dernière ligne est ce qui manque à l'approche fréquentiste : la <em>perte espérée</em> en cas de mauvais choix, exprimée dans l'unité de la métrique. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel. C'est le pont naturel vers le module 23.</p>
+    <p>La dernière ligne est ce qui manque à l'approche fréquentiste : la <em>perte espérée</em> en cas de mauvais choix, exprimée dans l'unité de la métrique. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel. C'est le pont naturel vers le module 24.</p>
 
     <h2 id="mcmc">5. MCMC : échantillonner un a posteriori</h2>
     <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable : en dimension 50, aucune quadrature ne tient. La solution consiste à renoncer à <em>calculer</em> l'a posteriori pour se contenter d'y <strong>échantillonner</strong> — ce qui suffit, puisqu'avec des échantillons on obtient moyennes, quantiles, intervalles et probabilités par simple comptage.</p>
@@ -175,7 +175,7 @@ print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")<
     </ul>
     <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés à partir des données.</p>
     <div style="text-align:center;overflow-x:auto">\[ y_{ij} \sim \mathcal{N}(\theta_j, \sigma^2), \qquad \theta_j \sim \mathcal{N}(\mu, \tau^2), \qquad \mu,\sigma,\tau \sim \text{a priori} \]</div>
-    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité — un groupe de 3 observations sera presque ramené à la moyenne, un groupe de 3 000 gardera sa valeur propre. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\), qui mesure la dispersion réelle entre groupes. C'est exactement l'effet du lissage du <em>target encoding</em> (module 11), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
+    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité — un groupe de 3 observations sera presque ramené à la moyenne, un groupe de 3 000 gardera sa valeur propre. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\), qui mesure la dispersion réelle entre groupes. C'est exactement l'effet du lissage du <em>target encoding</em> (module 12), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
 
     <div class="code-label">Python — PyMC, modèle hiérarchique non centré</div>
     <div class="code-block"><pre>import pymc as pm, arviz as az
@@ -216,10 +216,10 @@ de données
 ex : dispersion d'une mesure,    ex : prédire hors du domaine d'entraînement,
 variabilité d'un matériau        extrapolation, régime jamais observé</pre></div>
 
-    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut <em>dimensionner une marge</em> : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est <em>hors de son domaine de validité</em> : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 12) ou pour se replier sur une procédure de référence (module 23). Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
+    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut <em>dimensionner une marge</em> : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est <em>hors de son domaine de validité</em> : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 13) ou pour se replier sur une procédure de référence (module 24). Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
 
     <div class="warning-block">
-      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — un classificateur d'images entraîné sur des chiens et des chats attribue 99 % de confiance à une photo de voiture. C'est le comportement le plus dangereux pour un usage industriel. Les processus gaussiens (module 18), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données observées.
+      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — un classificateur d'images entraîné sur des chiens et des chats attribue 99 % de confiance à une photo de voiture. C'est le comportement le plus dangereux pour un usage industriel. Les processus gaussiens (module 19), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données observées.
     </div>
 
     <h2 id="uq-ml">9. Quantifier l'incertitude d'un modèle</h2>
@@ -237,7 +237,7 @@ Sortie probabiliste      faire prédire au réseau moyenne ET variance (perte de
                          log-vraisemblance gaussienne) : sépare les deux incertitudes.
 Bayésien complet         poids traités comme variables aléatoires (VI, SWAG).
                          Élégant, coûteux, rarement meilleur qu'un ensemble profond.
-Processus gaussien       incertitude exacte par construction (module 18) — mais O(n³).
+Processus gaussien       incertitude exacte par construction (module 19) — mais O(n³).
 Prédiction conforme      garantie de couverture sur n'importe quel modèle déjà
                          entraîné (section suivante).</pre></div>
 
@@ -278,10 +278,10 @@ bas, haut = pred - q, pred + q
 print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")
 # ≈ 90 %, par construction — quelle que soit la qualité du modèle</pre></div>
 
-    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise les quantiles prédits par la section précédente, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré, et directement exploitable pour décider de transmettre le cas à un humain (module 23).</p>
+    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise les quantiles prédits par la section précédente, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré, et directement exploitable pour décider de transmettre le cas à un humain (module 24).</p>
 
     <div class="warning-block">
-      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe — d'où les variantes conditionnées par groupe. Elle suppose l'échangeabilité : si la distribution dérive (module 25) ou si les données sont temporelles, la garantie tombe, et il faut des versions adaptatives en ligne. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges — ce qui est déjà une information utile, et honnête.
+      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe — d'où les variantes conditionnées par groupe. Elle suppose l'échangeabilité : si la distribution dérive (module 26) ou si les données sont temporelles, la garantie tombe, et il faut des versions adaptatives en ligne. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges — ce qui est déjà une information utile, et honnête.
     </div>
 
     <div class="step-block">
@@ -302,7 +302,7 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
   <hr class="divider">
   <div class="course-nav">
     <a href="project7-m09.html" class="btn btn-secondary">← Module 9 : Statistique inférentielle</a>
-    <a href="project7-m11.html" class="btn btn-primary">Module 11 : Data science en pratique →</a>
+    <a href="project7-m11.html" class="btn btn-primary">Module 11 : Inférence causale →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
   <div class="project-meta"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Hiérarchique</span><span class="tag">Incertitude</span><span class="tag">Conformal</span></div>
@@ -360,23 +360,24 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><strong>Probability, Bayesian inference and uncertainty quantification</strong></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

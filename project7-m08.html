@@ -77,8 +77,8 @@ Huber         quadratique près    le compromis : quadratique au centre, linéai
               de 0, linéaire loin  au-delà d'un seuil δ.
 Entropie      -Σ y_k log(ŷ_k)     classification. Pénalise la CONFIANCE dans une
 croisée                           erreur, pas seulement l'erreur.
-Hinge         max(0, 1 - y·ŷ)     marge (SVM, module 13).
-Pinball       asymétrique         régression sur un quantile (module 16).</pre></div>
+Hinge         max(0, 1 - y·ŷ)     marge (SVM, module 14).
+Pinball       asymétrique         régression sur un quantile (module 17).</pre></div>
 
     <div class="step-block">
       <h4>Pourquoi ne pas optimiser directement le taux d'erreur ?</h4>
@@ -126,7 +126,7 @@ def descente(X, y, eta=0.01, n_iter=1000):
         └──────────── trop petit      └──────────── trop grand      └──────── correct
 </pre></div>
 
-    <p>Deux garde-fous théoriques valent d'être connus. Si \(\hat R\) est convexe — une seule vallée, pas de minimum local — et si son gradient est \(L\)-lipschitzien, la méthode converge vers le minimum global pour tout \(0 \lt \eta \lt 2/L\), où \(L\) est la plus grande courbure de la fonction. En pratique on ne connaît pas \(L\), d'où la recherche empirique du taux (module 15). Et en deep learning, la fonction n'est pas convexe : on ne cherche plus le minimum global, on se contente d'un bon minimum local — ce qui, empiriquement, suffit largement.</p>
+    <p>Deux garde-fous théoriques valent d'être connus. Si \(\hat R\) est convexe — une seule vallée, pas de minimum local — et si son gradient est \(L\)-lipschitzien, la méthode converge vers le minimum global pour tout \(0 \lt \eta \lt 2/L\), où \(L\) est la plus grande courbure de la fonction. En pratique on ne connaît pas \(L\), d'où la recherche empirique du taux (module 16). Et en deep learning, la fonction n'est pas convexe : on ne cherche plus le minimum global, on se contente d'un bon minimum local — ce qui, empiriquement, suffit largement.</p>
 
     <h2 id="conditionnement">3. Pourquoi ça converge lentement</h2>
     <p>Pour une fonction quadratique de matrice hessienne \(H\) (la matrice des dérivées secondes, qui décrit la courbure), la vitesse de convergence dépend du <strong>conditionnement</strong> \(\kappa = \lambda_{\max}/\lambda_{\min}\), rapport de la plus grande à la plus petite valeur propre. L'erreur décroît comme :</p>
@@ -146,7 +146,7 @@ def descente(X, y, eta=0.01, n_iter=1000):
                                           et on avance très peu dans le bon sens</pre></div>
 
     <div class="warning-block">
-      <strong>La conséquence pratique la plus importante de tout le module.</strong> Des variables d'échelles très différentes — une surface en m² (valeurs autour de 70), un nombre de pièces (autour de 3), un prix en euros (autour de 250 000) — produisent un conditionnement catastrophique : la fonction de coût est une vallée extrêmement allongée, et la descente de gradient y rampe. <strong>Standardiser les variables</strong> (soustraire la moyenne, diviser par l'écart type) rend les lignes de niveau presque circulaires et peut accélérer la convergence d'un facteur mille. Ce n'est pas une coquetterie statistique : c'est ce qui rend l'optimisation possible. C'est aussi pourquoi la <em>batch normalization</em> aide tant en deep learning (module 15) — elle re-conditionne le problème à chaque couche.
+      <strong>La conséquence pratique la plus importante de tout le module.</strong> Des variables d'échelles très différentes — une surface en m² (valeurs autour de 70), un nombre de pièces (autour de 3), un prix en euros (autour de 250 000) — produisent un conditionnement catastrophique : la fonction de coût est une vallée extrêmement allongée, et la descente de gradient y rampe. <strong>Standardiser les variables</strong> (soustraire la moyenne, diviser par l'écart type) rend les lignes de niveau presque circulaires et peut accélérer la convergence d'un facteur mille. Ce n'est pas une coquetterie statistique : c'est ce qui rend l'optimisation possible. C'est aussi pourquoi la <em>batch normalization</em> aide tant en deep learning (module 16) — elle re-conditionne le problème à chaque couche.
     </div>
 
     <h2 id="variantes">4. SGD, momentum, Adam</h2>
@@ -260,7 +260,7 @@ SVD       A = UΣVᵀ    TOUTE matrice, même rectangulaire      la plus informa
     <div style="text-align:center;overflow-x:auto">\[ A_k = \sum_{i=1}^{k}\sigma_i u_i v_i^\top \]</div>
     <p>on obtient <strong>la meilleure approximation de rang \(k\) qui existe</strong>, au sens des normes de Frobenius et spectrale. Aucune autre matrice de rang \(k\), obtenue par quelque méthode que ce soit, ne fait mieux — et l'erreur commise est connue exactement :</p>
     <div style="text-align:center;overflow-x:auto">\[ \|A - A_k\|_F^2 = \sum_{i \gt k} \sigma_i^2 \]</div>
-    <p>Ce théorème fonde la compression par SVD, la PCA, le débruitage et les systèmes de recommandation par factorisation matricielle (module 22).</p>
+    <p>Ce théorème fonde la compression par SVD, la PCA, le débruitage et les systèmes de recommandation par factorisation matricielle (module 23).</p>
 
     <div class="code-label">Python — compression d'image, pour voir le théorème à l'œuvre</div>
     <div class="code-block"><pre>import numpy as np, matplotlib.pyplot as plt
@@ -286,11 +286,11 @@ print(f"k={k} : {taux:.1%} des coefficients d'origine, 95 % de l'énergie conser
     <ul>
       <li><strong>PCA</strong> — section suivante : c'est littéralement une SVD des données centrées ;</li>
       <li><strong>Ridge</strong> — la régularisation s'y lit comme un filtrage spectral (voir plus bas) ;</li>
-      <li><strong>LSA</strong> — réduction d'une matrice terme-document, ancêtre des embeddings (module 21) ;</li>
-      <li><strong>Recommandation</strong> — factorisation d'une matrice utilisateurs × items très creuse (module 22) ;</li>
+      <li><strong>LSA</strong> — réduction d'une matrice terme-document, ancêtre des embeddings (module 22) ;</li>
+      <li><strong>Recommandation</strong> — factorisation d'une matrice utilisateurs × items très creuse (module 23) ;</li>
       <li><strong>Débruitage et détection d'anomalies</strong> — le signal se concentre dans les grandes valeurs singulières, le bruit se répartit sur les petites ;</li>
-      <li><strong>Réduction de modèle</strong> — la POD des simulations physiques est une SVD de champs (module 20) ;</li>
-      <li><strong>LoRA</strong> — l'adaptation de LLM par matrices de rang faible repose sur la même intuition (module 21).</li>
+      <li><strong>Réduction de modèle</strong> — la POD des simulations physiques est une SVD de champs (module 21) ;</li>
+      <li><strong>LoRA</strong> — l'adaptation de LLM par matrices de rang faible repose sur la même intuition (module 22).</li>
     </ul>
 
     <h3>Ridge vu par la SVD</h3>
@@ -369,7 +369,7 @@ Détecter des anomalies       erreur de reconstruction élevée = point atypique
 Traiter la colinéarité       évite l'explosion de variance des coefficients</pre></div>
 
     <p><strong>Limites.</strong> La PCA est <em>linéaire</em> : elle ne capture pas une variété courbe (un rouleau enroulé sur lui-même). Elle est <em>non supervisée</em> : rien ne garantit que les axes de forte variance soient ceux qui prédisent \(y\) — on peut parfaitement jeter la direction la plus informative, ce que corrigent la PLS ou une LDA en classification. Elle est <em>sensible aux valeurs aberrantes</em>, puisqu'une variance se calcule au carré. Et elle détruit l'interprétabilité des variables d'origine.</p>
-    <p><strong>Variantes utiles</strong> : <code>IncrementalPCA</code> (par lots, pour des données hors mémoire), la version <em>randomisée</em> (par défaut dans scikit-learn dès que la matrice est grande), la <em>kernel PCA</em> (version non linéaire par astuce du noyau, module 13), la <em>sparse PCA</em> (axes à peu de variables non nulles, donc lisibles), et pour la visualisation pure, <strong>UMAP</strong> ou <strong>t-SNE</strong> — non linéaires, excellents visuellement, mais non paramétriques, non reproductibles d'une exécution à l'autre, et dont les distances entre groupes ne veulent rien dire.</p>
+    <p><strong>Variantes utiles</strong> : <code>IncrementalPCA</code> (par lots, pour des données hors mémoire), la version <em>randomisée</em> (par défaut dans scikit-learn dès que la matrice est grande), la <em>kernel PCA</em> (version non linéaire par astuce du noyau, module 14), la <em>sparse PCA</em> (axes à peu de variables non nulles, donc lisibles), et pour la visualisation pure, <strong>UMAP</strong> ou <strong>t-SNE</strong> — non linéaires, excellents visuellement, mais non paramétriques, non reproductibles d'une exécution à l'autre, et dont les distances entre groupes ne veulent rien dire.</p>
 
     <div class="warning-block">
       <strong>PCA et fuite de données.</strong> La PCA doit être ajustée <em>sur le pli d'entraînement seulement</em>. L'ajuster sur l'ensemble des données avant la validation croisée fait entrer l'information du jeu de test dans la définition des axes : le score obtenu est optimiste, et l'écart n'apparaît qu'en production. La seule protection fiable est de la placer dans un <code>Pipeline</code> (module 3).
@@ -419,9 +419,9 @@ print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></di
       <p>L'AUC-ROC mesure la probabilité qu'un positif tiré au hasard soit mieux classé qu'un négatif. Son défaut : le taux de faux positifs \(FP/(FP+VN)\) a un dénominateur énorme quand les négatifs dominent, si bien qu'une AUC de 0,95 peut masquer une précision de 3 % sur un problème à 0,1 % de positifs. <strong>En classe très déséquilibrée — fraude, défaut, maladie rare — la courbe précision-rappel est la bonne lecture</strong>, car ses deux axes ne dépendent que des positifs et des alertes.</p>
     </div>
 
-    <p>Deux métriques souvent oubliées et pourtant essentielles : la <strong>log-loss</strong> \(-\frac{1}{n}\sum_i [y_i\log p_i + (1-y_i)\log(1-p_i)]\), qui évalue les <em>probabilités</em> et non les décisions, et le <strong>score de Brier</strong> (erreur quadratique sur les probabilités), qui mesure la <em>calibration</em>. Un modèle peut parfaitement ordonner les cas — bonne AUC — tout en annonçant des probabilités fausses, ce qui rend inexploitable toute décision fondée sur un coût attendu (module 23). On corrige par calibration isotonique ou de Platt (module 13).</p>
+    <p>Deux métriques souvent oubliées et pourtant essentielles : la <strong>log-loss</strong> \(-\frac{1}{n}\sum_i [y_i\log p_i + (1-y_i)\log(1-p_i)]\), qui évalue les <em>probabilités</em> et non les décisions, et le <strong>score de Brier</strong> (erreur quadratique sur les probabilités), qui mesure la <em>calibration</em>. Un modèle peut parfaitement ordonner les cas — bonne AUC — tout en annonçant des probabilités fausses, ce qui rend inexploitable toute décision fondée sur un coût attendu (module 24). On corrige par calibration isotonique ou de Platt (module 14).</p>
 
-    <p>Enfin, l'accuracy est une métrique piégeuse : sur un problème à 99 % de négatifs, prédire toujours « négatif » donne 99 % d'accuracy et un modèle sans aucune valeur. La bonne démarche part du <strong>coût métier</strong> : si un faux négatif coûte cent fois un faux positif, ce rapport doit apparaître dans le choix du seuil — c'est l'objet du module 23.</p>
+    <p>Enfin, l'accuracy est une métrique piégeuse : sur un problème à 99 % de négatifs, prédire toujours « négatif » donne 99 % d'accuracy et un modèle sans aucune valeur. La bonne démarche part du <strong>coût métier</strong> : si un faux négatif coûte cent fois un faux positif, ce rapport doit apparaître dans le choix du seuil — c'est l'objet du module 24.</p>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
@@ -497,23 +497,24 @@ print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></di
         <li><strong>Math for ML: optimisation, linear algebra, SVD and PCA</strong></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

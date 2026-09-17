@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 15 - Deep learning - Nils Malmberg</title>
+  <title>Module 15 - Théorie de l'apprentissage : pourquoi ça généralise - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,286 +41,139 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 15</div>
-    <h1>Deep learning</h1>
+    <h1>Théorie de l'apprentissage : pourquoi ça généralise</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Le deep learning n'est pas un meilleur machine learning : c'est une famille de modèles qui apprennent leurs propres représentations, ce qui les rend imbattables là où les données brutes sont structurées et abondantes — images, son, texte, signaux — et souvent décevants ailleurs. Ce module couvre les architectures, les recettes d'entraînement qui font réellement la différence, et les PINN, qui relient réseaux de neurones et équations aux dérivées partielles.</p>
+    <p>Tout le cours repose sur un pari implicite : un modèle ajusté sur \(n\) exemples fonctionnera sur des données jamais vues. Rien ne le garantit a priori — un modèle peut parfaitement mémoriser son jeu d'entraînement sans rien avoir appris. Ce module expose ce que la théorie sait démontrer, ce qu'elle n'explique toujours pas (notamment le succès des réseaux profonds), et ce qu'un praticien doit en retenir.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#quand">Quand le deep learning est pertinent</a></li>
-        <li><a href="#mlp">Du neurone au MLP</a></li>
-        <li><a href="#backprop">Rétropropagation</a></li>
-        <li><a href="#recettes">Les recettes d'entraînement</a></li>
-        <li><a href="#cnn">CNN et vision</a></li>
-        <li><a href="#rnn">RNN, LSTM, et leurs limites</a></li>
-        <li><a href="#transformers">Transformers et attention</a></li>
-        <li><a href="#representations">Autoencodeurs et représentations</a></li>
-        <li><a href="#pinn">PINN : apprendre sous contrainte physique</a></li>
-        <li><a href="#limites">Limites</a></li>
+        <li><a href="#pac">Le cadre PAC</a></li>
+        <li><a href="#vc">Dimension VC et complexité de Rademacher</a></li>
+        <li><a href="#nfl">Pas de repas gratuit : le biais inductif</a></li>
+        <li><a href="#double">Double descente et sur-paramétrisation</a></li>
+        <li><a href="#implicite">La régularisation implicite de SGD</a></li>
+        <li><a href="#autres">Stabilité, PAC-Bayes, compression</a></li>
+        <li><a href="#limites">Ce que la théorie n'explique pas</a></li>
+        <li><a href="#pratique">Ce qu'on en retient en pratique</a></li>
       </ol>
     </div>
 
-    <h2 id="quand">1. Quand le deep learning est pertinent</h2>
-    <div class="code-label">arbitrage</div>
-    <div class="code-block"><pre>Le deep learning gagne quand...          Le ML classique gagne quand...
-──────────────────────────────────────────────────────────────────────────────
-données brutes structurées               données tabulaires hétérogènes
-(pixels, audio, texte, séquences)        (le boosting reste devant, module 13)
-beaucoup de données (10⁴ – 10⁹)          peu de données (10² – 10⁴)
-la REPRÉSENTATION est le problème        les variables métier existent déjà
-une architecture pré-entraînée existe    l'interprétabilité est exigée
-un GPU est disponible                    le coût d'inférence doit rester minimal</pre></div>
+    <h2 id="pac">1. Le cadre PAC</h2>
+    <p>Le cadre <em>probablement approximativement correct</em> (Valiant, 1984) formalise l'objectif : avec une probabilité d'au moins \(1-\delta\) sur le tirage de l'échantillon (« probablement »), l'erreur réelle doit être proche de l'erreur empirique (« approximativement correct »). On veut donc borner l'écart de généralisation :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(h) - \hat{R}_n(h), \qquad R(h)=\mathbb{E}_{(x,y)\sim\mathcal D}\big[\ell(h(x),y)\big], \quad \hat R_n(h)=\frac1n\sum_{i=1}^n \ell(h(x_i),y_i) \]</div>
 
-    <p>La question utile n'est donc pas « quel modèle est le meilleur » mais « existe-t-il un biais inductif adapté à mes données ? » (module 14). Une convolution encode l'invariance par translation ; une attention encode des dépendances à longue portée ; un arbre encode des effets de seuil. Choisir un modèle, c'est choisir l'hypothèse structurelle qui correspond au problème.</p>
+    <p>Pour une hypothèse <em>fixée à l'avance</em>, c'est facile : l'erreur empirique est une moyenne de variables aléatoires bornées, et l'inégalité de Hoeffding donne un écart en \(O(1/\sqrt{n})\). Mais c'est justement ce qu'on ne fait pas : on choisit \(h\) <em>après</em> avoir vu les données, en prenant celle qui minimise l'erreur empirique parmi toute une classe \(\mathcal{H}\). Or le maximum d'un grand nombre d'écarts est bien plus grand que chacun d'eux pris isolément — c'est le même phénomène que les comparaisons multiples du module 9. Il faut donc une borne <em>uniforme</em>, valable simultanément pour toutes les hypothèses de la classe :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(h) \;\leq\; \hat R_n(h) + \sqrt{\frac{\log|\mathcal{H}| + \log(1/\delta)}{2n}} \qquad \text{pour tout } h \in \mathcal{H} \]</div>
 
-    <h2 id="mlp">2. Du neurone au MLP</h2>
-    <p>Un <strong>neurone</strong> calcule une somme pondérée de ses entrées, ajoute un biais, et passe le tout dans une fonction non linéaire : \(a = \sigma(w^\top x + b)\). Une <strong>couche</strong> est un ensemble de neurones qui voient les mêmes entrées, ce qui s'écrit matriciellement \(h = \sigma(Wx + b)\). Un <strong>perceptron multicouche</strong> (MLP) empile ces couches.</p>
+    <p>La structure de ce résultat est l'essentiel : <strong>erreur réelle ≤ erreur observée + terme de complexité / \(\sqrt{n}\)</strong>. Plus la classe de modèles est riche, plus il faut de données pour que l'erreur empirique reste informative. C'est la formalisation exacte du surapprentissage, et la justification théorique de la régularisation (module 8).</p>
 
-    <div class="code-label">le flux, sur un réseau à deux couches cachées</div>
-    <div class="code-block"><pre>  entrée x        couche 1          couche 2         sortie
-  (10 var.)      (64 neurones)     (32 neurones)     (1 valeur)
+    <h2 id="vc">2. Dimension VC et complexité de Rademacher</h2>
+    <p>Pour une classe infinie — tous les hyperplans, tous les réseaux d'une architecture donnée —, \(\log|\mathcal H|\) n'a plus de sens. La <strong>dimension de Vapnik-Chervonenkis</strong> le remplace : c'est le plus grand nombre de points que la classe peut <em>pulvériser</em>, c'est-à-dire séparer correctement quelle que soit la façon de les étiqueter.</p>
 
-    x₁ ──┐        ┌─ σ(·) ─┐        ┌─ σ(·) ─┐
-    x₂ ──┼─ W₁ ──►│  ...   │─ W₂ ──►│  ...   │─ W₃ ──► ŷ
-    ...  │        │        │        │        │
-    x₁₀ ─┘        └─ σ(·) ─┘        └─ σ(·) ─┘
-                  (10×64 + 64      (64×32 + 32      (32×1 + 1
-                   = 704 param.)    = 2 080 param.)  = 33 param.)</pre></div>
+    <div class="code-label">l'exemple canonique : une droite dans le plan</div>
+    <div class="code-block"><pre>3 points non alignés : une droite peut réaliser les 2³ = 8 étiquetages possibles
+   ○ ○        ● ○        ● ●        ○ ●
+    ○          ○          ○          ●     … toutes les combinaisons sont
+  possible   possible   possible   possible    séparables par une droite
 
-    <p>Sans la non-linéarité \(\sigma\), la composition de couches affines resterait affine : trois couches vaudraient une seule, et toute la profondeur serait inutile. C'est \(\sigma\) qui donne sa puissance à l'empilement. Le théorème d'approximation universelle garantit d'ailleurs qu'un réseau à une seule couche cachée suffisamment large approche n'importe quelle fonction continue sur un compact — résultat rassurant mais peu opérationnel, car il ne dit rien du nombre de neurones nécessaires ni de la possibilité d'<em>apprendre</em> ces poids. La profondeur, elle, permet d'exprimer certaines fonctions avec exponentiellement moins de paramètres que la largeur.</p>
+4 points : l'étiquetage "en diagonale" (XOR) est IMPOSSIBLE
+   ● ○
+   ○ ●    aucune droite ne sépare les ● des ○
 
-    <div class="code-label">fonctions d'activation</div>
-    <div class="code-block"><pre>ReLU        max(0, x)          le défaut. Gradient constant à droite, nul à gauche —
-                               d'où les neurones "morts" si le gradient les pousse
-                               durablement dans la zone négative.
-LeakyReLU   max(αx, x)         corrige les neurones morts avec une pente résiduelle.
-GELU        x·Φ(x)             lisse ; le standard dans les transformers.
-SiLU/Swish  x·sigmoid(x)       proche de GELU, très utilisé en vision moderne.
-tanh        (-1, 1)            centrée ; encore utile dans les RNN et les PINN,
-                               car ses dérivées d'ordre 2 sont lisses.
-sigmoid     (0, 1)             réservée à la SORTIE binaire. En couche cachée, elle
-                               sature et tue le gradient (dérivée ≤ 0,25).
-softmax                        sortie multiclasse : produit une distribution.</pre></div>
+→ dimension VC d'une droite dans le plan = 3, soit p + 1 avec p = 2 dimensions</pre></div>
 
-    <p>L'<strong>initialisation</strong> n'est pas un détail. Trop petite, le signal s'éteint en traversant les couches ; trop grande, il explose. Les schémas de Xavier/Glorot (pour tanh) et He/Kaiming (pour ReLU) choisissent la variance des poids de façon à conserver l'échelle du signal d'une couche à l'autre — \(\operatorname{Var}(w) = 2/n_{\text{entrées}}\) pour He. C'est ce qui a rendu possible l'entraînement des réseaux profonds bien avant les architectures modernes.</p>
-
-    <h2 id="backprop">3. Rétropropagation</h2>
-    <p>La rétropropagation n'est rien d'autre que la règle de dérivation des fonctions composées, appliquée efficacement. Pour une couche \(z^{(l)} = W^{(l)}a^{(l-1)}+b^{(l)}\), on définit l'erreur locale \(\delta^{(l)} = \partial L/\partial z^{(l)}\) et on la propage vers l'arrière :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \delta^{(l)} = \big(W^{(l+1)\top}\delta^{(l+1)}\big)\odot \sigma'\!\big(z^{(l)}\big), \qquad \frac{\partial L}{\partial W^{(l)}} = \delta^{(l)}\,a^{(l-1)\top} \]</div>
-
-    <p>L'astuce algorithmique tient en une phrase : en réutilisant les \(\delta\) déjà calculés au lieu de recalculer chaque dérivée depuis le début, le coût du gradient complet est du même ordre que celui d'une passe avant — et non proportionnel au nombre de paramètres, comme le serait une différentiation numérique paramètre par paramètre. C'est ce qui rend l'entraînement de réseaux à des milliards de paramètres possible.</p>
-
-    <p>Le produit de matrices sur toute la profondeur explique aussi les pathologies classiques. Si les termes \(W^\top \sigma'\) sont systématiquement inférieurs à 1 en module, leur produit tend vers zéro : le gradient <strong>s'évanouit</strong> et les premières couches n'apprennent plus rien. S'ils dépassent 1, il <strong>explose</strong>, et les poids partent à l'infini en une itération. Les trois remèdes structurels sont les connexions résiduelles (section 5), la normalisation (section 4) et l'écrêtage du gradient (module 8).</p>
-
-    <h2 id="recettes">4. Les recettes d'entraînement</h2>
-    <p>En deep learning, l'écart entre un modèle qui converge et un modèle qui stagne tient rarement à l'architecture. Les leviers, par ordre d'impact :</p>
-
-    <ol>
-      <li><strong>Taux d'apprentissage</strong> — de loin le plus important (module 8). Le trouver par une montée exponentielle sur quelques centaines de pas (<em>LR range test</em>), puis prendre un ordre de grandeur en dessous du point de divergence.</li>
-      <li><strong>Normalisation</strong> — la <em>batch norm</em> normalise chaque variable sur le lot (efficace en vision, mais dépendante de la taille du lot et délicate en inférence, où l'on utilise des statistiques mémorisées) ; la <em>layer norm</em> normalise sur les variables d'un exemple (indépendante du lot, standard dans les transformers). L'effet principal est un meilleur conditionnement, donc une convergence plus rapide et plus stable.</li>
-      <li><strong>Régularisation</strong> — le <em>dropout</em> désactive aléatoirement une fraction des neurones à chaque passage, ce qui force le réseau à ne pas dépendre d'un chemin unique ; le <em>weight decay</em> via AdamW ; et surtout l'<strong>early stopping</strong>, la plus simple et la plus efficace : on garde les poids du meilleur point de validation.</li>
-      <li><strong>Augmentation de données</strong> — en vision, c'est souvent le gain le plus important : recadrages, symétries, variations colorimétriques, <em>mixup</em>, <em>cutmix</em>. On encode ainsi des invariances connues sans annoter davantage (module 12).</li>
-      <li><strong>Taille de lot</strong> — grand lot = gradient moins bruité et meilleure utilisation du GPU, mais généralisation parfois moins bonne. Règle empirique : en multipliant le lot par \(k\), multiplier le taux d'apprentissage par \(k\) (ou \(\sqrt{k}\) avec Adam). Si la mémoire manque, l'<em>accumulation de gradient</em> simule un grand lot (module 24).</li>
-      <li><strong>Précision mixte</strong> — calculs en 16 bits avec accumulation en 32 bits : mémoire divisée par deux et accélération d'un facteur 2 à 3 sur GPU récent, sans perte mesurable de qualité.</li>
-    </ol>
-
-    <div class="code-label">Python — une boucle d'entraînement complète et correcte</div>
-    <div class="code-block"><pre>import torch, torch.nn as nn
-from torch.amp import autocast, GradScaler
-
-modele = modele.to("cuda")
-opt = torch.optim.AdamW(modele.parameters(), lr=3e-4, weight_decay=0.01)
-sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=3e-4,
-                                            total_steps=n_epoques * len(train_loader))
-scaler = GradScaler()
-meilleure_val, patience, attente = float("inf"), 10, 0
-
-for epoque in range(n_epoques):
-    modele.train()                                   # active dropout et batch norm
-    for xb, yb in train_loader:
-        xb, yb = xb.to("cuda", non_blocking=True), yb.to("cuda", non_blocking=True)
-        opt.zero_grad(set_to_none=True)
-        with autocast("cuda", dtype=torch.bfloat16): # précision mixte
-            perte = critere(modele(xb), yb)
-        scaler.scale(perte).backward()
-        scaler.unscale_(opt)                          # avant l'écrêtage
-        nn.utils.clip_grad_norm_(modele.parameters(), 1.0)
-        scaler.step(opt); scaler.update(); sched.step()
-
-    modele.eval()                                     # désactive dropout
-    with torch.no_grad():                             # pas de graphe = plus rapide
-        val = sum(critere(modele(x.to("cuda")), y.to("cuda")).item()
-                  for x, y in val_loader) / len(val_loader)
-
-    if val &lt; meilleure_val:                           # EARLY STOPPING
-        meilleure_val, attente = val, 0
-        torch.save(modele.state_dict(), "meilleur.pt")
-    else:
-        attente += 1
-        if attente &gt;= patience:
-            break
-modele.load_state_dict(torch.load("meilleur.pt"))     # on garde le MEILLEUR, pas le dernier</pre></div>
+    <p>La borne devient alors :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(h) \leq \hat R_n(h) + O\!\left(\sqrt{\frac{d_{VC}\log(n/d_{VC}) + \log(1/\delta)}{n}}\right) \]</div>
+    <p>La lecture pratique : il faut environ autant d'exemples que de « degrés de liberté effectifs » pour espérer généraliser. La <strong>complexité de Rademacher</strong> raffine cette idée en mesurant directement la capacité de la classe à s'ajuster à du <em>bruit pur</em> — on remplace les étiquettes par des tirages à pile ou face et on regarde jusqu'où le modèle parvient à les suivre. C'est une définition plus fine, dépendante des données et de leur distribution, donc souvent bien moins pessimiste.</p>
 
     <div class="step-block">
-      <h4>La première chose à faire avant tout entraînement long</h4>
-      <p><strong>Surapprendre volontairement un tout petit échantillon</strong> — seize exemples, sans augmentation ni régularisation. Si le modèle n'atteint pas une perte quasi nulle dessus, il y a un bug : étiquettes mal alignées, normalisation erronée, gradients non propagés, perte mal branchée, ou couche gelée par erreur. Aucun réglage d'hyperparamètre ne sauvera cela. Ce test de trente secondes évite des heures de calcul inutile, et c'est le premier réflexe à acquérir.</p>
+      <h4>Ce que ces bornes valent réellement</h4>
+      <p>Elles sont <em>pire cas</em>, valables pour toute distribution, et uniformes sur toute la classe. Cela les rend correctes mais très lâches : appliquées à un réseau moderne, dont le nombre de paramètres dépasse largement le nombre d'exemples, elles donnent des bornes supérieures à 1 — donc vides, puisqu'une probabilité d'erreur est déjà inférieure à 1. Leur valeur est <strong>conceptuelle</strong> : elles disent <em>quelles quantités</em> gouvernent la généralisation (complexité effective, taille d'échantillon, marge), pas <em>combien</em> vaut l'erreur. Confondre les deux mène à des conclusions fausses dans les deux sens — croire qu'un grand modèle ne peut pas généraliser, ou croire qu'une borne garantit quoi que ce soit en pratique.</p>
     </div>
 
-    <h2 id="cnn">5. CNN et vision</h2>
-    <p>Une convolution applique un même petit noyau à toutes les positions de l'image. Concrètement, sur une fenêtre 3×3 :</p>
+    <h2 id="nfl">3. Pas de repas gratuit : le biais inductif</h2>
+    <p>Le théorème du <em>no free lunch</em> (Wolpert) énonce que, moyenné sur <strong>toutes</strong> les fonctions cibles possibles, tous les algorithmes d'apprentissage ont exactement la même performance. Aucun n'est universellement supérieur ; un algorithme qui bat un autre sur une classe de problèmes lui est nécessairement inférieur sur une autre.</p>
+    <p>Souvent cité comme une curiosité, ce résultat dit en réalité quelque chose de fondamental : <strong>apprendre est impossible sans hypothèse préalable</strong>. Si toutes les fonctions étaient également plausibles, observer un million de points ne dirait rien du suivant — n'importe quelle valeur resterait compatible avec les données. Ce qui fonctionne en pratique fonctionne parce que le monde réel n'est pas un tirage uniforme parmi toutes les fonctions : il est structuré — régulier, local, hiérarchique, invariant par certaines transformations, parcimonieux.</p>
 
-    <div class="code-label">une convolution, en clair</div>
-    <div class="code-block"><pre>  image (extrait)        noyau 3×3          on multiplie terme à terme
-  ┌───┬───┬───┐        ┌───┬───┬───┐       et on somme :
-  │ 10│ 10│ 10│        │ -1│  0│  1│
-  ├───┼───┼───┤        ├───┼───┼───┤       (10×-1)+(10×0)+(10×1) +
-  │ 10│ 10│ 80│   ×    │ -1│  0│  1│   =   (10×-1)+(10×0)+(80×1) +
-  ├───┼───┼───┤        ├───┼───┼───┤       (10×-1)+(10×0)+(80×1)
-  │ 10│ 10│ 80│        │ -1│  0│  1│       = 140  → un CONTOUR VERTICAL détecté
-  └───┴───┴───┘        └───┴───┴───┘
-  Ce noyau est un détecteur de contours verticaux. Un CNN n'utilise pas des noyaux
-  écrits à la main : il les APPREND, et les premières couches convergent
-  spontanément vers des détecteurs de contours et de textures.</pre></div>
+    <div class="code-label">le biais inductif de chaque famille</div>
+    <div class="code-block"><pre>Modèle linéaire   l'effet de chaque variable est additif et proportionnel
+Arbre             la réponse est constante par morceaux ; effets de SEUIL
+Noyau RBF         deux points proches ont des valeurs proches ; fonction LISSE
+Convolution       l'information est LOCALE et invariante par translation
+Attention         des dépendances existent entre positions éloignées
+GNN               l'information circule le long des ARÊTES d'un graphe
+PINN / contrainte la solution obéit à une équation physique connue
+physique</pre></div>
 
-    <p>Deux propriétés en découlent. Le <strong>partage de poids</strong> : un noyau 3×3 a neuf paramètres, quelle que soit la taille de l'image — là où une couche dense sur une image 224×224 en aurait des dizaines de millions. Et l'<strong>équivariance par translation</strong> : un motif déplacé produit une réponse déplacée. C'est le biais inductif exact des images, et la raison pour laquelle un CNN bat massivement un MLP à nombre de paramètres égal.</p>
+    <p>Choisir un modèle, c'est donc parier sur la structure du problème — le module 16 le formule déjà ainsi pour les architectures profondes. La conséquence pratique est nette : <em>la connaissance du domaine est un gain de performance</em>, pas un supplément d'âme. Imposer une symétrie connue, une monotonie ou une loi de conservation (module 21) vaut souvent mieux que dix fois plus de données.</p>
 
-    <p>En empilant des couches, le <strong>champ réceptif</strong> — la zone de l'image influençant un neurone — s'élargit : deux couches 3×3 voient une zone 5×5, trois couches en voient 7×7. Les premières couches détectent des contours, les suivantes des textures, puis des parties d'objets. Le <em>pooling</em> (ou une convolution à pas 2) réduit la résolution spatiale tout en augmentant le nombre de canaux, ce qui concentre l'information sémantique.</p>
+    <h2 id="double">4. Double descente et sur-paramétrisation</h2>
+    <p>La théorie classique prédit une courbe en U : l'erreur de test décroît puis remonte quand la capacité augmente. Les réseaux profonds contredisent apparemment ce tableau — un modèle à des milliards de paramètres, ajusté jusqu'à erreur d'entraînement nulle, généralise très bien. La <strong>double descente</strong> réconcilie les observations :</p>
 
-    <p>Le tournant architectural est la <strong>connexion résiduelle</strong> de ResNet : \(y = \mathcal{F}(x) + x\). Le bloc n'apprend qu'une <em>correction</em> à l'identité, ce qui est plus facile que d'apprendre la transformation entière, et le terme \(+x\) ouvre au gradient un chemin direct vers les couches profondes — le gradient passe par l'addition sans être multiplié. C'est ce qui a rendu possible l'entraînement de réseaux de plus de cent couches, et l'idée est si générale qu'on la retrouve dans tous les transformers.</p>
+    <div class="code-label">l'allure réelle de la courbe</div>
+    <div class="code-block"><pre>  erreur │                    ╱╲  ← pic au SEUIL D'INTERPOLATION
+  de test │  ╲               ╱  ╲     (capacité ≈ nombre d'exemples)
+          │   ╲___╱╲       ╱     ╲
+          │          ╲___╱        ╲________________  ← 2ᵉ descente, souvent
+          │                                            SOUS le minimum classique
+          └────────────────────────────────────────────────► capacité du modèle
+             régime         seuil          régime SUR-paramétré
+             classique                     (l'erreur d'entraînement est nulle
+             (le U)                         partout dans cette zone)</pre></div>
 
-    <div class="code-label">Python — transfer learning, le cas d'usage réaliste</div>
-    <div class="code-block"><pre>import torch, torchvision as tv
+    <p>Au seuil d'interpolation, le modèle atteint tout juste l'erreur d'entraînement nulle : il existe une <em>unique</em> solution qui passe par tous les points, et elle est extrêmement contrainte, donc très instable — d'où le pic. Au-delà, une infinité de paramétrages atteignent une erreur nulle, et l'algorithme d'optimisation en choisit un : il se trouve qu'il choisit systématiquement une solution « simple » au sens d'une norme (section suivante). Autrement dit, ce n'est plus la <em>taille</em> de la classe qui gouverne la généralisation, mais la solution que l'optimiseur sélectionne à l'intérieur de cette classe. La complexité pertinente n'est pas le nombre de paramètres.</p>
 
-modele = tv.models.resnet50(weights="IMAGENET1K_V2")
+    <h2 id="implicite">5. La régularisation implicite de SGD</h2>
+    <p>Cette sélection a un nom : la régularisation implicite. Deux résultats exacts la caractérisent dans des cas simples.</p>
+    <p>Sur un problème linéaire séparable avec perte logistique, la descente de gradient converge vers le <strong>séparateur à marge maximale</strong> — le même que celui du SVM (module 14) — sans qu'aucune régularisation n'ait été écrite. Sur un système sous-déterminé avec perte quadratique, partant de zéro, elle converge vers la solution de <strong>norme minimale</strong>, exactement celle que donne la pseudo-inverse (module 8).</p>
+    <p>À cela s'ajoutent des effets bien documentés empiriquement. Le bruit stochastique des mini-lots favorise les minima « plats » — ceux dont le fond de vallée est large — dont on observe qu'ils généralisent mieux que les minima « pointus » : intuitivement, une petite perturbation des poids ou des données y change peu la perte. Un grand taux d'apprentissage empêche de s'installer trop tôt dans une vallée étroite, ce qui explique pourquoi le <em>warmup</em> puis la décroissance (module 8) ne sont pas que des recettes. Et l'arrêt anticipé est lui-même une régularisation, équivalente dans le cas linéaire à une pénalité de type ridge.</p>
+    <p>La conclusion théorique importante : <strong>l'algorithme d'optimisation fait partie du modèle</strong>. On n'entraîne pas « une classe de fonctions », on entraîne un couple architecture-optimiseur, et c'est ce couple qui porte le biais inductif.</p>
 
-for p in modele.parameters():          # 1. on gèle le tronc pré-entraîné
-    p.requires_grad = False
-modele.fc = torch.nn.Linear(2048, n_classes)   # nouvelle tête, entraînable
-
-# 2. entraîner la tête seule quelques époques, avec un taux élevé (1e-3)
-# 3. puis dégeler les derniers blocs et affiner avec un taux 10 à 100× plus faible
-for p in modele.layer4.parameters():
-    p.requires_grad = True
-opt = torch.optim.AdamW([
-    {"params": modele.layer4.parameters(), "lr": 1e-5},   # tronc : taux minuscule
-    {"params": modele.fc.parameters(),     "lr": 1e-3},   # tête : taux normal
-])</pre></div>
-
-    <h2 id="rnn">6. RNN, LSTM, et leurs limites</h2>
-    <p>Un réseau récurrent maintient un état caché \(h_t = \sigma(W_h h_{t-1} + W_x x_t + b)\), mis à jour pas à pas : à chaque instant, il combine ce qu'il vient de voir et ce qu'il a retenu. Élégant pour les séquences, mais handicapé par deux défauts. Le gradient, propagé à travers le temps, s'évanouit sur les longues dépendances — le même produit de matrices que plus haut, mais sur la longueur de la séquence. Et le calcul est intrinsèquement <em>séquentiel</em>, donc impossible à paralléliser sur la longueur : on ne peut pas calculer \(h_{100}\) sans avoir calculé les 99 précédents.</p>
-    <p>LSTM et GRU corrigent partiellement le premier point avec des <em>portes</em> — des vannes apprises qui régulent ce qui entre dans la mémoire, ce qui en sort et ce qui est oublié — mais pas le second. Les transformers ont remplacé les RNN presque partout en traitement du langage, précisément parce qu'ils traitent toute la séquence en parallèle. Les RNN gardent un intérêt en inférence à très faible latence sur séquences courtes, et sur les très petits jeux de données temporelles — où, cela dit, un gradient boosting sur variables de décalage reste souvent supérieur aux deux (module 16).</p>
-
-    <h2 id="transformers">7. Transformers et attention</h2>
-    <p>Le mécanisme d'attention répond à une question simple : pour produire la représentation du mot \(i\), quels autres mots faut-il regarder, et avec quel poids ? Dans la phrase « le chat que le chien poursuivait <em>était</em> noir », comprendre « était » demande de remonter à « chat », six mots plus tôt — et un RNN doit faire transiter cette information par tous les mots intermédiaires.</p>
-    <p>Chaque position projette son vecteur en trois rôles, par trois matrices apprises : une <strong>requête</strong> \(Q\) (« ce que je cherche »), une <strong>clé</strong> \(K\) (« ce que je propose ») et une <strong>valeur</strong> \(V\) (« ce que je transmets »). L'analogie est celle d'un annuaire : on compare sa requête à toutes les clés, et l'on récupère un mélange des valeurs correspondantes, pondéré par la ressemblance.</p>
-    <div style="text-align:center;overflow-x:auto">\[ \operatorname{Attention}(Q,K,V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V \]</div>
-
-    <div class="code-label">l'opération, étape par étape</div>
-    <div class="code-block"><pre>1. QKᵀ          produit scalaire entre chaque requête et chaque clé
-                → matrice n×n de scores de compatibilité
-2. / √d_k       mise à l'échelle. INDISPENSABLE : en dimension d_k, les produits
-                scalaires ont une variance ∝ d_k ; sans division, le softmax
-                sature (un poids à 1, tous les autres à 0) et le gradient disparaît.
-3. softmax      chaque ligne devient une distribution de poids sommant à 1
-4. × V          moyenne pondérée des valeurs : voilà la nouvelle représentation</pre></div>
-
-    <p>L'<strong>attention multi-têtes</strong> réalise plusieurs fois cette opération en parallèle dans des sous-espaces différents, chaque tête pouvant se spécialiser (accord syntaxique, coréférence, position relative), puis concatène les résultats. Comme l'opération est invariante à l'ordre — permuter les mots permute simplement les lignes —, il faut injecter la position explicitement : encodages sinusoïdaux à l'origine, positions relatives ou rotatives (RoPE) aujourd'hui.</p>
-
-    <div class="code-label">anatomie d'un bloc transformer</div>
-    <div class="code-block"><pre>x = x + MultiHeadAttention(LayerNorm(x))      # connexion résiduelle + pré-normalisation
-x = x + FeedForward(LayerNorm(x))             # MLP 2 couches, expansion ×4, GELU
-
-Encodeur seul      BERT — compréhension, classification, embeddings (module 21)
-Décodeur seul      GPT — génération, attention CAUSALE (on ne regarde que le passé)
-Encodeur-décodeur  T5, traduction — l'architecture d'origine</pre></div>
-
-    <p><strong>Le coût</strong> : l'attention est quadratique en longueur de séquence, \(O(n^2 d)\), puisqu'on compare chaque position à toutes les autres. C'est ce qui borne la taille du contexte, et ce qui a engendré une industrie entière de variantes — attention creuse, FlashAttention (exacte, mais optimisée pour la hiérarchie mémoire du GPU, module 24), et modèles à espace d'états comme Mamba, linéaires en \(n\). <strong>Le bénéfice</strong> : chaque position accède directement à toutes les autres, sans le chemin de longueur \(n\) d'un RNN, et l'ensemble se parallélise — c'est ce qui a rendu possible l'entraînement à l'échelle actuelle.</p>
-    <p>Le <em>Vision Transformer</em> applique la même recette aux images en les découpant en imagettes traitées comme des jetons. Il dépasse les CNN au-delà d'un certain volume de données, mais reste en retrait sur les petits jeux : n'ayant pas le biais inductif de la convolution, il doit apprendre la localité à partir des exemples (module 14).</p>
-
-    <h2 id="representations">8. Autoencodeurs et représentations</h2>
-    <p>Un autoencodeur compresse l'entrée dans un espace latent de faible dimension, puis la reconstruit. Avec des couches linéaires et une perte quadratique, il retrouve exactement le sous-espace de la PCA (module 8) ; avec des non-linéarités, il capture des variétés courbes. Usages : réduction de dimension non linéaire, débruitage (on entraîne à reconstruire une entrée propre depuis une entrée bruitée), et détection d'anomalies par erreur de reconstruction — ce qui est mal reconstruit est ce que le modèle n'a jamais vu.</p>
-    <p>Plus important encore : l'<strong>apprentissage auto-supervisé</strong>, qui fabrique une tâche à partir des données non annotées — prédire un mot masqué, rapprocher deux vues augmentées d'une même image (module 12). C'est le principe qui a permis de pré-entraîner sur des corpus gigantesques sans annotation humaine, et qui produit les <em>embeddings</em> utilisés en recherche sémantique (module 21).</p>
-
-    <h2 id="pinn">9. PINN : apprendre sous contrainte physique</h2>
-    <p>Les <em>Physics-Informed Neural Networks</em> répondent à une situation fréquente en ingénierie : on connaît les équations qui régissent le système, mais on a peu de données — ou l'inverse, on a des mesures et un paramètre physique inconnu à identifier. L'idée est d'ajouter le résidu de l'équation dans la fonction de perte : le réseau doit à la fois coller aux données <em>et</em> satisfaire la physique.</p>
-
-    <p>Pour une EDP \(\mathcal{N}[u](x,t) = 0\), on approche la solution par un réseau \(u_\theta(x,t)\) et on minimise :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \mathcal{L} = \underbrace{\frac{1}{N_d}\sum_i \big|u_\theta(x_i,t_i) - u_i\big|^2}_{\text{données}} + \lambda_b \underbrace{\mathcal{L}_{\text{bord/initial}}}_{\text{conditions}} + \lambda_f \underbrace{\frac{1}{N_f}\sum_j \big|\mathcal{N}[u_\theta](x_j,t_j)\big|^2}_{\text{résidu physique}} \]</div>
-
-    <p>Le point élégant : les dérivées de l'EDP sont obtenues par <strong>différentiation automatique</strong> du réseau lui-même (module 3), exactement et en tout point — pas de maillage, pas de schéma aux différences finies, pas d'erreur de discrétisation. Les points de collocation où l'on évalue le résidu peuvent être tirés au hasard dans le domaine, et ils ne coûtent aucune donnée expérimentale.</p>
-
-    <div class="code-label">PyTorch — oscillateur amorti : m·u'' + c·u' + k·u = 0</div>
-    <div class="code-block"><pre>import torch, torch.nn as nn
-
-m, c, k = 1.0, 0.4, 20.0            # paramètres physiques connus
-
-reseau = nn.Sequential(             # tanh : dérivées d'ordre 2 lisses et non nulles
-    nn.Linear(1, 64), nn.Tanh(),    # (avec ReLU, la dérivée seconde serait nulle
-    nn.Linear(64, 64), nn.Tanh(),   #  partout — inutilisable pour une EDP d'ordre 2)
-    nn.Linear(64, 64), nn.Tanh(),
-    nn.Linear(64, 1),
-)
-opt = torch.optim.Adam(reseau.parameters(), lr=1e-3)
-
-def residu(t):
-    t = t.requires_grad_(True)
-    u    = reseau(t)
-    # create_graph=True : on dérivera ENCORE cette dérivée (pour u'' et pour backward)
-    u_t  = torch.autograd.grad(u,   t, torch.ones_like(u),   create_graph=True)[0]
-    u_tt = torch.autograd.grad(u_t, t, torch.ones_like(u_t), create_graph=True)[0]
-    return m * u_tt + c * u_t + k * u          # doit valoir 0 partout
-
-t0 = torch.zeros(1, 1, requires_grad=True)     # conditions initiales : u(0)=1, u'(0)=0
-for etape in range(20_000):
-    tf = torch.rand(256, 1) * 2.0              # collocation ALÉATOIRE sur [0, 2]
-
-    u0   = reseau(t0)
-    u0_t = torch.autograd.grad(u0, t0, torch.ones_like(u0), create_graph=True)[0]
-
-    perte = (residu(tf) ** 2).mean() + (u0 - 1.0) ** 2 + u0_t ** 2
-    opt.zero_grad(); perte.backward(); opt.step()</pre></div>
-
-    <p><strong>Ce que les PINN apportent</strong> : une solution continue et différentiable, donc évaluable et dérivable partout ; l'absence de maillage, avantage décisif en géométrie complexe ou en grande dimension ; l'assimilation naturelle de données expérimentales bruitées ; et surtout la résolution de <em>problèmes inverses</em> — en déclarant un paramètre physique comme entraînable (<code>c = nn.Parameter(torch.tensor(0.1))</code>), le réseau l'identifie à partir de quelques mesures. C'est le cas d'usage où ils sont réellement compétitifs (module 20).</p>
-
-    <div class="warning-block">
-      <strong>Ce que les PINN ne sont pas.</strong> Ils ne remplacent pas un solveur d'EDP classique : sur un problème direct bien posé où un schéma aux éléments finis existe, celui-ci est plus rapide, plus précis et vient avec des garanties de convergence. Les PINN sont difficiles à entraîner — la pondération \(\lambda_f\) entre termes de perte est délicate, et les gradients des différents termes entrent en compétition — et ils échouent sur les solutions raides ou à forts gradients (chocs, hautes fréquences) à cause du <em>biais spectral</em> des réseaux, qui apprennent les basses fréquences en premier. Les remèdes existent (pondération adaptative, décomposition de domaine, <em>Fourier features</em>) mais restent des sujets de recherche.
-    </div>
-
-    <h2 id="limites">10. Limites</h2>
+    <h2 id="autres">6. Stabilité, PAC-Bayes, compression</h2>
+    <p>Trois approches modernes donnent des bornes plus informatives que la dimension VC :</p>
     <ul>
-      <li><strong>Appétit en données et en calcul</strong> — sans pré-entraînement, un réseau profond sur 2 000 exemples surapprend systématiquement.</li>
-      <li><strong>Opacité</strong> — l'attribution par gradients ou par SHAP donne des indications, pas une explication vérifiable.</li>
-      <li><strong>Incertitude mal calibrée</strong> — un réseau est typiquement <em>trop confiant</em>, y compris sur des entrées hors distribution. Remèdes : température de calibration, ensembles profonds, dropout à l'inférence, ou modèles probabilistes (module 10).</li>
-      <li><strong>Fragilité</strong> — les exemples adverses montrent qu'une perturbation imperceptible peut renverser une prédiction (module 26).</li>
-      <li><strong>Reproductibilité</strong> — non-déterminisme des noyaux GPU, sensibilité aux graines : deux entraînements identiques ne donnent pas exactement le même modèle (module 25).</li>
-      <li><strong>Empreinte</strong> — coût énergétique et financier de l'entraînement comme de l'inférence, qui doit entrer dans l'arbitrage (module 24).</li>
+      <li><strong>Stabilité algorithmique</strong> — si changer un seul exemple d'entraînement modifie peu la fonction apprise, alors l'algorithme généralise. Le résultat est élégant car il porte sur l'<em>algorithme</em> et non sur la classe de fonctions : SGD avec un pas décroissant est stable, ce qui fournit directement une borne. L'intuition est simple : un modèle qui change du tout au tout quand on retire un point mémorise ce point.</li>
+      <li><strong>PAC-Bayes</strong> — borne l'erreur d'une <em>distribution</em> de prédicteurs par son erreur empirique plus une divergence KL à une distribution a priori (module 10). C'est le cadre qui produit aujourd'hui les bornes <em>non vides</em> les plus serrées pour des réseaux de neurones réels, et il éclaire au passage le lien avec la platitude des minima : un minimum plat tolère du bruit sur les poids, donc autorise une distribution large, donc une faible divergence à l'a priori, donc une meilleure borne.</li>
+      <li><strong>Bornes par compression</strong> — si un réseau entraîné peut être fortement compressé (élagage, quantification) sans perte de performance, sa complexité effective est faible, et cela se traduit en borne. Ce point de vue relie généralisation et compressibilité, avec un écho direct aux pratiques du module 25.</li>
+    </ul>
+
+    <h2 id="limites">7. Ce que la théorie n'explique pas</h2>
+    <div class="warning-block">
+      <strong>L'état honnête de la question.</strong> Aucune théorie ne prédit aujourd'hui, avant entraînement, la performance de généralisation d'un réseau profond donné sur un problème donné. L'expérience de Zhang et ses coauteurs (2017) l'a montré de façon frappante : les mêmes réseaux qui généralisent parfaitement sur des images réelles peuvent aussi apprendre par cœur ces mêmes images avec des <em>étiquettes tirées au hasard</em>, atteignant une erreur d'entraînement nulle sur un problème sans aucune structure. Leur capacité est donc largement suffisante pour mémoriser ; ce qui les fait généraliser n'est pas une limitation de capacité, mais l'interaction entre la structure des données, l'architecture et l'optimiseur. Ce que la théorie ne couvre pas davantage : les capacités émergentes des grands modèles, l'efficacité du transfert, la robustesse hors distribution, et la raison pour laquelle certaines architectures surpassent les autres. La pratique a plusieurs années d'avance sur la théorie dans ce domaine — et il vaut mieux le dire que de le masquer.
+    </div>
+
+    <h2 id="pratique">8. Ce qu'on en retient en pratique</h2>
+    <ul>
+      <li><strong>La complexité effective compte, pas le nombre de paramètres.</strong> Un grand modèle bien régularisé peut généraliser mieux qu'un petit modèle mal contraint — la double descente l'illustre.</li>
+      <li><strong>Le biais inductif est une ressource.</strong> Encoder une invariance connue, une contrainte physique ou une structure du domaine vaut souvent mieux que davantage de données.</li>
+      <li><strong>L'optimiseur fait partie du modèle.</strong> Taille de lot, taux d'apprentissage et arrêt anticipé changent la solution atteinte, pas seulement la vitesse pour y arriver.</li>
+      <li><strong>Les garanties théoriques ne sont pas des nombres utilisables.</strong> Pour une estimation chiffrée de la performance, la validation croisée (module 12) et un jeu de test intouché restent les seuls outils fiables ; pour une garantie exploitable en production, la prédiction conforme (module 10) donne une couverture démontrable à échantillon fini.</li>
+      <li><strong>Le no free lunch a une conséquence méthodologique.</strong> Comparer des modèles sans tenir compte du domaine n'a pas de sens universel : un classement sur un benchmark ne transfère pas automatiquement à votre problème, et c'est pourquoi la baseline maison reste la seule référence qui compte.</li>
     </ul>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Choisir une architecture, c'est choisir un biais inductif : convolution pour la localité, attention pour les dépendances longues.</li>
-        <li>Sans non-linéarité, la profondeur ne sert à rien ; l'initialisation conditionne la propagation du signal.</li>
-        <li>La rétropropagation coûte le prix d'une passe avant, ce qui rend l'échelle actuelle possible.</li>
-        <li>Le taux d'apprentissage domine tous les autres hyperparamètres ; commencer par surapprendre 16 exemples pour valider la chaîne.</li>
-        <li>Connexions résiduelles, normalisation et écrêtage résolvent les pathologies du gradient.</li>
-        <li>Transfer learning par défaut : entraîner de zéro est rarement le bon choix.</li>
-        <li>L'attention est quadratique en longueur de séquence — c'est la contrainte structurante des LLM.</li>
-        <li>Les PINN brillent sur les problèmes inverses et l'assimilation de données, pas en remplacement d'un solveur.</li>
+        <li>Les bornes PAC/VC donnent la bonne <em>structure</em> — erreur empirique plus terme de complexité en \(1/\sqrt{n}\) — mais des valeurs numériques inutilisables en deep learning.</li>
+        <li>Sans biais inductif, pas d'apprentissage : le no free lunch en fait une nécessité mathématique, pas une préférence esthétique.</li>
+        <li>La double descente montre que le nombre de paramètres n'est pas la bonne mesure de complexité.</li>
+        <li>SGD régularise implicitement : marge maximale, norme minimale, minima plats.</li>
+        <li>Stabilité, PAC-Bayes et compression expliquent mieux le deep learning que la dimension VC.</li>
+        <li>Pour un chiffre fiable, mesurer ; pour une garantie utilisable, conformaliser.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m14.html" class="btn btn-secondary">← Module 14 : Théorie de l'apprentissage</a>
-    <a href="project7-m16.html" class="btn btn-primary">Module 16 : Séries temporelles →</a>
+    <a href="project7-m14.html" class="btn btn-secondary">← Module 14 : ML classique</a>
+    <a href="project7-m16.html" class="btn btn-primary">Module 16 : Deep learning →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">MLP</span><span class="tag">CNN</span><span class="tag">Transformers</span><span class="tag">Attention</span><span class="tag">PINN</span><span class="tag">PyTorch</span></div>
+  <div class="project-meta"><span class="tag">PAC</span><span class="tag">Dimension VC</span><span class="tag">No free lunch</span><span class="tag">Double descente</span><span class="tag">PAC-Bayes</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -341,7 +194,7 @@ for etape in range(20_000):
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 15</div>
-    <h1>Deep learning</h1>
+    <h1>Learning theory: why generalisation happens</h1>
   </div>
 
   <div class="project-content course-content">
@@ -351,16 +204,14 @@ for etape in range(20_000):
 
     <h2>What this module covers</h2>
     <ul>
-      <li>When deep learning wins and when gradient boosting still wins, framed as a choice of inductive bias.</li>
-      <li>From the perceptron to the MLP: activation functions, the universal approximation theorem and what it does not say, and why initialisation matters.</li>
-      <li>Backpropagation as the chain rule applied efficiently, and the vanishing/exploding gradient pathologies it explains.</li>
-      <li>Training recipes ranked by impact: learning rate finding, batch vs layer normalisation, dropout and weight decay, augmentation, batch size, mixed precision — plus the 30-second sanity check of overfitting 16 examples.</li>
-      <li>CNNs: weight sharing, receptive fields, residual connections, and transfer learning as the realistic default.</li>
-      <li>RNNs and LSTMs, and the two limitations that transformers removed.</li>
-      <li>Transformers: scaled dot-product attention derived step by step, multi-head attention, positional encodings, the quadratic cost, and Vision Transformers.</li>
-      <li>Autoencoders, self-supervised learning and representations.</li>
-      <li>Physics-Informed Neural Networks: the composite loss, automatic differentiation of PDE residuals, a working PyTorch example on a damped oscillator, inverse problems — and an honest account of where PINNs fail.</li>
-      <li>Limitations: data hunger, opacity, miscalibrated uncertainty, adversarial fragility, reproducibility and footprint.</li>
+      <li>The PAC framework: bounding the generalisation gap, and why choosing a hypothesis after seeing the data requires uniform bounds.</li>
+      <li>VC dimension and Rademacher complexity, with an honest account of how loose these bounds are for modern networks — and why they are still conceptually valuable.</li>
+      <li>The no free lunch theorem and inductive bias: learning is impossible without prior assumptions, which makes domain knowledge a performance lever rather than a nicety.</li>
+      <li>Double descent and over-parameterisation: the interpolation threshold, and why parameter count is not the right complexity measure.</li>
+      <li>Implicit regularisation of gradient descent: maximum-margin and minimum-norm solutions, flat minima, early stopping as regularisation — and the conclusion that the optimiser is part of the model.</li>
+      <li>Modern approaches that explain deep learning better: algorithmic stability, PAC-Bayes (the source of today's tightest non-vacuous bounds) and compression bounds.</li>
+      <li>What theory still cannot explain, including the random-label experiment that shows capacity is not what limits memorisation.</li>
+      <li>Practical takeaways, and the closing note of the whole course.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -375,23 +226,24 @@ for etape in range(20_000):
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><strong>Deep learning</strong></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><strong>Learning theory: why generalisation happens</strong></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

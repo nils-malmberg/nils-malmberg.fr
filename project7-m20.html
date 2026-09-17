@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 20 - ML pour la simulation et l'ingénierie - Nils Malmberg</title>
+  <title>Module 20 - Apprentissage par renforcement - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,209 +41,219 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 20</div>
-    <h1>ML pour la simulation et l'ingénierie</h1>
+    <h1>Apprentissage par renforcement</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>C'est le module où la formation d'ingénieur devient un avantage plutôt qu'un détour. La situation est toujours la même : on dispose d'un code de calcul fiable mais coûteux — CFD, éléments finis, neutronique, transport Monte-Carlo — et l'on a besoin de milliers d'évaluations pour propager des incertitudes, optimiser une conception ou piloter un système en temps réel. Le machine learning n'y remplace pas la physique : il en construit une approximation utilisable, et il faut savoir exactement dans quelles limites elle reste valide.</p>
+    <p>En apprentissage supervisé, on dispose de la bonne réponse pour chaque exemple. En apprentissage par renforcement, on ne dispose que d'un signal de récompense, souvent rare et différé, et les décisions influencent les situations futures. Ce module présente le cadre, les algorithmes qui comptent, et — point important — les raisons pour lesquelles il faut souvent y renoncer.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#monte-carlo">Monte-Carlo et réduction de variance</a></li>
-        <li><a href="#qmc">Quasi-Monte-Carlo et plans d'expériences</a></li>
-        <li><a href="#propagation">Propagation d'incertitude et chaos polynomial</a></li>
-        <li><a href="#sobol">Analyse de sensibilité globale</a></li>
-        <li><a href="#surrogates">Métamodèles : construire et valider</a></li>
-        <li><a href="#rom">Réduction de modèle : POD, DMD</a></li>
-        <li><a href="#sciml">SciML : opérateurs neuronaux et hybrides</a></li>
-        <li><a href="#assimilation">Assimilation de données et problèmes inverses</a></li>
-        <li><a href="#jumeau">Jumeau numérique et crédibilité</a></li>
+        <li><a href="#cadre">Le cadre : agent, environnement, récompense</a></li>
+        <li><a href="#valeurs">Fonctions de valeur et équations de Bellman</a></li>
+        <li><a href="#exploration">Exploration et exploitation</a></li>
+        <li><a href="#tabulaire">Q-learning et SARSA</a></li>
+        <li><a href="#dqn">Deep RL : DQN</a></li>
+        <li><a href="#pg">Gradient de politique : REINFORCE, PPO</a></li>
+        <li><a href="#variantes">Model-based, offline RL, RLHF</a></li>
+        <li><a href="#pratique">En pratique, et pourquoi c'est difficile</a></li>
       </ol>
     </div>
 
-    <h2 id="monte-carlo">1. Monte-Carlo et réduction de variance</h2>
-    <p>Estimer \(I = \mathbb{E}[f(X)]\) par tirage aléatoire donne \(\hat I_N = \frac1N\sum f(x_i)\), d'erreur type \(\sigma/\sqrt{N}\). La propriété remarquable — et la raison pour laquelle la méthode domine en grande dimension — est que <strong>cette vitesse ne dépend pas de la dimension</strong>, contrairement à toute quadrature déterministe : une grille de 10 points par axe fait \(10^{d}\) évaluations, soit un million en dimension 6 et un milliard en dimension 9. Le revers de Monte-Carlo : gagner un chiffre significatif coûte cent fois plus de simulations. D'où l'importance des techniques de réduction de variance, qui s'attaquent au numérateur plutôt qu'au dénominateur.</p>
+    <h2 id="cadre">1. Le cadre : agent, environnement, récompense</h2>
+    <p>Un agent observe un état, choisit une action, reçoit une récompense et se retrouve dans un nouvel état. La boucle recommence.</p>
 
-    <div class="code-label">réduire la variance, plutôt qu'augmenter N</div>
-    <div class="code-block"><pre>Variables antithétiques   tirer u ET 1-u : la corrélation négative entre les deux
-                          annule une partie de la fluctuation. Gain modeste, coût nul.
-Variable de contrôle      utiliser une grandeur g corrélée à f dont l'espérance est
-                          CONNUE : Î = mean(f) - c·(mean(g) - E[g]). Souvent le
-                          meilleur rapport gain/effort — un modèle simplifié ou un
-                          métamodèle fait un excellent contrôle.
-Échantillonnage           tirer selon une loi q qui concentre les tirages là où f
-préférentiel              compte, puis corriger par le poids p/q. INDISPENSABLE pour
-                          les événements rares.
-Stratification / LHS      découper l'espace et garantir une couverture régulière.
-Multi-niveaux (MLMC)      combiner beaucoup de simulations grossières et peu de
-                          simulations fines : réduit le coût de plusieurs ordres.</pre></div>
+    <div class="code-label">la boucle d'interaction</div>
+    <div class="code-block"><pre>            action a_t
+        ┌──────────────────►┐
+   ┌────┴─────┐       ┌─────▼──────────┐
+   │  AGENT   │       │ ENVIRONNEMENT  │
+   └────▲─────┘       └─────┬──────────┘
+        │                   │
+        └───────────────────┘
+      état s_{t+1}, récompense r_{t+1}
+
+  Exemple (maintenance) : état = usure mesurée + heures de fonctionnement
+                          actions = {ne rien faire, inspecter, remplacer}
+                          récompense = -coût de l'action - coût d'une panne subie</pre></div>
+
+    <p>Le formalisme est le <strong>processus de décision markovien</strong> \((\mathcal{S}, \mathcal{A}, P, R, \gamma)\), dont l'hypothèse centrale est la propriété de Markov : l'état contient toute l'information utile pour prédire la suite, le passé n'apporte rien de plus. Quand ce n'est pas le cas — un capteur ne voit qu'une partie du système —, on parle de POMDP, et l'on empile généralement les dernières observations pour reconstituer un état approché.</p>
+
+    <p>L'agent maximise le <strong>retour</strong>, somme actualisée des récompenses futures :</p>
+    <div style="text-align:center;overflow-x:auto">\[ G_t = \sum_{k=0}^{\infty}\gamma^k r_{t+k+1}, \qquad \gamma \in [0,1) \]</div>
+    <p>Le facteur \(\gamma\) joue deux rôles : il garantit la convergence de la somme, et il encode l'horizon temporel. Avec \(\gamma = 0{,}99\), l'horizon effectif est d'environ \(1/(1-\gamma) = 100\) pas ; avec \(\gamma = 0{,}9\), il tombe à 10. C'est un paramètre bien plus structurant qu'il n'y paraît : trop bas, l'agent devient myope et sacrifie l'avenir ; trop haut, l'apprentissage devient instable car les valeurs à estimer deviennent énormes.</p>
 
     <div class="step-block">
-      <h4>Le cas des événements rares</h4>
-      <p>Estimer une probabilité de défaillance de \(10^{-6}\) par Monte-Carlo direct demande de l'ordre de \(10^{8}\) simulations pour une précision de 10 % — hors de portée avec un code coûteux. La raison est simple : pour observer l'événement une centaine de fois, il faut cent millions de tirages. Les méthodes dédiées (échantillonnage préférentiel, <em>subset simulation</em>, FORM/SORM en fiabilité des structures) ramènent cela à quelques milliers d'appels en déplaçant délibérément la loi de tirage vers la zone de défaillance, puis en corrigeant le biais introduit. Elles se combinent avec un métamodèle raffiné près de la surface d'état limite — c'est exactement l'articulation avec l'optimisation bayésienne du module 18 : on enrichit le plan là où la décision se joue.</p>
+      <h4>Ce qui distingue vraiment le RL du supervisé</h4>
+      <ul>
+        <li><strong>Pas d'étiquette</strong> — seulement un signal évaluatif : « cette action a rapporté 3 », sans indiquer quelle action aurait rapporté davantage. En supervisé, on connaît la bonne réponse ; ici, on ne connaît que la qualité de celle qu'on a choisie.</li>
+        <li><strong>Crédit différé</strong> — la récompense arrive parfois des centaines de pas après le choix qui l'a causée. Savoir à quelle décision l'attribuer est <em>le</em> problème central.</li>
+        <li><strong>Données non i.i.d. et non stationnaires</strong> — l'agent génère lui-même ses données, et cette distribution change à mesure qu'il apprend. Toute l'hypothèse de base de l'apprentissage supervisé tombe.</li>
+        <li><strong>Exploration</strong> — il faut essayer ce qu'on ne connaît pas pour découvrir mieux, au prix de mauvaises performances immédiates.</li>
+      </ul>
     </div>
 
-    <h2 id="qmc">2. Quasi-Monte-Carlo et plans d'expériences</h2>
-    <p>Les suites à faible discordance (Sobol, Halton) remplacent l'aléa par des points délibérément bien répartis : là où un tirage aléatoire laisse des trous et des amas, une suite de Sobol remplit l'espace régulièrement. La convergence passe de \(O(N^{-1/2})\) à \(O((\log N)^d/N)\) — bien meilleure en dimension modérée, l'avantage s'érodant quand \(d\) devient grand.</p>
+    <h2 id="valeurs">2. Fonctions de valeur et équations de Bellman</h2>
+    <p>Une <strong>politique</strong> \(\pi(a\mid s)\) donne la probabilité de choisir l'action \(a\) dans l'état \(s\) — c'est ce qu'on cherche. On lui associe deux fonctions de valeur :</p>
+    <div style="text-align:center;overflow-x:auto">\[ V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q^\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t=s,\, a_t=a] \]</div>
+    <p>\(V\) évalue un état (« à quel point est-il bon d'être ici ? »), \(Q\) évalue un couple état-action (« à quel point est-il bon de faire ceci, ici ? »). La différence est décisive : \(Q\) permet de <em>choisir</em> directement, en prenant l'action de plus grande valeur, sans avoir besoin de connaître le modèle de transition.</p>
 
-    <div class="code-label">Python — scipy.stats.qmc</div>
-    <div class="code-block"><pre>from scipy.stats import qmc
+    <p>La récursivité du retour donne l'équation de Bellman, et sa version optimale :</p>
+    <div style="text-align:center;overflow-x:auto">\[ Q^\star(s,a) = \mathbb{E}\Big[r + \gamma \max_{a'} Q^\star(s',a')\Big] \]</div>
+    <p>Elle se lit simplement : la valeur d'une action, c'est la récompense immédiate plus la valeur actualisée du meilleur coup suivant. C'est un point fixe d'un opérateur contractant de facteur \(\gamma\) : itérer l'opérateur rapproche donc nécessairement de \(Q^\star\), et la politique optimale s'en déduit par \(\pi^\star(s) = \arg\max_a Q^\star(s,a)\). Tout le RL par valeurs consiste à approcher ce point fixe à partir d'échantillons plutôt qu'avec la connaissance du modèle.</p>
 
-# hypercube latin optimisé : projection uniforme sur CHAQUE axe pris séparément
-plan = qmc.LatinHypercube(d=6, optimization="random-cd", seed=0).random(n=120)
+    <h2 id="exploration">3. Exploration et exploitation</h2>
+    <p>Le dilemme apparaît déjà dans le cas le plus simple, le <em>bandit manchot</em> : plusieurs leviers de récompense moyenne inconnue, et un budget de tirages. Exploiter le meilleur levier connu, c'est risquer de passer à côté d'un meilleur jamais essayé ; explorer, c'est payer des tirages sous-optimaux.</p>
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>ε-greedy          action aléatoire avec probabilité ε, sinon la meilleure connue.
+                  Simple ; on fait décroître ε au fil de l'apprentissage (de 1 à 0,05).
+Boltzmann         probabilité ∝ exp(Q/τ) : explore proportionnellement à la qualité,
+                  au lieu de tirer uniformément parmi les mauvaises actions.
+UCB               Q(a) + c·√(ln t / N(a)) : bonus d'optimisme pour les actions peu
+                  testées. Même intuition qu'en optimisation bayésienne (module 19).
+Thompson          tirage dans le postérieur sur les récompenses (module 10).
+                  Très efficace en bandits, et naturellement parallélisable.
+Bonus intrinsèque récompense de curiosité (erreur de prédiction, nouveauté de l'état)
+                  pour les environnements à récompense extrêmement rare.</pre></div>
 
-# suite de Sobol : extensible par puissances de 2, excellente uniformité
-sobol = qmc.Sobol(d=6, scramble=True, seed=0).random_base2(m=7)     # 128 points
+    <h2 id="tabulaire">4. Q-learning et SARSA</h2>
+    <p>Quand les états et actions sont peu nombreux, \(Q\) tient dans un tableau. Trois familles pour l'estimer : la <strong>programmation dynamique</strong> (exacte, mais exige de connaître \(P\) et \(R\) — rarement le cas) ; <strong>Monte-Carlo</strong> (attendre la fin de l'épisode et moyenner les retours observés — sans biais, mais de forte variance et inapplicable aux tâches continues) ; et les <strong>différences temporelles</strong> (TD), qui sont la grande idée du domaine.</p>
+    <p>TD met à jour <em>immédiatement</em>, à partir de l'estimation courante de l'état suivant, sans attendre la fin de l'épisode. C'est du <em>bootstrapping</em> : on apprend une estimation à partir d'une autre estimation — ce qui semble circulaire, mais converge bel et bien, puisque la récompense observée injecte à chaque pas une information réelle.</p>
 
-# mise à l'échelle vers les bornes PHYSIQUES des paramètres
-X = qmc.scale(plan, l_bounds=[0.1, 300, 1e5, 0.2, 1.0, 0.0],
-                    u_bounds=[0.9, 600, 5e5, 0.8, 3.0, 1.0])
-print(qmc.discrepancy(plan))              # plus c'est bas, mieux l'espace est couvert</pre></div>
+    <div style="text-align:center;overflow-x:auto">\[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\underbrace{r + \gamma \max_{a'}Q(s',a') - Q(s,a)}_{\text{erreur TD}}\Big] \]</div>
 
-    <p>Règle empirique pour un premier plan destiné à construire un métamodèle : environ dix points par dimension d'entrée, puis enrichissement adaptatif (module 18) plutôt qu'un grand plan figé. Et toujours prévoir un jeu de <em>validation</em> tiré indépendamment : valider un métamodèle sur les points qui ont servi à le construire n'a aucun sens, surtout s'il interpole exactement.</p>
-
-    <h2 id="propagation">3. Propagation d'incertitude et chaos polynomial</h2>
-    <p>Les entrées d'un calcul sont incertaines : propriétés matériaux, conditions aux limites, tolérances géométriques. La propagation consiste à en déduire la loi de la sortie — et pas seulement sa moyenne, car une décision de sûreté porte sur un quantile extrême, pas sur un comportement typique.</p>
-
-    <p>Le <strong>chaos polynomial</strong> (PCE) développe la sortie sur une base de polynômes orthogonaux des variables aléatoires d'entrée :</p>
-    <div style="text-align:center;overflow-x:auto">\[ Y = f(\xi) \approx \sum_{j=0}^{P} \alpha_j \Psi_j(\xi), \qquad \mathbb{E}[Y] = \alpha_0, \quad \operatorname{Var}(Y) = \sum_{j\geq 1}\alpha_j^2 \]</div>
-    <p>La base est choisie selon la loi des entrées : Hermite pour des gaussiennes, Legendre pour des uniformes — c'est cette correspondance qui rend les polynômes orthogonaux <em>pour le produit scalaire défini par la loi</em>, et donc qui donne les formules de moments ci-dessus.</p>
-    <p>L'intérêt est double : moyenne et variance se lisent <em>directement</em> sur les coefficients, sans simulation supplémentaire, et les indices de sensibilité s'en déduisent analytiquement (section suivante). Les coefficients s'obtiennent par projection ou par régression parcimonieuse (LARS), ce qui en fait un cas particulier remarquable de la régression régularisée du module 13. Limites : la taille de la base explose avec la dimension et le degré, et la méthode suppose une réponse régulière — un comportement discontinu (bifurcation, changement de régime) la met en échec, exactement comme un GP à noyau lisse.</p>
-
-    <h2 id="sobol">4. Analyse de sensibilité globale</h2>
-    <p>Question centrale en ingénierie : <em>quelle part de la variabilité de la sortie chaque entrée explique-t-elle ?</em> Les dérivées partielles ne répondent pas — elles ne valent qu'au point où elles sont calculées, et pour une plage de variation infinitésimale. L'analyse de sensibilité <strong>globale</strong> décompose la variance totale sur tout le domaine de variation :</p>
-    <div style="text-align:center;overflow-x:auto">\[ S_i = \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_i]\big)}{\operatorname{Var}(Y)}, \qquad S_{T_i} = 1 - \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_{\sim i}]\big)}{\operatorname{Var}(Y)} \]</div>
-
-    <p>\(S_i\) est l'indice du <em>premier ordre</em> : la part de variance qu'on supprimerait en fixant \(X_i\) à sa vraie valeur. \(S_{T_i}\) est l'indice <em>total</em> : effet propre plus toutes les interactions où \(X_i\) intervient.</p>
-
-    <div class="code-label">comment lire les deux ensemble</div>
-    <div class="code-block"><pre>S_Ti ≈ S_i          la variable agit SEULE, sans interaction → effet additif
-S_Ti ≫ S_i          la variable n'agit qu'EN INTERACTION avec d'autres.
-                    Attention : la fixer ferait perdre plus que S_i ne le suggère.
-S_Ti ≈ 0            la variable n'influence rien → on peut la FIXER, ce qui réduit
-                    la dimension du problème (utile pour le module 18)
-Σ S_i &lt; 1           la part manquante est due aux INTERACTIONS
-
-exemple :  conductivité  S=0,45  S_T=0,52   → effet principal, peu d'interaction
-           débit         S=0,10  S_T=0,44   → agit surtout EN INTERACTION
-           épaisseur     S=0,02  S_T=0,03   → négligeable : à fixer</pre></div>
-
-    <div class="code-label">Python — SALib</div>
-    <div class="code-block"><pre>from SALib.sample import sobol as sobol_sample
-from SALib.analyze import sobol as sobol_analyze
-
-probleme = {"num_vars": 4,
-            "names": ["conductivite", "debit", "epaisseur", "coef_echange"],
-            "bounds": [[10, 25], [0.5, 2.0], [1e-3, 5e-3], [200, 900]]}
-
-X = sobol_sample.sample(probleme, 1024)        # N(2d+2) = 10 240 évaluations
-Y = np.array([surrogate(x) for x in X])        # sur le MÉTAMODÈLE, pas le code direct
-
-Si = sobol_analyze.analyze(probleme, Y)
-print(Si["S1"], Si["ST"])</pre></div>
-
-    <p>Le coût — \(N(2d+2)\) évaluations — est la raison pour laquelle on calcule presque toujours les indices de Sobol <em>sur un métamodèle</em> plutôt que sur le code direct. Pour un simple criblage préalable en grande dimension, la méthode de Morris identifie les variables négligeables pour quelques dizaines d'évaluations seulement, et sert à réduire le problème avant l'analyse fine.</p>
-
-    <h2 id="surrogates">5. Métamodèles : construire et valider</h2>
-    <p>Un métamodèle remplace le code de calcul par une fonction bon marché ajustée sur un plan d'expériences. Les familles, et le critère de choix :</p>
-
-    <div class="code-label">choisir un surrogate</div>
-    <div class="code-block"><pre>Krigeage / GP       interpole exactement, fournit une VARIANCE de prédiction.
-(module 18)         Le défaut pour n &lt; quelques milliers de points. Indispensable
-                    si l'on veut enrichir le plan de façon adaptative.
-RBF                 interpolation par fonctions radiales : simple, robuste, très bon
-                    en dimension modérée. Sans incertitude native — c'est exactement
-                    ce que j'ai implémenté dans mdisd (voir le projet).
-Chaos polynomial    moments et indices de Sobol analytiques. Excellent si la réponse
-                    est régulière et la dimension modérée.
-Gradient boosting   robuste aux discontinuités et au bruit numérique, mais N'EXTRAPOLE
-                    PAS (module 13) : dangereux hors du domaine du plan.
-Réseau de neurones  utile quand le plan est très grand (10⁴+) ou la sortie de grande
-                    dimension (un champ complet plutôt qu'un scalaire).</pre></div>
-
-    <div class="warning-block">
-      <strong>Un métamodèle se valide sur des points qu'il n'a jamais vus.</strong> Le critère usuel est le \(Q^2\) — le \(R^2\) calculé sur un jeu de validation indépendant, ou par validation croisée <em>leave-one-out</em>, quasi gratuite pour un krigeage grâce à une formule fermée. Un \(Q^2\) de 0,99 sur les points d'apprentissage ne veut rien dire : un interpolateur passe par tous ses points par construction. Trois vérifications supplémentaires valent d'être systématiques : l'erreur <em>maximale</em> (et non seulement moyenne) sur le jeu de validation, la qualité de l'approximation <em>dans la zone qui décide</em> — près d'un seuil de sûreté, une erreur moyenne faible ne dit rien —, et la cohérence physique : monotonie attendue, signe, ordres de grandeur, comportement aux limites du domaine.
-    </div>
-
-    <h2 id="rom">6. Réduction de modèle : POD, DMD</h2>
-    <p>Les métamodèles précédents prédisent un scalaire. Quand la sortie est un <em>champ</em> — température en tout point, vitesse sur tout le maillage, soit des millions de valeurs —, on passe par la réduction de modèle. L'observation fondatrice : les solutions d'un système physique paramétré, malgré leur taille apparente, vivent presque toujours dans un sous-espace de très faible dimension.</p>
-
-    <p>La <strong>POD</strong> (décomposition orthogonale aux valeurs propres) consiste à assembler une matrice de <em>snapshots</em> — chaque colonne est un champ solution pour un jeu de paramètres — et à en calculer la SVD (module 8). Les premiers vecteurs singuliers forment une base de modes, et la décroissance des valeurs singulières indique combien en garder. C'est, mot pour mot, une PCA appliquée à des champs physiques : les modes obtenus ont souvent une interprétation directe — structures cohérentes d'un écoulement, modes propres de vibration.</p>
-
-    <div class="code-label">Python — POD sur des snapshots</div>
+    <div class="code-label">Python — Q-learning tabulaire complet</div>
     <div class="code-block"><pre>import numpy as np
 
-S = np.column_stack(snapshots)                 # (n_degrés_de_liberté, n_simulations)
-moyenne = S.mean(axis=1, keepdims=True)
-U, s, Vt = np.linalg.svd(S - moyenne, full_matrices=False)
+Q = np.zeros((n_etats, n_actions))
+alpha, gamma, eps = 0.1, 0.99, 1.0
 
-energie = np.cumsum(s**2) / np.sum(s**2)
-r = int(np.searchsorted(energie, 0.9999) + 1)  # souvent r ≈ 10-30 pour 99,99 %
-print(f"{S.shape[0]} degrés de liberté réduits à {r} modes")
-Phi = U[:, :r]                                 # la base réduite
+for episode in range(5_000):
+    s, _ = env.reset()
+    termine = False
+    while not termine:
+        # ε-greedy : explorer ou exploiter
+        a = env.action_space.sample() if np.random.rand() &lt; eps else int(Q[s].argmax())
 
-# coefficients réduits : LA CIBLE d'un surrogate (GP, RBF) sur les paramètres
-A = Phi.T @ (S - moyenne)                      # (r, n_simulations)
-champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPLET</pre></div>
+        s2, r, termine, tronque, _ = env.step(a)
 
-    <p>Deux stratégies en découlent. Le ROM <em>non intrusif</em> — celui du code ci-dessus — apprend simplement les coefficients modaux en fonction des paramètres : facile, applicable à un code fermé dont on n'a que les sorties, mais sans garantie physique. Le ROM <em>intrusif</em> (projection de Galerkin des équations sur la base réduite) conserve la structure des équations et offre de meilleures garanties, mais exige d'accéder aux opérateurs du solveur, et la non-linéarité impose des techniques d'hyper-réduction (DEIM). La <strong>DMD</strong>, elle, extrait des modes associés à des fréquences et des taux de croissance, ce qui en fait l'outil naturel pour analyser une dynamique et prédire à court terme.</p>
+        cible = r + gamma * Q[s2].max() * (not termine)   # 0 si l'épisode est fini
+        Q[s, a] += alpha * (cible - Q[s, a])              # l'erreur TD
+        s = s2
+        termine = termine or tronque
 
-    <p>La limite commune est claire : ces méthodes supposent une <em>faible dimension effective</em>. Un écoulement fortement turbulent, un problème avec chocs ou fronts mobiles, une bifurcation — et le spectre ne décroît plus. C'est d'ailleurs l'information utile : <strong>la décroissance des valeurs singulières mesure la réductibilité du problème</strong>, et se calcule avant tout investissement dans un ROM.</p>
+    eps = max(0.05, eps * 0.999)     # on explore de moins en moins
 
-    <h2 id="sciml">7. SciML : opérateurs neuronaux et hybrides</h2>
-    <p>Le module 15 présente les PINN, qui apprennent <em>une</em> solution sous contrainte d'EDP. Les <strong>opérateurs neuronaux</strong> visent plus haut : apprendre l'application qui envoie une fonction d'entrée (champ de conditions initiales, de coefficients, de géométrie) sur la fonction solution — donc une famille entière de problèmes, résolue en une seule fois.</p>
+politique = Q.argmax(axis=1)         # la politique gloutonne finale</pre></div>
+
+    <p>Sa particularité : le \(\max\) fait apprendre la valeur de la politique <em>optimale</em>, alors même que l'agent se comporte selon une politique exploratrice. C'est un algorithme <em>off-policy</em>, ce qui permet de réutiliser des données anciennes ou produites par un autre agent. <strong>SARSA</strong> remplace \(\max_{a'}Q(s',a')\) par \(Q(s',a')\) où \(a'\) est l'action réellement choisie : il apprend la valeur de la politique <em>suivie</em>, exploration comprise (<em>on-policy</em>), ce qui le rend plus prudent près des états dangereux.</p>
+    <p>L'exemple canonique est celui de la falaise : un chemin court longe un précipice, un chemin long en reste éloigné. Q-learning apprend le chemin optimal — le bord — et tombe régulièrement pendant l'apprentissage à cause de l'exploration ; SARSA, qui intègre le risque de l'exploration dans ses valeurs, préfère le chemin sûr. Aucun des deux n'a tort : ils répondent à des questions différentes.</p>
+
+    <h2 id="dqn">5. Deep RL : DQN</h2>
+    <p>Dès que l'espace d'états devient grand ou continu (des pixels), le tableau est remplacé par un réseau \(Q_\theta(s,a)\). Cette substitution casse les garanties de convergence — on combine approximation de fonction, bootstrapping et apprentissage off-policy, ce que la littérature appelle la « triade mortelle » — et trois mécanismes ont été nécessaires pour stabiliser l'entraînement :</p>
     <ul>
-      <li><strong>DeepONet</strong> — deux réseaux, l'un encodant la fonction d'entrée échantillonnée (<em>branch</em>), l'autre les coordonnées d'évaluation (<em>trunk</em>), combinés par produit scalaire. Fondé sur un théorème d'approximation d'opérateurs.</li>
-      <li><strong>FNO</strong> (<em>Fourier Neural Operator</em>) — effectue la convolution dans l'espace de Fourier en ne gardant que les basses fréquences : le coût passe en \(O(n\log n)\), et le modèle devient <em>indépendant de la discrétisation</em>, donc entraînable sur maillage grossier et évaluable sur maillage fin. Très efficace sur les problèmes à géométrie régulière et périodique.</li>
-      <li><strong>GNN sur maillage</strong> (module 17) — la bonne réponse quand la géométrie est complexe et non structurée.</li>
+      <li><strong>Replay buffer</strong> — stocker les transitions et en tirer des mini-lots au hasard. Cela casse la corrélation temporelle des échantillons successifs (qui violerait l'hypothèse i.i.d. du gradient stochastique) et réutilise chaque expérience plusieurs fois, ce qui améliore l'efficacité en données.</li>
+      <li><strong>Réseau cible</strong> — la cible \(r + \gamma\max_{a'}Q_{\theta^-}(s',a')\) est calculée avec une copie figée \(\theta^-\), mise à jour périodiquement. Sans cela, on poursuit une cible qui bouge à chaque pas — comme viser une cible fixée à son propre fusil — et l'entraînement diverge.</li>
+      <li><strong>Double DQN</strong> — l'opérateur \(\max\) surestime systématiquement les valeurs, parce que le maximum d'estimateurs bruités est biaisé vers le haut. On dissocie donc le <em>choix</em> de l'action (réseau courant) et son <em>évaluation</em> (réseau cible).</li>
     </ul>
-    <p>Une fois entraînés, ces modèles évaluent une solution en millisecondes contre des heures de calcul — d'où leur intérêt pour l'optimisation de forme, le contrôle en temps réel ou l'exploration paramétrique. Le prix à payer : la précision plafonne bien au-dessus de celle d'un solveur, la généralisation hors du régime d'entraînement est mauvaise, et l'entraînement demande un gros corpus de simulations. L'investissement ne se justifie donc que par un grand nombre d'évaluations futures.</p>
+    <p>Autres raffinements utiles : <em>dueling</em> (séparer valeur d'état et avantage de l'action), <em>prioritized replay</em> (rejouer davantage les transitions à forte erreur TD) et <em>n-step returns</em>. DQN et ses variantes ne traitent que les <strong>actions discrètes</strong> — pour un contrôle continu, il faut passer aux méthodes de politique.</p>
 
-    <div class="step-block">
-      <h4>Hybrider plutôt que remplacer</h4>
-      <p>Les approches qui fonctionnent le mieux en pratique ne substituent pas le ML à la physique : elles le placent là où la physique est mal connue. Apprendre une <em>loi de fermeture</em> (turbulence, loi de comportement matériau) tout en conservant les équations de conservation. Apprendre la <em>correction</em> entre un modèle grossier rapide et la réalité expérimentale — c'est le multi-fidélité du module 18, et cela demande beaucoup moins de données qu'apprendre la sortie complète. Imposer des contraintes dures — positivité, conservation de la masse, symétries, équivariance — directement dans l'architecture, ce qui améliore autant la fiabilité que l'efficacité en données (module 14). Un modèle qui viole la conservation de l'énergie n'est pas utilisable, quelle que soit son erreur quadratique moyenne.</p>
-    </div>
+    <h2 id="pg">6. Gradient de politique : REINFORCE, PPO</h2>
+    <p>Plutôt que d'estimer des valeurs pour en déduire une politique, on paramètre directement \(\pi_\theta(a\mid s)\) et on monte le gradient de la performance. Le théorème du gradient de politique donne une forme remarquablement simple :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a\mid s)\, A^{\pi}(s,a)\big] \]</div>
+    <p>La lecture est intuitive : on augmente la probabilité des actions dont l'<strong>avantage</strong> \(A = Q - V\) est positif — celles qui font mieux que la moyenne de l'état — et on diminue celle des autres. Le terme \(\nabla \log \pi\) indique dans quelle direction modifier les paramètres pour rendre l'action plus probable ; l'avantage donne le signe et l'ampleur.</p>
+    <p>La fonction \(V\) joue ici le rôle de <em>baseline</em> : la soustraire ne change pas l'espérance du gradient mais réduit fortement sa variance. Sans elle, toutes les actions d'un épisode réussi seraient renforcées, y compris les mauvaises ; avec elle, seules celles qui ont fait mieux que prévu le sont. C'est ce qui rend la méthode utilisable en pratique.</p>
 
-    <h2 id="assimilation">8. Assimilation de données et problèmes inverses</h2>
-    <p>L'assimilation combine un modèle physique et des mesures pour estimer l'état ou les paramètres d'un système. C'est le cadre de la météorologie opérationnelle, du recalage de modèles et de la surveillance en ligne. Le formalisme variationnel (4D-Var) s'écrit comme la minimisation d'une fonctionnelle :</p>
-    <div style="text-align:center;overflow-x:auto">\[ J(x_0) = \underbrace{\tfrac12 (x_0-x^b)^\top B^{-1}(x_0-x^b)}_{\text{écart à l'ébauche}} + \underbrace{\tfrac12\sum_{k}(\mathcal{H}(x_k)-z_k)^\top R^{-1}(\mathcal{H}(x_k)-z_k)}_{\text{écart aux observations}} \]</div>
-    <p>On reconnaît un MAP (module 10) : \(B\) encode la confiance dans l'ébauche a priori, \(R\) la précision des capteurs, et minimiser \(J\) revient à maximiser une densité a posteriori gaussienne. La minimisation demande le gradient par rapport à l'état initial, obtenu par le modèle <em>adjoint</em> — c'est exactement de la différentiation automatique en mode inverse, la même mécanique que la rétropropagation (module 15). D'où l'intérêt actuel des <strong>simulateurs différentiables</strong> : quand le solveur lui-même est écrit dans un cadre autodifférentiable (JAX, PyTorch), calibrer un paramètre physique devient une optimisation par gradient ordinaire, et l'on récupère gratuitement des décennies d'outillage.</p>
-    <p>L'alternative séquentielle est le filtre de Kalman d'ensemble (EnKF), qui propage un ensemble d'états au lieu d'une covariance explicite — indispensable dès que la dimension dépasse quelques milliers (module 16).</p>
+    <p><strong>REINFORCE</strong> est la version brute (avantage estimé par le retour Monte-Carlo) : correcte mais très bruitée. Les méthodes <strong>acteur-critique</strong> ajoutent un second réseau, le critique, qui estime \(V\) et fournit un avantage à faible variance (A2C, A3C, puis GAE pour un compromis biais-variance réglable).</p>
+
+    <p><strong>PPO</strong> est devenu le défaut pratique. Son idée : réutiliser plusieurs fois un même lot de trajectoires pour faire plusieurs pas de gradient — ce qui améliore beaucoup l'efficacité en données — tout en empêchant la politique de trop s'éloigner de celle qui a produit ces données, sans quoi les gradients calculés ne veulent plus rien dire. En notant \(\rho = \pi_\theta(a|s)/\pi_{\text{old}}(a|s)\) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ L^{\text{CLIP}} = \mathbb{E}\Big[\min\big(\rho A,\; \operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,A\big)\Big] \]</div>
+    <p>L'écrêtage annule le gain marginal dès que le rapport sort de la bande \([1-\epsilon, 1+\epsilon]\) (typiquement \(\epsilon = 0{,}2\)) : au-delà, pousser davantage n'apporte plus rien à l'objectif, donc le gradient s'annule et le pas reste borné. C'est simple, robuste, et c'est l'algorithme utilisé pour l'alignement des LLM par retour humain (module 22).</p>
+
+    <div class="code-label">panorama des algorithmes</div>
+    <div class="code-block"><pre>Algorithme   Actions      On/Off-policy   Points forts
+────────────────────────────────────────────────────────────────────────────────
+Q-learning   discrètes    off             tabulaire, fondation théorique
+DQN          discrètes    off             pixels, jeux Atari, efficace en données
+REINFORCE    les deux     on              simple, mais forte variance
+A2C / A3C    les deux     on              acteur-critique, bon compromis
+PPO          les deux     on              LE défaut : robuste, peu de réglage
+SAC          continues    off             entropie maximale, très efficace en données :
+                                          le choix pour la robotique et le contrôle
+TD3          continues    off             DDPG corrigé de la surestimation</pre></div>
+
+    <div class="code-label">Python — Gymnasium + Stable-Baselines3</div>
+    <div class="code-block"><pre>import gymnasium as gym
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.evaluation import evaluate_policy
+
+# 8 environnements en parallèle : le goulot est la SIMULATION, pas le réseau
+env = make_vec_env("LunarLander-v3", n_envs=8)
+
+modele = PPO("MlpPolicy", env, learning_rate=3e-4, n_steps=1024,
+             batch_size=256, gamma=0.999, verbose=0, seed=0)
+modele.learn(total_timesteps=1_000_000)
+
+# évaluer sur PLUSIEURS graines : la variance en RL est notoirement élevée
+for graine in range(5):
+    moy, ecart = evaluate_policy(modele, gym.make("LunarLander-v3"),
+                                 n_eval_episodes=30)
+    print(f"graine {graine}: {moy:.1f} ± {ecart:.1f}")</pre></div>
+
+    <h2 id="variantes">7. Model-based, offline RL, RLHF</h2>
+    <ul>
+      <li><strong>Model-based</strong> — apprendre un modèle de la dynamique \(P(s'\mid s,a)\) et planifier dedans (Dyna, MuZero, MPC). Gain considérable en nombre d'interactions réelles, au prix des erreurs du modèle, que la planification a tendance à exploiter : l'agent trouve les failles du simulateur appris plutôt que la bonne stratégie.</li>
+      <li><strong>Offline RL</strong> — apprendre uniquement à partir d'un jeu de données fixe, sans interagir. C'est le seul cadre réaliste en santé, en finance ou en industrie, où l'exploration est interdite. La difficulté est le décalage de distribution : l'agent surestime des actions jamais observées, puisque rien ne le contredit. Les algorithmes dédiés (CQL, IQL) contraignent la politique à rester près des données.</li>
+      <li><strong>RLHF</strong> — l'alignement des LLM : on entraîne un modèle de récompense sur des préférences humaines (« cette réponse est meilleure que celle-là »), puis on optimise le modèle de langage par PPO contre cette récompense, avec une pénalité KL pour ne pas trop s'éloigner du modèle initial. Les variantes récentes (DPO, GRPO) court-circuitent en partie cette boucle (module 22).</li>
+      <li><strong>Sim2real</strong> — entraîner en simulation puis transférer au réel. La <em>randomisation de domaine</em> (module 13) force une politique robuste au décalage entre simulateur et monde réel.</li>
+    </ul>
+
+    <h2 id="pratique">8. En pratique, et pourquoi c'est difficile</h2>
+    <div class="code-label">où le RL est réellement utilisé</div>
+    <div class="code-block"><pre>Jeux et simulation       Atari, Go, StarCraft — l'environnement est gratuit et parfait
+Robotique / contrôle     locomotion, manipulation, drones (avec sim2real)
+Systèmes opérés          refroidissement de datacenter, gestion d'énergie, trafic réseau
+Recommandation           optimisation d'engagement à long terme (via bandits, module 24)
+Alignement de LLM        RLHF, raisonnement par récompense vérifiable
+Gestion de portefeuille  allocation séquentielle sous contrainte de risque</pre></div>
 
     <div class="warning-block">
-      <strong>Identifiabilité : la question à poser avant de calibrer.</strong> Un problème inverse est presque toujours mal posé : plusieurs jeux de paramètres reproduisent exactement les mêmes mesures. Deux paramètres peuvent être <em>compensatoires</em> — seule leur combinaison (un produit, un rapport) est identifiable — et un optimiseur retournera alors une valeur précise et arbitraire, qui changera complètement avec une autre initialisation. Les remèdes : régulariser (Tikhonov, c'est-à-dire un a priori), réduire le nombre de paramètres calibrés à ceux que l'analyse de sensibilité désigne comme influents (section 4), et surtout <strong>estimer l'incertitude a posteriori</strong> plutôt qu'un point unique. Un paramètre calibré sans intervalle de crédibilité n'est pas un résultat.
+      <strong>Les difficultés, sans enrobage.</strong><br>
+      • <strong>Efficacité en données catastrophique</strong> — des millions d'interactions pour des tâches qu'un humain apprend en quelques essais. Acceptable en simulation, rédhibitoire sur un système réel.<br>
+      • <strong>Conception de la récompense</strong> — c'est le vrai travail, et le plus périlleux. Un agent optimise <em>exactement</em> ce qu'on mesure : le bateau de course qui tourne en rond pour ramasser des bonus plutôt que de finir la course en est l'illustration canonique. Toute récompense mal spécifiée sera exploitée, et c'est le même mécanisme que le détournement des critères du module 24.<br>
+      • <strong>Instabilité et variance</strong> — deux exécutions du même algorithme avec des graines différentes peuvent donner des résultats opposés. Toujours rapporter plusieurs graines.<br>
+      • <strong>Sensibilité aux hyperparamètres</strong> — bien plus marquée qu'en supervisé, et les réglages transfèrent mal d'un environnement à l'autre.<br>
+      • <strong>Sécurité</strong> — pendant l'exploration, l'agent fait par construction des choses absurdes. Inacceptable sur un procédé industriel ou un patient.
     </div>
 
-    <h2 id="jumeau">9. Jumeau numérique et crédibilité</h2>
-    <p>Un jumeau numérique n'est pas une simulation 3D animée : c'est un modèle d'un système <em>physique particulier</em>, synchronisé avec ses mesures, et utilisé pour décider. L'architecture typique assemble tout ce module : un modèle réduit ou un surrogate pour tenir la contrainte temps réel, un mécanisme d'assimilation pour se recaler sur les capteurs, une quantification d'incertitude pour assortir chaque prédiction d'une marge (module 10), et un module de décision (maintenance, pilotage — module 23). Les difficultés réelles sont moins scientifiques qu'opérationnelles : qualité et dérive des capteurs, latence, versionnement du modèle et de ses recalages (module 25), et la question de savoir quand le jumeau doit déclarer qu'il ne sait plus.</p>
-
     <div class="step-block">
-      <h4>Un modèle appris dans un contexte où la sûreté compte</h4>
-      <p>Les référentiels de vérification et validation (V&amp;V) demandent trois choses distinctes : la <em>vérification</em> (résout-on correctement les équations ?), la <em>validation</em> (les équations décrivent-elles la réalité ?) et la quantification des incertitudes. Un modèle appris s'y insère mal par nature : il n'a pas d'équations à vérifier, et son comportement hors domaine est imprévisible. Les pratiques qui le rendent défendable : déclarer explicitement un <strong>domaine de validité</strong> et refuser de prédire au-delà (la variance épistémique d'un GP ou un détecteur de nouveauté servent de garde-fou, module 10) ; assortir chaque sortie d'un intervalle avec garantie de couverture ; conserver un modèle physique de référence comme arbitre sur les cas critiques ; et tracer chaque prédiction jusqu'aux données et à la version du modèle (module 25). Autrement dit : le ML accélère l'exploration, il ne signe pas le dossier de sûreté.</p>
+      <h4>La question préalable : ai-je vraiment besoin de RL ?</h4>
+      <p>Le RL se justifie quand la décision est <em>séquentielle</em> et que les actions <em>influencent les états futurs</em>. Trois alternatives couvrent une grande partie des cas où on l'envisage à tort. Si chaque décision est indépendante des suivantes, un <strong>bandit contextuel</strong> — bien plus simple, mieux compris, plus sûr — suffit (module 24). Si l'on dispose d'exemples de bon comportement, l'<strong>imitation</strong> (apprentissage supervisé sur des démonstrations) est presque toujours plus rapide et plus stable, quitte à raffiner ensuite par RL. Et si l'environnement est connu et modélisable, la <strong>commande optimale classique</strong> (MPC, LQR) offre des garanties de stabilité que le RL n'apporte pas. Une part non négligeable des projets « RL » gagneraient à être l'un de ces trois autres projets.</p>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Monte-Carlo converge en \(1/\sqrt{N}\) indépendamment de la dimension ; pour aller plus vite, réduire la variance plutôt qu'augmenter \(N\).</li>
-        <li>LHS ou Sobol pour un plan initial, puis enrichissement adaptatif guidé par l'incertitude (module 18).</li>
-        <li>Les indices de Sobol totaux disent quelles variables on peut fixer ; les calculer sur un métamodèle.</li>
-        <li>Un surrogate se valide hors échantillon, avec l'erreur maximale et la cohérence physique, pas seulement un \(Q^2\) moyen.</li>
-        <li>La décroissance des valeurs singulières des snapshots mesure la réductibilité d'un problème avant tout investissement.</li>
-        <li>Les opérateurs neuronaux échangent de la précision contre plusieurs ordres de grandeur de vitesse ; hybrider vaut mieux que remplacer.</li>
-        <li>Un problème inverse est mal posé par défaut : vérifier l'identifiabilité et fournir une incertitude, jamais un point seul.</li>
+        <li>MDP, retour actualisé, équations de Bellman : tout part de là, et \(\gamma\) fixe l'horizon.</li>
+        <li>TD apprend d'une estimation à partir d'une autre : c'est ce qui permet d'apprendre en ligne, sans attendre la fin de l'épisode.</li>
+        <li>Q-learning est off-policy (réutilisation des données), SARSA on-policy (plus prudent).</li>
+        <li>DQN tient grâce au replay buffer et au réseau cible ; PPO est le défaut robuste, SAC pour le contrôle continu.</li>
+        <li>La baseline d'avantage est ce qui rend les gradients de politique utilisables.</li>
+        <li>La conception de la récompense est le cœur du problème : l'agent exploitera toute faille.</li>
+        <li>Coût en données très élevé, forte variance : vérifier d'abord qu'un bandit, de l'imitation ou une commande classique ne suffisent pas.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m19.html" class="btn btn-secondary">← Module 19 : Renforcement</a>
-    <a href="project7-m21.html" class="btn btn-primary">Module 21 : LLM et RAG →</a>
+    <a href="project7-m19.html" class="btn btn-secondary">← Module 19 : Processus gaussiens</a>
+    <a href="project7-m21.html" class="btn btn-primary">Module 21 : Simulation et ingénierie →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Monte-Carlo</span><span class="tag">Sobol</span><span class="tag">Surrogate</span><span class="tag">POD/ROM</span><span class="tag">FNO</span><span class="tag">Assimilation</span></div>
+  <div class="project-meta"><span class="tag">MDP</span><span class="tag">Bellman</span><span class="tag">Q-learning</span><span class="tag">DQN</span><span class="tag">PPO</span><span class="tag">Gymnasium</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -264,7 +274,7 @@ champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPL
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 20</div>
-    <h1>Machine learning for simulation and engineering</h1>
+    <h1>Reinforcement learning</h1>
   </div>
 
   <div class="project-content course-content">
@@ -274,15 +284,14 @@ champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPL
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Monte Carlo estimation, its dimension-independent 1/√N rate, and variance reduction (antithetics, control variates, importance sampling, stratification, multilevel) — including rare-event failure probabilities.</li>
-      <li>Quasi-Monte Carlo, Latin hypercube and Sobol designs of numerical experiments, with sizing rules and independent validation sets.</li>
-      <li>Uncertainty propagation and polynomial chaos expansion, where moments read directly off the coefficients.</li>
-      <li>Global sensitivity analysis: first-order and total Sobol indices, how to read them together, and Morris screening.</li>
-      <li>Surrogate models compared (kriging/GP, RBF as implemented in my mdisd project, polynomial chaos, boosting, neural networks) and how to validate one honestly — out-of-sample Q², maximum error, accuracy where the decision happens, physical consistency.</li>
-      <li>Model order reduction: POD as an SVD of snapshots, intrusive vs non-intrusive ROMs, DMD, and using singular value decay to measure reducibility upfront.</li>
-      <li>Scientific ML: DeepONet and Fourier Neural Operators, mesh GNNs, and why hybridising (closure models, multi-fidelity corrections, hard physical constraints) beats replacing the solver.</li>
-      <li>Data assimilation: the 4D-Var cost function as a MAP estimate, adjoint gradients as reverse-mode autodiff, ensemble Kalman filters, differentiable simulators — and identifiability as the question to ask before calibrating.</li>
-      <li>Digital twins and what it takes for a learned model to be defensible in a safety context.</li>
+      <li>The MDP framework, discounted returns, and the four things that genuinely separate RL from supervised learning.</li>
+      <li>Value functions and Bellman equations as a contraction fixed point.</li>
+      <li>Exploration strategies: ε-greedy, Boltzmann, UCB, Thompson sampling, intrinsic curiosity.</li>
+      <li>Temporal-difference learning, Q-learning vs SARSA, and what off-policy vs on-policy changes in behaviour.</li>
+      <li>Deep Q-Networks: why function approximation breaks convergence, and the three fixes (replay buffer, target network, double estimation).</li>
+      <li>Policy gradients: the policy gradient theorem, advantage baselines, actor-critic methods, and PPO's clipped objective.</li>
+      <li>Model-based RL, offline RL and distribution shift, RLHF for language models, and sim2real transfer.</li>
+      <li>Where RL is actually used, an unvarnished list of its difficulties (sample efficiency, reward hacking, variance, safety), and the question to ask before starting: would a contextual bandit, imitation learning or classical optimal control do the job?</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -297,23 +306,24 @@ champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPL
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><strong>Machine learning for simulation and engineering</strong></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><strong>Reinforcement learning</strong></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

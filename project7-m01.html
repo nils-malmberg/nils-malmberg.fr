@@ -531,7 +531,7 @@ uv run mypy src/                 # vérification des types</pre></div>
     <p>Le formatage automatique n'est pas une coquetterie : il supprime les différences de style dans les diffs, qui polluent les revues et masquent les vrais changements.</p>
 
     <h3>pytest : tester du code de data science</h3>
-    <p>La question n'est pas « comment écrire un test » mais « que faut-il tester ». On ne teste pas « le modèle atteint 92 % d'accuracy » — cela dépend des données et relève du suivi en production (module 25). On teste la <em>plomberie</em> : les formes, les cas dégénérés, le déterminisme, les invariants métier.</p>
+    <p>La question n'est pas « comment écrire un test » mais « que faut-il tester ». On ne teste pas « le modèle atteint 92 % d'accuracy » — cela dépend des données et relève du suivi en production (module 26). On teste la <em>plomberie</em> : les formes, les cas dégénérés, le déterminisme, les invariants métier.</p>
 
     <div class="code-label">tests/test_features.py</div>
     <div class="code-block"><pre>import numpy as np
@@ -612,7 +612,7 @@ uv run pre-commit autoupdate</pre></div>
       - id: nbstripout</pre></div>
 
     <p>Deux hooks méritent qu'on s'y arrête. <code>check-added-large-files</code> est la meilleure protection contre l'erreur la plus coûteuse d'un projet data — committer un jeu de données (section 8). <code>nbstripout</code> retire les sorties des notebooks : sans lui, chaque exécution produit un diff de plusieurs milliers de lignes illisibles, et les images encodées font gonfler le dépôt indéfiniment.</p>
-    <p>Un dernier détail pratique : <code>git commit --no-verify</code> contourne les hooks. C'est utile dans une urgence, et c'est aussi la raison pour laquelle les mêmes vérifications doivent tourner dans la chaîne d'intégration continue, où personne ne peut les contourner (module 25).</p>
+    <p>Un dernier détail pratique : <code>git commit --no-verify</code> contourne les hooks. C'est utile dans une urgence, et c'est aussi la raison pour laquelle les mêmes vérifications doivent tourner dans la chaîne d'intégration continue, où personne ne peut les contourner (module 26).</p>
 
     <h2 id="git">8. Git pour un projet data</h2>
     <p>Le workflow que j'utilise, volontairement minimal : <code>main</code> toujours fonctionnelle, une branche par sujet, une <em>pull request</em> même en solo — elle force une relecture du diff complet, ce qui attrape beaucoup d'erreurs.</p>
@@ -633,7 +633,7 @@ git diff main...HEAD                     # tout ce que la branche apporte</pre><
     <p>Les messages suivent la convention <em>Conventional Commits</em> (<code>feat:</code>, <code>fix:</code>, <code>refactor:</code>, <code>docs:</code>) : cela permet de générer un changelog et, surtout, de retrouver <em>pourquoi</em> une transformation a été ajoutée six mois plus tard.</p>
 
     <div class="warning-block">
-      <strong>Git n'est pas fait pour les données.</strong> Un CSV de 2 Go committé reste dans l'historique <em>pour toujours</em>, même supprimé ensuite : chaque clone le retéléchargera. Mettez <code>data/</code>, <code>*.csv</code>, <code>*.parquet</code>, <code>*.pkl</code>, <code>models/</code>, <code>.venv/</code> et <code>.ipynb_checkpoints/</code> dans <code>.gitignore</code> dès le premier commit. Pour versionner données et modèles, voir DVC au module 25.
+      <strong>Git n'est pas fait pour les données.</strong> Un CSV de 2 Go committé reste dans l'historique <em>pour toujours</em>, même supprimé ensuite : chaque clone le retéléchargera. Mettez <code>data/</code>, <code>*.csv</code>, <code>*.parquet</code>, <code>*.pkl</code>, <code>models/</code>, <code>.venv/</code> et <code>.ipynb_checkpoints/</code> dans <code>.gitignore</code> dès le premier commit. Pour versionner données et modèles, voir DVC au module 26.
     </div>
 
     <div class="step-block">
@@ -709,23 +709,24 @@ git diff main...HEAD                     # tout ce que la branche apporte</pre><
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

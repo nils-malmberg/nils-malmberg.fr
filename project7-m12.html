@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 12 - Apprendre avec peu d'étiquettes - Nils Malmberg</title>
+  <title>Module 12 - Data science en pratique : du problème au dataset - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 <header><div class="header-inner">
@@ -40,256 +41,360 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 12</div>
-    <h1>Apprendre avec peu d'étiquettes</h1>
+    <h1>Data science en pratique : du problème au dataset</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Dans presque tous les projets industriels, les données brutes abondent et les données <em>étiquetées</em> manquent : annoter demande un expert, un essai destructif, ou simplement du temps que personne n'a. Ce module rassemble les stratégies qui permettent d'apprendre quand même — et surtout, comment décider où dépenser un budget d'annotation limité.</p>
+    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes, et qui décide pourtant du sort du projet.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#taxonomie">Situer son problème</a></li>
-        <li><a href="#transfert">Transfert : l'option par défaut</a></li>
-        <li><a href="#actif">Apprentissage actif</a></li>
-        <li><a href="#semi">Semi-supervisé</a></li>
-        <li><a href="#auto">Auto-supervisé</a></li>
-        <li><a href="#faible">Supervision faible et étiquettes bruitées</a></li>
-        <li><a href="#synthetique">Données synthétiques et simulation</a></li>
-        <li><a href="#fewshot">Few-shot et zero-shot</a></li>
-        <li><a href="#budget">Décider combien annoter</a></li>
+        <li><a href="#cycle">Cycle de vie d'un projet</a></li>
+        <li><a href="#cadrage">Cadrage : la cible et la baseline</a></li>
+        <li><a href="#eda">Exploration : une checklist</a></li>
+        <li><a href="#viz">Visualisation utile</a></li>
+        <li><a href="#manquantes">Données manquantes</a></li>
+        <li><a href="#features">Feature engineering</a></li>
+        <li><a href="#desequilibre">Classes déséquilibrées</a></li>
+        <li><a href="#validation">Validation croisée : choisir le bon schéma</a></li>
+        <li><a href="#leakage">Fuites de données : le catalogue</a></li>
       </ol>
     </div>
 
-    <h2 id="taxonomie">1. Situer son problème</h2>
-    <p>Le point de départ n'est pas « quelle méthode est la plus moderne » mais « de quoi est-ce que je dispose ».</p>
-    <div class="code-label">ce dont vous disposez → la stratégie</div>
-    <div class="code-block"><pre>Un modèle pré-entraîné existe sur un        transfert / fine-tuning       (section 2)
-domaine proche
-On PEUT annoter, mais c'est cher            apprentissage actif           (section 3)
-Beaucoup de données non annotées            semi-supervisé (4),
-disponibles                                 auto-supervisé (5)
-Des règles métier ou des heuristiques       supervision faible            (section 6)
-existent
-Les étiquettes existent mais sont bruitées  apprentissage robuste au bruit (section 6)
-Un simulateur du phénomène est disponible   données synthétiques, sim2real (section 7)
-Quelques exemples seulement, et un gros     few-shot / zero-shot          (section 8)
-modèle de fondation accessible</pre></div>
+    <h2 id="cycle">1. Cycle de vie d'un projet</h2>
+    <div class="code-label">les étapes, et leur poids réel en temps</div>
+    <div class="code-block"><pre>1. Cadrage métier       définir la question, la métrique, l'usage du résultat    ~10 %
+2. Collecte / accès     trouver, extraire, joindre les données                   ~20 %
+3. Exploration          comprendre les données, détecter les anomalies           ~15 %
+4. Préparation          nettoyage, features, encodages                           ~25 %
+5. Modélisation         baseline, puis itérations                                ~10 %
+6. Évaluation           protocole, métriques, analyse d'erreurs                  ~10 %
+7. Déploiement / suivi  mise en production, monitoring, ré-entraînement          ~10 %</pre></div>
 
-    <p>Ces approches se combinent, et l'ordre compte : commencer par le transfert, puis récupérer des représentations auto-supervisées sur les données non annotées dont on dispose, puis annoter activement les cas informatifs. C'est ce pipeline qui donne le meilleur résultat par euro dépensé.</p>
+    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique, avec une « livraison » à la fin.</p>
 
-    <h2 id="transfert">2. Transfert : l'option par défaut</h2>
-    <p>Le principe : un modèle entraîné sur des millions d'images a appris des représentations générales — contours, textures, formes — qui servent bien au-delà de sa tâche d'origine. On récupère ces représentations plutôt que de les réapprendre à partir de 2 000 images.</p>
-
-    <div class="code-label">trois niveaux, du plus léger au plus lourd</div>
-    <div class="code-block"><pre>EXTRACTION DE FEATURES   on fige tout le réseau, on récupère le vecteur de la couche
-                         pénultième, on entraîne une régression logistique dessus.
-                         Quelques centaines d'exemples suffisent. Très rapide, et
-                         souvent MEILLEUR qu'un fine-tuning qui surapprendrait.
-
-FINE-TUNING PARTIEL      on dégèle les dernières couches et on affine avec un taux
-                         d'apprentissage 10 à 100× plus faible que d'habitude.
-                         Le bon compromis à partir de quelques milliers d'exemples.
-
-FINE-TUNING COMPLET      tout le réseau est réentraîné. Demande beaucoup de données,
-                         sous peine d'OUBLI CATASTROPHIQUE : le réseau perd les
-                         représentations générales qui faisaient sa valeur.</pre></div>
-
-    <div class="code-label">Python — extraction de features, la version qui marche avec peu de données</div>
-    <div class="code-block"><pre>import torch, torchvision as tv
-from sklearn.linear_model import LogisticRegression
-
-modele = tv.models.resnet50(weights="IMAGENET1K_V2")
-modele.fc = torch.nn.Identity()          # on retire la tête de classification
-modele.eval()
-
-with torch.no_grad():                    # pas de gradient : on n'entraîne rien ici
-    F = torch.cat([modele(xb) for xb, _ in chargeur])   # (n, 2048) embeddings
-
-clf = LogisticRegression(max_iter=2000, C=1.0).fit(F.numpy(), y)
-# 300 images étiquetées suffisent souvent à dépasser 90 % sur une tâche simple</pre></div>
-
-    <p>Deux points de vigilance. La <strong>distance entre domaines</strong> décide du succès : d'ImageNet vers des photographies industrielles, le transfert fonctionne très bien ; vers des images de tomographie, de microscopie ou de spectrogrammes, nettement moins — les statistiques de bas niveau n'ont rien à voir. Dans ce cas, un pré-entraînement auto-supervisé sur ses propres images non annotées (section 5) est supérieur. Et l'<strong>adaptation de domaine</strong> traite le cas où l'on a des étiquettes sur un domaine source et aucune sur le domaine cible : on y aligne les distributions de représentations (CORAL, DANN), ou l'on recalibre simplement les statistiques de normalisation sur les données cibles — souvent étonnamment efficace pour un effort minime.</p>
-
-    <h2 id="actif">3. Apprentissage actif</h2>
-    <p>Principe : plutôt que d'annoter au hasard, laisser le modèle désigner les exemples dont l'annotation lui apprendrait le plus. La boucle est identique à celle de l'optimisation bayésienne (module 18) — un critère d'acquisition, une évaluation coûteuse, une mise à jour — et l'intuition est la même : on ne mesure pas là où l'on sait déjà.</p>
-
-    <div class="code-label">critères de sélection</div>
-    <div class="code-block"><pre>Moindre confiance       1 - max p(y|x) : les cas où le modèle hésite le plus
-Marge                   écart entre les deux meilleures classes. Souvent le meilleur
-                        critère simple en classification multiclasse.
-Entropie                incertitude globale de la distribution prédite
-Désaccord de comité     plusieurs modèles votent ; on annote là où ils divergent.
-                        Très bon avec un ensemble profond (module 10).
-Diversité / core-set    couvrir l'espace des représentations plutôt que se concentrer
-                        sur une seule zone ambiguë
-Incertitude épistémique cibler ce que le modèle IGNORE plutôt que ce qui est
-                        intrinsèquement bruité — la distinction du module 10 est ici
-                        décisive : annoter du bruit pur n'apporte rien.
-Espérance de gain       critère théoriquement optimal, coûteux à calculer
-d'information</pre></div>
-
-    <div class="code-label">Python — une boucle d'annotation par lots, complète</div>
-    <div class="code-block"><pre>import numpy as np
-from sklearn.cluster import KMeans
-
-rng = np.random.default_rng(0)
-etiquetes = np.zeros(len(X), dtype=bool)
-etiquetes[rng.choice(len(X), 100, replace=False)] = True     # amorçage ALÉATOIRE
-
-for tour in range(10):
-    modele.fit(X[etiquetes], y[etiquetes])
-
-    # 1. incertitude : la marge entre les deux classes les plus probables
-    P = modele.predict_proba(X[~etiquetes])
-    tries = np.sort(P, axis=1)
-    marge = tries[:, -1] - tries[:, -2]              # petite marge = cas ambigu
-
-    # 2. on présélectionne les 500 plus ambigus…
-    candidats = np.where(~etiquetes)[0][np.argsort(marge)[:500]]
-
-    # 3. …puis on impose la DIVERSITÉ : un représentant par groupe
-    km = KMeans(n_clusters=50, n_init=5, random_state=0).fit(Z[candidats])
-    lot = [candidats[np.argmin(np.linalg.norm(Z[candidats] - c, axis=1))]
-           for c in km.cluster_centers_]
-
-    y[lot] = annoter(X[lot])                          # LA seule étape coûteuse
-    etiquetes[lot] = True
-    print(f"tour {tour}: {etiquetes.sum()} étiquettes, "
-          f"score={modele.score(X_test_aleatoire, y_test_aleatoire):.3f}")</pre></div>
-
-    <div class="warning-block">
-      <strong>Trois pièges de l'apprentissage actif.</strong> D'abord, le jeu annoté devient <em>non représentatif</em> : il est concentré près des frontières de décision. Il ne peut donc plus servir à estimer la performance — il faut conserver un jeu de test tiré <strong>aléatoirement</strong> et intouchable, comme dans le code ci-dessus. Ensuite, sélectionner un lot par pure incertitude renvoie cinquante exemples quasi identiques, et le gain est cinquante fois moindre qu'espéré : le critère de diversité n'est pas optionnel. Enfin, le démarrage à froid : avec un modèle initial mauvais, ses scores d'incertitude n'ont aucun sens — les premières centaines d'annotations doivent être tirées au hasard.
+    <div class="step-block">
+      <h4>La question à poser avant tout le reste</h4>
+      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout : la métrique (un coût d'erreur asymétrique change le seuil, module 24), la latence acceptable (temps réel ou lot nocturne, module 6), le besoin d'explicabilité (un refus de crédit doit être motivé, module 27), et même la faisabilité — certaines décisions ont besoin de <em>causalité</em>, pas de prédiction (module 9).</p>
     </div>
 
-    <h2 id="semi">4. Semi-supervisé</h2>
-    <p>On exploite les données non étiquetées pour contraindre le modèle. Deux hypothèses le justifient : les points d'un même groupe dense partagent probablement une étiquette (<em>hypothèse de cluster</em>), et la frontière de décision passe dans les zones de faible densité — elle sépare les paquets plutôt que de les traverser.</p>
-    <ul>
-      <li><strong>Pseudo-étiquetage</strong> — le modèle étiquette lui-même les cas où il est très confiant, et se réentraîne dessus. Simple et souvent efficace, mais il <em>amplifie ses propres erreurs</em> : une erreur confiante devient une étiquette d'entraînement, donc une erreur encore plus confiante. Indispensable de fixer un seuil de confiance élevé (0,95 et plus), de recalibrer les probabilités (module 8) et de vérifier la performance à chaque tour sur un jeu annoté.</li>
-      <li><strong>Régularisation par cohérence</strong> — exiger que deux versions augmentées de la même donnée reçoivent la même prédiction. C'est l'idée de <strong>FixMatch</strong> : une augmentation <em>faible</em> produit la pseudo-étiquette, une augmentation <em>forte</em> doit la reproduire. Le modèle apprend ainsi ce à quoi il doit être invariant, sans étiquette humaine. L'une des méthodes les plus efficaces en vision avec très peu d'étiquettes.</li>
-      <li><strong>Propagation sur graphe</strong> — construire un graphe de voisinage (module 17) et diffuser les étiquettes le long des arêtes, de proche en proche.</li>
-    </ul>
-    <p>Une mise en garde honnête : le semi-supervisé peut <em>dégrader</em> la performance si ses hypothèses ne tiennent pas — classes qui se chevauchent fortement, ou données non étiquetées issues d'une distribution différente (un autre capteur, une autre période). Il faut donc toujours le comparer à la baseline purement supervisée sur le même jeu de test, et accepter de l'abandonner.</p>
+    <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
+    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif depuis six mois est-il parti ?). Deux définitions également raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables. Écrire la définition en une phrase, et la faire valider par le métier, économise des semaines.</p>
 
-    <h2 id="auto">5. Auto-supervisé</h2>
-    <p>Ici, on fabrique une tâche à partir des données elles-mêmes, sans aucune étiquette humaine, dans le seul but d'apprendre de bonnes représentations — qu'un petit modèle supervisé exploitera ensuite. C'est ce qui a permis de pré-entraîner sur des corpus gigantesques non annotés, et c'est à l'origine des grands modèles actuels.</p>
-    <ul>
-      <li><strong>Contrastif</strong> (SimCLR, MoCo) — rapprocher dans l'espace de représentation deux vues augmentées d'une même donnée, éloigner celles de données différentes. Le choix des augmentations <em>définit</em> les invariances apprises : si l'on inclut des variations de couleur, le modèle apprendra à ignorer la couleur — ce qui est souhaitable pour reconnaître un objet, catastrophique pour trier des composants par code couleur.</li>
-      <li><strong>Masquage</strong> (BERT pour le texte, MAE pour l'image) — cacher une partie de l'entrée et la reconstruire. Plus stable que le contrastif, sans besoin de paires négatives.</li>
-      <li><strong>Prédiction de contexte</strong> — prédire la suite d'un signal, l'ordre de fragments, la rotation appliquée à une image.</li>
-    </ul>
-    <p>C'est l'approche à privilégier quand on possède beaucoup de données brutes <em>spécifiques</em> — des millions de spectres, d'images de production, de journaux machine — et peu d'annotations : un pré-entraînement sur ses propres données bat généralement un transfert depuis un domaine éloigné.</p>
+    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8), et il est très coûteux à changer en cours de route.</p>
 
-    <h2 id="faible">6. Supervision faible et étiquettes bruitées</h2>
+    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème.</p>
+    <div class="code-label">Python — les baselines à toujours calculer</div>
+    <div class="code-block"><pre>from sklearn.dummy import DummyRegressor, DummyClassifier
 
-    <h3>Supervision faible</h3>
-    <p>Plutôt que d'annoter exemple par exemple, on écrit des <em>fonctions d'étiquetage</em> : des règles, des expressions régulières, des seuils métier, un modèle existant. Chacune est imprécise et ne couvre qu'une partie des données ; prises ensemble, elles se recoupent. Un modèle génératif (approche Snorkel) estime alors la fiabilité de chaque règle à partir de leurs accords et désaccords — sans connaître la vérité — et produit des étiquettes probabilistes pour tout le corpus.</p>
+# régression : prédire toujours la moyenne (ou la médiane)
+base = DummyRegressor(strategy="median").fit(X_tr, y_tr)
 
-    <div class="code-label">Python — le principe, en pseudo-code Snorkel</div>
-    <div class="code-block"><pre>from snorkel.labeling import labeling_function, PandasLFApplier, LabelModel
+# classification : prédire toujours la classe majoritaire
+base = DummyClassifier(strategy="most_frequent").fit(X_tr, y_tr)
 
-ABSTIEN, NEGATIF, POSITIF = -1, 0, 1
+# série temporelle : la valeur de la veille, ou celle de l'an dernier (module 17)
+pred_naive = y[:-1]
 
-@labeling_function()
-def contient_mot_cle(x):
-    return POSITIF if "remboursement" in x.texte.lower() else ABSTIEN
+# et surtout : la RÈGLE MÉTIER existante, si elle existe
+pred_regle = np.where(df["anciennete"] &lt; 3, 1, 0)</pre></div>
+    <p>La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, celui-ci ne vaut peut-être pas sa complexité opérationnelle.</p>
 
-@labeling_function()
-def montant_eleve(x):
-    return POSITIF if x.montant &gt; 5000 else ABSTIEN
+    <h2 id="eda">3. Exploration : une checklist</h2>
+    <div class="code-label">ce que je regarde systématiquement</div>
+    <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
+Cible          distribution, taux de positifs, extrêmes, évolution dans le temps
+Manquants      taux par colonne, et STRUCTURE des manquants (section 5)
+Doublons       lignes identiques ET doublons sur la clé métier
+Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
+Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix &lt; 0)
+Temps          couverture, trous, saisonnalité, ruptures de collecte
+Relations      corrélations entre variables, lien de chaque variable avec la cible
+Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
 
-@labeling_function()
-def client_historique(x):
-    return NEGATIF if x.anciennete_ans &gt; 10 else ABSTIEN
+    <div class="code-label">Python — le tour d'horizon, en quelques lignes</div>
+    <div class="code-block"><pre>import polars as pl
 
-L = PandasLFApplier([contient_mot_cle, montant_eleve, client_historique]).apply(df)
-modele_etiquettes = LabelModel(cardinality=2).fit(L)      # estime la fiabilité de chaque règle
-y_probable = modele_etiquettes.predict_proba(L)[:, 1]     # étiquettes PROBABILISTES</pre></div>
-    <p>Trois experts qui écrivent dix règles en une journée produisent souvent l'équivalent de plusieurs semaines d'annotation manuelle — et les règles se documentent, se versionnent et se corrigent, contrairement à des étiquettes figées.</p>
+df = pl.read_parquet("data/clients.parquet")
 
-    <h3>Étiquettes bruitées</h3>
-    <p>Elles sont la norme, pas l'exception : les jeux de référence publics eux-mêmes contiennent quelques pour cent d'erreurs. Les défenses efficaces :</p>
-    <ul>
-      <li><strong>Pertes robustes</strong> — MAE, Huber ou perte symétrique plutôt qu'entropie croisée pure, qui sur-pénalise les exemples mal étiquetés (elle tend vers l'infini quand le modèle contredit fortement l'étiquette).</li>
-      <li><strong>Label smoothing</strong> — remplacer la cible 1 par 0,9 : le modèle cesse de chercher une certitude absolue, ce qui limite l'effet des étiquettes fausses.</li>
-      <li><strong>Co-teaching</strong> — entraîner deux réseaux qui s'échangent les exemples de <em>faible</em> perte, considérés comme plus fiables.</li>
-      <li><strong>Détecter les erreurs</strong> — un modèle entraîné en validation croisée et très confiant <em>en désaccord</em> avec l'étiquette signale un cas à re-vérifier. <code>cleanlab</code> automatise cette recherche.</li>
-    </ul>
+print(df.shape, df.estimated_size("mb"))
+print(df.describe())                                     # stats par colonne
+print(df.null_count())                                   # manquants par colonne
+print(df.select(pl.all().n_unique()))                    # cardinalités
+print(df.filter(pl.struct(df.columns).is_duplicated()))  # doublons exacts
 
-    <div class="code-label">Python — trouver les étiquettes douteuses</div>
-    <div class="code-block"><pre>from cleanlab.filter import find_label_issues
-from sklearn.model_selection import cross_val_predict
+# valeurs impossibles : toujours confronter aux bornes MÉTIER
+print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))
 
-proba = cross_val_predict(modele, X, y, cv=5, method="predict_proba")
-suspects = find_label_issues(labels=y, pred_probs=proba, return_indices_ranked_by="self_confidence")
-print(f"{len(suspects)} étiquettes suspectes sur {len(y)}")
-# relire les 50 premières à la main : c'est souvent l'heure la mieux investie du projet</pre></div>
-    <p>Corriger 2 % d'étiquettes fausses rapporte souvent davantage que tout le réglage d'hyperparamètres — et le gain est <em>permanent</em>, puisqu'il porte sur les données et non sur un modèle.</p>
+# la cible dans le temps : LE graphique qui révèle les ruptures de collecte
+print(df.group_by_dynamic("date", every="1w").agg(
+          taux=pl.col("cible").mean(), n=pl.len()))
 
-    <h2 id="synthetique">7. Données synthétiques et simulation</h2>
-    <p>Quand un simulateur du phénomène existe — et c'est fréquent en ingénierie (module 20) — il devient une source illimitée de données étiquetées, puisque la vérité terrain est connue par construction. Le problème est le <strong>fossé simulation-réalité</strong> : un modèle entraîné sur des images de synthèse échoue sur des images réelles à cause de différences subtiles de texture, de bruit et d'éclairage que l'œil humain ne remarque même pas.</p>
-    <ul>
-      <li><strong>Randomisation de domaine</strong> — faire varier massivement, et même de façon exagérée, les paramètres non essentiels du simulateur : textures, éclairages, bruits, frottements, couleurs. Le monde réel devient alors « un cas parmi d'autres » du domaine d'entraînement, et le modèle apprend à ignorer ce qui varie. C'est la technique qui a permis les transferts sim2real les plus convaincants en robotique (module 19).</li>
-      <li><strong>Mélange et ajustement</strong> — pré-entraîner sur le synthétique, affiner sur un petit jeu réel. Très efficace, et souvent tout ce dont on a besoin.</li>
-      <li><strong>Génération par modèle</strong> — VAE, GAN, modèles de diffusion, ou LLM pour du texte. Utile pour équilibrer des classes rares, mais un modèle génératif n'invente rien : il recombine ce qu'il a vu. Entraîner massivement sur des données générées appauvrit progressivement la diversité.</li>
-      <li><strong>Confidentialité</strong> — les données synthétiques sont parfois présentées comme une solution au partage de données personnelles. À manier avec prudence : sans garantie formelle (confidentialité différentielle, module 26), un générateur peut mémoriser et restituer des enregistrements réels.</li>
-    </ul>
+# lien de chaque variable numérique avec la cible
+print(df.select(pl.corr(pl.col(c), pl.col("cible")).alias(c)
+                for c in colonnes_numeriques))</pre></div>
+
+    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou que la valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
 
     <div class="warning-block">
-      <strong>Évaluer, toujours, sur des données réelles.</strong> Un modèle entraîné sur du synthétique et évalué sur du synthétique affiche des scores excellents et sans aucune signification. Le jeu de test doit provenir du monde réel, dans les conditions d'exploitation visées — c'est la seule mesure qui compte, et il faut donc réserver une partie du budget d'annotation à sa constitution.
+      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité fortement corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une variable semble trop belle, elle contient généralement une information qui n'existera pas au moment de la prédiction (section 9).
     </div>
 
-    <h2 id="fewshot">8. Few-shot et zero-shot</h2>
-    <p>Les grands modèles pré-entraînés ont déplacé la frontière : un LLM (module 21) classe correctement du texte avec trois exemples dans son prompt, CLIP (module 17) reconnaît des catégories décrites en langage naturel sans aucun exemple étiqueté. Pour un prototype ou une tâche à faible volume, c'est souvent la solution la plus rapide — et elle permet surtout de <em>tester la valeur du projet</em> avant d'investir dans l'annotation.</p>
-    <p>Trois réserves. Le coût par prédiction reste élevé : un appel de modèle par exemple, contre quelques microsecondes pour une régression logistique. La performance plafonne en dessous de ce qu'atteint un petit modèle spécialisé bien entraîné, dès que le domaine est technique. Et la dépendance à un fournisseur externe pose des questions de confidentialité et de reproductibilité (module 26).</p>
-    <p>La trajectoire raisonnable est donc : démarrer en zero-shot pour valider l'intérêt, utiliser le grand modèle pour <em>pré-annoter</em> en faisant valider par un expert (ce qui divise le temps d'annotation par trois ou quatre), puis distiller le tout dans un petit modèle maison qui sera des milliers de fois moins cher à l'inférence.</p>
+    <h2 id="viz">4. Visualisation utile</h2>
+    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellents défauts), <strong>plotly</strong> (interactif, précieux pour explorer un nuage dense). Quelques principes qui changent réellement la lisibilité :</p>
+    <ul>
+      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure d'une distribution. Doubler avec un <em>violin plot</em> ou afficher les points quand l'échantillon est petit.</li>
+      <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
+      <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
+      <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 26).</li>
+      <li><strong>Se méfier des résumés</strong> : le quartet d'Anscombe et le « datasaurus » montrent que des jeux de données de moyennes, variances et corrélations <em>identiques</em> peuvent être radicalement différents. Regarder les distributions, pas seulement les statistiques.</li>
+    </ul>
 
-    <h2 id="budget">9. Décider combien annoter</h2>
-    <p>La question la plus utile du module se pose en euros : faut-il annoter mille exemples de plus, ou changer de modèle ? La <strong>courbe d'apprentissage</strong> y répond empiriquement — on entraîne sur des fractions croissantes des étiquettes disponibles et on extrapole.</p>
+    <div class="code-label">Python — les quatre graphiques que je fais en premier</div>
+    <div class="code-block"><pre>import matplotlib.pyplot as plt, seaborn as sns
+
+fig, ax = plt.subplots(2, 2, figsize=(12, 8))
+
+sns.histplot(df["prix"], log_scale=True, ax=ax[0, 0])          # 1. la cible
+ax[0, 0].set_title("distribution de la cible (échelle log)")
+
+df.set_index("date")["cible"].resample("W").mean().plot(ax=ax[0, 1])   # 2. le temps
+ax[0, 1].set_title("taux de positifs par semaine")
+
+sns.heatmap(df[num].corr(), cmap="RdBu_r", center=0, ax=ax[1, 0])      # 3. corrélations
+ax[1, 0].set_title("corrélations entre variables")
+
+sns.boxplot(data=df, x="segment", y="prix", ax=ax[1, 1])               # 4. par groupe
+ax[1, 1].set_yscale("log")
+plt.tight_layout()</pre></div>
+
+    <h2 id="manquantes">5. Données manquantes</h2>
+    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin, qui n'est pas qu'une curiosité théorique :</p>
+    <ul>
+      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : un capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
+      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est alors légitime, puisque l'information nécessaire est disponible.</li>
+      <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
+    </ul>
+
+    <div class="code-label">Python — diagnostiquer la structure des manquants</div>
+    <div class="code-block"><pre># le taux de manquants dépend-il des autres variables ? (indice de MAR)
+df["revenu_manquant"] = df["revenu"].isna()
+print(df.groupby("revenu_manquant")[["age", "anciennete", "cible"]].mean())
+# si les moyennes diffèrent nettement → le manque est INFORMATIF
+
+# les manquants sont-ils groupés ? (plusieurs colonnes absentes ensemble)
+import missingno as msno
+msno.matrix(df); msno.heatmap(df)     # visualise la co-occurrence des manquants</pre></div>
+
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
+Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
+Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase
+                          les corrélations. Acceptable comme baseline.
+KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux, bien meilleur.
+Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres,
+                          qui peuvent isoler cette modalité.
+Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement
+                          les NaN et APPRENNENT la meilleure direction pour eux.
+Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est
+                          souvent informatif (un client qui ne renseigne pas
+                          son revenu n'est pas un client au hasard).</pre></div>
 
     <div class="code-label">Python</div>
-    <div class="code-block"><pre>import numpy as np
-from sklearn.model_selection import learning_curve
-from scipy.optimize import curve_fit
+    <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
+from sklearn.impute import IterativeImputer, SimpleImputer
 
-tailles, score_train, score_val = learning_curve(
-    modele, X, y, train_sizes=np.linspace(0.1, 1.0, 8),
-    cv=5, scoring="average_precision", n_jobs=-1)
+# imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
+imp = IterativeImputer(max_iter=10, random_state=0)
 
-# la performance suit typiquement une loi de puissance : erreur ≈ a·n^(-b) + c
-def loi(n, a, b, c): return a * n ** (-b) + c
-(a, b, c), _ = curve_fit(loi, tailles, 1 - score_val.mean(axis=1), p0=[1, 0.5, 0.05])
+# conserver l'information "cette valeur manquait" : ajoute une colonne booléenne
+imp = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
 
-for n in (2_000, 5_000, 10_000):
-    print(f"{n} étiquettes → erreur prédite {loi(n, a, b, c):.3f}")
-# c est l'erreur INCOMPRESSIBLE : si elle est déjà proche du score actuel,
-# annoter davantage ne changera rien.</pre></div>
+    <div class="warning-block">
+      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3), et rien d'autre.
+    </div>
 
-    <p>La lecture décide de la suite. Si la courbe de validation monte encore nettement, annoter davantage est le meilleur investissement. Si elle a plafonné loin du niveau souhaité, le problème est ailleurs — variables insuffisantes, étiquettes bruitées, ou tâche intrinsèquement difficile — et mille annotations de plus ne changeront rien. C'est le même raisonnement que le diagnostic biais-variance du module 13, mais exprimé en budget.</p>
+    <h2 id="features">6. Feature engineering</h2>
+    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne variable bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter — un arbre ne « devinera » jamais qu'il faut diviser le prix par la surface.</p>
+
+    <h3>Variables catégorielles</h3>
+    <div class="code-label">encodages</div>
+    <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
+Ordinal          un entier par modalité. Uniquement si un ORDRE existe réellement
+                 (S &lt; M &lt; L), ou pour des arbres, qui savent découper n'importe où.
+Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
+                 forte cardinalité (code postal, produit) — et très exposé à la fuite.
+Hashing          projette dans un espace de taille fixe. Utile en flux, perd la lisibilité.
+Embeddings       représentation dense apprise. Pour les réseaux (module 16).</pre></div>
+
+    <p>Le <strong>target encoding</strong> mérite un développement, car il est à la fois redoutablement efficace et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute — qui vaudrait 0 ou 1 pour une modalité vue une seule fois — mais une moyenne lissée vers la moyenne globale :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
+    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. C'est exactement le regroupement partiel des modèles hiérarchiques (module 10), en version simplifiée.</p>
+    <p>Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> : chaque pli encodé avec les statistiques des <em>autres</em> plis. Sans cela, chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable en production. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
+
+    <h3>Variables numériques et temporelles</h3>
+    <div class="code-label">Python — les transformations qui rapportent</div>
+    <div class="code-block"><pre>import numpy as np, polars as pl
+
+df = df.with_columns(
+    # 1. transformations : log pour les queues lourdes (prix, revenus, durées)
+    log_prix=pl.col("prix").log1p(),           # log1p gère la valeur 0
+
+    # 2. RATIOS et interactions : souvent l'apport décisif. Les arbres approchent
+    #    très mal un ratio (il leur faut des dizaines de coupes), il faut le fournir.
+    prix_m2=pl.col("prix") / pl.col("surface"),
+    revenu_par_personne=pl.col("revenu") / pl.col("taille_foyer"),
+    intensite=pl.col("n_connexions") / pl.col("anciennete_jours"),
+
+    # 3. variables de calendrier
+    jour_semaine=pl.col("date").dt.weekday(),
+    mois=pl.col("date").dt.month(),
+    est_weekend=pl.col("date").dt.weekday() &gt;= 6,
+
+    # 4. variables CYCLIQUES : pour que 23 h soit proche de 0 h
+    heure_sin=(2 * np.pi * pl.col("date").dt.hour() / 24).sin(),
+    heure_cos=(2 * np.pi * pl.col("date").dt.hour() / 24).cos(),
+
+    # 5. agrégats à fenêtre STRICTEMENT passée (le shift(1) est essentiel)
+    depense_moy_30j=pl.col("montant").shift(1).rolling_mean(30).over("client_id"),
+    n_achats_7j=pl.col("montant").shift(1).rolling_count(7).over("client_id"),
+)</pre></div>
+
+    <p>Les <strong>agrégats à fenêtre</strong> sont le cœur du feature engineering sur données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 4) — souvent plus efficacement, directement dans la base. La <strong>discrétisation</strong> (transformer l'âge en tranches) capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information ; elle est inutile pour un modèle à base d'arbres, qui la trouve tout seul.</p>
+
+    <h3>Sélection de variables</h3>
+    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 14) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées <em>à l'intérieur</em> de la validation croisée, sinon la sélection elle-même devient une fuite.</p>
+
+    <h2 id="desequilibre">7. Classes déséquilibrées</h2>
+    <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
+    <ol>
+      <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 8).</li>
+      <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
+      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, jamais laissé à 0,5 par défaut (module 24).</li>
+      <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
+    </ol>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.metrics import precision_recall_curve
+
+# 1 et 2 : métrique adaptée et pondération
+modele = LGBMClassifier(scale_pos_weight=(y_tr == 0).sum() / (y_tr == 1).sum())
+modele.fit(X_tr, y_tr, eval_metric="average_precision")
+
+# 3 : choisir le seuil sur la courbe précision-rappel, pas à 0,5
+p = modele.predict_proba(X_val)[:, 1]
+prec, rap, seuils = precision_recall_curve(y_val, p)
+# par exemple : le seuil qui garantit au moins 80 % de précision
+i = np.argmax(prec[:-1] &gt;= 0.80)
+print(f"seuil = {seuils[i]:.3f} → précision {prec[i]:.1%}, rappel {rap[i]:.1%}")</pre></div>
+
+    <div class="warning-block">
+      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion, parfois spectaculaire. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
+    </div>
+
+    <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
+    <p>Un découpage unique train/test est bruité : le score dépend du tirage, et sur un petit jeu l'écart entre deux tirages peut dépasser l'écart entre deux modèles. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
+
+    <div class="code-label">les schémas, visualisés</div>
+    <div class="code-block"><pre>KFold (K=5)                     TimeSeriesSplit
+pli 1  [test][─── train ───]    pli 1  [train][test]·············
+pli 2  [train][test][ train ]   pli 2  [── train ──][test]·······
+pli 3  [── train ─][test][──]   pli 3  [──── train ───][test]····
+pli 4  [─── train ──][test][]   pli 4  [────── train ────][test]·
+pli 5  [──── train ────][test]         ↑ on n'entraîne JAMAIS sur le futur
+
+GroupKFold (groupe = client)
+client A ██  B ██  C ██  D ██  E ██     un client entier va d'un seul côté :
+pli 1    test    train train train      pas de client des deux côtés du découpage</pre></div>
+
+    <div class="code-label">quel schéma pour quelle structure de données</div>
+    <div class="code-block"><pre>KFold                  données i.i.d., régression                 K = 5 ou 10
+StratifiedKFold        classification : conserve les proportions  le défaut en classif
+GroupKFold             plusieurs lignes par entité (patient,      un groupe = un seul pli
+                       client, bien immobilier)
+StratifiedGroupKFold   les deux contraintes à la fois
+TimeSeriesSplit        séries temporelles : entraîner sur le      jamais de mélange
+                       passé, tester sur le futur
+LeaveOneOut            très peu de données                        coûteux, variance élevée
+Nested CV              on optimise DES hyperparamètres ET on veut boucle interne = réglage
+                       une estimation non biaisée                 boucle externe = évaluation</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>from sklearn.model_selection import GroupKFold, cross_validate
+
+# données transactionnelles : plusieurs lignes par client → GroupKFold
+res = cross_validate(pipeline, X, y, groups=df["client_id"],
+                     cv=GroupKFold(n_splits=5),
+                     scoring=["roc_auc", "average_precision"],
+                     return_train_score=True, n_jobs=-1)
+
+# l'écart train/validation mesure directement le surapprentissage
+print(f"train {res['train_roc_auc'].mean():.3f} | "
+      f"val {res['test_roc_auc'].mean():.3f} ± {res['test_roc_auc'].std():.3f}")</pre></div>
+
+    <div class="step-block">
+      <h4>Le protocole que je considère comme correct</h4>
+      <ol>
+        <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
+        <li>Travailler en validation croisée sur le reste : exploration, variables, réglages.</li>
+        <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
+        <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
+        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation, et son score n'est plus une estimation honnête.</li>
+      </ol>
+    </div>
+
+    <h2 id="leakage">9. Fuites de données : le catalogue</h2>
+    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production, quand plus personne ne sait d'où vient le problème.</p>
+
+    <div class="code-label">les formes de fuite, et leur remède</div>
+    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de variables ajustés sur TOUT
+                         le jeu avant le découpage.    → tout mettre dans un Pipeline
+
+Fuite temporelle         une variable utilise de l'information postérieure à la date
+                         de prédiction : moyenne calculée sur toute la période,
+                         statut final du dossier.      → figer une date de référence
+
+Duplication              la même observation (ou quasi) des deux côtés du découpage :
+                         doublons, utilisateur présent plusieurs fois.  → GroupKFold
+
+Cible déguisée           une colonne qui n'existe QUE parce que l'événement a eu lieu :
+                         "date de résiliation", "montant remboursé", "motif de panne".
+
+Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
+                         → encodage en validation croisée interne
+
+Fuite par le seuil       choisir le seuil de décision sur le jeu de test.
+
+Sélection répétée        essayer 200 modèles et garder le meilleur score de test :
+                         le test devient un jeu d'entraînement déguisé.</pre></div>
+
+    <div class="step-block">
+      <h4>Comment la détecter</h4>
+      <p>Un score anormalement élevé — une AUC de 0,99 sur un problème réputé difficile — doit déclencher une suspicion, pas une satisfaction. Trois gestes efficaces : regarder les <em>importances de variables</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; rejouer la chaîne complète sur une période postérieure (validation temporelle), où une fuite disparaît et fait s'effondrer le score ; et écrire pour chaque variable, noir sur blanc, <em>à quel instant elle est connue</em>. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
+    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Ordre d'attaque : transfert, puis auto-supervisé sur ses propres données brutes, puis annotation active.</li>
-        <li>Avec très peu d'exemples, l'extraction de features battra souvent un fine-tuning complet.</li>
-        <li>L'apprentissage actif cible l'incertitude <em>épistémique</em>, exige de la diversité dans les lots, et impose de garder un jeu de test tiré au hasard.</li>
-        <li>Le semi-supervisé aide quand ses hypothèses tiennent — à vérifier contre la baseline supervisée.</li>
-        <li>Des règles métier (supervision faible) valent souvent des semaines d'annotation manuelle.</li>
-        <li>Nettoyer 2 % d'étiquettes fausses rapporte plus que tout le réglage d'hyperparamètres.</li>
-        <li>Le synthétique s'évalue sur du réel, sans exception ; la randomisation de domaine réduit le fossé sim2real.</li>
-        <li>Le zero-shot sert à valider la valeur du projet, puis à pré-annoter, puis à distiller.</li>
-        <li>La courbe d'apprentissage transforme « faut-il annoter plus ? » en décision chiffrée.</li>
+        <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
+        <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
+        <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
+        <li>Le feature engineering paie plus que le choix d'algorithme : ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
+        <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
+        <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
+        <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m11.html" class="btn btn-secondary">← Module 11 : Data science en pratique</a>
-    <a href="project7-m13.html" class="btn btn-primary">Module 13 : ML classique →</a>
+    <a href="project7-m11.html" class="btn btn-secondary">← Module 11 : Inférence causale</a>
+    <a href="project7-m13.html" class="btn btn-primary">Module 13 : Peu d'étiquettes →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Active learning</span><span class="tag">Semi-supervisé</span><span class="tag">Auto-supervisé</span><span class="tag">Snorkel</span><span class="tag">Sim2real</span><span class="tag">Few-shot</span></div>
+  <div class="project-meta"><span class="tag">EDA</span><span class="tag">Feature engineering</span><span class="tag">Imputation</span><span class="tag">Validation croisée</span><span class="tag">Data leakage</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -310,7 +415,7 @@ for n in (2_000, 5_000, 10_000):
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 12</div>
-    <h1>Learning with few labels</h1>
+    <h1>Data science in practice: from problem to dataset</h1>
   </div>
 
   <div class="project-content course-content">
@@ -320,15 +425,15 @@ for n in (2_000, 5_000, 10_000):
 
     <h2>What this module covers</h2>
     <ul>
-      <li>A decision table mapping what you have (a pre-trained model, unlabelled data, business rules, a simulator, noisy labels) to the strategy that fits.</li>
-      <li>Transfer learning done properly: freeze-then-unfreeze, feature extraction for very small datasets, domain distance, and unsupervised domain adaptation.</li>
-      <li>Active learning: uncertainty, margin, entropy, committee disagreement, core-set diversity and epistemic targeting — with the three traps (non-representative labelled set, redundant batches, cold start).</li>
-      <li>Semi-supervised learning: pseudo-labelling, consistency regularisation (FixMatch), graph propagation, and the conditions under which it helps rather than hurts.</li>
-      <li>Self-supervised pre-training: contrastive and masked objectives, and why pre-training on your own raw data beats transfer from a distant domain.</li>
-      <li>Weak supervision with labelling functions (Snorkel), and learning with noisy labels — including finding mislabelled examples, which usually pays more than hyperparameter tuning.</li>
-      <li>Synthetic data and simulation: domain randomisation for sim2real, mixing and fine-tuning, generative data and its diversity collapse, privacy caveats — and the rule that evaluation must always be on real data.</li>
-      <li>Few-shot and zero-shot with foundation models, and the sensible trajectory: validate, pre-annotate, then distil.</li>
-      <li>Learning curves as a budgeting tool: turning "should we label more?" into a quantified decision.</li>
+      <li>The real shape of a data project, and the one question to answer first: which decision will change because of this model?</li>
+      <li>Framing: defining the target, the observation unit, and a baseline worth beating.</li>
+      <li>An exploration checklist, automated profiling, and the "disguised identifier" trap.</li>
+      <li>Visualisation rules that actually improve readability.</li>
+      <li>Missing data: Rubin's MCAR / MAR / MNAR typology, imputation strategies, and why imputation belongs inside the pipeline.</li>
+      <li>Feature engineering: categorical encodings (including smoothed, cross-fitted target encoding), transformations, cyclical time features, windowed aggregates, feature selection.</li>
+      <li>Imbalanced classes: metrics first, class weights, threshold tuning, and an honest assessment of SMOTE.</li>
+      <li>Cross-validation schemes matched to data structure (groups, time series, stratification), nested CV, and a protocol that keeps the test set honest.</li>
+      <li>A catalogue of data leakage patterns and how to detect them.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -343,23 +448,24 @@ for n in (2_000, 5_000, 10_000):
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><strong>Learning with few labels</strong></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><strong>Data science in practice: from problem to dataset</strong></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

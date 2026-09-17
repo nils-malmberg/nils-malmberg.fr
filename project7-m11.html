@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 11 - Data science en pratique : du problème au dataset - Nils Malmberg</title>
+  <title>Module 11 - Inférence causale : mesurer l'effet d'une action - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,360 +41,494 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 11</div>
-    <h1>Data science en pratique : du problème au dataset</h1>
+    <h1>Inférence causale : mesurer l'effet d'une action</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes, et qui décide pourtant du sort du projet.</p>
+    <p>Le module 9 a montré comment décider si une différence observée est réelle, et il s'est arrêté à une phrase importante : quand on ne peut pas randomiser, il existe des méthodes quasi-expérimentales, qui reposent sur des hypothèses à argumenter. Ce module développe cette phrase. C'est probablement le savoir-faire qui distingue le plus nettement quelqu'un qui sait entraîner un modèle de quelqu'un dont l'analyse fonde une décision : la question « quel est l'effet de cette action ? » n'est pas la question « que va-t-il se passer ? », et aucun modèle prédictif, si bon soit-il, ne répond à la première.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cycle">Cycle de vie d'un projet</a></li>
-        <li><a href="#cadrage">Cadrage : la cible et la baseline</a></li>
-        <li><a href="#eda">Exploration : une checklist</a></li>
-        <li><a href="#viz">Visualisation utile</a></li>
-        <li><a href="#manquantes">Données manquantes</a></li>
-        <li><a href="#features">Feature engineering</a></li>
-        <li><a href="#desequilibre">Classes déséquilibrées</a></li>
-        <li><a href="#validation">Validation croisée : choisir le bon schéma</a></li>
-        <li><a href="#leakage">Fuites de données : le catalogue</a></li>
+        <li><a href="#probleme">Le problème : prédire n'est pas agir</a></li>
+        <li><a href="#potentiels">Les résultats potentiels : écrire ce qu'on cherche</a></li>
+        <li><a href="#estimandes">ATE, ATT, CATE : de quel effet parle-t-on ?</a></li>
+        <li><a href="#hypotheses">Les trois hypothèses qu'on ne peut pas tester</a></li>
+        <li><a href="#randomisation">L'expérience randomisée, et CUPED</a></li>
+        <li><a href="#propension">Le score de propension : pondérer ou apparier</a></li>
+        <li><a href="#did">Différences de différences</a></li>
+        <li><a href="#rdd">Régression sur discontinuité</a></li>
+        <li><a href="#iv">Variables instrumentales</a></li>
+        <li><a href="#dml">Double machine learning et effets hétérogènes</a></li>
+        <li><a href="#sensibilite">Et si un confondant manquait ?</a></li>
+        <li><a href="#recap">Récapitulatif et erreurs fréquentes</a></li>
       </ol>
     </div>
 
-    <h2 id="cycle">1. Cycle de vie d'un projet</h2>
-    <div class="code-label">les étapes, et leur poids réel en temps</div>
-    <div class="code-block"><pre>1. Cadrage métier       définir la question, la métrique, l'usage du résultat    ~10 %
-2. Collecte / accès     trouver, extraire, joindre les données                   ~20 %
-3. Exploration          comprendre les données, détecter les anomalies           ~15 %
-4. Préparation          nettoyage, features, encodages                           ~25 %
-5. Modélisation         baseline, puis itérations                                ~10 %
-6. Évaluation           protocole, métriques, analyse d'erreurs                  ~10 %
-7. Déploiement / suivi  mise en production, monitoring, ré-entraînement          ~10 %</pre></div>
+    <h2 id="probleme">1. Le problème : prédire n'est pas agir</h2>
 
-    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique, avec une « livraison » à la fin.</p>
+    <p>Un exemple auquel on ne coupe pas. Une entreprise constate que les clients ayant contacté le support résilient deux fois moins que les autres. Un modèle de classification le confirme : « a contacté le support » est la variable la plus importante. Conclusion tentante : appelons tout le monde.</p>
+
+    <p>Elle est probablement fausse, et pour une raison structurelle. Les gens qui contactent le support sont ceux qui tiennent assez au service pour prendre leur téléphone ; les autres sont déjà partis mentalement. La corrélation est réelle, le modèle n'a pas menti, mais l'<strong>intervention</strong> — appeler quelqu'un qui n'aurait pas appelé — n'est pas la même chose que l'<strong>observation</strong> — constater que quelqu'un a appelé.</p>
 
     <div class="step-block">
-      <h4>La question à poser avant tout le reste</h4>
-      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout : la métrique (un coût d'erreur asymétrique change le seuil, module 23), la latence acceptable (temps réel ou lot nocturne, module 6), le besoin d'explicabilité (un refus de crédit doit être motivé, module 26), et même la faisabilité — certaines décisions ont besoin de <em>causalité</em>, pas de prédiction (module 9).</p>
-    </div>
-
-    <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
-    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif depuis six mois est-il parti ?). Deux définitions également raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables. Écrire la définition en une phrase, et la faire valider par le métier, économise des semaines.</p>
-
-    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8), et il est très coûteux à changer en cours de route.</p>
-
-    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème.</p>
-    <div class="code-label">Python — les baselines à toujours calculer</div>
-    <div class="code-block"><pre>from sklearn.dummy import DummyRegressor, DummyClassifier
-
-# régression : prédire toujours la moyenne (ou la médiane)
-base = DummyRegressor(strategy="median").fit(X_tr, y_tr)
-
-# classification : prédire toujours la classe majoritaire
-base = DummyClassifier(strategy="most_frequent").fit(X_tr, y_tr)
-
-# série temporelle : la valeur de la veille, ou celle de l'an dernier (module 16)
-pred_naive = y[:-1]
-
-# et surtout : la RÈGLE MÉTIER existante, si elle existe
-pred_regle = np.where(df["anciennete"] &lt; 3, 1, 0)</pre></div>
-    <p>La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, celui-ci ne vaut peut-être pas sa complexité opérationnelle.</p>
-
-    <h2 id="eda">3. Exploration : une checklist</h2>
-    <div class="code-label">ce que je regarde systématiquement</div>
-    <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
-Cible          distribution, taux de positifs, extrêmes, évolution dans le temps
-Manquants      taux par colonne, et STRUCTURE des manquants (section 5)
-Doublons       lignes identiques ET doublons sur la clé métier
-Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
-Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix &lt; 0)
-Temps          couverture, trous, saisonnalité, ruptures de collecte
-Relations      corrélations entre variables, lien de chaque variable avec la cible
-Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
-
-    <div class="code-label">Python — le tour d'horizon, en quelques lignes</div>
-    <div class="code-block"><pre>import polars as pl
-
-df = pl.read_parquet("data/clients.parquet")
-
-print(df.shape, df.estimated_size("mb"))
-print(df.describe())                                     # stats par colonne
-print(df.null_count())                                   # manquants par colonne
-print(df.select(pl.all().n_unique()))                    # cardinalités
-print(df.filter(pl.struct(df.columns).is_duplicated()))  # doublons exacts
-
-# valeurs impossibles : toujours confronter aux bornes MÉTIER
-print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))
-
-# la cible dans le temps : LE graphique qui révèle les ruptures de collecte
-print(df.group_by_dynamic("date", every="1w").agg(
-          taux=pl.col("cible").mean(), n=pl.len()))
-
-# lien de chaque variable numérique avec la cible
-print(df.select(pl.corr(pl.col(c), pl.col("cible")).alias(c)
-                for c in colonnes_numeriques))</pre></div>
-
-    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou que la valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
-
-    <div class="warning-block">
-      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité fortement corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une variable semble trop belle, elle contient généralement une information qui n'existera pas au moment de la prédiction (section 9).
-    </div>
-
-    <h2 id="viz">4. Visualisation utile</h2>
-    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellents défauts), <strong>plotly</strong> (interactif, précieux pour explorer un nuage dense). Quelques principes qui changent réellement la lisibilité :</p>
-    <ul>
-      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure d'une distribution. Doubler avec un <em>violin plot</em> ou afficher les points quand l'échantillon est petit.</li>
-      <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
-      <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
-      <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 25).</li>
-      <li><strong>Se méfier des résumés</strong> : le quartet d'Anscombe et le « datasaurus » montrent que des jeux de données de moyennes, variances et corrélations <em>identiques</em> peuvent être radicalement différents. Regarder les distributions, pas seulement les statistiques.</li>
-    </ul>
-
-    <div class="code-label">Python — les quatre graphiques que je fais en premier</div>
-    <div class="code-block"><pre>import matplotlib.pyplot as plt, seaborn as sns
-
-fig, ax = plt.subplots(2, 2, figsize=(12, 8))
-
-sns.histplot(df["prix"], log_scale=True, ax=ax[0, 0])          # 1. la cible
-ax[0, 0].set_title("distribution de la cible (échelle log)")
-
-df.set_index("date")["cible"].resample("W").mean().plot(ax=ax[0, 1])   # 2. le temps
-ax[0, 1].set_title("taux de positifs par semaine")
-
-sns.heatmap(df[num].corr(), cmap="RdBu_r", center=0, ax=ax[1, 0])      # 3. corrélations
-ax[1, 0].set_title("corrélations entre variables")
-
-sns.boxplot(data=df, x="segment", y="prix", ax=ax[1, 1])               # 4. par groupe
-ax[1, 1].set_yscale("log")
-plt.tight_layout()</pre></div>
-
-    <h2 id="manquantes">5. Données manquantes</h2>
-    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin, qui n'est pas qu'une curiosité théorique :</p>
-    <ul>
-      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : un capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
-      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est alors légitime, puisque l'information nécessaire est disponible.</li>
-      <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
-    </ul>
-
-    <div class="code-label">Python — diagnostiquer la structure des manquants</div>
-    <div class="code-block"><pre># le taux de manquants dépend-il des autres variables ? (indice de MAR)
-df["revenu_manquant"] = df["revenu"].isna()
-print(df.groupby("revenu_manquant")[["age", "anciennete", "cible"]].mean())
-# si les moyennes diffèrent nettement → le manque est INFORMATIF
-
-# les manquants sont-ils groupés ? (plusieurs colonnes absentes ensemble)
-import missingno as msno
-msno.matrix(df); msno.heatmap(df)     # visualise la co-occurrence des manquants</pre></div>
-
-    <div class="code-label">stratégies</div>
-    <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
-Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
-Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase
-                          les corrélations. Acceptable comme baseline.
-KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux, bien meilleur.
-Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres,
-                          qui peuvent isoler cette modalité.
-Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement
-                          les NaN et APPRENNENT la meilleure direction pour eux.
-Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est
-                          souvent informatif (un client qui ne renseigne pas
-                          son revenu n'est pas un client au hasard).</pre></div>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
-from sklearn.impute import IterativeImputer, SimpleImputer
-
-# imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
-imp = IterativeImputer(max_iter=10, random_state=0)
-
-# conserver l'information "cette valeur manquait" : ajoute une colonne booléenne
-imp = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
-
-    <div class="warning-block">
-      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3), et rien d'autre.
-    </div>
-
-    <h2 id="features">6. Feature engineering</h2>
-    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne variable bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter — un arbre ne « devinera » jamais qu'il faut diviser le prix par la surface.</p>
-
-    <h3>Variables catégorielles</h3>
-    <div class="code-label">encodages</div>
-    <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
-Ordinal          un entier par modalité. Uniquement si un ORDRE existe réellement
-                 (S &lt; M &lt; L), ou pour des arbres, qui savent découper n'importe où.
-Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
-                 forte cardinalité (code postal, produit) — et très exposé à la fuite.
-Hashing          projette dans un espace de taille fixe. Utile en flux, perd la lisibilité.
-Embeddings       représentation dense apprise. Pour les réseaux (module 15).</pre></div>
-
-    <p>Le <strong>target encoding</strong> mérite un développement, car il est à la fois redoutablement efficace et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute — qui vaudrait 0 ou 1 pour une modalité vue une seule fois — mais une moyenne lissée vers la moyenne globale :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
-    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. C'est exactement le regroupement partiel des modèles hiérarchiques (module 10), en version simplifiée.</p>
-    <p>Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> : chaque pli encodé avec les statistiques des <em>autres</em> plis. Sans cela, chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable en production. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
-
-    <h3>Variables numériques et temporelles</h3>
-    <div class="code-label">Python — les transformations qui rapportent</div>
-    <div class="code-block"><pre>import numpy as np, polars as pl
-
-df = df.with_columns(
-    # 1. transformations : log pour les queues lourdes (prix, revenus, durées)
-    log_prix=pl.col("prix").log1p(),           # log1p gère la valeur 0
-
-    # 2. RATIOS et interactions : souvent l'apport décisif. Les arbres approchent
-    #    très mal un ratio (il leur faut des dizaines de coupes), il faut le fournir.
-    prix_m2=pl.col("prix") / pl.col("surface"),
-    revenu_par_personne=pl.col("revenu") / pl.col("taille_foyer"),
-    intensite=pl.col("n_connexions") / pl.col("anciennete_jours"),
-
-    # 3. variables de calendrier
-    jour_semaine=pl.col("date").dt.weekday(),
-    mois=pl.col("date").dt.month(),
-    est_weekend=pl.col("date").dt.weekday() &gt;= 6,
-
-    # 4. variables CYCLIQUES : pour que 23 h soit proche de 0 h
-    heure_sin=(2 * np.pi * pl.col("date").dt.hour() / 24).sin(),
-    heure_cos=(2 * np.pi * pl.col("date").dt.hour() / 24).cos(),
-
-    # 5. agrégats à fenêtre STRICTEMENT passée (le shift(1) est essentiel)
-    depense_moy_30j=pl.col("montant").shift(1).rolling_mean(30).over("client_id"),
-    n_achats_7j=pl.col("montant").shift(1).rolling_count(7).over("client_id"),
-)</pre></div>
-
-    <p>Les <strong>agrégats à fenêtre</strong> sont le cœur du feature engineering sur données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 4) — souvent plus efficacement, directement dans la base. La <strong>discrétisation</strong> (transformer l'âge en tranches) capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information ; elle est inutile pour un modèle à base d'arbres, qui la trouve tout seul.</p>
-
-    <h3>Sélection de variables</h3>
-    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 13) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées <em>à l'intérieur</em> de la validation croisée, sinon la sélection elle-même devient une fuite.</p>
-
-    <h2 id="desequilibre">7. Classes déséquilibrées</h2>
-    <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
-    <ol>
-      <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 8).</li>
-      <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
-      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, jamais laissé à 0,5 par défaut (module 23).</li>
-      <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
-    </ol>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.metrics import precision_recall_curve
-
-# 1 et 2 : métrique adaptée et pondération
-modele = LGBMClassifier(scale_pos_weight=(y_tr == 0).sum() / (y_tr == 1).sum())
-modele.fit(X_tr, y_tr, eval_metric="average_precision")
-
-# 3 : choisir le seuil sur la courbe précision-rappel, pas à 0,5
-p = modele.predict_proba(X_val)[:, 1]
-prec, rap, seuils = precision_recall_curve(y_val, p)
-# par exemple : le seuil qui garantit au moins 80 % de précision
-i = np.argmax(prec[:-1] &gt;= 0.80)
-print(f"seuil = {seuils[i]:.3f} → précision {prec[i]:.1%}, rappel {rap[i]:.1%}")</pre></div>
-
-    <div class="warning-block">
-      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion, parfois spectaculaire. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
-    </div>
-
-    <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
-    <p>Un découpage unique train/test est bruité : le score dépend du tirage, et sur un petit jeu l'écart entre deux tirages peut dépasser l'écart entre deux modèles. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
-
-    <div class="code-label">les schémas, visualisés</div>
-    <div class="code-block"><pre>KFold (K=5)                     TimeSeriesSplit
-pli 1  [test][─── train ───]    pli 1  [train][test]·············
-pli 2  [train][test][ train ]   pli 2  [── train ──][test]·······
-pli 3  [── train ─][test][──]   pli 3  [──── train ───][test]····
-pli 4  [─── train ──][test][]   pli 4  [────── train ────][test]·
-pli 5  [──── train ────][test]         ↑ on n'entraîne JAMAIS sur le futur
-
-GroupKFold (groupe = client)
-client A ██  B ██  C ██  D ██  E ██     un client entier va d'un seul côté :
-pli 1    test    train train train      pas de client des deux côtés du découpage</pre></div>
-
-    <div class="code-label">quel schéma pour quelle structure de données</div>
-    <div class="code-block"><pre>KFold                  données i.i.d., régression                 K = 5 ou 10
-StratifiedKFold        classification : conserve les proportions  le défaut en classif
-GroupKFold             plusieurs lignes par entité (patient,      un groupe = un seul pli
-                       client, bien immobilier)
-StratifiedGroupKFold   les deux contraintes à la fois
-TimeSeriesSplit        séries temporelles : entraîner sur le      jamais de mélange
-                       passé, tester sur le futur
-LeaveOneOut            très peu de données                        coûteux, variance élevée
-Nested CV              on optimise DES hyperparamètres ET on veut boucle interne = réglage
-                       une estimation non biaisée                 boucle externe = évaluation</pre></div>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.model_selection import GroupKFold, cross_validate
-
-# données transactionnelles : plusieurs lignes par client → GroupKFold
-res = cross_validate(pipeline, X, y, groups=df["client_id"],
-                     cv=GroupKFold(n_splits=5),
-                     scoring=["roc_auc", "average_precision"],
-                     return_train_score=True, n_jobs=-1)
-
-# l'écart train/validation mesure directement le surapprentissage
-print(f"train {res['train_roc_auc'].mean():.3f} | "
-      f"val {res['test_roc_auc'].mean():.3f} ± {res['test_roc_auc'].std():.3f}")</pre></div>
-
-    <div class="step-block">
-      <h4>Le protocole que je considère comme correct</h4>
-      <ol>
-        <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
-        <li>Travailler en validation croisée sur le reste : exploration, variables, réglages.</li>
-        <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
-        <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
-        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation, et son score n'est plus une estimation honnête.</li>
-      </ol>
-    </div>
-
-    <h2 id="leakage">9. Fuites de données : le catalogue</h2>
-    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production, quand plus personne ne sait d'où vient le problème.</p>
-
-    <div class="code-label">les formes de fuite, et leur remède</div>
-    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de variables ajustés sur TOUT
-                         le jeu avant le découpage.    → tout mettre dans un Pipeline
-
-Fuite temporelle         une variable utilise de l'information postérieure à la date
-                         de prédiction : moyenne calculée sur toute la période,
-                         statut final du dossier.      → figer une date de référence
-
-Duplication              la même observation (ou quasi) des deux côtés du découpage :
-                         doublons, utilisateur présent plusieurs fois.  → GroupKFold
-
-Cible déguisée           une colonne qui n'existe QUE parce que l'événement a eu lieu :
-                         "date de résiliation", "montant remboursé", "motif de panne".
-
-Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
-                         → encodage en validation croisée interne
-
-Fuite par le seuil       choisir le seuil de décision sur le jeu de test.
-
-Sélection répétée        essayer 200 modèles et garder le meilleur score de test :
-                         le test devient un jeu d'entraînement déguisé.</pre></div>
-
-    <div class="step-block">
-      <h4>Comment la détecter</h4>
-      <p>Un score anormalement élevé — une AUC de 0,99 sur un problème réputé difficile — doit déclencher une suspicion, pas une satisfaction. Trois gestes efficaces : regarder les <em>importances de variables</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; rejouer la chaîne complète sur une période postérieure (validation temporelle), où une fuite disparaît et fait s'effondrer le score ; et écrire pour chaque variable, noir sur blanc, <em>à quel instant elle est connue</em>. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
-    </div>
-
-    <div class="step-block">
-      <h4>Ce qu'il faut retenir du module</h4>
+      <h4>Deux questions que tout oppose</h4>
       <ul>
-        <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
-        <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
-        <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
-        <li>Le feature engineering paie plus que le choix d'algorithme : ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
-        <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
-        <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
-        <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
+        <li><strong>Prédictive</strong> — « sachant que ce client a appelé le support, quelle est sa probabilité de résilier ? » Un modèle de ML y répond très bien. On note cela \(P(Y \mid X = x)\) : on <em>conditionne</em> sur ce qu'on observe.</li>
+        <li><strong>Causale</strong> — « si j'appelle ce client, de combien sa probabilité de résilier change-t-elle ? » On note cela \(P(Y \mid do(X = x))\) : on <em>intervient</em>, on force la valeur au lieu de la constater.</li>
+      </ul>
+      <p>Les deux quantités coïncident dans un seul cas : quand l'affectation au traitement est indépendante de tout le reste, c'est-à-dire quand on a randomisé. Partout ailleurs, elles diffèrent, et parfois jusqu'à changer de signe — c'est le paradoxe de Simpson du module 9.</p>
+    </div>
+
+    <p>La difficulté de fond est qu'aucune donnée, si abondante soit-elle, ne tranche seule. Deux mondes qui produisent exactement les mêmes données peuvent réclamer deux décisions opposées. Ce qui tranche, c'est une <strong>hypothèse sur le mécanisme</strong>, apportée par la connaissance du domaine, et que l'on écrit explicitement pour pouvoir en discuter. L'inférence causale est l'ensemble des méthodes qui rendent cette hypothèse visible et ses conséquences calculables.</p>
+
+    <h2 id="potentiels">2. Les résultats potentiels : écrire ce qu'on cherche</h2>
+
+    <h3>L'intuition</h3>
+    <p>Le cadre dominant, dû à Rubin, part d'une idée simple. Pour chaque individu \(i\), imaginons deux versions du monde :</p>
+    <ul>
+      <li>\(Y_i(1)\) — ce qui lui serait arrivé <em>s'il avait été traité</em> ;</li>
+      <li>\(Y_i(0)\) — ce qui lui serait arrivé <em>s'il ne l'avait pas été</em>.</li>
+    </ul>
+    <p>L'effet du traitement sur cet individu est la différence \(\tau_i = Y_i(1) - Y_i(0)\). C'est exactement ce qu'on voudrait connaître, et c'est exactement ce qu'on ne peut jamais observer : un individu est traité ou ne l'est pas, jamais les deux. On n'observe que</p>
+    \[ Y_i = T_i\,Y_i(1) + (1 - T_i)\,Y_i(0) \]
+    <p>où \(T_i \in \{0,1\}\) indique le traitement. L'autre terme est manquant, définitivement. C'est ce qu'on appelle le <strong>problème fondamental de l'inférence causale</strong>, et la formulation la plus utile est celle-ci : <em>l'inférence causale est un problème de données manquantes</em>, où ce qui manque est la moitié du tableau.</p>
+
+    <div class="code-label">le tableau qu'on ne verra jamais en entier</div>
+    <div class="code-block"><pre>  individu   T   Y(0)   Y(1)    τ = Y(1)-Y(0)     observé
+  ────────────────────────────────────────────────────────
+     1       1     ?     420         ?              420
+     2       0    310      ?         ?              310
+     3       1     ?     380         ?              380
+     4       0    295      ?         ?              295
+
+  · la colonne τ est entièrement inconnue, ligne par ligne
+  · MAIS sa MOYENNE peut être estimée, si les groupes sont comparables
+  → tout le reste du module consiste à rendre les groupes comparables</pre></div>
+
+    <p>Ce déplacement — renoncer à l'effet individuel, viser une moyenne — est la clé. On ne saura jamais si <em>ce</em> client aurait résilié ; on peut savoir de combien le taux de résiliation change en moyenne sur une population.</p>
+
+    <h2 id="estimandes">3. ATE, ATT, CATE : de quel effet parle-t-on ?</h2>
+
+    <p>« L'effet du traitement » recouvre plusieurs quantités distinctes, qu'il faut nommer avant d'estimer, parce qu'elles n'ont ni la même valeur ni la même utilité.</p>
+
+    <div class="code-label">trois effets, trois questions</div>
+    <div class="code-block"><pre>ATE  — Average Treatment Effect            E[Y(1) - Y(0)]
+       « et si on traitait TOUT LE MONDE ? »
+       la bonne cible pour une politique générale
+
+ATT  — ... on the Treated              E[Y(1) - Y(0) | T = 1]
+       « le programme a-t-il servi à CEUX QUI Y ONT PARTICIPÉ ? »
+       la bonne cible pour évaluer un dispositif existant
+
+CATE — Conditional ATE                 E[Y(1) - Y(0) | X = x]
+       « l'effet pour un individu DE PROFIL x »
+       la bonne cible pour cibler — c'est l'uplift du module 24
+
+LATE — Local ATE : l'effet sur le sous-groupe que l'instrument
+       a réellement fait changer de comportement (section 9)</pre></div>
+
+    <p>La distinction n'est pas académique. Un dispositif de formation professionnelle auquel s'inscrivent surtout les personnes déjà motivées peut avoir un ATT élevé — il aide ceux qui viennent — et un ATE faible — il n'aiderait guère si on l'imposait à tous. Publier l'un pour l'autre est une faute courante, et coûteuse en décision publique.</p>
+
+    <h2 id="hypotheses">4. Les trois hypothèses qu'on ne peut pas tester</h2>
+
+    <p>Estimer un effet causal à partir de données observationnelles exige trois hypothèses. Elles ne se vérifient pas dans les données — c'est leur nature — mais elles se discutent, et une analyse honnête les énonce.</p>
+
+    <div class="step-block">
+      <h4>1. Ignorabilité (absence de confondant non mesuré)</h4>
+      <p>À profil \(X\) identique, recevoir le traitement est indépendant des résultats potentiels :</p>
+      \[ \big(Y(0),\, Y(1)\big) \perp\!\!\!\perp T \;\mid\; X \]
+      <p>Autrement dit : parmi les gens qui se ressemblent sur \(X\), qui a été traité est essentiellement une affaire de hasard. C'est l'hypothèse la plus forte et la plus souvent fausse. Si la motivation détermine à la fois la participation et le résultat, et qu'on ne la mesure pas, tout s'effondre.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>2. Positivité (chevauchement)</h4>
+      <p>Pour tout profil observé, les deux issues doivent être possibles : \(0 < P(T=1 \mid X=x) < 1\). Si aucun client de plus de 70 ans n'a jamais été appelé, on ne peut rien dire de l'effet d'un appel sur eux — il n'existe aucun terme de comparaison. On <em>peut</em>, elle, la vérifier empiriquement : c'est le diagnostic de chevauchement de la section 6.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>3. SUTVA (pas d'interférence, un seul traitement)</h4>
+      <p>Le résultat d'un individu ne dépend pas du traitement des autres, et « être traité » signifie la même chose pour tous. Deux violations très concrètes :</p>
+      <ul>
+        <li><strong>Effets de réseau</strong> — offrir une réduction à la moitié des utilisateurs d'un réseau social : les non-traités en entendent parler. Le groupe témoin est contaminé, l'effet mesuré est sous-estimé.</li>
+        <li><strong>Équilibre général</strong> — un site de covoiturage qui teste une prime conducteur sur 10 % des trajets : ces conducteurs prennent les courses que les autres auraient prises. L'effet mesuré sur le petit groupe ne se reproduira pas à l'échelle.</li>
+      </ul>
+      <p>La parade usuelle est de randomiser par <em>grappes</em> (une ville entière, un réseau entier) plutôt que par individu — au prix d'une forte perte de puissance statistique.</p>
+    </div>
+
+    <h2 id="randomisation">5. L'expérience randomisée, et CUPED</h2>
+
+    <p>Randomiser rend l'affectation indépendante de tout, y compris de ce qu'on n'a pas mesuré : l'ignorabilité devient vraie par construction, sans hypothèse. C'est pour cela que l'essai contrôlé randomisé — l'A/B test du module 9 — reste l'étalon-or, et que la première question devant tout problème causal est : <em>puis-je randomiser ?</em></p>
+
+    <h3>Le problème : la puissance</h3>
+    <p>La randomisation garantit l'absence de biais, pas la précision. Sur une métrique très dispersée — le chiffre d'affaires par utilisateur, où 1 % des utilisateurs font 40 % du total — l'intervalle de confiance reste large même avec un million d'observations. Or l'écart-type entre individus est en grande partie stable dans le temps : un gros acheteur avant l'expérience sera un gros acheteur pendant. Cette part de variance est du bruit prévisible, donc soustrayable.</p>
+
+    <h3>CUPED : retirer le bruit qu'on peut prédire</h3>
+    <p>L'idée tient en une ligne. Soit \(X\) la valeur de la métrique <em>avant</em> l'expérience. On remplace \(Y\) par</p>
+    \[ Y^{\mathrm{cuped}} = Y - \theta\,(X - \bar{X}), \qquad \theta = \frac{\operatorname{Cov}(Y, X)}{\operatorname{Var}(X)} \]
+    <p>Comme \(X\) est mesuré avant l'affectation, il ne peut pas être affecté par le traitement : soustraire sa contribution ne déplace pas la moyenne du traitement, mais réduit la variance d'un facteur \(1 - \rho^2\), où \(\rho\) est la corrélation entre \(X\) et \(Y\). Avec \(\rho = 0{,}7\), la variance tombe de moitié : on obtient la même précision avec deux fois moins d'utilisateurs, ou le même résultat deux fois plus vite.</p>
+
+    <div class="code-label">python — CUPED sur un A/B test</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+n = 20_000
+base = rng.lognormal(3, 1, n)              # dépense AVANT l'expérience
+groupe = rng.integers(0, 2, n)             # 0 = témoin, 1 = traitement
+effet_vrai = 1.5
+apres = 0.8 * base + rng.lognormal(3, 1, n) * 0.4 + effet_vrai * groupe
+
+def ic(y, g):
+    d = y[g == 1].mean() - y[g == 0].mean()
+    se = np.sqrt(y[g == 1].var(ddof=1) / (g == 1).sum()
+                 + y[g == 0].var(ddof=1) / (g == 0).sum())
+    return d, 1.96 * se
+
+theta = np.cov(apres, base)[0, 1] / base.var(ddof=1)
+apres_cuped = apres - theta * (base - base.mean())
+
+d0, m0 = ic(apres, groupe)
+d1, m1 = ic(apres_cuped, groupe)
+print(f"brut  : effet {d0:5.2f} ± {m0:4.2f}")   # effet  1.62 ± 0.94
+print(f"CUPED : effet {d1:5.2f} ± {m1:4.2f}")   # effet  1.55 ± 0.42
+print(f"largeur divisée par {m0 / m1:.1f}")     # largeur divisée par 2.3</pre></div>
+
+    <div class="warning-block">
+      <strong>La condition impérative.</strong> La covariable \(X\) doit être mesurée <em>strictement avant</em> l'affectation au traitement. Utiliser une variable postérieure — même corrélée, même « évidemment indépendante » — conditionne sur une conséquence du traitement et rouvre la porte au biais de collisionneur du module 9. C'est la même règle que l'interdiction de la fuite de données en ML (module 12) : rien qui vienne du futur.
+    </div>
+
+    <h2 id="propension">6. Le score de propension : pondérer ou apparier</h2>
+
+    <h3>Le problème</h3>
+    <p>On n'a pas pu randomiser. Les traités et les non-traités diffèrent sur dix variables : âge, ancienneté, dépense passée, canal d'acquisition. Comparer les moyennes brutes revient à comparer des populations différentes. On voudrait comparer chaque traité à des non-traités « qui lui ressemblent », mais avec dix variables, personne ne ressemble exactement à personne — c'est la malédiction de la dimension.</p>
+
+    <h3>L'intuition : résumer en un seul nombre</h3>
+    <p>Le résultat de Rosenbaum et Rubin est élégant. Définissons le <strong>score de propension</strong></p>
+    \[ e(x) = P(T = 1 \mid X = x) \]
+    <p>c'est-à-dire la probabilité d'être traité compte tenu du profil. Alors, sous l'hypothèse d'ignorabilité, conditionner sur ce <em>seul</em> nombre suffit : deux individus de même score de propension sont comparables, même si leurs profils diffèrent. Dix dimensions se réduisent à une.</p>
+
+    <p>On estime \(e(x)\) par un modèle de classification ordinaire — régression logistique ou gradient boosting du module 14 —, puis on s'en sert de deux façons :</p>
+
+    <div class="step-block">
+      <h4>Pondération (IPW) — reconstruire une population équilibrée</h4>
+      <p>On pondère chaque individu par l'inverse de sa probabilité d'avoir reçu le traitement qu'il a effectivement reçu :</p>
+      \[ \widehat{\mathrm{ATE}} = \frac{1}{n}\sum_{i} \left( \frac{T_i\,Y_i}{e(X_i)} - \frac{(1-T_i)\,Y_i}{1-e(X_i)} \right) \]
+      <p>L'intuition : un traité qui avait peu de chances de l'être est rare, donc il représente beaucoup de gens comme lui — on lui donne un grand poids. On fabrique ainsi une pseudo-population où traitement et profil sont indépendants.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Appariement — constituer des paires</h4>
+      <p>À chaque traité on associe un ou plusieurs témoins de score voisin, et on compare à l'intérieur des paires. Plus intuitif à expliquer, plus facile à auditer, mais on écarte les individus sans correspondant — ce qui change silencieusement la population sur laquelle porte le résultat.</p>
+    </div>
+
+    <div class="code-label">python — IPW avec diagnostic de chevauchement</div>
+    <div class="code-block"><pre>import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.calibration import CalibratedClassifierCV
+
+# X : covariables mesurées AVANT le traitement ; T : 0/1 ; Y : résultat
+modele = CalibratedClassifierCV(LogisticRegression(max_iter=1000), cv=5)
+modele.fit(X, T)
+e = modele.predict_proba(X)[:, 1]
+
+# 1) positivité : les deux groupes doivent se recouvrir
+print("traités   e ∈", np.percentile(e[T == 1], [1, 99]).round(3))
+print("témoins   e ∈", np.percentile(e[T == 0], [1, 99]).round(3))
+# si les plages ne se recouvrent pas, AUCUNE méthode ne sauvera l'analyse
+
+# 2) écrêtage : un score de 0.001 donnerait un poids de 1000
+e = np.clip(e, 0.05, 0.95)
+w = np.where(T == 1, 1 / e, 1 / (1 - e))
+
+# 3) vérifier que la pondération a bien équilibré les covariables
+def diff_standardisee(x, T, w):
+    m1 = np.average(x[T == 1], weights=w[T == 1])
+    m0 = np.average(x[T == 0], weights=w[T == 0])
+    return (m1 - m0) / np.sqrt((x[T == 1].var() + x[T == 0].var()) / 2)
+
+for j, nom in enumerate(noms_colonnes):
+    d = diff_standardisee(X[:, j], T, w)
+    drapeau = "  ⚠ déséquilibré" if abs(d) > 0.1 else ""
+    print(f"{nom:20s} {d:+.3f}{drapeau}")
+
+ate = np.average(Y[T == 1], weights=w[T == 1]) - \
+      np.average(Y[T == 0], weights=w[T == 0])
+print(f"ATE estimé : {ate:.3f}")</pre></div>
+
+    <div class="warning-block">
+      <strong>Le diagnostic n'est pas optionnel.</strong> Un score de propension n'est utile que si (a) les distributions se recouvrent et (b) après pondération, les covariables sont équilibrées — on vise une différence standardisée inférieure à 0,1. Notez le renversement complet par rapport au ML habituel : un modèle de propension qui <em>sépare parfaitement</em> traités et témoins est une catastrophe, parce qu'il signifie qu'il n'existe aucun témoin comparable. Ici, un bon modèle est un modèle qui prédit mal.
+    </div>
+
+    <h2 id="did">7. Différences de différences</h2>
+
+    <h3>Le problème</h3>
+    <p>Une région applique une nouvelle réglementation, l'autre non. Comparer les deux régions après coup ne dit rien : elles différaient déjà avant. Comparer la région traitée avant et après ne dit rien non plus : entre-temps, la conjoncture a bougé pour tout le monde.</p>
+
+    <h3>L'intuition : soustraire deux fois</h3>
+    <p>On combine les deux comparaisons pour éliminer les deux biais. La différence <em>avant/après</em> dans le groupe témoin mesure ce qui se serait passé sans traitement — la tendance commune. On la retranche de la différence avant/après du groupe traité ; ce qui reste est l'effet.</p>
+
+    \[ \widehat{\mathrm{ATT}} = \underbrace{(\bar Y_{\text{tr,apr}} - \bar Y_{\text{tr,av}})}_{\text{évolution des traités}} - \underbrace{(\bar Y_{\text{té,apr}} - \bar Y_{\text{té,av}})}_{\text{évolution des témoins}} \]
+
+    <div class="code-label">ce que la méthode fait, graphiquement</div>
+    <div class="code-block"><pre>  Y
+  │                                        ● traités (observé)
+  │                             ●──────────
+  │                    ●───────╱      ↕ EFFET ESTIMÉ
+  │            ●──────╱    ○ ─ ─ ─ ─ ─   contrefactuel : les traités
+  │                            ╱          s'ils avaient suivi la tendance
+  │        ○──────○──────○────╱           des témoins
+  │                          ○ témoins (observé)
+  └────────────────────────┬──────────────────────────► temps
+                    intervention
+
+  L'hypothèse, INVÉRIFIABLE : sans traitement, les deux courbes seraient
+  restées PARALLÈLES. On ne peut pas la tester après l'intervention —
+  mais on peut regarder si elles l'étaient AVANT. C'est le test de
+  tendances pré-traitement, et c'est le premier graphique à produire.</pre></div>
+
+    <div class="code-label">python — DiD par régression, avec effets fixes</div>
+    <div class="code-block"><pre>import statsmodels.formula.api as smf
+
+# df : une ligne par (unité, période), colonnes traite (0/1), apres (0/1)
+# L'interaction porte TOUT l'effet causal recherché.
+m = smf.ols("y ~ traite * apres", data=df).fit(
+        cov_type="cluster", cov_kwds={"groups": df["unite"]})
+print(m.summary().tables[1])
+#                    coef    std err     P>|t|
+# Intercept        12.400      0.210     0.000   niveau témoins, avant
+# traite            3.100      0.290     0.000   écart initial (biais de niveau)
+# apres             1.800      0.240     0.000   tendance commune
+# traite:apres      2.450      0.330     0.000   ← L'EFFET
+
+# forme plus robuste : effets fixes unité + période, qui absorbent
+# toute différence stable entre unités et tout choc commun aux unités
+m2 = smf.ols("y ~ traite:apres + C(unite) + C(periode)", data=df).fit(
+        cov_type="cluster", cov_kwds={"groups": df["unite"]})</pre></div>
+
+    <div class="warning-block">
+      <strong>Deux pièges classiques.</strong> D'abord, les écarts-types : les observations d'une même unité sont corrélées dans le temps, et l'ignorer divise artificiellement l'erreur type par trois ou quatre. Il faut <em>regrouper</em> (<em>cluster</em>) au niveau de l'unité randomisée. Ensuite, les adoptions échelonnées : quand les unités sont traitées à des dates différentes, la régression DiD classique utilise des unités déjà traitées comme témoins, ce qui peut produire un signe faux. La littérature récente (Callaway–Sant'Anna, Sun–Abraham) fournit des estimateurs corrigés — il faut les utiliser dès que les dates de traitement diffèrent.
+    </div>
+
+    <h2 id="rdd">8. Régression sur discontinuité</h2>
+
+    <h3>L'intuition</h3>
+    <p>Certaines décisions reposent sur un seuil arbitraire : une bourse attribuée en dessous d'un revenu, un rattrapage déclenché sous 10 de moyenne, une remise commerciale au-delà d'un montant de panier. Un élève à 9,9 et un élève à 10,1 sont, à toutes fins pratiques, identiques — sauf que l'un reçoit le dispositif et l'autre non. Au voisinage immédiat du seuil, on dispose donc d'une <strong>quasi-randomisation offerte par la règle</strong>.</p>
+
+    <div class="code-label">l'effet, c'est le saut au seuil</div>
+    <div class="code-block"><pre>  résultat
+  │                                      ╭─── ajustement à droite
+  │                                 ╭────╯
+  │                            ╭────╯
+  │                       ╭────╯  ↕ EFFET = saut à la discontinuité
+  │              ────────╯
+  │        ──────
+  │  ──────
+  └──────────────────────┬───────────────────────► variable de forçage
+                        seuil
+
+  · on ajuste une courbe DE CHAQUE CÔTÉ, séparément
+  · l'effet est l'écart des deux ajustements AU seuil, rien d'autre
+  · la validité décroît vite quand on s'éloigne : l'effet estimé est LOCAL</pre></div>
+
+    <div class="step-block">
+      <h4>Les vérifications qui font la différence</h4>
+      <ul>
+        <li><strong>Pas de manipulation du seuil.</strong> Si les enseignants remontent les 9,7 à 10, la densité de la variable de forçage présente un trou juste avant et une bosse juste après. Le test de McCrary consiste à tracer cet histogramme : un pic au seuil invalide l'analyse.</li>
+        <li><strong>Continuité des covariables.</strong> L'âge, le sexe, l'origine sociale ne doivent pas sauter au seuil. S'ils sautent, quelque chose d'autre change en même temps.</li>
+        <li><strong>Choix de la fenêtre.</strong> Trop large, on mélange des individus dissemblables ; trop étroite, il ne reste rien. On reporte la sensibilité du résultat à ce choix — pas une seule valeur.</li>
+        <li><strong>Degré du polynôme.</strong> Linéaire ou quadratique local ; au-delà, les degrés élevés fabriquent des sauts artificiels aux bords.</li>
       </ul>
     </div>
+
+    <div class="code-label">python — RDD local, en quelques lignes</div>
+    <div class="code-block"><pre>import numpy as np, statsmodels.formula.api as smf
+
+seuil, fenetre = 10.0, 1.5
+d = df[np.abs(df["note"] - seuil) &lt;= fenetre].copy()
+d["centre"] = d["note"] - seuil
+d["droite"] = (d["centre"] &gt;= 0).astype(int)
+
+# pentes séparées de part et d'autre : centre * droite
+m = smf.ols("resultat ~ centre * droite", data=d).fit(cov_type="HC1")
+print(f"effet au seuil : {m.params['droite']:.3f} "
+      f"[{m.conf_int().loc['droite', 0]:.3f}, "
+      f"{m.conf_int().loc['droite', 1]:.3f}]")
+
+# sensibilité à la fenêtre : un résultat solide bouge peu
+for h in (0.5, 1.0, 1.5, 2.0, 3.0):
+    dd = df[np.abs(df["note"] - seuil) &lt;= h].copy()
+    dd["centre"] = dd["note"] - seuil
+    dd["droite"] = (dd["centre"] &gt;= 0).astype(int)
+    r = smf.ols("resultat ~ centre * droite", data=dd).fit()
+    print(f"  fenêtre {h}: {r.params['droite']:+.3f}  (n = {len(dd)})")</pre></div>
+
+    <h2 id="iv">9. Variables instrumentales</h2>
+
+    <h3>Le problème</h3>
+    <p>Un confondant non mesuré subsiste, et aucun ajustement ne le corrigera puisqu'on ne l'observe pas. Exemple canonique : l'effet d'une année d'études supplémentaire sur le salaire. La capacité individuelle influence à la fois la poursuite d'études et le salaire, et elle n'est pas dans les données.</p>
+
+    <h3>L'intuition : une source de variation innocente</h3>
+    <p>On cherche une troisième variable \(Z\), l'<strong>instrument</strong>, qui pousse à être traité sans avoir d'effet propre sur le résultat. Elle joue le rôle d'un tirage au sort partiel, fourni par la nature ou l'administration. On n'utilise alors que la part de variation du traitement <em>due à l'instrument</em> — une part dont on sait qu'elle n'est pas contaminée.</p>
+
+    <div class="code-label">les trois conditions, et leur statut</div>
+    <div class="code-block"><pre>          Z ─────────► T ─────────► Y
+          │                ▲
+          │                │
+          └──── ✗ ────►    U (confondant non observé)
+                            │
+                            ▼  (U influence T ET Y)
+
+  1. PERTINENCE      Z influence réellement T      → TESTABLE (statistique F)
+  2. EXCLUSION       Z n'agit sur Y QUE via T      → NON testable, à argumenter
+  3. INDÉPENDANCE    Z n'est lié à aucun confondant → NON testable
+
+  Exemples utilisés en économie :
+   · distance au lycée le plus proche → poursuite d'études → salaire
+   · loterie d'affectation scolaire   → école fréquentée   → résultats
+   · mois de naissance (âge légal de sortie) → années d'études → salaire
+   · en entreprise : une INCITATION randomisée à utiliser une fonction,
+     quand on ne peut pas forcer l'usage → c'est le cas le plus utile</pre></div>
+
+    <div class="code-label">python — moindres carrés en deux étapes</div>
+    <div class="code-block"><pre>from linearmodels.iv import IV2SLS
+
+# y ~ 1 + controles + [traitement ~ instrument]
+res = IV2SLS.from_formula(
+    "salaire ~ 1 + experience + [annees_etudes ~ distance_lycee]",
+    data=df).fit(cov_type="robust")
+print(res.summary)
+
+# LE diagnostic à lire en premier : la première étape
+print(res.first_stage)
+# F < 10  →  instrument FAIBLE : l'estimation est biaisée et son
+#            intervalle de confiance n'a pas la couverture annoncée.
+#            Mieux vaut ne rien conclure que publier ce chiffre.</pre></div>
+
+    <div class="warning-block">
+      <strong>Ce que la méthode estime vraiment.</strong> Pas l'ATE, mais le <strong>LATE</strong> : l'effet moyen sur les seuls individus dont le comportement a été modifié par l'instrument — les « conformistes ». Ceux qui auraient fait des études de toute façon, et ceux qui n'en auraient jamais fait, ne contribuent pas. Le résultat peut donc ne pas se transposer à la population entière, et deux instruments valides peuvent légitimement donner deux valeurs différentes.
+    </div>
+
+    <h2 id="dml">10. Double machine learning et effets hétérogènes</h2>
+
+    <h3>Le problème</h3>
+    <p>On voudrait ajuster sur beaucoup de covariables, avec des relations non linéaires — exactement ce que le gradient boosting du module 14 fait bien. Mais brancher un modèle de ML dans une estimation causale échoue de deux façons. D'abord, la <strong>régularisation</strong> qui aide à prédire biaise l'estimation de l'effet : elle rétrécit tous les coefficients, y compris celui qui nous intéresse. Ensuite, le <strong>surapprentissage</strong> : un modèle qui a vu un individu à l'entraînement produit sur lui un résidu artificiellement petit.</p>
+
+    <h3>L'intuition : régresser le bruit sur le bruit</h3>
+    <p>La méthode de Chernozhukov et coauteurs repose sur une idée ancienne — le théorème de Frisch–Waugh — appliquée avec du ML :</p>
+    <ol>
+      <li>prédire le résultat à partir des covariables, \(\hat{m}(X) \approx E[Y \mid X]\), et garder le résidu \(\tilde{Y} = Y - \hat{m}(X)\) ;</li>
+      <li>prédire le traitement à partir des covariables, \(\hat{e}(X) \approx E[T \mid X]\), et garder le résidu \(\tilde{T} = T - \hat{e}(X)\) ;</li>
+      <li>régresser \(\tilde{Y}\) sur \(\tilde{T}\) : la pente est l'effet causal.</li>
+    </ol>
+    <p>Les deux premières étapes retirent tout ce que les covariables expliquent ; ce qui reste dans \(\tilde{T}\) est la part d'affectation au traitement qui ne s'explique pas par le profil — la part « comme si » elle avait été tirée au sort. Deux ingrédients rendent la construction valide :</p>
+    <ul>
+      <li><strong>L'orthogonalisation</strong> — résidualiser des deux côtés rend l'estimation insensible au premier ordre aux erreurs des modèles auxiliaires. Ceux-ci peuvent être imparfaits sans invalider l'effet.</li>
+      <li><strong>Le découpage croisé</strong> (<em>cross-fitting</em>) — on prédit toujours un individu avec un modèle entraîné sans lui, comme en validation croisée (module 12). C'est ce qui neutralise le surapprentissage.</li>
+    </ul>
+
+    <div class="code-label">python — DML, puis effets hétérogènes</div>
+    <div class="code-block"><pre>from econml.dml import LinearDML, CausalForestDML
+from sklearn.ensemble import HistGradientBoostingRegressor as HGB
+from sklearn.ensemble import HistGradientBoostingClassifier as HGC
+
+# ---- effet moyen, avec ajustement non linéaire sur X
+est = LinearDML(model_y=HGB(), model_t=HGC(),
+                discrete_treatment=True, cv=5)   # cv = découpage croisé
+est.fit(Y, T, X=X, W=W)          # X : modulateurs d'effet ; W : contrôles
+print("ATE :", est.ate(X), est.ate_interval(X, alpha=0.05))
+
+# ---- effet PAR INDIVIDU : qui gagne à être traité ?
+foret = CausalForestDML(model_y=HGB(), model_t=HGC(),
+                        discrete_treatment=True, cv=5, n_estimators=500)
+foret.fit(Y, T, X=X, W=W)
+cate = foret.effect(X)                     # un effet estimé par individu
+
+print(f"effet médian   : {np.median(cate):+.3f}")
+print(f"part d'effets négatifs : {(cate &lt; 0).mean():.1%}")
+# → si 30 % des individus ont un effet négatif, traiter tout le monde
+#   est une mauvaise politique même si l'ATE est positif.
+
+# quelles variables portent l'hétérogénéité ?
+print(foret.feature_importances())</pre></div>
+
+    <p>Cette dernière sortie est le pont vers l'action : un effet moyen positif peut masquer un sous-groupe que le traitement dégrade. C'est précisément l'<em>uplift</em> du module 24, qui reprend ce résultat pour décider <em>qui</em> traiter sous contrainte de budget.</p>
+
+    <h2 id="sensibilite">11. Et si un confondant manquait ?</h2>
+
+    <p>Toutes les méthodes observationnelles reposent sur une hypothèse invérifiable. Plutôt que de l'affirmer, on peut mesurer sa <strong>fragilité</strong> : quelle force devrait avoir un confondant caché pour annuler la conclusion ?</p>
+
+    <div class="step-block">
+      <h4>La valeur E, en une phrase</h4>
+      <p>C'est la force d'association minimale — avec le traitement <em>et</em> avec le résultat — que devrait avoir un confondant non mesuré pour ramener l'effet observé à zéro. Une valeur E de 1,3 signifie qu'une variable oubliée assez banale suffirait : la conclusion est fragile. Une valeur E de 4 signifie qu'il faudrait un facteur très puissant, que l'on aurait probablement remarqué : la conclusion est robuste.</p>
+      <p>L'exemple historique est éclairant. Pour le lien tabac–cancer, la valeur E dépassait 10 : aucun confondant plausible ne pouvait produire une association aussi forte. C'est ce raisonnement, et non un essai randomisé — impossible à mener —, qui a emporté la conviction.</p>
+    </div>
+
+    <div class="code-label">python — calculer la valeur E d'un risque relatif</div>
+    <div class="code-block"><pre>import numpy as np
+
+def valeur_e(rr: float) -&gt; float:
+    """Valeur E d'un risque relatif (ou de sa borne de confiance)."""
+    if rr &lt; 1:
+        rr = 1 / rr
+    return rr + np.sqrt(rr * (rr - 1))
+
+print(f"RR = 1.2 → E = {valeur_e(1.2):.2f}")   # 1.69  fragile
+print(f"RR = 2.0 → E = {valeur_e(2.0):.2f}")   # 3.41  solide
+print(f"RR = 5.0 → E = {valeur_e(5.0):.2f}")   # 9.47  très solide
+# On reporte TOUJOURS la valeur E de la borne de confiance la plus
+# proche de 1 : c'est le scénario le moins favorable compatible
+# avec les données.</pre></div>
+
+    <p>Reporter une valeur E change la nature du débat : on ne discute plus de savoir si l'hypothèse est vraie — question sans réponse —, mais de savoir si un confondant de cette force est plausible dans ce domaine. C'est une question à laquelle un expert métier peut répondre.</p>
+
+    <h2 id="recap">12. Récapitulatif et erreurs fréquentes</h2>
+
+    <div class="code-label">choisir sa méthode</div>
+    <div class="code-block"><pre>Puis-je randomiser ?
+├─ OUI  → A/B test (module 9) + CUPED pour la puissance
+│         randomiser par grappes si les unités interagissent
+└─ NON  → quelle structure les données offrent-elles ?
+   │
+   ├─ Un seuil administratif décide du traitement
+   │    → RÉGRESSION SUR DISCONTINUITÉ      effet local, très crédible
+   │
+   ├─ Deux groupes observés avant ET après
+   │    → DIFFÉRENCES DE DIFFÉRENCES        hypothèse : tendances parallèles
+   │
+   ├─ Une variable pousse au traitement sans agir sur le résultat
+   │    → VARIABLES INSTRUMENTALES           estime le LATE ; vérifier F > 10
+   │
+   ├─ Je crois avoir mesuré tous les confondants
+   │    → SCORE DE PROPENSION / DOUBLE ML    hypothèse la plus forte
+   │      + diagnostic de chevauchement OBLIGATOIRE
+   │
+   └─ Rien de tout cela
+        → décrire, ne pas conclure. Une corrélation présentée comme
+          telle vaut mieux qu'un effet causal inventé.</pre></div>
+
+    <div class="step-block">
+      <h4>Les six erreurs qui reviennent</h4>
+      <ol>
+        <li><strong>Contrôler par tout ce qu'on a.</strong> Ajouter des variables n'est pas neutre : conditionner sur un médiateur efface l'effet, conditionner sur un collisionneur en crée un (module 9). Le choix des variables d'ajustement se déduit d'un graphe causal, pas de la disponibilité des colonnes.</li>
+        <li><strong>Ajuster sur une variable postérieure au traitement.</strong> Même règle que la fuite de données du module 12 : tout ce qui est mesuré après l'affectation est suspect.</li>
+        <li><strong>Lire l'importance des variables comme un effet causal.</strong> Un SHAP élevé (module 14) signifie « utile pour prédire », jamais « agir dessus produira un effet ».</li>
+        <li><strong>Oublier le regroupement des écarts-types.</strong> Quand la randomisation porte sur des villes et l'analyse sur des individus, l'erreur type est sous-estimée d'un facteur trois ou quatre, et tout devient « significatif ».</li>
+        <li><strong>Publier l'ATT pour l'ATE.</strong> « Le dispositif a aidé ses participants » n'est pas « le dispositif aiderait tout le monde ».</li>
+        <li><strong>Traiter tout le monde parce que l'effet moyen est positif.</strong> S'il existe un sous-groupe où l'effet est négatif, la bonne politique est de cibler — c'est l'objet du module 24.</li>
+      </ol>
+    </div>
+
+    <p>Une dernière remarque, qui vaut pour tout le reste du cours. Un modèle prédictif et un modèle causal ne s'évaluent pas de la même manière : le premier se juge sur des données de test, le second ne se juge sur rien — il n'existe pas de vérité terrain pour un effet causal, puisque le contrefactuel est manquant par construction. C'est pourquoi la crédibilité repose ici sur la <em>conception</em> de l'étude, sur les diagnostics, et sur l'énoncé explicite des hypothèses. Le module 12 reprend maintenant le fil de la pratique : comment passer d'un problème métier à un jeu de données exploitable.</p>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
     <a href="project7-m10.html" class="btn btn-secondary">← Module 10 : Inférence bayésienne</a>
-    <a href="project7-m12.html" class="btn btn-primary">Module 12 : Peu d'étiquettes →</a>
+    <a href="project7-m12.html" class="btn btn-primary">Module 12 : Data science en pratique →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">EDA</span><span class="tag">Feature engineering</span><span class="tag">Imputation</span><span class="tag">Validation croisée</span><span class="tag">Data leakage</span></div>
+  <div class="project-meta"><span class="tag">Inférence causale</span><span class="tag">Score de propension</span><span class="tag">DiD</span><span class="tag">Variables instrumentales</span><span class="tag">Double ML</span><span class="tag">CUPED</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -415,7 +549,7 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 11</div>
-    <h1>Data science in practice: from problem to dataset</h1>
+    <h1>Causal inference: measuring the effect of an action</h1>
   </div>
 
   <div class="project-content course-content">
@@ -425,15 +559,18 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The real shape of a data project, and the one question to answer first: which decision will change because of this model?</li>
-      <li>Framing: defining the target, the observation unit, and a baseline worth beating.</li>
-      <li>An exploration checklist, automated profiling, and the "disguised identifier" trap.</li>
-      <li>Visualisation rules that actually improve readability.</li>
-      <li>Missing data: Rubin's MCAR / MAR / MNAR typology, imputation strategies, and why imputation belongs inside the pipeline.</li>
-      <li>Feature engineering: categorical encodings (including smoothed, cross-fitted target encoding), transformations, cyclical time features, windowed aggregates, feature selection.</li>
-      <li>Imbalanced classes: metrics first, class weights, threshold tuning, and an honest assessment of SMOTE.</li>
-      <li>Cross-validation schemes matched to data structure (groups, time series, stratification), nested CV, and a protocol that keeps the test set honest.</li>
-      <li>A catalogue of data leakage patterns and how to detect them.</li>
+      <li>Why prediction is not action: the support-call example, and the difference between conditioning on an observation and intervening on it.</li>
+      <li>The potential-outcomes framework: the fundamental problem of causal inference stated as a missing-data problem, with the table you can never fully observe.</li>
+      <li>Naming the estimand before estimating it: ATE, ATT, CATE and LATE, and why publishing one for another misleads.</li>
+      <li>The three untestable assumptions — ignorability, positivity and SUTVA — with concrete violations (network spillovers, general-equilibrium effects) and the cluster-randomisation remedy.</li>
+      <li>Randomised experiments and statistical power: CUPED derived and measured, with the strict rule that the covariate must predate assignment.</li>
+      <li>Propensity scores: the dimension-reduction result, inverse-probability weighting versus matching, and the overlap and covariate-balance diagnostics that decide whether the analysis is admissible at all.</li>
+      <li>Difference-in-differences: the double subtraction drawn out, the parallel-trends assumption and its pre-trend check, clustered standard errors, and the staggered-adoption trap.</li>
+      <li>Regression discontinuity: thresholds as natural experiments, the McCrary density test, bandwidth sensitivity, and a local estimation in a few lines.</li>
+      <li>Instrumental variables: relevance, exclusion and independence, the weak-instrument F statistic, two-stage least squares, and what LATE actually measures.</li>
+      <li>Double machine learning: why regularisation and overfitting break naive ML-based estimation, orthogonalisation via Frisch–Waugh, cross-fitting, and causal forests for individual-level effects.</li>
+      <li>Sensitivity analysis: the E-value as a measure of how strong an unmeasured confounder would have to be, illustrated with the smoking–cancer case.</li>
+      <li>A decision tree for choosing a method, and the six recurring mistakes — including reading feature importance as a causal effect.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -448,23 +585,24 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><strong>Data science in practice: from problem to dataset</strong></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><strong>Causal inference: measuring the effect of an action</strong></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

@@ -297,7 +297,7 @@ GPU               PyTorch, CuPy, cuDF                 si le calcul est massiveme
       <li><code>transform(X)</code> — applique la transformation apprise ;</li>
       <li><code>predict(X)</code> / <code>predict_proba(X)</code> — produit la prédiction.</li>
     </ul>
-    <p>La conséquence est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur. La validation croisée réajuste donc <em>toute</em> la chaîne à chaque pli, ce qui constitue la protection la plus efficace contre la fuite de données (module 11) — un <code>StandardScaler</code> ajusté hors du pipeline aurait appris la moyenne du jeu de validation.</p>
+    <p>La conséquence est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur. La validation croisée réajuste donc <em>toute</em> la chaîne à chaque pli, ce qui constitue la protection la plus efficace contre la fuite de données (module 12) — un <code>StandardScaler</code> ajusté hors du pipeline aurait appris la moyenne du jeu de validation.</p>
 
     <div class="code-label">Python — un pipeline complet</div>
     <div class="code-block"><pre>from sklearn.compose import ColumnTransformer
@@ -361,7 +361,7 @@ print(x.grad)                                 # tensor([11.]) = 2x + 5 en x = 3 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-modele = nn.Sequential(                       # un perceptron multicouche (module 15)
+modele = nn.Sequential(                       # un perceptron multicouche (module 16)
     nn.Linear(10, 64), nn.ReLU(),
     nn.Linear(64, 1),
 ).to(device)
@@ -385,7 +385,7 @@ for epoque in range(100):
     modele.train()</pre></div>
 
     <div class="warning-block">
-      <strong>Les gradients s'accumulent.</strong> C'est le bug numéro un des débutants : sans <code>opt.zero_grad()</code>, chaque <code>backward()</code> <em>ajoute</em> au gradient précédent au lieu de le remplacer, et l'entraînement diverge sans message d'erreur. Ce comportement n'est pas un défaut : il permet l'accumulation de gradient volontaire, qui simule un grand lot sur une petite carte (module 24). Deux autres réflexes : <code>torch.no_grad()</code> pour toute évaluation, et <code>modele.eval()</code> / <code>modele.train()</code> pour basculer le comportement du dropout et de la batch norm.
+      <strong>Les gradients s'accumulent.</strong> C'est le bug numéro un des débutants : sans <code>opt.zero_grad()</code>, chaque <code>backward()</code> <em>ajoute</em> au gradient précédent au lieu de le remplacer, et l'entraînement diverge sans message d'erreur. Ce comportement n'est pas un défaut : il permet l'accumulation de gradient volontaire, qui simule un grand lot sur une petite carte (module 25). Deux autres réflexes : <code>torch.no_grad()</code> pour toute évaluation, et <code>modele.eval()</code> / <code>modele.train()</code> pour basculer le comportement du dropout et de la batch norm.
     </div>
 
     <div class="code-label">PyTorch, TensorFlow et les autres, en 2026</div>
@@ -395,7 +395,7 @@ TensorFlow     encore présent en production, écosystème mobile mûr (TFLite).
                si l'existant de l'équipe l'impose.
 JAX            fonctions pures et transformations composables (grad, vmap, jit).
                Très utilisé en recherche scientifique et en calcul différentiable.
-BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 18) :
+BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 19) :
                optimiser un système dont chaque évaluation coûte cher.</pre></div>
 
     <div class="step-block">
@@ -472,23 +472,24 @@ BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 18
         <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
         <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
         <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m12.html">Learning with few labels</a></li>
-        <li><a href="project7-m13.html">Classical machine learning</a></li>
-        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m15.html">Deep learning</a></li>
-        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m19.html">Reinforcement learning</a></li>
-        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m23.html">From scores to decisions</a></li>
-        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 
