@@ -139,7 +139,7 @@ print(sorted(zip(np.abs(coefs), noms), reverse=True)[:10])   # variables les plu
     <p>L'interprétation des coefficients est directe et c'est ce qui fait la valeur du modèle : \(e^{\beta_j}\) est le facteur multiplicatif sur la cote quand \(x_j\) augmente d'une unité. Un coefficient de 0,7 signifie que la cote est multipliée par \(e^{0{,}7} \approx 2\) : le phénomène devient deux fois plus « probable » au sens de la cote. C'est le modèle de référence quand l'explication compte autant que la performance — scoring de crédit, épidémiologie —, et ses probabilités sont naturellement bien calibrées, ce qui n'est pas le cas d'un gradient boosting.</p>
 
     <div class="warning-block">
-      <strong>Interpréter un coefficient demande des précautions.</strong> Il se lit « toutes choses égales par ailleurs », ce qui perd son sens quand les variables sont corrélées : le coefficient de la surface, à nombre de pièces fixé, ne décrit pas un bien réel. Il dépend de l'échelle : comparer des coefficients exige des variables standardisées. Et il n'est <em>pas</em> un effet causal (module 9) : un coefficient négatif sur « a contacté le support » ne dit pas qu'appeler le support fidélise.
+      <strong>Interpréter un coefficient demande des précautions.</strong> Il se lit « toutes choses égales par ailleurs », ce qui perd son sens quand les variables sont corrélées : le coefficient de la surface, à nombre de pièces fixé, ne décrit pas un bien réel. Il dépend de l'échelle : comparer des coefficients exige des variables standardisées. Et il n'est <em>pas</em> un effet causal (module 11) : un coefficient négatif sur « a contacté le support » ne dit pas qu'appeler le support fidélise.
     </div>
 
     <h2 id="svm">4. SVM et astuce du noyau</h2>
@@ -345,7 +345,7 @@ shap.plots.waterfall(valeurs[42])   # pourquoi CETTE prédiction : contribution 
 shap.plots.scatter(valeurs[:, "surface"], color=valeurs)   # forme de l'effet + interaction</pre></div>
 
     <div class="warning-block">
-      <strong>Expliquer n'est pas comprendre la réalité.</strong> SHAP explique ce que <em>le modèle</em> fait, pas ce que le monde fait. Une contribution SHAP élevée ne signifie ni que la variable cause la cible, ni qu'agir dessus changerait quoi que ce soit (module 9). C'est un outil de débogage et de confiance — et il est excellent pour cela : une variable inattendue en tête est souvent le signe d'une fuite de données.
+      <strong>Expliquer n'est pas comprendre la réalité.</strong> SHAP explique ce que <em>le modèle</em> fait, pas ce que le monde fait. Une contribution SHAP élevée ne signifie ni que la variable cause la cible, ni qu'agir dessus changerait quoi que ce soit (module 11). C'est un outil de débogage et de confiance — et il est excellent pour cela : une variable inattendue en tête est souvent le signe d'une fuite de données.
     </div>
 
     <h2 id="comparatif">12. Tableau comparatif et pièges</h2>
