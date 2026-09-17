@@ -51,7 +51,7 @@
       <p>Le contenu a été <strong>rédigé par Claude Code</strong> (l'assistant de programmation d'Anthropic) à ma demande, à partir d'un programme que j'ai défini et de mes lacunes identifiées — analyse en composantes principales, statistique inférentielle, concurrence en Python. Je préfère le dire clairement plutôt que de laisser croire à une rédaction manuelle : l'objectif est de disposer d'un parcours cohérent et complet, calibré sur mon niveau (prépa scientifique, Python et mathématiques solides), que je relis, corrige et complète au fil de mon apprentissage. Les erreurs qui subsistent restent les miennes — si vous en repérez une, elle m'intéresse.</p>
     </div>
 
-    <p>Le cours compte <strong>28 modules</strong>, du premier environnement Python jusqu'à un projet complet mis en production. Chaque module est une page autonome.</p>
+    <p>Le cours compte <strong>28 modules</strong>, du premier environnement Python jusqu'à un projet complet mis en production, plus <strong>trois annexes</strong> — un glossaire, une série d'exercices et une bibliographie. Chaque module est une page autonome.</p>
 
     <h2>Le format</h2>
     <p>Le cours suppose des bases solides en mathématiques et en Python — je ne réexplique ni le calcul différentiel, ni l'algèbre linéaire élémentaire. En revanche, tout ce qui est spécifique à la data science est repris depuis le problème qu'il résout, avec des exemples de code exécutables. Chaque notion suit la même trame :</p>
@@ -70,6 +70,18 @@
 
     <div class="warning-block">
       <strong>Travail en cours.</strong> Ce cours évolue au fil de mon apprentissage : certains modules seront enrichis, corrigés ou réorganisés.
+    </div>
+
+    <h2>Quatre façons de le parcourir</h2>
+    <p>Vingt-huit modules, cela ne se lit pas d'affilée. Selon ce qu'on cherche, quatre entrées possibles :</p>
+    <div class="step-block">
+      <h4>Choisir son parcours</h4>
+      <ul>
+        <li><strong>Dans l'ordre</strong> — le parcours conçu : chaque module suppose les précédents et rien d'autre. C'est le seul qui garantisse qu'aucune notion n'arrive sans avoir été expliquée.</li>
+        <li><strong>Combler une lacune précise</strong> — aller droit au module concerné, en s'appuyant sur le <a href="project7-glossaire.html">glossaire</a> pour les termes croisés en chemin. Les modules 8 (SVD et PCA), 9 (tests d'hypothèse), 2 (concurrence) et 11 (causalité) se lisent isolément.</li>
+        <li><strong>Entrer par la pratique</strong> — commencer par le <a href="project7-m28.html">projet final</a>, buter sur ce qu'on ne comprend pas, et remonter vers le module correspondant. Plus frustrant, souvent plus efficace.</li>
+        <li><strong>Vérifier ce qu'on sait</strong> — passer directement aux <a href="project7-exercices.html">exercices</a>, et ne lire que les modules dont l'exercice résiste.</li>
+      </ul>
     </div>
 
     <h2>Le parcours</h2>
@@ -572,25 +584,68 @@
     </div>
 
 
-    <h2>Références</h2>
-    <p>Le cours n'invente rien : il condense et réorganise. Les sources sur lesquelles il s'appuie le plus souvent :</p>
-    <ul>
-      <li><em>The Elements of Statistical Learning</em> (Hastie, Tibshirani, Friedman) — la référence du ML statistique ;</li>
-      <li><em>Pattern Recognition and Machine Learning</em> (Bishop) et <em>Probabilistic Machine Learning</em> (Murphy) ;</li>
-      <li><em>Deep Learning</em> (Goodfellow, Bengio, Courville) et le cours de Karpathy pour les réseaux de neurones ;</li>
-      <li><em>Gaussian Processes for Machine Learning</em> (Rasmussen &amp; Williams), disponible librement ;</li>
-      <li><em>Bayesian Data Analysis</em> (Gelman et al.) et <em>Statistical Rethinking</em> (McElreath) ;</li>
-      <li><em>Forecasting: Principles and Practice</em> (Hyndman &amp; Athanasopoulos), en accès libre ;</li>
-      <li><em>Reinforcement Learning: An Introduction</em> (Sutton &amp; Barto) ;</li>
-      <li><em>Understanding Machine Learning</em> (Shalev-Shwartz &amp; Ben-David) et <em>Causal Inference: The Mixtape</em> (Cunningham) ;</li>
-      <li>les documentations officielles (scikit-learn, PyTorch, polars, FastAPI, MLflow), souvent les meilleurs cours disponibles.</li>
-    </ul>
+    <h2>Annexes</h2>
+    <p>Trois pages transversales, qui ne sont pas des modules mais s'utilisent tout au long du cours.</p>
+
+    <div class="projects-grid">
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">A1</div>
+          <div>
+            <h3><a href="project7-glossaire.html">Glossaire et notations</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Annexe · Référence</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Les conventions de notation employées partout, puis environ cent quarante définitions courtes renvoyant chacune au module où la notion est développée.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Définitions</span><span class="tag">Notations</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">A2</div>
+          <div>
+            <h3><a href="project7-exercices.html">Exercices et auto-évaluation</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Annexe · Pratique</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Trente et un exercices, un par notion difficile, avec un critère de vérification chiffré et sans corrigé. Plusieurs sont faits pour échouer d'abord.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Exercices</span><span class="tag">Vérification</span></div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-card-header">
+          <div class="project-num">A3</div>
+          <div>
+            <h3><a href="project7-ressources.html">Ressources pour aller plus loin</a></h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-faint)">Annexe · Bibliographie</p>
+          </div>
+        </div>
+        <div class="project-card-body">
+          <p>Une recommandation par sujet plutôt qu'une bibliographie : livres, cours en ligne, une trentaine d'articles fondateurs, jeux de données, et comment lire un article.</p>
+        </div>
+        <div class="project-card-footer">
+          <div class="project-tags"><span class="tag">Livres</span><span class="tag">Articles</span><span class="tag">Données</span></div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 
   <hr class="divider">
   <div class="course-nav">
     <a href="projects.html" class="btn btn-secondary">Retour aux projets</a>
     <a href="project7-m01.html" class="btn btn-primary">Commencer par le module 1 →</a>
+    <a href="project7-exercices.html" class="btn btn-ghost">Exercices</a>
     <a href="project7-m28.html" class="btn btn-ghost">Voir le projet final</a>
   </div>
   <div class="project-meta"><span class="tag">Data science</span><span class="tag">Machine learning</span><span class="tag">Python</span><span class="tag">Statistiques</span><span class="tag">2026</span></div>
@@ -665,6 +720,14 @@
         <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
 
+    <h2>Appendices</h2>
+    <p>Three cross-cutting pages, also in French:</p>
+    <ul>
+      <li><a href="project7-glossaire.html">Glossary and notation</a> — the notation conventions used throughout, then about 140 short definitions, each linking to the module that develops the notion.</li>
+      <li><a href="project7-exercices.html">Exercises and self-assessment</a> — thirty-one exercises, one per hard notion, each with a numeric verification criterion and no worked solution.</li>
+      <li><a href="project7-ressources.html">Further reading</a> — one recommendation per subject rather than a bibliography: books, online courses, about thirty foundational papers, datasets, and how to read a paper.</li>
+    </ul>
+
     <h2>Main references</h2>
     <ul>
       <li><em>The Elements of Statistical Learning</em> (Hastie, Tibshirani, Friedman);</li>
@@ -682,6 +745,7 @@
   <hr class="divider">
   <a href="projects.html" class="btn btn-secondary">Back to projects</a>
   <a href="project7-m01.html" class="btn btn-primary">Start with module 1</a>
+  <a href="project7-glossaire.html" class="btn btn-ghost">Glossary</a>
   <br><br>
   <div class="project-meta"><span class="tag">Data science</span><span class="tag">Machine learning</span><span class="tag">Python</span><span class="tag">Statistics</span><span class="tag">2026</span></div>
 </div>

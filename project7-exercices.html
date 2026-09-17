@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Exercices et auto-évaluation - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-exercices-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Annexe</div>
+    <h1>Exercices et auto-évaluation</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Lire un cours de data science donne l'illusion de le comprendre. Le test honnête, c'est de reproduire un résultat sans le support sous les yeux — et de se tromper, puis de comprendre pourquoi. Cette annexe rassemble une trentaine d'exercices, un par notion difficile, dans l'ordre des modules. Chacun tient en une à trois heures sur un ordinateur portable ordinaire.</p>
+
+    <div class="step-block">
+      <h4>Comment ils sont faits</h4>
+      <p>Chaque exercice donne un <strong>objectif</strong>, un <strong>énoncé</strong> et une <strong>vérification</strong> : un résultat chiffré ou un comportement qualitatif attendu, qui permet de savoir seul si c'est réussi. Il n'y a pas de corrigé, volontairement — le cours contient tout ce qu'il faut, et chercher où est l'erreur fait partie de l'exercice. Beaucoup sont construits pour <em>échouer d'abord</em> : c'est l'échec qui est instructif, et il est prévu.</p>
+    </div>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#p1">Partie I — Outillage (modules 1 à 7)</a></li>
+        <li><a href="#p2">Partie II — Socle mathématique et statistique (8 à 11)</a></li>
+        <li><a href="#p3">Partie III — Méthode et données (12 et 13)</a></li>
+        <li><a href="#p4">Partie IV — Familles de modèles (14 à 19)</a></li>
+        <li><a href="#p5">Partie V — Domaines et applications (20 à 23)</a></li>
+        <li><a href="#p6">Partie VI — Décision, production, responsabilité (24 à 27)</a></li>
+        <li><a href="#p7">Partie VII — Prolongements du projet final</a></li>
+      </ol>
+    </div>
+
+    <h2 id="p1">Partie I — Outillage</h2>
+
+    <h3>Exercice 1 — Un décorateur de cache, avec statistiques</h3>
+    <p><strong>Objectif :</strong> comprendre qu'un décorateur n'est qu'une fonction qui en renvoie une autre (module 1).</p>
+    <p><strong>Énoncé :</strong> écrivez <code>@memoize</code> qui met en cache les résultats d'une fonction selon ses arguments, et expose <code>fn.hits</code>, <code>fn.misses</code> et <code>fn.vider()</code>. Appliquez-le à une suite de Fibonacci naïvement récursive. Puis comparez à <code>functools.lru_cache</code> et lisez la sortie de <code>cache_info()</code>.</p>
+    <p><strong>Vérification :</strong> sans cache, <code>fib(35)</code> prend plusieurs secondes ; avec, moins d'une milliseconde. Vous devez obtenir exactement 36 échecs de cache pour <code>fib(35)</code> — si vous en avez davantage, votre clé de cache est mal construite. Question subsidiaire : que se passe-t-il si un argument est une liste, et pourquoi ?</p>
+
+    <h3>Exercice 2 — Traiter un fichier plus gros que la mémoire</h3>
+    <p><strong>Objectif :</strong> voir concrètement ce qu'apporte un générateur (module 1).</p>
+    <p><strong>Énoncé :</strong> fabriquez un CSV de 2 Go, puis calculez la moyenne et l'écart-type d'une colonne <em>sans jamais charger plus de quelques mégaoctets</em>. Utilisez <code>tracemalloc</code> pour mesurer le pic mémoire réel. Écrivez deux versions : l'une avec <code>pd.read_csv</code> nu, l'autre avec un générateur.</p>
+    <p><strong>Vérification :</strong> la version paresseuse doit rester sous 50 Mo de pic. Calculez l'écart-type en une seule passe (algorithme de Welford) et comparez au résultat de NumPy sur l'ensemble : l'écart relatif doit être inférieur à \(10^{-10}\).</p>
+
+    <h3>Exercice 3 — Mesurer le GIL plutôt que d'en parler</h3>
+    <p><strong>Objectif :</strong> établir soi-même les chiffres du module 2.</p>
+    <p><strong>Énoncé :</strong> prenez une fonction purement calculatoire en Python pur, puis mesurez le temps total pour 8 exécutions dans quatre configurations : séquentiel, 8 threads, 8 processus, et une réécriture vectorisée NumPy sur un seul cœur. Produisez un tableau des accélérations.</p>
+    <p><strong>Vérification :</strong> les threads doivent donner une accélération proche de 1 — voire inférieure. Les processus doivent approcher le nombre de cœurs, moins le coût de démarrage. La version NumPy bat souvent les 8 processus à elle seule : c'est le résultat le plus important de l'exercice.</p>
+
+    <h3>Exercice 4 — CSV contre Parquet, chiffres à l'appui</h3>
+    <p><strong>Objectif :</strong> vérifier les ordres de grandeur du module 7.</p>
+    <p><strong>Énoncé :</strong> téléchargez un jeu de données public d'au moins 500 Mo en CSV. Convertissez-le en Parquet, puis en Parquet partitionné par mois. Mesurez : taille sur disque, temps de lecture d'une colonne, temps d'une agrégation filtrée sur un mois.</p>
+    <p><strong>Vérification :</strong> attendez un facteur 5 à 10 sur la taille, 20 à 50 sur la lecture d'une colonne. Vérifiez ensuite que la requête filtrée ne lit <em>que</em> la partition concernée — en la chronométrant sur un mois puis sur toute l'année.</p>
+
+    <h3>Exercice 5 — Une image Docker qui ne fait pas 3 Go</h3>
+    <p><strong>Objectif :</strong> pratiquer la construction multi-étapes (module 5).</p>
+    <p><strong>Énoncé :</strong> empaquetez un modèle scikit-learn derrière FastAPI dans une image. Contraintes : construction multi-étapes, utilisateur non root, <code>healthcheck</code>, <code>.dockerignore</code>, et le modèle chargé une seule fois au démarrage. Mesurez la taille finale avec <code>docker images</code>.</p>
+    <p><strong>Vérification :</strong> visez moins de 400 Mo. Modifiez ensuite une ligne de code applicatif et reconstruisez : si l'installation des dépendances se relance, l'ordre de vos instructions est mauvais — corrigez-le jusqu'à ce que seule la dernière couche soit reconstruite.</p>
+
+    <h3>Exercice 6 — Le top 3 par groupe, en SQL</h3>
+    <p><strong>Objectif :</strong> les fonctions de fenêtre (module 4).</p>
+    <p><strong>Énoncé :</strong> sur une table de ventes, renvoyez les trois meilleurs produits de chaque catégorie, avec leur rang et leur part du chiffre d'affaires de la catégorie. Écrivez-la deux fois : avec une sous-requête corrélée, puis avec une CTE et <code>ROW_NUMBER()</code>. Comparez les plans d'exécution avec <code>EXPLAIN ANALYZE</code>.</p>
+    <p><strong>Vérification :</strong> les deux requêtes doivent donner le même résultat, mais des plans très différents. Traitez explicitement le cas des ex æquo : <code>RANK</code>, <code>DENSE_RANK</code> et <code>ROW_NUMBER</code> ne renvoient pas la même chose, et savoir lequel choisir est l'objet de l'exercice.</p>
+
+    <h2 id="p2">Partie II — Socle mathématique et statistique</h2>
+
+    <h3>Exercice 7 — La PCA sans scikit-learn</h3>
+    <p><strong>Objectif :</strong> établir soi-même le lien SVD–PCA (module 8).</p>
+    <p><strong>Énoncé :</strong> à partir d'une matrice de données, centrez-la, calculez sa SVD, et déduisez composantes principales, variance expliquée et projection. Comparez à <code>sklearn.decomposition.PCA</code>.</p>
+    <p><strong>Vérification :</strong> les variances expliquées doivent coïncider à \(10^{-12}\) près. Les vecteurs, eux, peuvent différer d'un signe : comprendre pourquoi ce signe est arbitraire fait partie de l'exercice. Vérifiez aussi que la somme des valeurs singulières au carré, divisée par \(n-1\), redonne la variance totale.</p>
+
+    <h3>Exercice 8 — Compresser une image par approximation de rang faible</h3>
+    <p><strong>Objectif :</strong> rendre le théorème d'Eckart–Young tangible (module 8).</p>
+    <p><strong>Énoncé :</strong> prenez une photographie en niveaux de gris, tronquez sa SVD à \(k = 5, 20, 50, 100\), affichez les reconstructions côte à côte. Tracez l'erreur relative en fonction de \(k\) et le taux de compression correspondant.</p>
+    <p><strong>Vérification :</strong> l'erreur doit décroître exactement comme la racine de la somme des valeurs singulières écartées au carré — vérifiez-le numériquement. Trouvez le \(k\) qui conserve 90 % de l'énergie, et regardez à quoi ressemble l'image : elle est souvent déjà très reconnaissable, ce qui explique pourquoi la PCA fonctionne.</p>
+
+    <h3>Exercice 9 — Le théorème central limite, vu de ses limites</h3>
+    <p><strong>Objectif :</strong> savoir quand l'approximation normale cesse d'être valable (module 9).</p>
+    <p><strong>Énoncé :</strong> échantillonnez dans une loi très asymétrique (exponentielle, puis log-normale de forte variance). Pour \(n = 5, 30, 100, 1000\), tracez la distribution de la moyenne et mesurez le <em>taux de couverture réel</em> d'un intervalle de confiance à 95 % sur 10 000 répétitions.</p>
+    <p><strong>Vérification :</strong> pour l'exponentielle, la couverture s'approche de 95 % dès \(n \approx 30\). Pour une log-normale de paramètre \(\sigma = 2\), elle reste nettement en dessous même à \(n = 1000\) : c'est exactement pourquoi on utilise le bootstrap sur des données de dépense.</p>
+
+    <h3>Exercice 10 — Calculer la puissance avant l'expérience</h3>
+    <p><strong>Objectif :</strong> dimensionner un A/B test (module 9).</p>
+    <p><strong>Énoncé :</strong> par simulation, tracez la puissance d'un test de proportions en fonction de \(n\), pour un taux de base de 5 % et un effet relatif de 2 %, 5 % et 10 %. Confrontez au calcul analytique de <code>statsmodels</code>.</p>
+    <p><strong>Vérification :</strong> pour détecter un effet relatif de 2 % avec 80 % de puissance, vous devriez trouver de l'ordre de plusieurs centaines de milliers d'utilisateurs par groupe. Ce chiffre est le plus utile de tout le module : il explique pourquoi la plupart des A/B tests réellement menés sont sous-dimensionnés.</p>
+
+    <h3>Exercice 11 — Cent tests A/A</h3>
+    <p><strong>Objectif :</strong> voir le p-hacking se produire (module 9).</p>
+    <p><strong>Énoncé :</strong> simulez 100 expériences où les deux groupes sont <em>identiques</em>, et testez 20 métriques dans chacune. Comptez les « résultats significatifs » à 5 %. Appliquez ensuite Bonferroni puis Benjamini-Hochberg, et recomptez.</p>
+    <p><strong>Vérification :</strong> vous devez trouver environ une métrique significative par expérience, alors qu'aucune différence n'existe. Puis : Bonferroni en élimine presque toutes au prix d'une perte de puissance, Benjamini-Hochberg en garde davantage pour un taux de fausses découvertes contrôlé. Regarder ces deux chiffres côte à côte vaut mieux qu'un long développement.</p>
+
+    <h3>Exercice 12 — Bootstrap contre formule</h3>
+    <p><strong>Objectif :</strong> savoir quand la formule cesse d'exister (module 9).</p>
+    <p><strong>Énoncé :</strong> estimez un intervalle de confiance pour la <em>médiane</em> d'une distribution asymétrique — par bootstrap, puis en cherchant une formule analytique. Faites de même pour le rapport de deux moyennes.</p>
+    <p><strong>Vérification :</strong> le bootstrap fonctionne sans effort dans les deux cas ; la formule analytique est pénible pour la médiane et franchement délicate pour le rapport. C'est tout l'intérêt de la méthode. Vérifiez ensuite la couverture réelle de l'intervalle bootstrap par simulation : elle est bonne, mais pas parfaite en petit échantillon.</p>
+
+    <h3>Exercice 13 — Fabriquer un confondant, puis le neutraliser</h3>
+    <p><strong>Objectif :</strong> manipuler soi-même un biais causal (module 11).</p>
+    <p><strong>Énoncé :</strong> générez des données selon un mécanisme que vous choisissez : une variable \(Z\) influence à la fois le traitement \(T\) et le résultat \(Y\), et \(T\) a un effet vrai que vous fixez à 2,0. Estimez l'effet (a) par différence de moyennes brutes, (b) par régression ajustée sur \(Z\), (c) par pondération IPW.</p>
+    <p><strong>Vérification :</strong> (a) doit être franchement biaisé, (b) et (c) doivent retrouver 2,0 à l'erreur d'échantillonnage près. Reprenez ensuite l'exercice en <em>n'observant pas</em> \(Z\) : aucune des trois méthodes ne s'en sort, et c'est le point à retenir. Enfin, ajoutez un collisionneur aux variables d'ajustement et constatez que l'estimation se dégrade — ajouter des variables n'est pas neutre.</p>
+
+    <h3>Exercice 14 — CUPED sur vos propres données</h3>
+    <p><strong>Objectif :</strong> quantifier un gain de puissance (module 11).</p>
+    <p><strong>Énoncé :</strong> simulez une expérience où la métrique est fortement corrélée à sa valeur de la période précédente. Appliquez CUPED et mesurez la réduction de largeur de l'intervalle de confiance pour \(\rho = 0{,}3\), \(0{,}5\), \(0{,}7\), \(0{,}9\).</p>
+    <p><strong>Vérification :</strong> la variance doit être réduite d'un facteur \(1 - \rho^2\). Traduisez ce gain en économie de durée d'expérience : à \(\rho = 0{,}7\), vous devez trouver environ deux fois moins d'utilisateurs nécessaires. Essayez ensuite d'utiliser une covariable mesurée <em>après</em> le début de l'expérience et observez le biais apparaître.</p>
+
+    <h2 id="p3">Partie III — Méthode et données</h2>
+
+    <h3>Exercice 15 — Fabriquer une fuite de données volontairement</h3>
+    <p><strong>Objectif :</strong> reconnaître le symptôme avant de le subir (module 12).</p>
+    <p><strong>Énoncé :</strong> sur un jeu tabulaire, encodez une variable catégorielle par la moyenne de la cible calculée <em>sur l'ensemble des données</em>, puis validez par validation croisée. Recommencez en calculant l'encodage à l'intérieur de chaque pli, via un <code>Pipeline</code>.</p>
+    <p><strong>Vérification :</strong> la première version affiche un score spectaculaire et faux ; la seconde, un score honnête et plus bas. L'écart entre les deux est la mesure exacte de la fuite. Recommencez avec une normalisation appliquée avant le découpage : le même phénomène se produit, en plus discret.</p>
+
+    <h3>Exercice 16 — Choisir le bon schéma de validation</h3>
+    <p><strong>Objectif :</strong> comprendre que le découpage encode une hypothèse (module 12).</p>
+    <p><strong>Énoncé :</strong> sur des données horodatées, comparez <code>KFold</code>, <code>GroupKFold</code> et <code>TimeSeriesSplit</code>. Mesurez à chaque fois le score de validation, puis le score réel sur une période future conservée à part.</p>
+    <p><strong>Vérification :</strong> <code>KFold</code> doit être nettement optimiste. Quantifiez l'optimisme : c'est cet écart, et non le score de validation, qui indique si votre protocole est honnête.</p>
+
+    <h3>Exercice 17 — Combien d'étiquettes acheter ?</h3>
+    <p><strong>Objectif :</strong> raisonner en coût marginal (module 13).</p>
+    <p><strong>Énoncé :</strong> partez de 100 exemples étiquetés et ajoutez-en par lots de 100, selon deux stratégies : tirage au hasard, et apprentissage actif par incertitude. Tracez les deux courbes d'apprentissage.</p>
+    <p><strong>Vérification :</strong> l'apprentissage actif doit atteindre une performance donnée avec deux à trois fois moins d'étiquettes — mais pas toujours : sur certains jeux il n'apporte rien, et comprendre pourquoi (déséquilibre, bruit d'annotation) vaut le détour. Repérez le point où la courbe s'aplatit : c'est là que l'annotation cesse d'être rentable.</p>
+
+    <h2 id="p4">Partie IV — Familles de modèles</h2>
+
+    <h3>Exercice 18 — Voir le compromis biais-variance</h3>
+    <p><strong>Objectif :</strong> produire la figure canonique soi-même (module 14).</p>
+    <p><strong>Énoncé :</strong> ajustez des polynômes de degré 1 à 15 sur un petit échantillon bruité issu d'une fonction connue. Tracez erreur d'entraînement et erreur de test en fonction du degré. Répétez sur 200 échantillons et décomposez l'erreur en biais² et variance.</p>
+    <p><strong>Vérification :</strong> l'erreur d'entraînement doit décroître sans cesse, l'erreur de test passer par un minimum. La somme biais² + variance + bruit doit reconstituer l'erreur totale à l'erreur de Monte-Carlo près : c'est la vérification qui prouve que la décomposition a été faite correctement.</p>
+
+    <h3>Exercice 19 — Reproduire la double descente</h3>
+    <p><strong>Objectif :</strong> constater que la courbe en U n'est pas toute l'histoire (module 15).</p>
+    <p><strong>Énoncé :</strong> sur un jeu de taille \(n\) fixée, faites croître la capacité du modèle (nombre de variables aléatoires ajoutées, ou largeur d'un réseau) bien au-delà de \(n\). Tracez l'erreur de test.</p>
+    <p><strong>Vérification :</strong> un pic d'erreur doit apparaître au voisinage du point d'interpolation, suivi d'une <em>seconde</em> descente. Vous n'obtiendrez le phénomène qu'avec une régularisation très faible : chercher pourquoi fait partie de l'exercice.</p>
+
+    <h3>Exercice 20 — Gradient boosting contre réseau de neurones sur données tabulaires</h3>
+    <p><strong>Objectif :</strong> se faire une opinion fondée sur une mesure (modules 14 et 16).</p>
+    <p><strong>Énoncé :</strong> sur trois jeux tabulaires de tailles différentes, comparez LightGBM et un perceptron multicouche correctement réglé. Chronométrez le temps de réglage, pas seulement le score final.</p>
+    <p><strong>Vérification :</strong> le boosting doit gagner sur la plupart des jeux, et surtout gagner beaucoup plus vite. Notez précisément combien de temps vous avez passé à régler chacun : c'est la variable la plus souvent absente des comparaisons publiées.</p>
+
+    <h3>Exercice 21 — La rétropropagation à la main</h3>
+    <p><strong>Objectif :</strong> ne plus considérer l'autodifférenciation comme magique (module 16).</p>
+    <p><strong>Énoncé :</strong> implémentez un réseau à deux couches en NumPy seul — propagation avant, calcul de la perte, gradients écrits à la main, mise à jour. Entraînez-le sur un problème séparable non linéairement.</p>
+    <p><strong>Vérification :</strong> comparez chaque gradient analytique à son approximation par différences finies. L'écart relatif doit être inférieur à \(10^{-6}\) ; s'il ne l'est pas, le bug est dans votre dérivation, et le trouver est précisément l'exercice.</p>
+
+    <h3>Exercice 22 — Un Transformer minuscule</h3>
+    <p><strong>Objectif :</strong> comprendre l'attention par construction (module 16).</p>
+    <p><strong>Énoncé :</strong> implémentez l'attention produit scalaire mise à l'échelle, puis un bloc Transformer complet, et entraînez-le à inverser une séquence de chiffres. Affichez la matrice d'attention apprise.</p>
+    <p><strong>Vérification :</strong> la carte d'attention doit faire apparaître une anti-diagonale nette. Retirez ensuite l'encodage de position et observez l'échec : c'est la démonstration la plus directe de son rôle.</p>
+
+    <h3>Exercice 23 — Optimisation bayésienne contre recherche aléatoire</h3>
+    <p><strong>Objectif :</strong> mesurer le gain à budget égal (module 19).</p>
+    <p><strong>Énoncé :</strong> réglez trois hyperparamètres d'un modèle avec 30 évaluations, par recherche aléatoire puis par optimisation bayésienne. Répétez 20 fois et comparez les distributions du meilleur score atteint.</p>
+    <p><strong>Vérification :</strong> l'optimisation bayésienne doit gagner en médiane, avec un écart qui se creuse quand chaque évaluation devient coûteuse. Sur un espace de recherche petit et peu coûteux, l'écart est souvent négligeable — savoir reconnaître ce cas évite d'ajouter une dépendance pour rien.</p>
+
+    <h2 id="p5">Partie V — Domaines et applications</h2>
+
+    <h3>Exercice 24 — Battre la baseline naïve saisonnière</h3>
+    <p><strong>Objectif :</strong> la leçon d'humilité des séries temporelles (module 17).</p>
+    <p><strong>Énoncé :</strong> sur une série réelle (consommation électrique, fréquentation, ventes), établissez la baseline « même jour la semaine dernière ». Essayez ensuite ETS, ARIMA, puis un gradient boosting sur variables calendaires et retards.</p>
+    <p><strong>Vérification :</strong> la baseline est difficile à battre, et un ARIMA mal configuré perd contre elle. Évaluez en validation glissante, jamais par découpage aléatoire. Rapportez l'erreur relative à la baseline plutôt qu'en valeur absolue : c'est la seule forme interprétable.</p>
+
+    <h3>Exercice 25 — Un RAG sur vos propres notes</h3>
+    <p><strong>Objectif :</strong> voir où un système RAG échoue (module 22).</p>
+    <p><strong>Énoncé :</strong> indexez une centaine de documents à vous, construisez la chaîne découpage → embeddings → recherche → génération. Constituez 20 questions dont vous connaissez la réponse, et mesurez séparément la qualité de la <em>récupération</em> et celle de la <em>réponse</em>.</p>
+    <p><strong>Vérification :</strong> la plupart des échecs viennent de la récupération, pas du modèle de langage — vérifiez-le en fournissant manuellement le bon passage. Trouvez ensuite une question où le système répond avec assurance et se trompe : c'est le mode de défaillance qui compte réellement en production.</p>
+
+    <h3>Exercice 26 — Recherche hybride</h3>
+    <p><strong>Objectif :</strong> comprendre pourquoi le lexical n'est pas mort (module 23).</p>
+    <p><strong>Énoncé :</strong> sur un corpus avec des jugements de pertinence, comparez BM25 seul, embeddings seuls, et une fusion des deux. Mesurez nDCG@10.</p>
+    <p><strong>Vérification :</strong> l'hybride doit battre les deux. Identifiez les requêtes où chaque approche gagne : le lexical excelle sur les références exactes et les identifiants, le sémantique sur les reformulations. Cette analyse par cas vaut plus que le chiffre global.</p>
+
+    <h2 id="p6">Partie VI — Décision, production, responsabilité</h2>
+
+    <h3>Exercice 27 — Le seuil optimal n'est pas 0,5</h3>
+    <p><strong>Objectif :</strong> relier score et décision (module 24).</p>
+    <p><strong>Énoncé :</strong> entraînez un classifieur sur un problème déséquilibré. Fixez un coût de faux positif et un coût de faux négatif, puis tracez le coût total en fonction du seuil. Comparez au seuil 0,5 et au seuil qui maximise le F1.</p>
+    <p><strong>Vérification :</strong> le seuil optimal doit être loin de 0,5 dès que les coûts sont asymétriques, et il doit coïncider avec la formule du module 24. Vérifiez aussi que le modèle est calibré avant de l'utiliser : sur un score mal calibré, le seuil théorique est faux.</p>
+
+    <h3>Exercice 28 — Cibler par uplift, pas par risque</h3>
+    <p><strong>Objectif :</strong> la distinction qui change une campagne (modules 11 et 24).</p>
+    <p><strong>Énoncé :</strong> simulez une population contenant les quatre types — convaincables, acquis, perdus, réfractaires. Comparez deux stratégies de ciblage à budget égal : par probabilité de résiliation, et par uplift estimé.</p>
+    <p><strong>Vérification :</strong> le ciblage par uplift doit rapporter davantage, et le ciblage par risque peut même détruire de la valeur s'il touche des réfractaires. Faites varier la proportion de réfractaires et trouvez le point où le ciblage par risque devient contre-productif.</p>
+
+    <h3>Exercice 29 — Détecter une dérive</h3>
+    <p><strong>Objectif :</strong> surveiller un modèle en production (module 26).</p>
+    <p><strong>Énoncé :</strong> implémentez l'indice de stabilité de population (PSI). Simulez trois scénarios : dérive brutale, dérive lente, et dérive de concept sans dérive de covariables. Mesurez le délai de détection de chacun.</p>
+    <p><strong>Vérification :</strong> le PSI détecte bien les deux premiers cas, et <em>pas du tout</em> le troisième — les entrées n'ont pas bougé, seule la relation a changé. C'est la limite fondamentale de la surveillance sans étiquettes, et la raison pour laquelle il faut aussi suivre une métrique de performance retardée.</p>
+
+    <h3>Exercice 30 — Audit d'équité, et son impossibilité</h3>
+    <p><strong>Objectif :</strong> constater empiriquement le théorème d'incompatibilité (module 27).</p>
+    <p><strong>Énoncé :</strong> sur un jeu public comportant un attribut sensible, mesurez parité démographique, égalité des chances et calibration par sous-groupe. Tentez ensuite de satisfaire les trois simultanément.</p>
+    <p><strong>Vérification :</strong> vous n'y arriverez pas, sauf si les taux de base sont identiques entre groupes. Le constat n'est pas un échec technique mais un résultat mathématique : améliorer l'un dégrade mécaniquement un autre, et le choix est politique, pas algorithmique.</p>
+
+    <h3>Exercice 31 — Profiler avant d'optimiser</h3>
+    <p><strong>Objectif :</strong> trouver le vrai goulot (module 25).</p>
+    <p><strong>Énoncé :</strong> profilez une boucle d'entraînement avec le profileur PyTorch. Mesurez le taux d'occupation du GPU. Corrigez ce que le profil révèle, puis re-mesurez.</p>
+    <p><strong>Vérification :</strong> dans la grande majorité des cas, le goulot est le chargement des données, pas le calcul. Un GPU occupé à moins de 50 % le confirme. Après correction — <code>num_workers</code>, <code>pin_memory</code>, préchargement — l'accélération doit être nette. Optimiser le modèle avant d'avoir regardé ce chiffre est la perte de temps classique.</p>
+
+    <h2 id="p7">Partie VII — Prolongements du projet final</h2>
+    <p>Le module 28 construit un pipeline complet. Ces variantes le prolongent, chacune ajoutant une contrainte réaliste.</p>
+    <ul>
+      <li><strong>Sans scraping.</strong> Refaites le projet sur les <em>demandes de valeurs foncières</em> publiées en données ouvertes : transactions réelles, notariées, avec les difficultés propres aux données administratives — codes géographiques changeants, doublons de dépôt, valeurs aberrantes légitimes.</li>
+      <li><strong>Avec incertitude.</strong> Remplacez la prédiction ponctuelle par un intervalle de prédiction conforme (module 10), et exposez-le dans l'API. Vérifiez empiriquement la couverture sur un jeu conservé à part.</li>
+      <li><strong>Avec surveillance.</strong> Ajoutez un calcul de PSI hebdomadaire sur les variables d'entrée et une étape de CI qui échoue si la dérive dépasse un seuil. Simulez une dérive en filtrant les annonces d'une région.</li>
+      <li><strong>Avec une question causale.</strong> Le prix au mètre carré est-il <em>causé</em> par la présence d'un ascenseur, ou l'ascenseur accompagne-t-il simplement des immeubles plus récents et mieux situés ? Posez le graphe causal, choisissez une méthode du module 11, et comparez la réponse causale au coefficient du modèle prédictif.</li>
+      <li><strong>Avec du volume.</strong> Multipliez artificiellement les données par cent et refaites tourner le pipeline. Ce qui casse en premier — mémoire, temps d'ingestion, index manquant — vous apprendra davantage que n'importe quel chapitre sur le passage à l'échelle.</li>
+    </ul>
+
+    <div class="step-block">
+      <h4>Se corriger sans corrigé</h4>
+      <ul>
+        <li><strong>Prédire avant de lancer.</strong> Écrivez le résultat attendu <em>avant</em> d'exécuter. Un écart avec la prédiction est une information ; une exécution sans attente préalable n'en est pas une.</li>
+        <li><strong>Vérifier sur un cas dont la réponse est connue.</strong> Données simulées à effet fixé, matrice dont on connaît les valeurs singulières, série parfaitement périodique.</li>
+        <li><strong>Faire varier un seul paramètre à la fois</strong> et vérifier que le sens de variation est celui que la théorie prédit. C'est souvent plus révélateur qu'une valeur absolue.</li>
+        <li><strong>Expliquer à voix haute.</strong> Si l'explication cale à un endroit précis, c'est exactement la section du module à relire.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7.html" class="btn btn-secondary">← Sommaire du cours</a>
+    <a href="project7-m01.html" class="btn btn-ghost">Module 1</a>
+  </div>
+  <div class="project-meta"><span class="tag">Exercices</span><span class="tag">Pratique</span><span class="tag">Auto-évaluation</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-exercices-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Appendix</div>
+    <h1>Exercises and self-assessment</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This appendix is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it contains.
+    </div>
+
+    <h2>What this appendix contains</h2>
+    <ul>
+      <li>About thirty self-contained exercises, one per hard notion, in module order — each doable in one to three hours on an ordinary laptop.</li>
+      <li>Every exercise states an objective, a task, and a verification: a numeric result or qualitative behaviour that tells you on your own whether you got it right. There are deliberately no worked solutions.</li>
+      <li>Many are built to fail first — a deliberate data leak, a naive p-hacking run, an unobserved confounder — because the failure is the lesson.</li>
+      <li>Grouped by course part: tooling, mathematical and statistical foundations, method, model families, application domains, decision and production.</li>
+      <li>Five extensions of the final project, including redoing it on French open property-transaction data, adding conformal prediction intervals, adding drift monitoring to CI, and asking a causal question of the same dataset.</li>
+      <li>A short section on how to check your own work when no solution key exists.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
