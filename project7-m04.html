@@ -178,7 +178,7 @@ GROUP BY client_id
 HAVING SUM(montant) &gt; 1000              -- filtre APRÈS agrégation (sur les groupes)
 ORDER BY ca_total DESC;</pre></div>
 
-    <p>Une <strong>fonction de fenêtre</strong> calcule une agrégation <em>sans</em> écraser : chaque ligne conserve son identité tout en « voyant » son groupe. C'est l'outil décisif pour le feature engineering temporel (module 10), car il permet de calculer moyennes mobiles, rangs et décalages directement dans la base, sur des volumes qui ne tiendraient pas en mémoire.</p>
+    <p>Une <strong>fonction de fenêtre</strong> calcule une agrégation <em>sans</em> écraser : chaque ligne conserve son identité tout en « voyant » son groupe. C'est l'outil décisif pour le feature engineering temporel (module 11), car il permet de calculer moyennes mobiles, rangs et décalages directement dans la base, sur des volumes qui ne tiendraient pas en mémoire.</p>
 
     <div class="code-label">SQL — anatomie d'une fonction de fenêtre</div>
     <div class="code-block"><pre>SELECT
@@ -208,7 +208,7 @@ ORDER BY ca_total DESC;</pre></div>
     montant / SUM(montant) OVER (PARTITION BY client_id) AS part
 FROM commandes;</pre></div>
 
-    <p>La clause <code>ROWS BETWEEN … AND CURRENT ROW</code> n'est pas cosmétique : elle garantit qu'aucune information <em>future</em> n'entre dans la feature. C'est la version SQL de la protection contre la fuite temporelle (module 10) — sans elle, la fenêtre par défaut inclurait toutes les lignes du groupe, y compris celles qui viennent après.</p>
+    <p>La clause <code>ROWS BETWEEN … AND CURRENT ROW</code> n'est pas cosmétique : elle garantit qu'aucune information <em>future</em> n'entre dans la feature. C'est la version SQL de la protection contre la fuite temporelle (module 11) — sans elle, la fenêtre par défaut inclurait toutes les lignes du groupe, y compris celles qui viennent après.</p>
 
     <div class="code-label">les fonctions de fenêtre à connaître</div>
     <div class="code-block"><pre>ROW_NUMBER()    numérote 1, 2, 3… sans ex æquo
@@ -348,11 +348,11 @@ Document      MongoDB, Firestore  documents JSON imbriqués, schéma souple. Pra
 Colonnes      Cassandra, HBase    écriture massive distribuée, séries temporelles,
                                   télémétrie. Modélisation dictée par les requêtes.
 Graphe        Neo4j               les relations sont l'objet premier : détection de
-                                  fraude, réseaux, recommandation (module 16).</pre></div>
+                                  fraude, réseaux, recommandation (module 17).</pre></div>
 
     <p>Le cadre théorique est le <strong>théorème CAP</strong> : dans un système distribué, une partition réseau finit toujours par se produire (des machines ne se voient plus). Il faut alors choisir entre la <em>cohérence</em> — refuser de répondre plutôt que renvoyer une donnée potentiellement périmée — et la <em>disponibilité</em> — répondre quand même, quitte à être en retard. PostgreSQL privilégie la première, Cassandra la seconde avec une cohérence « à terme ».</p>
 
-    <p>Une <strong>base vectorielle</strong> indexe des <em>embeddings</em> — des vecteurs de quelques centaines de dimensions représentant un texte ou une image — et répond à « quels sont les <em>k</em> vecteurs les plus proches de celui-ci ? ». Les options : <strong>pgvector</strong> (extension PostgreSQL, à privilégier tant qu'une seule base suffit), <strong>FAISS</strong> (bibliothèque locale), <strong>Qdrant</strong> ou <strong>Milvus</strong> (services dédiés). Le fonctionnement des index approchés et le pipeline RAG complet sont traités au <a href="project7-m20.html">module 20</a>.</p>
+    <p>Une <strong>base vectorielle</strong> indexe des <em>embeddings</em> — des vecteurs de quelques centaines de dimensions représentant un texte ou une image — et répond à « quels sont les <em>k</em> vecteurs les plus proches de celui-ci ? ». Les options : <strong>pgvector</strong> (extension PostgreSQL, à privilégier tant qu'une seule base suffit), <strong>FAISS</strong> (bibliothèque locale), <strong>Qdrant</strong> ou <strong>Milvus</strong> (services dédiés). Le fonctionnement des index approchés et le pipeline RAG complet sont traités au <a href="project7-m21.html">module 21</a>.</p>
 
     <div class="step-block">
       <h4>Position par défaut raisonnable</h4>
@@ -460,26 +460,27 @@ df = pd.read_sql("SELECT * FROM annonces WHERE ville = %(v)s", moteur, params={"
         <li><strong>SQL and databases</strong></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

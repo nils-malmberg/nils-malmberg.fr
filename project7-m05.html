@@ -63,7 +63,7 @@
 
     <h2 id="probleme">1. Le problème que Docker résout</h2>
     <p>Un projet Python ne dépend pas que de Python. Il dépend d'une version de l'interpréteur, de bibliothèques compilées (BLAS, libpq, ffmpeg), de paquets système, de variables d'environnement, parfois d'un pilote GPU et d'une version de CUDA. Un environnement virtuel (module 1) fige les bibliothèques <em>Python</em> ; il ne fige rien de tout le reste. C'est pourquoi le même code fonctionne sur un portable et échoue sur le serveur.</p>
-    <p>Un <strong>conteneur</strong> emporte tout ce dont l'application a besoin — code, dépendances Python, bibliothèques système, fichiers de configuration — dans une unité qui s'exécute à l'identique partout où tourne un moteur de conteneurs. Le bénéfice ne se limite pas au déploiement : il rend un résultat reproductible dans six mois, ce qui est exactement ce qu'on cherche en data science (module 24).</p>
+    <p>Un <strong>conteneur</strong> emporte tout ce dont l'application a besoin — code, dépendances Python, bibliothèques système, fichiers de configuration — dans une unité qui s'exécute à l'identique partout où tourne un moteur de conteneurs. Le bénéfice ne se limite pas au déploiement : il rend un résultat reproductible dans six mois, ce qui est exactement ce qu'on cherche en data science (module 25).</p>
 
     <h2 id="vm">2. Conteneur ou machine virtuelle ?</h2>
     <p>Les deux isolent une application, mais à des niveaux très différents.</p>
@@ -356,7 +356,7 @@ docker compose down -v            # … et SUPPRIME LES VOLUMES (donc les donné
 docker compose run --rm api pytest         # lancer une commande ponctuelle
 docker compose --profile dev up            # démarrer un sous-ensemble de services</pre></div>
 
-    <p>Trois points méritent d'être soulignés dans ce fichier. Le <code>healthcheck</code> combiné à <code>depends_on: condition: service_healthy</code> évite l'erreur la plus courante : l'API démarre avant que PostgreSQL n'accepte les connexions et plante immédiatement. L'absence de section <code>ports</code> sur la base signifie qu'elle n'est joignable que depuis le réseau interne — une bonne pratique de sécurité, et suffisante puisque l'API l'atteint par le nom <code>base</code>. Enfin, le script monté dans <code>/docker-entrypoint-initdb.d/</code> est exécuté automatiquement au tout premier démarrage : c'est ainsi qu'on crée le schéma SQL du module 4 sans intervention manuelle. C'est exactement la structure utilisée dans le projet final (<a href="project7-m26.html">module 26</a>).</p>
+    <p>Trois points méritent d'être soulignés dans ce fichier. Le <code>healthcheck</code> combiné à <code>depends_on: condition: service_healthy</code> évite l'erreur la plus courante : l'API démarre avant que PostgreSQL n'accepte les connexions et plante immédiatement. L'absence de section <code>ports</code> sur la base signifie qu'elle n'est joignable que depuis le réseau interne — une bonne pratique de sécurité, et suffisante puisque l'API l'atteint par le nom <code>base</code>. Enfin, le script monté dans <code>/docker-entrypoint-initdb.d/</code> est exécuté automatiquement au tout premier démarrage : c'est ainsi qu'on crée le schéma SQL du module 4 sans intervention manuelle. C'est exactement la structure utilisée dans le projet final (<a href="project7-m27.html">module 27</a>).</p>
 
     <h2 id="k8s">9. Kubernetes</h2>
 
@@ -395,7 +395,7 @@ docker compose --profile dev up            # démarrer un sous-ensemble de servi
 
     <p><strong>PersistentVolumeClaim</strong> — une demande de stockage durable, l'équivalent du volume nommé de Compose.</p>
 
-    <p><strong>Job</strong> et <strong>CronJob</strong> — une tâche qui se termine (un entraînement, un import) et sa version planifiée (un ré-entraînement hebdomadaire, module 24).</p>
+    <p><strong>Job</strong> et <strong>CronJob</strong> — une tâche qui se termine (un entraînement, un import) et sa version planifiée (un ré-entraînement hebdomadaire, module 25).</p>
 
     <p><strong>Namespace</strong> — un cloisonnement logique du cluster, pour séparer les équipes ou les environnements.</p>
 
@@ -556,26 +556,27 @@ kubectl delete -f deployment.yaml</pre></div>
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><strong>Docker, Compose and Kubernetes</strong></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 9 - Probabilités, inférence bayésienne et quantification d'incertitude - Nils Malmberg</title>
+  <title>Module 9 - Statistique inférentielle : estimer, tester, décider - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,271 +41,315 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 9</div>
-    <h1>Probabilités, inférence bayésienne et quantification d'incertitude</h1>
+    <h1>Statistique inférentielle : estimer, tester, décider</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Le module 8 traite l'inférence fréquentiste : tests, intervalles de confiance, décisions binaires. Ce module prend l'autre point de vue — traiter les paramètres eux-mêmes comme des variables aléatoires — et aboutit à la question qui manque à la plupart des modèles de machine learning : <em>à quel point cette prédiction est-elle sûre, et pourquoi ?</em> Pour un ingénieur qui doit dimensionner une marge de sécurité, c'est souvent plus important que la précision moyenne.</p>
+    <p>Un modèle donne des nombres ; la statistique inférentielle dit lesquels sont crédibles. C'est ce qui sépare « la variante B a fait +2,3 % » de « la variante B est meilleure ». Ce module traite les p-values et les tests d'hypothèse pour ce qu'ils sont — des outils précis, très souvent mal interprétés — puis la question qui compte vraiment : quand a-t-on le droit de parler de cause ?</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#lois">Les lois usuelles comme briques de modélisation</a></li>
-        <li><a href="#vraisemblance">Vraisemblance, MLE, MAP</a></li>
-        <li><a href="#bayes">Bayes, avec un exemple chiffré</a></li>
-        <li><a href="#conjugaison">Conjugaison et A/B test bayésien</a></li>
-        <li><a href="#mcmc">MCMC : échantillonner un a posteriori</a></li>
-        <li><a href="#hierarchique">Modèles hiérarchiques</a></li>
-        <li><a href="#vi">Inférence variationnelle</a></li>
-        <li><a href="#incertitude">Aléatoire contre épistémique</a></li>
-        <li><a href="#uq-ml">Quantifier l'incertitude d'un modèle</a></li>
-        <li><a href="#conformal">Prédiction conforme</a></li>
+        <li><a href="#cadre">Échantillon, estimateur, variabilité</a></li>
+        <li><a href="#ic">Intervalles de confiance</a></li>
+        <li><a href="#bootstrap">Le bootstrap</a></li>
+        <li><a href="#tests">Tests d'hypothèse et p-value</a></li>
+        <li><a href="#puissance">Erreurs, puissance, taille d'échantillon</a></li>
+        <li><a href="#catalogue">Catalogue des tests usuels</a></li>
+        <li><a href="#multiple">Comparaisons multiples et p-hacking</a></li>
+        <li><a href="#causalite">Corrélation, causalité, confondants</a></li>
+        <li><a href="#abtest">Un A/B test de bout en bout</a></li>
       </ol>
     </div>
 
-    <h2 id="lois">1. Les lois usuelles comme briques de modélisation</h2>
-    <p>Choisir une loi, c'est faire une hypothèse sur le <em>mécanisme</em> qui a engendré les données. L'essentiel du travail de modélisation probabiliste tient dans ce choix, et il se raisonne à partir du phénomène physique, pas à partir de l'allure de l'histogramme.</p>
+    <h2 id="cadre">1. Échantillon, estimateur, variabilité</h2>
+    <p>On veut connaître une quantité \(\theta\) d'une population — une moyenne, une proportion, un écart — mais on n'observe qu'un échantillon de taille \(n\). On calcule alors un <strong>estimateur</strong> \(\hat\theta\), et voici le point central : <em>cet estimateur est lui-même une variable aléatoire</em>. Un autre échantillon aurait donné une autre valeur. Toute la statistique inférentielle consiste à quantifier cette variabilité, pour savoir ce que l'on peut affirmer malgré elle.</p>
 
-    <div class="code-label">quelle loi pour quel mécanisme</div>
-    <div class="code-block"><pre>Bernoulli / Binomiale   succès-échec ; nombre de succès sur n essais indépendants
-Poisson                 comptage d'événements RARES et INDÉPENDANTS dans un
-                        intervalle fixe (désintégrations, pannes, arrivées).
-                        Propriété : variance = espérance.
-Binomiale négative      comptage SURDISPERSÉ (variance &gt; espérance) : le cas réel
-                        le plus fréquent, quand le taux varie d'une unité à l'autre.
-Exponentielle           temps d'attente entre événements poissoniens. SANS MÉMOIRE :
-                        avoir attendu 10 min ne change pas l'attente restante.
-Weibull                 durée de vie à taux de défaillance variable : LA loi de la
-                        fiabilité (k &lt; 1 mortalité infantile, k &gt; 1 usure) — module 15
-Gamma                   somme d'exponentielles ; temps de service ; a priori de précision
-Beta                    une proportion inconnue dans [0,1] : l'a priori naturel d'un taux
-Normale                 SOMME de nombreux effets indépendants (TCL, module 8)
-Log-normale             PRODUIT de nombreux effets : tailles, revenus, durées, prix
-Student                 normale à queues épaisses : régression robuste aux aberrants
-Dirichlet               une distribution sur des proportions qui somment à 1</pre></div>
+    <div class="code-label">Python — voir la variabilité d'échantillonnage</div>
+    <div class="code-block"><pre>import numpy as np
+rng = np.random.default_rng(0)
+
+# une population dont on connaît la vérité : moyenne 100, écart type 15
+population = rng.normal(100, 15, size=1_000_000)
+
+# on tire 10 000 échantillons de 30 individus et on regarde varier LA MOYENNE
+moyennes = np.array([rng.choice(population, 30).mean() for _ in range(10_000)])
+
+print(f"moyenne des moyennes : {moyennes.mean():.2f}")       # ≈ 100  → sans biais
+print(f"dispersion observée  : {moyennes.std():.2f}")        # ≈ 2.74
+print(f"prédiction théorique : {15 / np.sqrt(30):.2f}")      # ≈ 2.74  ✓
+print(f"étendue              : {moyennes.min():.1f} à {moyennes.max():.1f}")
+# ≈ 89 à 111 : avec 30 individus, une moyenne d'échantillon peut s'écarter
+# de 10 points de la vérité, sans que rien ne soit anormal.</pre></div>
+
+    <p>Deux résultats suffisent à presque tout. La <strong>loi des grands nombres</strong> garantit que \(\bar X_n \to \mu\). Le <strong>théorème central limite</strong> précise <em>à quelle vitesse</em> et <em>sous quelle forme</em> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \sqrt{n}\,\frac{\bar X_n - \mu}{\sigma} \xrightarrow[n\to\infty]{\mathcal{L}} \mathcal{N}(0,1) \]</div>
+    <p>Sa portée est remarquable : quelle que soit la forme de la distribution d'origine — asymétrique, discrète, bimodale —, la moyenne d'un échantillon suffisamment grand suit approximativement une loi normale. C'est ce qui rend les outils qui suivent applicables sans connaître la loi des données.</p>
+    <p>L'<strong>erreur type</strong> \(\sigma/\sqrt{n}\) décroît en \(1/\sqrt{n}\) : diviser l'incertitude par deux demande <em>quatre</em> fois plus de données, par dix en demande cent fois plus. C'est la contrainte économique de fond de toute expérimentation, et elle explique pourquoi les gains de précision deviennent vite hors de prix.</p>
 
     <div class="step-block">
-      <h4>Le réflexe qui évite les erreurs</h4>
-      <p>Une variable strictement positive et très asymétrique n'est presque jamais normale : elle est souvent log-normale ou gamma. Modéliser un temps de réparation par une loi normale attribue une probabilité non nulle à des durées <em>négatives</em>, ce qui se voit immédiatement dans les prédictions absurdes. De même, un comptage modélisé par une loi de Poisson alors que les données sont surdispersées produit des intervalles beaucoup trop étroits, donc une fausse confiance — et c'est le cas dès que le taux d'événements varie entre individus, ce qui est la règle plutôt que l'exception.</p>
+      <h4>Deux distinctions à ne pas confondre</h4>
+      <p><strong>Écart type</strong> (dispersion des individus) contre <strong>erreur type</strong> (dispersion de l'estimateur) : le premier ne diminue pas quand \(n\) augmente — les gens ne se ressemblent pas davantage parce qu'on en observe plus —, le second si. <strong>Biais</strong> (l'estimateur vise-t-il juste en moyenne ?) contre <strong>variance</strong> (est-il stable ?) : un estimateur légèrement biaisé mais de faible variance bat souvent un estimateur sans biais et instable. C'est exactement l'argument de la régularisation (module 13).</p>
     </div>
 
-    <h2 id="vraisemblance">2. Vraisemblance, MLE, MAP</h2>
-    <p>La <strong>vraisemblance</strong> est la probabilité des données observées, vue comme une fonction du paramètre : \(\mathcal{L}(\theta) = p(y \mid \theta)\). Attention au renversement de perspective — ce n'est pas une densité de probabilité en \(\theta\), c'est la même formule lue « à l'envers » : les données sont fixées, le paramètre varie.</p>
-    <p>L'estimation du maximum de vraisemblance consiste à prendre le \(\theta\) qui rend les données observées les plus probables :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MLE}} = \arg\max_\theta \sum_{i=1}^{n} \log p(y_i \mid \theta) \]</div>
-    <p>On travaille sur le logarithme pour deux raisons : il transforme un produit en somme (plus stable numériquement, un produit de milliers de probabilités valant zéro en virgule flottante), et il ne change pas l'argmax puisque le logarithme est croissant.</p>
-
-    <div class="code-label">toutes les pertes du cours sont des log-vraisemblances</div>
-    <div class="code-block"><pre>Bruit gaussien homoscédastique   → -log p ∝ (y - ŷ)²        = perte quadratique
-Bernoulli                        → -log p = entropie croisée
-Poisson                          → -log p = perte de Poisson (comptages)
-Student                          → -log p ≈ perte robuste (queues épaisses)
-Laplace                          → -log p ∝ |y - ŷ|         = MAE</pre></div>
-    <p>Autrement dit : <strong>choisir une perte, c'est choisir un modèle de bruit</strong>. L'expliciter permet de le choisir correctement plutôt que par habitude — si les erreurs de mesure ont des queues épaisses, minimiser un MSE revient à supposer un bruit gaussien qu'on sait faux, et le modèle sera tiré par les aberrants.</p>
-
-    <p>En ajoutant un <em>a priori</em> \(p(\theta)\), on obtient l'estimateur du maximum a posteriori :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MAP}} = \arg\max_\theta \big[\log p(y\mid\theta) + \log p(\theta)\big] \]</div>
+    <h2 id="ic">2. Intervalles de confiance</h2>
+    <p>Plutôt qu'une valeur unique, on donne un intervalle qui reflète l'incertitude. Pour une moyenne :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \bar{x} \;\pm\; t_{n-1,\,1-\alpha/2}\,\frac{s}{\sqrt{n}} \]</div>
+    <p>La loi de Student remplace la loi normale parce que \(\sigma\) est lui-même estimé par \(s\), ce qui ajoute de l'incertitude ; l'écart n'est appréciable qu'en dessous de \(n \approx 30\), au-delà les deux coïncident presque.</p>
 
     <div class="warning-block">
-      <strong>La régularisation est un a priori déguisé.</strong> Avec un a priori gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un a priori de Laplace (pic en zéro, queues lourdes), on retrouve exactement le lasso. Les modules 7 et 12 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
+      <strong>L'interprétation correcte, et la fausse.</strong> Un IC à 95 % ne signifie <em>pas</em> « il y a 95 % de chances que \(\mu\) soit dans cet intervalle ». Dans le cadre fréquentiste, \(\mu\) est une constante inconnue : elle y est ou elle n'y est pas, il n'y a pas de probabilité là-dedans. Ce qui est aléatoire, c'est l'<em>intervalle</em>, puisqu'il dépend de l'échantillon tiré. La formulation correcte porte donc sur la procédure : si l'on répétait l'expérience un grand nombre de fois, 95 % des intervalles ainsi construits contiendraient \(\mu\). L'énoncé probabiliste direct sur \(\mu\) existe bel et bien, mais il s'appelle un intervalle <em>crédible</em> et relève de l'approche bayésienne (module 10).
     </div>
 
-    <h2 id="bayes">3. Bayes, avec un exemple chiffré</h2>
-    <p>Le MAP ne retient qu'un point. L'approche bayésienne complète conserve toute la distribution :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \underbrace{p(\theta\mid y)}_{\text{a posteriori}} = \frac{\overbrace{p(y\mid\theta)}^{\text{vraisemblance}}\;\overbrace{p(\theta)}^{\text{a priori}}}{\underbrace{p(y)}_{\text{évidence}}} \;\propto\; p(y\mid\theta)\,p(\theta) \]</div>
+    <div class="code-label">Python — vérifier la couverture par simulation</div>
+    <div class="code-block"><pre>from scipy import stats
 
-    <p>L'interprétation est opérationnelle : l'a priori encode ce qu'on sait <em>avant</em> de regarder les données, la vraisemblance ce que les données disent, et l'a posteriori combine les deux en pondérant chacun par sa précision. Avec peu de données, l'a priori domine ; avec beaucoup, il s'efface. C'est un mécanisme de régularisation qui s'adapte automatiquement à la quantité d'information disponible.</p>
+couverts = 0
+for _ in range(10_000):
+    ech = rng.normal(100, 15, size=30)
+    bas, haut = stats.t.interval(0.95, df=29, loc=ech.mean(),
+                                 scale=stats.sem(ech))
+    couverts += (bas &lt;= 100 &lt;= haut)          # la vraie valeur est-elle dedans ?
 
-    <div class="step-block">
-      <h4>L'exemple qui rend le théorème concret</h4>
-      <p>Un test de dépistage détecte 99 % des malades (sensibilité) et se trompe dans 1 % des cas chez les sains (faux positifs). La maladie touche 0,1 % de la population. Votre test est positif : quelle est la probabilité que vous soyez malade ?</p>
-      <p>L'intuition répond « 99 % ». Le calcul répond autrement. Sur 100 000 personnes : 100 sont malades, dont 99 sont détectées ; 99 900 sont saines, dont 999 sont faussement positives. Parmi les 1 098 positifs, 99 sont réellement malades :</p>
-      <div style="text-align:center;overflow-x:auto">\[ P(\text{malade}\mid +) = \frac{0{,}99 \times 0{,}001}{0{,}99 \times 0{,}001 + 0{,}01 \times 0{,}999} = \frac{0{,}00099}{0{,}01098} \approx 9\,\% \]</div>
-      <p>Neuf pour cent, pas quatre-vingt-dix-neuf. L'a priori — la rareté de la maladie — écrase la qualité du test. C'est exactement le mécanisme qui explique pourquoi un détecteur de fraude à 99 % de précision apparente produit une majorité de fausses alertes quand la fraude est rare (module 7, PR-AUC), et pourquoi la question « quelle proportion de mes alertes sont justes ? » n'a pas la même réponse que « quelle proportion des fraudes est-ce que j'attrape ? ».</p>
-    </div>
+print(f"couverture réelle : {couverts / 10_000:.1%}")    # ≈ 95,0 % ✓</pre></div>
 
-    <h2 id="conjugaison">4. Conjugaison et A/B test bayésien</h2>
-    <p>Dans quelques cas heureux, l'a posteriori appartient à la même famille que l'a priori : on parle de <strong>conjugaison</strong>, et le calcul se réduit à une mise à jour de paramètres. Le cas Beta-Binomial est le plus utile :</p>
-    <div style="text-align:center;overflow-x:auto">\[ p \sim \text{Beta}(\alpha,\beta), \quad k \mid p \sim \text{Bin}(n,p) \;\Longrightarrow\; p \mid k \sim \text{Beta}(\alpha + k,\; \beta + n - k) \]</div>
-    <p>La lecture est intuitive : \(\alpha\) et \(\beta\) se comportent comme des succès et des échecs « virtuels » observés avant l'expérience. Un a priori Beta(1,1) est uniforme — aucune opinion ; un Beta(30,70) affirme qu'on croit le taux proche de 30 %, avec la force de 100 observations.</p>
+    <p>Pour une <strong>proportion</strong>, l'intervalle normal usuel \(\hat p \pm z\sqrt{\hat p(1-\hat p)/n}\) se comporte mal quand \(\hat p\) est proche de 0 ou 1 : il peut sortir de l'intervalle [0, 1], et sa couverture réelle chute bien en dessous de 95 %. L'intervalle de <strong>Wilson</strong> corrige cela et devrait être le choix par défaut :</p>
+    <div class="code-block"><pre>from statsmodels.stats.proportion import proportion_confint
+proportion_confint(count=7, nobs=100, method="wilson")    # (0.034, 0.139)
+proportion_confint(count=7, nobs=100, method="normal")    # (0.020, 0.120) — trop étroit</pre></div>
 
-    <div class="code-label">Python — A/B test bayésien, en dix lignes</div>
+    <h2 id="bootstrap">3. Le bootstrap</h2>
+    <p>Pour une médiane, un coefficient de Gini, un R², un ratio de métriques — bref dès que la loi de l'estimateur n'a pas de forme analytique commode — il n'existe pas de formule d'intervalle. Le <strong>bootstrap</strong> résout cela par une idée d'une simplicité déconcertante : l'échantillon est notre meilleure approximation de la population, alors tirons dedans <em>avec remise</em> et regardons varier la statistique. On simule ainsi la variabilité d'échantillonnage sans nouvelle collecte.</p>
+
+    <div class="code-label">Python</div>
     <div class="code-block"><pre>import numpy as np
 from scipy import stats
 
-# mêmes données qu'au module 8, autre lecture
-a_post = stats.beta(1 + 1183, 1 + 20_143 - 1183)      # variante A
-b_post = stats.beta(1 + 1279, 1 + 20_089 - 1279)      # variante B
-
 rng = np.random.default_rng(0)
-ta, tb = a_post.rvs(200_000, random_state=rng), b_post.rvs(200_000, random_state=rng)
+x = rng.lognormal(mean=1.0, sigma=1.2, size=200)     # distribution très asymétrique
 
-print(f"P(B meilleure que A)         = {(tb &gt; ta).mean():.3f}")      # 0.982
-print(f"gain relatif médian          = {np.median((tb - ta) / ta):+.2%}")
-print(f"P(gain &gt; 5 %)                = {((tb - ta) / ta &gt; 0.05).mean():.3f}")
-print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")</pre></div>
+# ── bootstrap "à la main", pour voir le mécanisme ──
+idx = rng.integers(0, len(x), size=(10_000, len(x)))  # 10 000 rééchantillonnages
+medianes = np.median(x[idx], axis=1)                  # la statistique sur chacun
+ic_percentile = np.percentile(medianes, [2.5, 97.5])  # l'intervalle empirique
 
-    <p>La dernière ligne est ce qui manque à l'approche fréquentiste : la <em>perte espérée</em> en cas de mauvais choix, exprimée dans l'unité de la métrique. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel. C'est le pont naturel vers le module 22.</p>
+# ── version scipy, avec correction BCa (biais + asymétrie) : plus fiable ──
+res = stats.bootstrap((x,), np.median, confidence_level=0.95,
+                      n_resamples=10_000, method="BCa", random_state=0)
+print(ic_percentile, res.confidence_interval)</pre></div>
 
-    <h2 id="mcmc">5. MCMC : échantillonner un a posteriori</h2>
-    <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable : en dimension 50, aucune quadrature ne tient. La solution consiste à renoncer à <em>calculer</em> l'a posteriori pour se contenter d'y <strong>échantillonner</strong> — ce qui suffit, puisqu'avec des échantillons on obtient moyennes, quantiles, intervalles et probabilités par simple comptage.</p>
-    <p>Le procédé : construire une chaîne de Markov — une marche aléatoire dont chaque pas ne dépend que du précédent — conçue de sorte que, après une phase de chauffe, la fréquence de passage dans chaque région soit proportionnelle à la densité a posteriori. On laisse la chaîne courir, et les positions visitées <em>sont</em> l'échantillon recherché.</p>
+    <p>Le bootstrap est d'une généralité rare, mais il a ses limites : il suppose des observations <strong>indépendantes</strong> (pour des séries temporelles, il faut un bootstrap par blocs — module 16), il est mauvais pour les statistiques d'<em>extrêmes</em> (un maximum ne se rééchantillonne pas bien, puisqu'aucun tirage ne peut dépasser la valeur observée), et il ne crée pas d'information : sur douze observations, il reste douze observations.</p>
 
-    <ul>
-      <li><strong>Metropolis-Hastings</strong> — proposer un déplacement, l'accepter avec une probabilité qui compare les densités du point proposé et du point courant. La beauté du procédé : le rapport élimine la constante de normalisation inconnue, celle-là même qu'on ne sait pas calculer. Mais la marche aléatoire explore mal en grande dimension, où presque toutes les directions mènent vers des zones de faible densité.</li>
-      <li><strong>Gibbs</strong> — mettre à jour chaque coordonnée selon sa loi conditionnelle aux autres. Efficace si ces conditionnelles sont connues, très lent si les paramètres sont fortement corrélés.</li>
-      <li><strong>Hamiltonien (HMC) et NUTS</strong> — la méthode moderne. On introduit une variable d'impulsion et l'on simule une dynamique physique sur le paysage \(-\log p(\theta\mid y)\), vu comme une énergie potentielle : la « bille » suit les vallées au lieu de tâtonner. Le gradient guide la trajectoire, ce qui permet de parcourir de longues distances avec un taux d'acceptation élevé. NUTS choisit automatiquement la longueur de trajectoire, supprimant le principal réglage manuel. C'est ce qui a rendu l'inférence bayésienne praticable sur des modèles à centaines de paramètres.</li>
-    </ul>
+    <h2 id="tests">4. Tests d'hypothèse et p-value</h2>
+    <p>La démarche est celle d'un raisonnement par l'absurde probabiliste :</p>
+    <ol>
+      <li>poser une hypothèse nulle \(H_0\) — « aucun effet », « les deux moyennes sont égales » ;</li>
+      <li>choisir une statistique de test \(T\) dont on connaît la loi <em>sous \(H_0\)</em> ;</li>
+      <li>calculer sa valeur \(t_{\text{obs}}\) sur les données observées ;</li>
+      <li>évaluer à quel point cette valeur serait surprenante si \(H_0\) était vraie.</li>
+    </ol>
+    <p>Cette dernière quantité est la <strong>p-value</strong> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ p = \mathbb{P}\big(|T| \geq |t_{\text{obs}}| \;\big|\; H_0 \text{ vraie}\big) \]</div>
+
+    <div class="code-label">Python — fabriquer une p-value soi-même, par simulation</div>
+    <div class="code-block"><pre># Situation : groupe A (n=40) et groupe B (n=40), on observe un écart de moyennes.
+ecart_observe = b.mean() - a.mean()          # par exemple 1,8
+
+# Sous H0, l'appartenance au groupe n'a AUCUN effet : les étiquettes sont
+# interchangeables. On les mélange 100 000 fois pour voir quels écarts
+# le hasard seul produit.
+ensemble = np.concatenate([a, b])
+ecarts_h0 = np.empty(100_000)
+for i in range(100_000):
+    melange = rng.permutation(ensemble)
+    ecarts_h0[i] = melange[40:].mean() - melange[:40].mean()
+
+p = np.mean(np.abs(ecarts_h0) &gt;= abs(ecart_observe))
+print(f"p-value (test de permutation) = {p:.4f}")
+# La p-value est LITTÉRALEMENT la proportion de mondes "sans effet" dans lesquels
+# le hasard produirait un écart au moins aussi grand que celui observé.</pre></div>
+
+    <p>Ce test de permutation est intéressant à double titre : il ne suppose aucune loi particulière, et il rend la définition de la p-value concrète — c'est une fréquence, comptée dans un monde où l'hypothèse nulle serait vraie.</p>
+
+    <div class="warning-block">
+      <strong>Ce que la p-value n'est pas.</strong><br>
+      • Ce n'est <strong>pas</strong> la probabilité que \(H_0\) soit vraie. Elle est calculée <em>en supposant</em> \(H_0\) vraie : c'est \(P(\text{données}\mid H_0)\), jamais \(P(H_0\mid\text{données})\). Confondre les deux, c'est confondre « la probabilité d'avoir de la fièvre quand on a la grippe » et « la probabilité d'avoir la grippe quand on a de la fièvre ».<br>
+      • Ce n'est <strong>pas</strong> une mesure de la taille de l'effet. Avec \(n = 10^6\), une différence de 0,01 % devient « hautement significative » sans avoir le moindre intérêt pratique.<br>
+      • \(p \gt 0{,}05\) ne <strong>prouve pas</strong> \(H_0\). Absence de preuve n'est pas preuve d'absence : c'est très souvent un simple manque de puissance.<br>
+      • Le seuil de 0,05 est une <strong>convention</strong> de Fisher, pas une loi de la nature. Rien ne distingue \(p = 0{,}049\) de \(p = 0{,}051\).
+    </div>
+
+    <p>Le réflexe sain consiste à toujours rapporter <em>trois</em> choses ensemble : la taille d'effet (l'écart observé, dans son unité métier), son intervalle de confiance, et la p-value. L'intervalle contient à lui seul presque toute l'information utile — un IC qui exclut zéro dit exactement la même chose qu'un test significatif, en plus informatif, puisqu'il indique aussi l'ordre de grandeur de l'effet.</p>
+
+    <h2 id="puissance">5. Erreurs, puissance, taille d'échantillon</h2>
+    <div class="code-label">les deux erreurs possibles</div>
+    <div class="code-block"><pre>                        H0 vraie en réalité       H0 fausse en réalité
+Rejeter H0              ERREUR DE TYPE I (α)      décision correcte
+                        "fausse découverte"       (puissance = 1 - β)
+Ne pas rejeter H0       décision correcte         ERREUR DE TYPE II (β)
+                                                  "on est passé à côté"</pre></div>
+
+    <p>\(\alpha\) est <em>choisi</em> (5 % par convention) : c'est le taux de faux positifs qu'on accepte. \(\beta\) se subit, sauf si l'on dimensionne l'expérience à l'avance. La <strong>puissance</strong> \(1-\beta\) est la probabilité de détecter un effet qui existe réellement ; on la vise à 80 % ou 90 %.</p>
+
+    <p>Pour comparer deux moyennes, en notant \(d = |\mu_1-\mu_2|/\sigma\) la taille d'effet de Cohen (un écart exprimé en nombre d'écarts types), la taille par groupe nécessaire pour \(\alpha=5\%\) et une puissance de 80 % est bien approchée par :</p>
+    <div style="text-align:center;overflow-x:auto">\[ n \approx \frac{16}{d^{2}} \]</div>
+    <p>Un effet « moyen » (\(d=0{,}5\)) demande donc environ 64 observations par groupe ; un petit effet (\(d=0{,}2\)) en demande 400 ; un très petit effet (\(d=0{,}05\)) en demande 6 400. Cette formule, faite de tête avant de lancer une expérience, évite de collecter des données qui n'avaient aucune chance de conclure.</p>
+
+    <div class="code-label">Python — dimensionner, puis vérifier par simulation</div>
+    <div class="code-block"><pre>from statsmodels.stats.power import TTestIndPower
+
+n = TTestIndPower().solve_power(effect_size=0.3, alpha=0.05, power=0.8)
+print(f"n = {np.ceil(n):.0f} par groupe")          # 176
+
+# vérification empirique : on simule 10 000 expériences de cette taille
+n = 176
+rejets = sum(
+    stats.ttest_ind(rng.normal(0, 1, n), rng.normal(0.3, 1, n)).pvalue &lt; 0.05
+    for _ in range(10_000)
+)
+print(f"puissance simulée = {rejets / 10_000:.1%}")   # ≈ 80 % ✓</pre></div>
 
     <div class="step-block">
-      <h4>Diagnostics : une chaîne qui a convergé, ça se vérifie</h4>
-      <ul>
-        <li><strong>\(\hat{R}\) (Gelman-Rubin)</strong> — compare la variance entre plusieurs chaînes lancées de points différents à la variance à l'intérieur de chacune. Il faut \(\hat R \lt 1{,}01\) ; au-delà, les chaînes n'explorent pas la même région et <em>rien</em> ne doit être interprété.</li>
-        <li><strong>ESS</strong> (taille d'échantillon effective) — les tirages MCMC sont autocorrélés : 10 000 tirages peuvent n'en valoir que 200 d'indépendants. Viser au moins quelques centaines par quantité d'intérêt.</li>
-        <li><strong>Divergences</strong> (HMC) — signalent une géométrie trop courbée pour le pas d'intégration, typiquement l'« entonnoir » des modèles hiérarchiques. Le remède est presque toujours une reparamétrisation (forme non centrée, section suivante), pas une augmentation du nombre d'itérations.</li>
-        <li><strong>Prédictif a posteriori</strong> — simuler des jeux de données depuis le modèle ajusté et les comparer aux vraies données. C'est le test le plus parlant : si les simulations ne ressemblent pas aux observations, le modèle est faux, quelle que soit la qualité de la convergence.</li>
-      </ul>
+      <h4>Le piège des études sous-dimensionnées</h4>
+      <p>Une expérience à faible puissance ne se contente pas de « rater » des effets. Quand elle atteint quand même la significativité, c'est nécessairement parce que le hasard a gonflé l'estimation — sans quoi elle n'aurait pas franchi le seuil. Les effets publiés à partir de petits échantillons sont donc <em>systématiquement surestimés</em> (on parle d'erreur de type M, pour magnitude), et parfois même de signe inverse (type S). C'est l'un des moteurs de la crise de reproductibilité, et cela explique pourquoi tant de résultats spectaculaires ne se confirment pas à plus grande échelle.</p>
     </div>
 
-    <h2 id="hierarchique">6. Modèles hiérarchiques</h2>
-    <p>C'est l'apport le plus utile du cadre bayésien en pratique. Situation typique : estimer un taux par site, par machine ou par client, alors que certains groupes n'ont que trois observations. Deux extrêmes également mauvais :</p>
-    <ul>
-      <li><strong>Aucun regroupement</strong> — un modèle indépendant par groupe : un groupe avec 1 succès sur 1 essai affiche 100 %, ce qui est absurde.</li>
-      <li><strong>Regroupement total</strong> — une seule estimation globale : on efface toute différence réelle entre groupes.</li>
-    </ul>
-    <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés à partir des données.</p>
-    <div style="text-align:center;overflow-x:auto">\[ y_{ij} \sim \mathcal{N}(\theta_j, \sigma^2), \qquad \theta_j \sim \mathcal{N}(\mu, \tau^2), \qquad \mu,\sigma,\tau \sim \text{a priori} \]</div>
-    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité — un groupe de 3 observations sera presque ramené à la moyenne, un groupe de 3 000 gardera sa valeur propre. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\), qui mesure la dispersion réelle entre groupes. C'est exactement l'effet du lissage du <em>target encoding</em> (module 10), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
+    <h2 id="catalogue">6. Catalogue des tests usuels</h2>
+    <div class="code-label">quel test pour quelle question</div>
+    <div class="code-block"><pre>Question                              Test                     Fonction
+────────────────────────────────────────────────────────────────────────────────────
+Moyenne = valeur de référence ?       t à un échantillon       stats.ttest_1samp
+Deux groupes indépendants ?           t de WELCH (défaut !)    stats.ttest_ind(
+                                                                 equal_var=False)
+Avant/après sur les mêmes sujets ?    t apparié                stats.ttest_rel
+Idem, sans hypothèse de normalité ?   Mann-Whitney / Wilcoxon  stats.mannwhitneyu
+Plus de deux groupes ?                ANOVA / Kruskal-Wallis   stats.f_oneway, kruskal
+Deux variables catégorielles liées ?  chi² d'indépendance      stats.chi2_contingency
+Idem, petits effectifs (&lt; 5) ?        test exact de Fisher     stats.fisher_exact
+Deux proportions (A/B test) ?         test z de proportions    proportions_ztest
+Même distribution ?                   Kolmogorov-Smirnov       stats.ks_2samp
+Distribution normale ?                Shapiro-Wilk             stats.shapiro
+Corrélation linéaire ? monotone ?     Pearson / Spearman       stats.pearsonr, spearmanr</pre></div>
 
-    <div class="code-label">Python — PyMC, modèle hiérarchique non centré</div>
-    <div class="code-block"><pre>import pymc as pm, arviz as az
+    <p>Trois remarques valent mieux qu'un long tableau.</p>
+    <p><strong>Le test de Welch doit être le défaut</strong> pour comparer deux groupes : il ne suppose pas l'égalité des variances, et il ne perd presque rien en puissance quand celles-ci sont effectivement égales. Le test de Student classique, lui, donne des résultats faux quand les variances diffèrent et que les groupes sont de tailles inégales — situation courante.</p>
+    <p><strong>Les tests de normalité sont contre-productifs</strong> sur de grands échantillons : ils rejettent systématiquement pour des écarts sans conséquence pratique, alors que le TCL rend justement le test de Student robuste à la non-normalité dès que \(n\) dépasse quelques dizaines. Un histogramme et un QQ-plot informent mieux qu'une p-value de Shapiro.</p>
+    <p>Enfin, les <strong>tests non paramétriques</strong> ne comparent pas des moyennes mais des rangs. Mann-Whitney répond à « une valeur tirée de A a-t-elle tendance à dépasser une valeur tirée de B ? », ce qui n'est pas la même question qu'une différence de moyennes — deux distributions de moyennes identiques mais de formes différentes peuvent donner un résultat significatif.</p>
 
-with pm.Model(coords={"groupe": noms_groupes}) as modele:
-    mu    = pm.Normal("mu", 0, 5)                 # moyenne globale
-    tau   = pm.HalfNormal("tau", 2)               # dispersion ENTRE groupes
-    sigma = pm.HalfNormal("sigma", 2)             # bruit INTRA-groupe
+    <h2 id="multiple">7. Comparaisons multiples et p-hacking</h2>
+    <p>Tester 20 hypothèses au seuil de 5 % alors qu'<em>aucune</em> n'est vraie donne une probabilité \(1 - 0{,}95^{20} \approx 64\%\) d'obtenir au moins un « résultat significatif ». C'est mécanique, et c'est la raison pour laquelle explorer librement un jeu de données produit toujours quelque chose.</p>
 
-    # paramétrage NON CENTRÉ : on tire un z standard puis on le décale.
-    # Mathématiquement équivalent, mais la géométrie devient beaucoup plus
-    # facile à explorer pour NUTS (évite l'entonnoir et les divergences).
-    z     = pm.Normal("z", 0, 1, dims="groupe")
-    theta = pm.Deterministic("theta", mu + tau * z, dims="groupe")
+    <div class="code-label">les corrections</div>
+    <div class="code-block"><pre>Bonferroni         seuil α/m           contrôle le FWER (probabilité d'AU MOINS
+                                       une fausse découverte). Simple, très conservateur.
+Holm-Bonferroni    séquentiel          même garantie, uniformément plus puissant :
+                                       à préférer systématiquement à Bonferroni.
+Benjamini-Hochberg contrôle le FDR     accepte une PROPORTION q de faux parmi les
+                                       rejets. Le bon choix quand on teste des
+                                       centaines d'hypothèses (génomique, sélection
+                                       de variables).</pre></div>
 
-    pm.Normal("obs", mu=theta[idx_groupe], sigma=sigma, observed=y)
+    <div class="code-block"><pre>from statsmodels.stats.multitest import multipletests
+rejets, p_corriges, _, _ = multipletests(p_values, alpha=0.05, method="holm")
+rejets, p_corriges, _, _ = multipletests(p_values, alpha=0.05, method="fdr_bh")</pre></div>
 
-    trace = pm.sample(2000, tune=1000, chains=4, target_accept=0.9)
-
-print(az.summary(trace, var_names=["mu", "tau"]))   # r_hat, ess_bulk, intervalles
-az.plot_forest(trace, var_names=["theta"])          # le rétrécissement, visible</pre></div>
-
-    <h2 id="vi">7. Inférence variationnelle</h2>
-    <p>MCMC est asymptotiquement exact mais coûteux : chaque itération évalue la vraisemblance sur toutes les données, ce qui devient impraticable sur des millions d'observations ou sur un réseau de neurones. L'<strong>inférence variationnelle</strong> transforme l'inférence en optimisation : on cherche, dans une famille paramétrée \(q_\phi\) (souvent des gaussiennes indépendantes), celle qui approche le mieux l'a posteriori au sens de la divergence de Kullback-Leibler. Cela revient à maximiser la borne inférieure de l'évidence :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \text{ELBO}(\phi) = \mathbb{E}_{q_\phi}\big[\log p(y\mid\theta)\big] - \operatorname{KL}\!\big(q_\phi(\theta)\,\|\,p(\theta)\big) \]</div>
-    <p>Le premier terme demande de bien expliquer les données, le second de ne pas trop s'écarter de l'a priori : on retrouve la structure « ajustement + régularisation » de tout le cours. Avantage : un problème d'optimisation classique, compatible avec les mini-lots et le GPU (module 7). Inconvénient à connaître : une famille de gaussiennes indépendantes <em>sous-estime systématiquement</em> la variance a posteriori et ignore les corrélations entre paramètres. Les intervalles produits sont donc trop étroits — utilisables pour un ordre de grandeur, pas pour une marge de sécurité.</p>
-    <p>Les outils : <strong>PyMC</strong> (le plus accessible), <strong>NumPyro</strong> (sur JAX, très rapide), <strong>Stan</strong> (la référence historique). Tous partagent la même logique : on écrit le <em>modèle génératif</em> — comment les données auraient pu être produites — et l'inférence est prise en charge.</p>
-
-    <h2 id="incertitude">8. Aléatoire contre épistémique</h2>
-    <p>Distinction fondamentale, et régulièrement ignorée :</p>
-    <div class="code-label">deux incertitudes de nature différente</div>
-    <div class="code-block"><pre>ALÉATOIRE (aleatoric)            ÉPISTÉMIQUE (epistemic)
-bruit intrinsèque du phénomène   ignorance du modèle
-deux essais identiques donnent   le modèle n'a pas vu de données dans cette région
-deux résultats différents
-NE diminue PAS avec plus         DIMINUE avec plus de données
-de données
-ex : dispersion d'une mesure,    ex : prédire hors du domaine d'entraînement,
-variabilité d'un matériau        extrapolation, régime jamais observé</pre></div>
-
-    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut <em>dimensionner une marge</em> : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est <em>hors de son domaine de validité</em> : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 11) ou pour se replier sur une procédure de référence (module 22). Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
+    <p>La distinction entre les deux familles est importante. Bonferroni et Holm contrôlent la probabilité de commettre <em>ne serait-ce qu'une</em> fausse découverte : c'est adapté quand une erreur coûte cher (un essai clinique confirmatoire). Benjamini-Hochberg contrôle la <em>proportion</em> de fausses découvertes parmi les résultats déclarés positifs : sur 10 000 gènes testés, on accepte que 5 % des gènes retenus soient des faux positifs, ce qui est infiniment plus puissant et parfaitement raisonnable en phase exploratoire.</p>
 
     <div class="warning-block">
-      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — un classificateur d'images entraîné sur des chiens et des chats attribue 99 % de confiance à une photo de voiture. C'est le comportement le plus dangereux pour un usage industriel. Les processus gaussiens (module 17), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données observées.
+      <strong>Le p-hacking n'est pas toujours conscient.</strong> Essayer plusieurs définitions de la variable cible, retirer « les valeurs manifestement aberrantes », tester plusieurs sous-groupes, arrêter la collecte quand le résultat devient significatif, choisir la transformation qui « marche le mieux » : chacune de ces décisions, prise <em>après</em> avoir vu les données, multiplie les tests implicites sans qu'aucun ne soit compté. Le remède est procédural : écrire l'analyse avant de regarder les résultats, séparer un jeu d'exploration d'un jeu de confirmation, et rapporter tout ce qui a été essayé — pas seulement ce qui a marché.
     </div>
 
-    <h2 id="uq-ml">9. Quantifier l'incertitude d'un modèle</h2>
-    <div class="code-label">méthodes, du plus simple au plus coûteux</div>
-    <div class="code-block"><pre>Régression quantile      entraîner sur la perte pinball aux quantiles 5 % et 95 %.
-                         Capture l'incertitude ALÉATOIRE, y compris hétéroscédastique.
-                         Disponible dans LightGBM et HistGradientBoosting : le
-                         meilleur rapport effort/résultat sur données tabulaires.
-Ensembles profonds       entraîner 5 réseaux avec des graines différentes ; la
-                         dispersion des prédictions estime l'incertitude ÉPISTÉMIQUE.
-                         Simple, robuste, la référence empirique — coût ×5.
-MC dropout               laisser le dropout actif à l'inférence et échantillonner.
-                         Bon marché, mais approximation grossière.
-Sortie probabiliste      faire prédire au réseau moyenne ET variance (perte de
-                         log-vraisemblance gaussienne) : sépare les deux incertitudes.
-Bayésien complet         poids traités comme variables aléatoires (VI, SWAG).
-                         Élégant, coûteux, rarement meilleur qu'un ensemble profond.
-Processus gaussien       incertitude exacte par construction (module 17) — mais O(n³).
-Prédiction conforme      garantie de couverture sur n'importe quel modèle déjà
-                         entraîné (section suivante).</pre></div>
+    <h2 id="causalite">8. Corrélation, causalité, confondants</h2>
+    <p>Une corrélation entre \(X\) et \(Y\) admet cinq explications : \(X\) cause \(Y\) ; \(Y\) cause \(X\) ; une variable \(Z\) cause les deux (<strong>confondant</strong>) ; l'échantillon a été sélectionné d'une façon qui crée l'association (<strong>biais de sélection</strong>) ; ou c'est le hasard. <em>Rien dans les données seules</em> ne permet de trancher — il faut une hypothèse sur le mécanisme, qui vient de la connaissance du domaine.</p>
 
-    <div class="code-label">Python — régression quantile, immédiatement applicable</div>
-    <div class="code-block"><pre>from lightgbm import LGBMRegressor
+    <div class="step-block">
+      <h4>Le paradoxe de Simpson</h4>
+      <p>Un traitement peut être meilleur dans <em>chaque</em> sous-groupe et pire globalement. L'exemple classique : un hôpital de pointe affiche une mortalité supérieure à celle d'une clinique de quartier, parce qu'il reçoit les cas graves. La gravité est un confondant, et l'agrégation inverse la conclusion. La leçon n'est pas « il faut toujours stratifier » — conditionner sur la mauvaise variable peut <em>créer</em> un biais, voir plus bas — mais « il faut un modèle causal explicite pour savoir sur quoi conditionner ».</p>
+    </div>
 
-modeles = {}
-for alpha in (0.05, 0.5, 0.95):
-    modeles[alpha] = LGBMRegressor(objective="quantile", alpha=alpha,
-                                   n_estimators=500).fit(X_tr, y_tr)
+    <p>L'outil formel est le <strong>graphe causal</strong> (DAG) : on y dessine les relations supposées, et des règles graphiques disent quelles variables ajuster. Trois structures élémentaires suffisent à comprendre l'essentiel.</p>
 
-bas  = modeles[0.05].predict(X_te)
-med  = modeles[0.50].predict(X_te)
-haut = modeles[0.95].predict(X_te)
+    <div class="code-label">les trois structures, et ce qu'il faut en faire</div>
+    <div class="code-block"><pre>CHAÎNE        X ──► M ──► Y        M est un MÉDIATEUR (l'effet passe par lui)
+              exemple : traitement → tension → infarctus
+              → conditionner sur M SUPPRIME l'effet qu'on cherche à mesurer
 
-couverture = np.mean((y_te &gt;= bas) &amp; (y_te &lt;= haut))
-print(f"couverture empirique : {couverture:.1%}")   # visée : 90 %
-# largeur variable selon les points : c'est le signe d'un bruit hétéroscédastique</pre></div>
+FOURCHE       X ◄── Z ──► Y        Z est un CONFONDANT (cause commune)
+              exemple : ventes de glaces ◄ chaleur ► noyades
+              → il FAUT conditionner sur Z (critère de la porte dérobée)
 
-    <h2 id="conformal">10. Prédiction conforme</h2>
-    <p>La prédiction conforme est, à mon sens, la technique la plus sous-utilisée du domaine. Elle fournit un intervalle de prédiction avec une <strong>garantie de couverture valable à échantillon fini</strong>, sans aucune hypothèse sur la distribution des données ni sur le modèle — seulement l'échangeabilité des observations, c'est-à-dire le fait que l'ordre n'a pas d'importance.</p>
+COLLISIONNEUR X ──► C ◄── Y        C est un EFFET COMMUN
+              exemple : talent ► être recruté ◄ apparence
+              → conditionner sur C CRÉE une corrélation artificielle entre X et Y
+              (parmi les recrutés, les moins talentueux sont les plus beaux :
+               c'est un artefact de sélection, pas une réalité)</pre></div>
 
-    <p>La version par découpage tient en trois étapes. On met de côté un jeu de calibration, disjoint de l'entraînement. On y calcule les scores de non-conformité \(s_i = |y_i - \hat f(x_i)|\) — à quel point le modèle s'est trompé sur chaque point. On prend le quantile empirique \(\hat q\) d'ordre \(\lceil (n+1)(1-\alpha)\rceil / n\). L'intervalle \(\hat f(x) \pm \hat q\) vérifie alors, pour un nouveau point :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(y_{\text{nouveau}} \in \hat{C}(x_{\text{nouveau}})\big) \;\geq\; 1-\alpha \]</div>
-    <p>L'intuition : si le modèle s'est trompé de moins de \(\hat q\) sur 90 % des points de calibration, et que le nouveau point est échangeable avec ceux-là, il a 90 % de chances de tomber dans la même marge.</p>
+    <p>Le collisionneur est la source de biais la plus contre-intuitive, et la plus fréquente quand on « contrôle par tout ce qu'on a » : ajouter des variables à un modèle n'est pas neutre, cela peut fabriquer des associations qui n'existent pas.</p>
 
-    <div class="code-label">Python — conformaliser n'importe quel modèle</div>
+    <p>La seule méthode qui élimine tous les confondants d'un coup, connus <em>comme inconnus</em>, est la <strong>randomisation</strong> : en tirant l'affectation au hasard, on rend le traitement indépendant de tout le reste, y compris de ce qu'on n'a pas mesuré. C'est pour cette raison que l'essai contrôlé randomisé — l'A/B test — est l'étalon-or.</p>
+    <p>Quand on ne peut pas randomiser, on s'appuie sur des méthodes quasi-expérimentales : différence-en-différences (deux groupes suivis avant et après), variables instrumentales, régression sur discontinuité, appariement sur score de propension. Toutes reposent sur des hypothèses <em>non vérifiables à partir des données seules</em> : elles doivent être argumentées explicitement, pas supposées silencieusement.</p>
+
+    <div class="warning-block">
+      <strong>Le lien avec le ML.</strong> Un modèle prédictif exploite des corrélations, ce qui est parfaitement légitime <em>tant qu'on ne l'utilise que pour prédire</em>. Le glissement dangereux est d'en tirer une conclusion d'action : « le modèle dit que les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention — peut-être que ceux qui appellent sont simplement ceux qui étaient déjà attachés au service. L'importance d'une variable dans un modèle (module 13) n'est pas un effet causal, et le module 23 montre comment poser correctement la question de l'effet d'une action.
+    </div>
+
+    <h2 id="abtest">9. Un A/B test de bout en bout</h2>
+    <p>C'est l'exercice qui mobilise tout ce module. La séquence, dans l'ordre :</p>
+    <ol>
+      <li><strong>Définir la métrique principale</strong> — une seule, décidée à l'avance. Les autres sont des garde-fous (métriques de non-régression) ou de l'exploration.</li>
+      <li><strong>Fixer l'effet minimal détectable</strong> — quel gain justifierait le changement ? Cette valeur vient du métier, pas des données.</li>
+      <li><strong>Dimensionner</strong> — en déduire \(n\) et la durée. Couvrir des semaines entières : le comportement du lundi n'est pas celui du samedi.</li>
+      <li><strong>Randomiser au bon niveau</strong> — par utilisateur, pas par session, sinon le même individu voit les deux variantes et les observations ne sont plus indépendantes.</li>
+      <li><strong>Vérifier l'équilibre</strong> — un test A/A (deux groupes identiques, qui ne doivent rien montrer) et un contrôle du ratio de répartition (<em>sample ratio mismatch</em>) détectent les bugs d'assignation, cause numéro un des résultats invraisemblables.</li>
+      <li><strong>Attendre la fin</strong> — regarder les résultats en continu et s'arrêter dès que \(p \lt 0{,}05\) fait exploser le taux de faux positifs bien au-delà de 5 %, parce qu'on multiplie les tests sans les compter. Si l'arrêt anticipé est nécessaire, il faut des méthodes conçues pour cela (tests séquentiels, bornes d'O'Brien-Fleming).</li>
+      <li><strong>Analyser</strong> — effet, intervalle de confiance, puis p-value.</li>
+    </ol>
+
+    <div class="code-label">Python — analyse d'un test sur un taux de conversion</div>
     <div class="code-block"><pre>import numpy as np
+from statsmodels.stats.proportion import proportions_ztest, confint_proportions_2indep
 
-modele.fit(X_train, y_train)                       # GBM, réseau, n'importe quoi
+conv = np.array([1183, 1279])        # conversions A, B
+n    = np.array([20_143, 20_089])    # visiteurs A, B
 
-scores = np.abs(y_calib - modele.predict(X_calib))            # non-conformité
-n, alpha = len(scores), 0.1
-q = np.quantile(scores, np.ceil((n + 1) * (1 - alpha)) / n, method="higher")
+stat, p = proportions_ztest(conv, n)
+lo, hi = confint_proportions_2indep(conv[1], n[1], conv[0], n[0], method="wald")
 
-pred = modele.predict(X_test)
-bas, haut = pred - q, pred + q
-print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")
-# ≈ 90 %, par construction — quelle que soit la qualité du modèle</pre></div>
+taux = conv / n
+print(f"A = {taux[0]:.3%}, B = {taux[1]:.3%}")
+print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p = {p:.4f}")
+# A = 5.873%, B = 6.367%
+# écart absolu = +0.494%  IC95 = [+0.031%, +0.957%]  p = 0.0366</pre></div>
 
-    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise les quantiles prédits par la section précédente, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré, et directement exploitable pour décider de transmettre le cas à un humain (module 22).</p>
+    <p>La lecture correcte de ce résultat : l'écart estimé est de +0,49 point, et les données sont compatibles avec un gain compris entre +0,03 et +0,96 point. C'est significatif au seuil de 5 %, mais l'intervalle frôle zéro — autrement dit, il reste possible que le vrai gain soit négligeable. La décision dépend donc du coût de mise en œuvre et du gain minimal jugé pertinent (fixé à l'étape 2), pas du seul verdict binaire du test.</p>
 
-    <div class="warning-block">
-      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe — d'où les variantes conditionnées par groupe. Elle suppose l'échangeabilité : si la distribution dérive (module 24) ou si les données sont temporelles, la garantie tombe, et il faut des versions adaptatives en ligne. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges — ce qui est déjà une information utile, et honnête.
+    <div class="step-block">
+      <h4>Et l'approche bayésienne ?</h4>
+      <p>Elle répond à la question qu'on se pose réellement : « quelle est la probabilité que B soit meilleure que A ? ». On pose une loi a priori sur les taux, on la met à jour par les données, et l'on obtient une loi a posteriori d'où se lisent directement \(P(p_B \gt p_A)\) et l'espérance de perte en cas de mauvais choix. Avantages : interprétation naturelle, arrêt anticipé sans pénalité formelle, intégration d'une connaissance préalable. Coûts : il faut assumer un a priori, et la communication d'un résultat bayésien exige un peu de pédagogie. Le module 10 le détaille, avec une implémentation en dix lignes.</p>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Choisir une loi, c'est faire une hypothèse sur le mécanisme ; choisir une perte, c'est choisir un modèle de bruit.</li>
-        <li>Ridge et lasso sont des MAP avec a priori gaussien et laplacien : la régularisation est une croyance explicite.</li>
-        <li>Bayes renverse la conditionnelle : avec un événement rare, un test très précis produit surtout des faux positifs.</li>
-        <li>L'a posteriori combine a priori et données en pondérant par la précision ; il s'efface quand les données abondent.</li>
-        <li>NUTS/HMC rend l'inférence praticable ; toujours vérifier \(\hat R\), l'ESS, les divergences et le prédictif a posteriori.</li>
-        <li>Les modèles hiérarchiques font du regroupement partiel : la meilleure réponse aux groupes à faibles effectifs.</li>
-        <li>Distinguer incertitude aléatoire (irréductible, à dimensionner) et épistémique (réductible, signal de hors-domaine).</li>
-        <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour cinq lignes de code.</li>
+        <li>Un estimateur est une variable aléatoire ; l'erreur type décroît en \(1/\sqrt{n}\), donc la précision coûte quadratiquement cher.</li>
+        <li>Un IC porte sur la procédure, pas sur le paramètre ; Wilson pour les proportions, bootstrap quand il n'y a pas de formule.</li>
+        <li>La p-value est \(P(\text{données}\mid H_0)\), rien d'autre. Rapporter effet + IC + p, dans cet ordre.</li>
+        <li>Dimensionner avant de collecter : \(n \approx 16/d^2\). Une étude sous-puissante surestime les effets qu'elle détecte.</li>
+        <li>Welch par défaut ; les tests de normalité sont inutiles sur grand échantillon.</li>
+        <li>Corriger les comparaisons multiples : Holm pour quelques tests, Benjamini-Hochberg pour des centaines.</li>
+        <li>Pas de causalité sans hypothèse causale : confondants à contrôler, collisionneurs à ne surtout pas contrôler, randomisation quand c'est possible.</li>
+        <li>Dans un A/B test : une métrique, une durée fixée à l'avance, une randomisation par utilisateur, pas de coup d'œil anticipé.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m08.html" class="btn btn-secondary">← Module 8 : Statistique inférentielle</a>
-    <a href="project7-m10.html" class="btn btn-primary">Module 10 : Data science en pratique →</a>
+    <a href="project7-m08.html" class="btn btn-secondary">← Module 8 : Mathématiques du ML</a>
+    <a href="project7-m10.html" class="btn btn-primary">Module 10 : Inférence bayésienne →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Hiérarchique</span><span class="tag">Incertitude</span><span class="tag">Conformal</span></div>
+  <div class="project-meta"><span class="tag">Inférence</span><span class="tag">p-value</span><span class="tag">Bootstrap</span><span class="tag">Puissance</span><span class="tag">Causalité</span><span class="tag">A/B test</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -326,7 +370,7 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 9</div>
-    <h1>Probability, Bayesian inference and uncertainty quantification</h1>
+    <h1>Inferential statistics: estimate, test, decide</h1>
   </div>
 
   <div class="project-content course-content">
@@ -336,16 +380,14 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Common distributions as modelling primitives, chosen from the mechanism rather than from the histogram (Poisson vs negative binomial, Weibull for reliability, log-normal for multiplicative effects).</li>
-      <li>Likelihood, maximum likelihood and MAP — and the fact that every loss function in this course is a noise model in disguise.</li>
-      <li>Ridge and lasso derived as MAP estimates under Gaussian and Laplace priors: regularisation as an explicit belief.</li>
-      <li>Bayes' rule as an update, conjugate priors, and a ten-line Bayesian A/B test that reports expected loss rather than a p-value.</li>
-      <li>MCMC: Metropolis-Hastings, Gibbs, and Hamiltonian Monte Carlo / NUTS — plus the diagnostics that decide whether anything may be interpreted (R-hat, ESS, divergences, posterior predictive checks).</li>
-      <li>Hierarchical models and partial pooling: the principled answer to small groups, with a non-centred PyMC example.</li>
-      <li>Variational inference and the ELBO, and why mean-field posteriors are systematically too narrow.</li>
-      <li>Aleatoric vs epistemic uncertainty, and why confusing them leads either to over-engineering or to trusting extrapolation.</li>
-      <li>Practical UQ for ML models: quantile regression, deep ensembles, MC dropout, probabilistic outputs.</li>
-      <li>Conformal prediction: finite-sample, distribution-free coverage on top of any trained model, with CQR for adaptive intervals — and the precise limits of the guarantee.</li>
+      <li>Sampling variability, the central limit theorem, and why precision costs quadratically.</li>
+      <li>Confidence intervals: the correct frequentist reading, Wilson intervals for proportions, and the bootstrap (percentile and BCa) with its limitations.</li>
+      <li>Hypothesis testing: the mechanics, a rigorous definition of the p-value, and a list of what it is <em>not</em>.</li>
+      <li>Type I and II errors, statistical power, effect sizes, sample sizing (<em>n ≈ 16/d²</em>) and why underpowered studies overstate the effects they find.</li>
+      <li>A catalogue of the usual tests, why Welch should be the default, and why normality tests are counterproductive on large samples.</li>
+      <li>Multiple comparisons: Bonferroni, Holm, Benjamini-Hochberg (FWER vs FDR), and the many unintentional forms of p-hacking.</li>
+      <li>Correlation vs causation: confounders, Simpson's paradox, DAGs (chains, forks, colliders), randomisation and quasi-experimental designs.</li>
+      <li>A complete A/B test: metric definition, sizing, randomisation unit, sample ratio mismatch, the cost of peeking, and how to read the result.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -356,26 +398,27 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><strong>Probability, Bayesian inference and uncertainty quantification</strong></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><strong>Inferential statistics: estimate, test, decide</strong></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

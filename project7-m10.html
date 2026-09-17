@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 10 - Data science en pratique : du problème au dataset - Nils Malmberg</title>
+  <title>Module 10 - Probabilités, inférence bayésienne et quantification d'incertitude - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,360 +41,271 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 10</div>
-    <h1>Data science en pratique : du problème au dataset</h1>
+    <h1>Probabilités, inférence bayésienne et quantification d'incertitude</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Dans un projet réel, le choix de l'algorithme occupe une fraction marginale du temps et explique une fraction marginale de la performance. Ce qui fait la différence, c'est le cadrage du problème, la qualité des données et la rigueur du protocole d'évaluation. Ce module couvre exactement cette partie-là — celle qu'on n'apprend pas dans les cours d'algorithmes, et qui décide pourtant du sort du projet.</p>
+    <p>Le module 9 traite l'inférence fréquentiste : tests, intervalles de confiance, décisions binaires. Ce module prend l'autre point de vue — traiter les paramètres eux-mêmes comme des variables aléatoires — et aboutit à la question qui manque à la plupart des modèles de machine learning : <em>à quel point cette prédiction est-elle sûre, et pourquoi ?</em> Pour un ingénieur qui doit dimensionner une marge de sécurité, c'est souvent plus important que la précision moyenne.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cycle">Cycle de vie d'un projet</a></li>
-        <li><a href="#cadrage">Cadrage : la cible et la baseline</a></li>
-        <li><a href="#eda">Exploration : une checklist</a></li>
-        <li><a href="#viz">Visualisation utile</a></li>
-        <li><a href="#manquantes">Données manquantes</a></li>
-        <li><a href="#features">Feature engineering</a></li>
-        <li><a href="#desequilibre">Classes déséquilibrées</a></li>
-        <li><a href="#validation">Validation croisée : choisir le bon schéma</a></li>
-        <li><a href="#leakage">Fuites de données : le catalogue</a></li>
+        <li><a href="#lois">Les lois usuelles comme briques de modélisation</a></li>
+        <li><a href="#vraisemblance">Vraisemblance, MLE, MAP</a></li>
+        <li><a href="#bayes">Bayes, avec un exemple chiffré</a></li>
+        <li><a href="#conjugaison">Conjugaison et A/B test bayésien</a></li>
+        <li><a href="#mcmc">MCMC : échantillonner un a posteriori</a></li>
+        <li><a href="#hierarchique">Modèles hiérarchiques</a></li>
+        <li><a href="#vi">Inférence variationnelle</a></li>
+        <li><a href="#incertitude">Aléatoire contre épistémique</a></li>
+        <li><a href="#uq-ml">Quantifier l'incertitude d'un modèle</a></li>
+        <li><a href="#conformal">Prédiction conforme</a></li>
       </ol>
     </div>
 
-    <h2 id="cycle">1. Cycle de vie d'un projet</h2>
-    <div class="code-label">les étapes, et leur poids réel en temps</div>
-    <div class="code-block"><pre>1. Cadrage métier       définir la question, la métrique, l'usage du résultat    ~10 %
-2. Collecte / accès     trouver, extraire, joindre les données                   ~20 %
-3. Exploration          comprendre les données, détecter les anomalies           ~15 %
-4. Préparation          nettoyage, features, encodages                           ~25 %
-5. Modélisation         baseline, puis itérations                                ~10 %
-6. Évaluation           protocole, métriques, analyse d'erreurs                  ~10 %
-7. Déploiement / suivi  mise en production, monitoring, ré-entraînement          ~10 %</pre></div>
+    <h2 id="lois">1. Les lois usuelles comme briques de modélisation</h2>
+    <p>Choisir une loi, c'est faire une hypothèse sur le <em>mécanisme</em> qui a engendré les données. L'essentiel du travail de modélisation probabiliste tient dans ce choix, et il se raisonne à partir du phénomène physique, pas à partir de l'allure de l'histogramme.</p>
 
-    <p>Le cycle n'est pas linéaire : l'exploration révèle des problèmes de collecte, l'analyse d'erreurs renvoie au feature engineering, et le déploiement fait apparaître des contraintes de latence qui invalident un modèle. La seule erreur structurelle est de traiter ces étapes comme un tunnel à sens unique, avec une « livraison » à la fin.</p>
+    <div class="code-label">quelle loi pour quel mécanisme</div>
+    <div class="code-block"><pre>Bernoulli / Binomiale   succès-échec ; nombre de succès sur n essais indépendants
+Poisson                 comptage d'événements RARES et INDÉPENDANTS dans un
+                        intervalle fixe (désintégrations, pannes, arrivées).
+                        Propriété : variance = espérance.
+Binomiale négative      comptage SURDISPERSÉ (variance &gt; espérance) : le cas réel
+                        le plus fréquent, quand le taux varie d'une unité à l'autre.
+Exponentielle           temps d'attente entre événements poissoniens. SANS MÉMOIRE :
+                        avoir attendu 10 min ne change pas l'attente restante.
+Weibull                 durée de vie à taux de défaillance variable : LA loi de la
+                        fiabilité (k &lt; 1 mortalité infantile, k &gt; 1 usure) — module 16
+Gamma                   somme d'exponentielles ; temps de service ; a priori de précision
+Beta                    une proportion inconnue dans [0,1] : l'a priori naturel d'un taux
+Normale                 SOMME de nombreux effets indépendants (TCL, module 9)
+Log-normale             PRODUIT de nombreux effets : tailles, revenus, durées, prix
+Student                 normale à queues épaisses : régression robuste aux aberrants
+Dirichlet               une distribution sur des proportions qui somment à 1</pre></div>
 
     <div class="step-block">
-      <h4>La question à poser avant tout le reste</h4>
-      <p><em>Quelle décision sera prise différemment grâce à ce modèle ?</em> Si personne ne sait répondre, le projet produira un notebook et rien d'autre. Cette question détermine tout : la métrique (un coût d'erreur asymétrique change le seuil, module 22), la latence acceptable (temps réel ou lot nocturne, module 6), le besoin d'explicabilité (un refus de crédit doit être motivé, module 25), et même la faisabilité — certaines décisions ont besoin de <em>causalité</em>, pas de prédiction (module 8).</p>
+      <h4>Le réflexe qui évite les erreurs</h4>
+      <p>Une variable strictement positive et très asymétrique n'est presque jamais normale : elle est souvent log-normale ou gamma. Modéliser un temps de réparation par une loi normale attribue une probabilité non nulle à des durées <em>négatives</em>, ce qui se voit immédiatement dans les prédictions absurdes. De même, un comptage modélisé par une loi de Poisson alors que les données sont surdispersées produit des intervalles beaucoup trop étroits, donc une fausse confiance — et c'est le cas dès que le taux d'événements varie entre individus, ce qui est la règle plutôt que l'exception.</p>
     </div>
 
-    <h2 id="cadrage">2. Cadrage : la cible et la baseline</h2>
-    <p><strong>Définir la cible</strong> est plus subtil qu'il n'y paraît. Prédire « le churn » exige de fixer une fenêtre (résiliation dans les 30 jours ? 90 ?), une date d'observation, et le sort des cas ambigus (un client inactif depuis six mois est-il parti ?). Deux définitions également raisonnables peuvent donner des taux de positifs allant du simple au triple, et donc des modèles incomparables. Écrire la définition en une phrase, et la faire valider par le métier, économise des semaines.</p>
+    <h2 id="vraisemblance">2. Vraisemblance, MLE, MAP</h2>
+    <p>La <strong>vraisemblance</strong> est la probabilité des données observées, vue comme une fonction du paramètre : \(\mathcal{L}(\theta) = p(y \mid \theta)\). Attention au renversement de perspective — ce n'est pas une densité de probabilité en \(\theta\), c'est la même formule lue « à l'envers » : les données sont fixées, le paramètre varie.</p>
+    <p>L'estimation du maximum de vraisemblance consiste à prendre le \(\theta\) qui rend les données observées les plus probables :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MLE}} = \arg\max_\theta \sum_{i=1}^{n} \log p(y_i \mid \theta) \]</div>
+    <p>On travaille sur le logarithme pour deux raisons : il transforme un produit en somme (plus stable numériquement, un produit de milliers de probabilités valant zéro en virgule flottante), et il ne change pas l'argmax puisque le logarithme est croissant.</p>
 
-    <p><strong>Fixer l'unité d'observation</strong> : une ligne = un client ? un client-mois ? une transaction ? Ce choix détermine la structure de dépendance des données, donc le schéma de validation (section 8), et il est très coûteux à changer en cours de route.</p>
+    <div class="code-label">toutes les pertes du cours sont des log-vraisemblances</div>
+    <div class="code-block"><pre>Bruit gaussien homoscédastique   → -log p ∝ (y - ŷ)²        = perte quadratique
+Bernoulli                        → -log p = entropie croisée
+Poisson                          → -log p = perte de Poisson (comptages)
+Student                          → -log p ≈ perte robuste (queues épaisses)
+Laplace                          → -log p ∝ |y - ŷ|         = MAE</pre></div>
+    <p>Autrement dit : <strong>choisir une perte, c'est choisir un modèle de bruit</strong>. L'expliciter permet de le choisir correctement plutôt que par habitude — si les erreurs de mesure ont des queues épaisses, minimiser un MSE revient à supposer un bruit gaussien qu'on sait faux, et le modèle sera tiré par les aberrants.</p>
 
-    <p><strong>Établir une baseline</strong>, enfin, avant tout modèle. Sans elle, un R² de 0,7 ne veut rien dire — il peut être excellent ou ridicule selon le problème.</p>
-    <div class="code-label">Python — les baselines à toujours calculer</div>
-    <div class="code-block"><pre>from sklearn.dummy import DummyRegressor, DummyClassifier
-
-# régression : prédire toujours la moyenne (ou la médiane)
-base = DummyRegressor(strategy="median").fit(X_tr, y_tr)
-
-# classification : prédire toujours la classe majoritaire
-base = DummyClassifier(strategy="most_frequent").fit(X_tr, y_tr)
-
-# série temporelle : la valeur de la veille, ou celle de l'an dernier (module 15)
-pred_naive = y[:-1]
-
-# et surtout : la RÈGLE MÉTIER existante, si elle existe
-pred_regle = np.where(df["anciennete"] &lt; 3, 1, 0)</pre></div>
-    <p>La baseline donne aussi le coût réel du projet : si une règle à trois conditions atteint 95 % de la performance du modèle, celui-ci ne vaut peut-être pas sa complexité opérationnelle.</p>
-
-    <h2 id="eda">3. Exploration : une checklist</h2>
-    <div class="code-label">ce que je regarde systématiquement</div>
-    <div class="code-block"><pre>Structure      dimensions, types, mémoire, granularité (une ligne = quoi ?)
-Cible          distribution, taux de positifs, extrêmes, évolution dans le temps
-Manquants      taux par colonne, et STRUCTURE des manquants (section 5)
-Doublons       lignes identiques ET doublons sur la clé métier
-Cardinalité    colonnes constantes (inutiles), identifiants déguisés (dangereux)
-Distributions  asymétrie, multimodalité, valeurs impossibles (âge = 200, prix &lt; 0)
-Temps          couverture, trous, saisonnalité, ruptures de collecte
-Relations      corrélations entre variables, lien de chaque variable avec la cible
-Groupes        déséquilibres entre segments, sous-populations sous-représentées</pre></div>
-
-    <div class="code-label">Python — le tour d'horizon, en quelques lignes</div>
-    <div class="code-block"><pre>import polars as pl
-
-df = pl.read_parquet("data/clients.parquet")
-
-print(df.shape, df.estimated_size("mb"))
-print(df.describe())                                     # stats par colonne
-print(df.null_count())                                   # manquants par colonne
-print(df.select(pl.all().n_unique()))                    # cardinalités
-print(df.filter(pl.struct(df.columns).is_duplicated()))  # doublons exacts
-
-# valeurs impossibles : toujours confronter aux bornes MÉTIER
-print(df.filter((pl.col("age") &lt; 0) | (pl.col("age") &gt; 120)))
-
-# la cible dans le temps : LE graphique qui révèle les ruptures de collecte
-print(df.group_by_dynamic("date", every="1w").agg(
-          taux=pl.col("cible").mean(), n=pl.len()))
-
-# lien de chaque variable numérique avec la cible
-print(df.select(pl.corr(pl.col(c), pl.col("cible")).alias(c)
-                for c in colonnes_numeriques))</pre></div>
-
-    <p>Les outils de profilage automatique (<code>ydata-profiling</code>, <code>skrub</code>) produisent en une ligne un rapport complet. Utiles pour débroussailler, ils ne remplacent pas le regard métier : seule une connaissance du domaine dit qu'un prix à 0,01 € correspond à un test interne, ou que la valeur « 9999 » est un code de saisie signifiant « inconnu ».</p>
+    <p>En ajoutant un <em>a priori</em> \(p(\theta)\), on obtient l'estimateur du maximum a posteriori :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat\theta_{\text{MAP}} = \arg\max_\theta \big[\log p(y\mid\theta) + \log p(\theta)\big] \]</div>
 
     <div class="warning-block">
-      <strong>L'identifiant déguisé.</strong> Une colonne de très forte cardinalité fortement corrélée à la cible est presque toujours un piège : numéro de dossier attribué séquentiellement, code produit encodant la catégorie, date d'export. Un arbre l'exploitera parfaitement en validation et s'effondrera en production. Quand une variable semble trop belle, elle contient généralement une information qui n'existera pas au moment de la prédiction (section 9).
+      <strong>La régularisation est un a priori déguisé.</strong> Avec un a priori gaussien \(\theta \sim \mathcal{N}(0,\tau^2)\), le terme \(\log p(\theta)\) vaut \(-\|\theta\|^2/2\tau^2\) : le MAP <em>est</em> la régression ridge, avec \(\lambda = \sigma^2/\tau^2\). Avec un a priori de Laplace (pic en zéro, queues lourdes), on retrouve exactement le lasso. Les modules 8 et 13 présentent la régularisation comme un procédé numérique ; c'est en réalité une déclaration de croyance sur l'ordre de grandeur des coefficients. Ce point de vue dit aussi quand elle est légitime — et pourquoi un \(\lambda\) énorme revient à affirmer une conviction très forte que rien n'a d'effet.
     </div>
 
-    <h2 id="viz">4. Visualisation utile</h2>
-    <p>Trois bibliothèques couvrent tous les besoins : <strong>matplotlib</strong> (contrôle total, verbeux), <strong>seaborn</strong> (statistique, concis, excellents défauts), <strong>plotly</strong> (interactif, précieux pour explorer un nuage dense). Quelques principes qui changent réellement la lisibilité :</p>
+    <h2 id="bayes">3. Bayes, avec un exemple chiffré</h2>
+    <p>Le MAP ne retient qu'un point. L'approche bayésienne complète conserve toute la distribution :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \underbrace{p(\theta\mid y)}_{\text{a posteriori}} = \frac{\overbrace{p(y\mid\theta)}^{\text{vraisemblance}}\;\overbrace{p(\theta)}^{\text{a priori}}}{\underbrace{p(y)}_{\text{évidence}}} \;\propto\; p(y\mid\theta)\,p(\theta) \]</div>
+
+    <p>L'interprétation est opérationnelle : l'a priori encode ce qu'on sait <em>avant</em> de regarder les données, la vraisemblance ce que les données disent, et l'a posteriori combine les deux en pondérant chacun par sa précision. Avec peu de données, l'a priori domine ; avec beaucoup, il s'efface. C'est un mécanisme de régularisation qui s'adapte automatiquement à la quantité d'information disponible.</p>
+
+    <div class="step-block">
+      <h4>L'exemple qui rend le théorème concret</h4>
+      <p>Un test de dépistage détecte 99 % des malades (sensibilité) et se trompe dans 1 % des cas chez les sains (faux positifs). La maladie touche 0,1 % de la population. Votre test est positif : quelle est la probabilité que vous soyez malade ?</p>
+      <p>L'intuition répond « 99 % ». Le calcul répond autrement. Sur 100 000 personnes : 100 sont malades, dont 99 sont détectées ; 99 900 sont saines, dont 999 sont faussement positives. Parmi les 1 098 positifs, 99 sont réellement malades :</p>
+      <div style="text-align:center;overflow-x:auto">\[ P(\text{malade}\mid +) = \frac{0{,}99 \times 0{,}001}{0{,}99 \times 0{,}001 + 0{,}01 \times 0{,}999} = \frac{0{,}00099}{0{,}01098} \approx 9\,\% \]</div>
+      <p>Neuf pour cent, pas quatre-vingt-dix-neuf. L'a priori — la rareté de la maladie — écrase la qualité du test. C'est exactement le mécanisme qui explique pourquoi un détecteur de fraude à 99 % de précision apparente produit une majorité de fausses alertes quand la fraude est rare (module 8, PR-AUC), et pourquoi la question « quelle proportion de mes alertes sont justes ? » n'a pas la même réponse que « quelle proportion des fraudes est-ce que j'attrape ? ».</p>
+    </div>
+
+    <h2 id="conjugaison">4. Conjugaison et A/B test bayésien</h2>
+    <p>Dans quelques cas heureux, l'a posteriori appartient à la même famille que l'a priori : on parle de <strong>conjugaison</strong>, et le calcul se réduit à une mise à jour de paramètres. Le cas Beta-Binomial est le plus utile :</p>
+    <div style="text-align:center;overflow-x:auto">\[ p \sim \text{Beta}(\alpha,\beta), \quad k \mid p \sim \text{Bin}(n,p) \;\Longrightarrow\; p \mid k \sim \text{Beta}(\alpha + k,\; \beta + n - k) \]</div>
+    <p>La lecture est intuitive : \(\alpha\) et \(\beta\) se comportent comme des succès et des échecs « virtuels » observés avant l'expérience. Un a priori Beta(1,1) est uniforme — aucune opinion ; un Beta(30,70) affirme qu'on croit le taux proche de 30 %, avec la force de 100 observations.</p>
+
+    <div class="code-label">Python — A/B test bayésien, en dix lignes</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import stats
+
+# mêmes données qu'au module 9, autre lecture
+a_post = stats.beta(1 + 1183, 1 + 20_143 - 1183)      # variante A
+b_post = stats.beta(1 + 1279, 1 + 20_089 - 1279)      # variante B
+
+rng = np.random.default_rng(0)
+ta, tb = a_post.rvs(200_000, random_state=rng), b_post.rvs(200_000, random_state=rng)
+
+print(f"P(B meilleure que A)         = {(tb &gt; ta).mean():.3f}")      # 0.982
+print(f"gain relatif médian          = {np.median((tb - ta) / ta):+.2%}")
+print(f"P(gain &gt; 5 %)                = {((tb - ta) / ta &gt; 0.05).mean():.3f}")
+print(f"perte espérée si on choisit B = {np.maximum(ta - tb, 0).mean():.5f}")</pre></div>
+
+    <p>La dernière ligne est ce qui manque à l'approche fréquentiste : la <em>perte espérée</em> en cas de mauvais choix, exprimée dans l'unité de la métrique. Elle transforme un résultat statistique en critère de décision — on arrête l'expérience quand le risque résiduel devient négligeable devant le coût d'attendre, et non quand une p-value franchit un seuil conventionnel. C'est le pont naturel vers le module 23.</p>
+
+    <h2 id="mcmc">5. MCMC : échantillonner un a posteriori</h2>
+    <p>Dès que le modèle sort des cas conjugués, l'évidence \(p(y) = \int p(y\mid\theta)p(\theta)\,d\theta\) devient une intégrale incalculable : en dimension 50, aucune quadrature ne tient. La solution consiste à renoncer à <em>calculer</em> l'a posteriori pour se contenter d'y <strong>échantillonner</strong> — ce qui suffit, puisqu'avec des échantillons on obtient moyennes, quantiles, intervalles et probabilités par simple comptage.</p>
+    <p>Le procédé : construire une chaîne de Markov — une marche aléatoire dont chaque pas ne dépend que du précédent — conçue de sorte que, après une phase de chauffe, la fréquence de passage dans chaque région soit proportionnelle à la densité a posteriori. On laisse la chaîne courir, et les positions visitées <em>sont</em> l'échantillon recherché.</p>
+
     <ul>
-      <li><strong>Un histogramme cache autant qu'il montre</strong> : le nombre de classes change complètement l'allure d'une distribution. Doubler avec un <em>violin plot</em> ou afficher les points quand l'échantillon est petit.</li>
-      <li><strong>Sur des données asymétriques, passer en échelle log</strong> — sinon 99 % des points s'écrasent dans le premier centimètre du graphique.</li>
-      <li><strong>Contre la surimpression</strong> (des millions de points), utiliser la transparence, un échantillon, ou une carte de densité (<em>hexbin</em>).</li>
-      <li><strong>Toujours tracer la cible en fonction du temps</strong> : c'est le graphique qui révèle les ruptures de collecte, les changements de définition et la dérive (module 24).</li>
-      <li><strong>Se méfier des résumés</strong> : le quartet d'Anscombe et le « datasaurus » montrent que des jeux de données de moyennes, variances et corrélations <em>identiques</em> peuvent être radicalement différents. Regarder les distributions, pas seulement les statistiques.</li>
+      <li><strong>Metropolis-Hastings</strong> — proposer un déplacement, l'accepter avec une probabilité qui compare les densités du point proposé et du point courant. La beauté du procédé : le rapport élimine la constante de normalisation inconnue, celle-là même qu'on ne sait pas calculer. Mais la marche aléatoire explore mal en grande dimension, où presque toutes les directions mènent vers des zones de faible densité.</li>
+      <li><strong>Gibbs</strong> — mettre à jour chaque coordonnée selon sa loi conditionnelle aux autres. Efficace si ces conditionnelles sont connues, très lent si les paramètres sont fortement corrélés.</li>
+      <li><strong>Hamiltonien (HMC) et NUTS</strong> — la méthode moderne. On introduit une variable d'impulsion et l'on simule une dynamique physique sur le paysage \(-\log p(\theta\mid y)\), vu comme une énergie potentielle : la « bille » suit les vallées au lieu de tâtonner. Le gradient guide la trajectoire, ce qui permet de parcourir de longues distances avec un taux d'acceptation élevé. NUTS choisit automatiquement la longueur de trajectoire, supprimant le principal réglage manuel. C'est ce qui a rendu l'inférence bayésienne praticable sur des modèles à centaines de paramètres.</li>
     </ul>
 
-    <div class="code-label">Python — les quatre graphiques que je fais en premier</div>
-    <div class="code-block"><pre>import matplotlib.pyplot as plt, seaborn as sns
+    <div class="step-block">
+      <h4>Diagnostics : une chaîne qui a convergé, ça se vérifie</h4>
+      <ul>
+        <li><strong>\(\hat{R}\) (Gelman-Rubin)</strong> — compare la variance entre plusieurs chaînes lancées de points différents à la variance à l'intérieur de chacune. Il faut \(\hat R \lt 1{,}01\) ; au-delà, les chaînes n'explorent pas la même région et <em>rien</em> ne doit être interprété.</li>
+        <li><strong>ESS</strong> (taille d'échantillon effective) — les tirages MCMC sont autocorrélés : 10 000 tirages peuvent n'en valoir que 200 d'indépendants. Viser au moins quelques centaines par quantité d'intérêt.</li>
+        <li><strong>Divergences</strong> (HMC) — signalent une géométrie trop courbée pour le pas d'intégration, typiquement l'« entonnoir » des modèles hiérarchiques. Le remède est presque toujours une reparamétrisation (forme non centrée, section suivante), pas une augmentation du nombre d'itérations.</li>
+        <li><strong>Prédictif a posteriori</strong> — simuler des jeux de données depuis le modèle ajusté et les comparer aux vraies données. C'est le test le plus parlant : si les simulations ne ressemblent pas aux observations, le modèle est faux, quelle que soit la qualité de la convergence.</li>
+      </ul>
+    </div>
 
-fig, ax = plt.subplots(2, 2, figsize=(12, 8))
-
-sns.histplot(df["prix"], log_scale=True, ax=ax[0, 0])          # 1. la cible
-ax[0, 0].set_title("distribution de la cible (échelle log)")
-
-df.set_index("date")["cible"].resample("W").mean().plot(ax=ax[0, 1])   # 2. le temps
-ax[0, 1].set_title("taux de positifs par semaine")
-
-sns.heatmap(df[num].corr(), cmap="RdBu_r", center=0, ax=ax[1, 0])      # 3. corrélations
-ax[1, 0].set_title("corrélations entre variables")
-
-sns.boxplot(data=df, x="segment", y="prix", ax=ax[1, 1])               # 4. par groupe
-ax[1, 1].set_yscale("log")
-plt.tight_layout()</pre></div>
-
-    <h2 id="manquantes">5. Données manquantes</h2>
-    <p>Avant de choisir une méthode, il faut comprendre <em>pourquoi</em> une valeur manque. La typologie de Rubin, qui n'est pas qu'une curiosité théorique :</p>
+    <h2 id="hierarchique">6. Modèles hiérarchiques</h2>
+    <p>C'est l'apport le plus utile du cadre bayésien en pratique. Situation typique : estimer un taux par site, par machine ou par client, alors que certains groupes n'ont que trois observations. Deux extrêmes également mauvais :</p>
     <ul>
-      <li><strong>MCAR</strong> (<em>missing completely at random</em>) — le manque est indépendant de tout : un capteur tombé en panne au hasard. Supprimer les lignes ne biaise rien, on perd seulement de la puissance.</li>
-      <li><strong>MAR</strong> (<em>missing at random</em>) — le manque dépend des variables <em>observées</em> : les revenus manquent plus souvent chez les jeunes, et l'âge est connu. L'imputation conditionnelle est alors légitime, puisque l'information nécessaire est disponible.</li>
-      <li><strong>MNAR</strong> (<em>missing not at random</em>) — le manque dépend de la valeur <em>elle-même</em> : les hauts revenus refusent de répondre. Aucune imputation ne corrige cela ; il faut modéliser le mécanisme, ou au minimum documenter le biais.</li>
+      <li><strong>Aucun regroupement</strong> — un modèle indépendant par groupe : un groupe avec 1 succès sur 1 essai affiche 100 %, ce qui est absurde.</li>
+      <li><strong>Regroupement total</strong> — une seule estimation globale : on efface toute différence réelle entre groupes.</li>
     </ul>
+    <p>Le modèle hiérarchique fait le <strong>regroupement partiel</strong> : les paramètres de groupe sont tirés d'une loi commune dont les paramètres sont eux-mêmes estimés à partir des données.</p>
+    <div style="text-align:center;overflow-x:auto">\[ y_{ij} \sim \mathcal{N}(\theta_j, \sigma^2), \qquad \theta_j \sim \mathcal{N}(\mu, \tau^2), \qquad \mu,\sigma,\tau \sim \text{a priori} \]</div>
+    <p>Chaque estimation de groupe est automatiquement tirée vers la moyenne globale, d'autant plus fortement que le groupe est petit ou bruité — un groupe de 3 observations sera presque ramené à la moyenne, un groupe de 3 000 gardera sa valeur propre. Le degré de rétrécissement n'est pas choisi à la main : il est <em>appris</em> à travers \(\tau\), qui mesure la dispersion réelle entre groupes. C'est exactement l'effet du lissage du <em>target encoding</em> (module 11), mais dérivé du modèle au lieu d'être un paramètre réglé au jugé.</p>
 
-    <div class="code-label">Python — diagnostiquer la structure des manquants</div>
-    <div class="code-block"><pre># le taux de manquants dépend-il des autres variables ? (indice de MAR)
-df["revenu_manquant"] = df["revenu"].isna()
-print(df.groupby("revenu_manquant")[["age", "anciennete", "cible"]].mean())
-# si les moyennes diffèrent nettement → le manque est INFORMATIF
+    <div class="code-label">Python — PyMC, modèle hiérarchique non centré</div>
+    <div class="code-block"><pre>import pymc as pm, arviz as az
 
-# les manquants sont-ils groupés ? (plusieurs colonnes absentes ensemble)
-import missingno as msno
-msno.matrix(df); msno.heatmap(df)     # visualise la co-occurrence des manquants</pre></div>
+with pm.Model(coords={"groupe": noms_groupes}) as modele:
+    mu    = pm.Normal("mu", 0, 5)                 # moyenne globale
+    tau   = pm.HalfNormal("tau", 2)               # dispersion ENTRE groupes
+    sigma = pm.HalfNormal("sigma", 2)             # bruit INTRA-groupe
 
-    <div class="code-label">stratégies</div>
-    <div class="code-block"><pre>Supprimer les lignes      acceptable si &lt; 5 % et MCAR. Sinon on biaise l'échantillon.
-Supprimer la colonne      si &gt; 60-70 % manquants ET aucun signal dans le fait de manquer.
-Moyenne / médiane         rapide ; réduit artificiellement la variance et écrase
-                          les corrélations. Acceptable comme baseline.
-KNN / itératif (MICE)     impute à partir des autres colonnes ; coûteux, bien meilleur.
-Valeur sentinelle         -1, "inconnu" : parfait pour les modèles à base d'arbres,
-                          qui peuvent isoler cette modalité.
-Ne rien faire             HistGradientBoosting, XGBoost et LightGBM gèrent nativement
-                          les NaN et APPRENNENT la meilleure direction pour eux.
-Indicateur de manque      ajouter une colonne booléenne : le FAIT de manquer est
-                          souvent informatif (un client qui ne renseigne pas
-                          son revenu n'est pas un client au hasard).</pre></div>
+    # paramétrage NON CENTRÉ : on tire un z standard puis on le décale.
+    # Mathématiquement équivalent, mais la géométrie devient beaucoup plus
+    # facile à explorer pour NUTS (évite l'entonnoir et les divergences).
+    z     = pm.Normal("z", 0, 1, dims="groupe")
+    theta = pm.Deterministic("theta", mu + tau * z, dims="groupe")
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.experimental import enable_iterative_imputer   # noqa: F401
-from sklearn.impute import IterativeImputer, SimpleImputer
+    pm.Normal("obs", mu=theta[idx_groupe], sigma=sigma, observed=y)
 
-# imputation multivariée : chaque colonne est prédite à partir des autres, en boucle
-imp = IterativeImputer(max_iter=10, random_state=0)
+    trace = pm.sample(2000, tune=1000, chains=4, target_accept=0.9)
 
-# conserver l'information "cette valeur manquait" : ajoute une colonne booléenne
-imp = SimpleImputer(strategy="median", add_indicator=True)</pre></div>
+print(az.summary(trace, var_names=["mu", "tau"]))   # r_hat, ess_bulk, intervalles
+az.plot_forest(trace, var_names=["theta"])          # le rétrécissement, visible</pre></div>
 
-    <div class="warning-block">
-      <strong>L'imputation appartient au pipeline.</strong> Calculer une médiane sur l'ensemble des données avant le découpage train/test fait entrer de l'information du test dans l'entraînement. L'imputeur doit être <em>ajusté sur le pli d'entraînement</em> et appliqué au reste — ce que garantit un <code>Pipeline</code> (module 3), et rien d'autre.
-    </div>
+    <h2 id="vi">7. Inférence variationnelle</h2>
+    <p>MCMC est asymptotiquement exact mais coûteux : chaque itération évalue la vraisemblance sur toutes les données, ce qui devient impraticable sur des millions d'observations ou sur un réseau de neurones. L'<strong>inférence variationnelle</strong> transforme l'inférence en optimisation : on cherche, dans une famille paramétrée \(q_\phi\) (souvent des gaussiennes indépendantes), celle qui approche le mieux l'a posteriori au sens de la divergence de Kullback-Leibler. Cela revient à maximiser la borne inférieure de l'évidence :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{ELBO}(\phi) = \mathbb{E}_{q_\phi}\big[\log p(y\mid\theta)\big] - \operatorname{KL}\!\big(q_\phi(\theta)\,\|\,p(\theta)\big) \]</div>
+    <p>Le premier terme demande de bien expliquer les données, le second de ne pas trop s'écarter de l'a priori : on retrouve la structure « ajustement + régularisation » de tout le cours. Avantage : un problème d'optimisation classique, compatible avec les mini-lots et le GPU (module 8). Inconvénient à connaître : une famille de gaussiennes indépendantes <em>sous-estime systématiquement</em> la variance a posteriori et ignore les corrélations entre paramètres. Les intervalles produits sont donc trop étroits — utilisables pour un ordre de grandeur, pas pour une marge de sécurité.</p>
+    <p>Les outils : <strong>PyMC</strong> (le plus accessible), <strong>NumPyro</strong> (sur JAX, très rapide), <strong>Stan</strong> (la référence historique). Tous partagent la même logique : on écrit le <em>modèle génératif</em> — comment les données auraient pu être produites — et l'inférence est prise en charge.</p>
 
-    <h2 id="features">6. Feature engineering</h2>
-    <p>C'est l'étape au meilleur rendement sur données tabulaires : une bonne variable bat presque toujours un meilleur algorithme. L'idée générale est d'encoder la connaissance métier sous une forme que le modèle peut exploiter — un arbre ne « devinera » jamais qu'il faut diviser le prix par la surface.</p>
+    <h2 id="incertitude">8. Aléatoire contre épistémique</h2>
+    <p>Distinction fondamentale, et régulièrement ignorée :</p>
+    <div class="code-label">deux incertitudes de nature différente</div>
+    <div class="code-block"><pre>ALÉATOIRE (aleatoric)            ÉPISTÉMIQUE (epistemic)
+bruit intrinsèque du phénomène   ignorance du modèle
+deux essais identiques donnent   le modèle n'a pas vu de données dans cette région
+deux résultats différents
+NE diminue PAS avec plus         DIMINUE avec plus de données
+de données
+ex : dispersion d'une mesure,    ex : prédire hors du domaine d'entraînement,
+variabilité d'un matériau        extrapolation, régime jamais observé</pre></div>
 
-    <h3>Variables catégorielles</h3>
-    <div class="code-label">encodages</div>
-    <div class="code-block"><pre>One-hot          une colonne par modalité. Défaut sûr. Explose si cardinalité élevée.
-Ordinal          un entier par modalité. Uniquement si un ORDRE existe réellement
-                 (S &lt; M &lt; L), ou pour des arbres, qui savent découper n'importe où.
-Target encoding  remplace la modalité par la moyenne de la cible. Très puissant sur
-                 forte cardinalité (code postal, produit) — et très exposé à la fuite.
-Hashing          projette dans un espace de taille fixe. Utile en flux, perd la lisibilité.
-Embeddings       représentation dense apprise. Pour les réseaux (module 14).</pre></div>
-
-    <p>Le <strong>target encoding</strong> mérite un développement, car il est à la fois redoutablement efficace et dangereux. Pour une modalité \(c\) comptant \(n_c\) observations, on ne prend pas la moyenne brute — qui vaudrait 0 ou 1 pour une modalité vue une seule fois — mais une moyenne lissée vers la moyenne globale :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \tilde{y}_c = \frac{n_c\,\bar{y}_c + m\,\bar{y}}{n_c + m} \]</div>
-    <p>Le paramètre \(m\) contrôle la régularisation : une modalité vue trois fois est tirée vers la moyenne globale, une modalité vue mille fois garde sa propre moyenne. C'est exactement le regroupement partiel des modèles hiérarchiques (module 9), en version simplifiée.</p>
-    <p>Surtout, l'encodage doit être calculé <strong>en validation croisée interne</strong> : chaque pli encodé avec les statistiques des <em>autres</em> plis. Sans cela, chaque ligne contient un peu de sa propre cible — fuite garantie, avec un score de validation flatteur et un modèle inutilisable en production. <code>sklearn.preprocessing.TargetEncoder</code> fait cela correctement.</p>
-
-    <h3>Variables numériques et temporelles</h3>
-    <div class="code-label">Python — les transformations qui rapportent</div>
-    <div class="code-block"><pre>import numpy as np, polars as pl
-
-df = df.with_columns(
-    # 1. transformations : log pour les queues lourdes (prix, revenus, durées)
-    log_prix=pl.col("prix").log1p(),           # log1p gère la valeur 0
-
-    # 2. RATIOS et interactions : souvent l'apport décisif. Les arbres approchent
-    #    très mal un ratio (il leur faut des dizaines de coupes), il faut le fournir.
-    prix_m2=pl.col("prix") / pl.col("surface"),
-    revenu_par_personne=pl.col("revenu") / pl.col("taille_foyer"),
-    intensite=pl.col("n_connexions") / pl.col("anciennete_jours"),
-
-    # 3. variables de calendrier
-    jour_semaine=pl.col("date").dt.weekday(),
-    mois=pl.col("date").dt.month(),
-    est_weekend=pl.col("date").dt.weekday() &gt;= 6,
-
-    # 4. variables CYCLIQUES : pour que 23 h soit proche de 0 h
-    heure_sin=(2 * np.pi * pl.col("date").dt.hour() / 24).sin(),
-    heure_cos=(2 * np.pi * pl.col("date").dt.hour() / 24).cos(),
-
-    # 5. agrégats à fenêtre STRICTEMENT passée (le shift(1) est essentiel)
-    depense_moy_30j=pl.col("montant").shift(1).rolling_mean(30).over("client_id"),
-    n_achats_7j=pl.col("montant").shift(1).rolling_count(7).over("client_id"),
-)</pre></div>
-
-    <p>Les <strong>agrégats à fenêtre</strong> sont le cœur du feature engineering sur données transactionnelles, et c'est exactement ce que font les fonctions de fenêtre SQL (module 4) — souvent plus efficacement, directement dans la base. La <strong>discrétisation</strong> (transformer l'âge en tranches) capture une non-linéarité pour un modèle linéaire, au prix d'une perte d'information ; elle est inutile pour un modèle à base d'arbres, qui la trouve tout seul.</p>
-
-    <h3>Sélection de variables</h3>
-    <p>Moins de variables, c'est moins de surapprentissage, moins de coût d'inférence et plus de robustesse. Par ordre de fiabilité croissante : filtres univariés (corrélation, information mutuelle — rapides mais aveugles aux interactions) ; importance par permutation sur un modèle ajusté (module 12) ; élimination récursive (RFE) ; et la régularisation \(L^1\), qui sélectionne en annulant des coefficients. Attention : les méthodes fondées sur la cible doivent, elles aussi, être évaluées <em>à l'intérieur</em> de la validation croisée, sinon la sélection elle-même devient une fuite.</p>
-
-    <h2 id="desequilibre">7. Classes déséquilibrées</h2>
-    <p>Fraude à 0,2 %, panne à 1 %, maladie rare : la classe qui intéresse est minuscule. Les réflexes, dans l'ordre de ce qui marche le mieux :</p>
-    <ol>
-      <li><strong>Changer de métrique</strong> — l'accuracy n'a aucun sens ici ; PR-AUC, rappel à précision fixée, ou coût métier (module 7).</li>
-      <li><strong>Pondérer les classes</strong> — <code>class_weight="balanced"</code> ou <code>scale_pos_weight</code> : le modèle paie plus cher une erreur sur la classe rare. Simple, sans distorsion des données.</li>
-      <li><strong>Ajuster le seuil</strong> — un modèle produit une probabilité ; le seuil de décision est un choix <em>métier</em> qui se règle sur la courbe précision-rappel, jamais laissé à 0,5 par défaut (module 22).</li>
-      <li><strong>Rééchantillonner</strong> — sous-échantillonner la majorité (perte d'information) ou sur-échantillonner la minorité (risque de surapprentissage). <strong>SMOTE</strong> crée des exemples synthétiques par interpolation entre voisins : séduisant, mais il interpole aussi le bruit, fonctionne mal en grande dimension et avec des variables catégorielles, et la littérature récente montre qu'il apporte rarement mieux qu'une simple pondération.</li>
-    </ol>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.metrics import precision_recall_curve
-
-# 1 et 2 : métrique adaptée et pondération
-modele = LGBMClassifier(scale_pos_weight=(y_tr == 0).sum() / (y_tr == 1).sum())
-modele.fit(X_tr, y_tr, eval_metric="average_precision")
-
-# 3 : choisir le seuil sur la courbe précision-rappel, pas à 0,5
-p = modele.predict_proba(X_val)[:, 1]
-prec, rap, seuils = precision_recall_curve(y_val, p)
-# par exemple : le seuil qui garantit au moins 80 % de précision
-i = np.argmax(prec[:-1] &gt;= 0.80)
-print(f"seuil = {seuils[i]:.3f} → précision {prec[i]:.1%}, rappel {rap[i]:.1%}")</pre></div>
+    <p>La conséquence opérationnelle est directe. Une incertitude aléatoire élevée signifie qu'il faut <em>dimensionner une marge</em> : collecter plus de données n'y changera rien. Une incertitude épistémique élevée signifie que le modèle est <em>hors de son domaine de validité</em> : sa prédiction ne doit pas être utilisée, et c'est un signal pour collecter des données dans cette région (module 12) ou pour se replier sur une procédure de référence (module 23). Confondre les deux conduit soit à sur-dimensionner inutilement, soit à faire confiance à une extrapolation.</p>
 
     <div class="warning-block">
-      <strong>Ne jamais rééchantillonner avant le découpage.</strong> Sur-échantillonner puis découper place des copies (ou des interpolations) du même point des deux côtés : le score de validation devient une illusion, parfois spectaculaire. Le rééchantillonnage s'applique <em>uniquement</em> au pli d'entraînement — c'est ce que garantit <code>imblearn.pipeline.Pipeline</code>. Et le jeu de test doit conserver la distribution réelle : c'est celle qu'on rencontrera en production.
+      <strong>Le défaut structurel des réseaux de neurones.</strong> Un réseau standard ne modélise <em>aucune</em> des deux : il produit un point, et son softmax n'est pas une probabilité calibrée. Il reste très confiant sur des entrées totalement hors distribution — un classificateur d'images entraîné sur des chiens et des chats attribue 99 % de confiance à une photo de voiture. C'est le comportement le plus dangereux pour un usage industriel. Les processus gaussiens (module 18), eux, fournissent nativement l'incertitude épistémique : leur variance croît mécaniquement loin des données observées.
     </div>
 
-    <h2 id="validation">8. Validation croisée : choisir le bon schéma</h2>
-    <p>Un découpage unique train/test est bruité : le score dépend du tirage, et sur un petit jeu l'écart entre deux tirages peut dépasser l'écart entre deux modèles. La validation croisée à \(K\) plis moyenne \(K\) évaluations, chaque observation servant une fois au test. Son écart type entre plis est aussi informatif que la moyenne — un modèle à 0,82 ± 0,01 est préférable à 0,84 ± 0,09.</p>
+    <h2 id="uq-ml">9. Quantifier l'incertitude d'un modèle</h2>
+    <div class="code-label">méthodes, du plus simple au plus coûteux</div>
+    <div class="code-block"><pre>Régression quantile      entraîner sur la perte pinball aux quantiles 5 % et 95 %.
+                         Capture l'incertitude ALÉATOIRE, y compris hétéroscédastique.
+                         Disponible dans LightGBM et HistGradientBoosting : le
+                         meilleur rapport effort/résultat sur données tabulaires.
+Ensembles profonds       entraîner 5 réseaux avec des graines différentes ; la
+                         dispersion des prédictions estime l'incertitude ÉPISTÉMIQUE.
+                         Simple, robuste, la référence empirique — coût ×5.
+MC dropout               laisser le dropout actif à l'inférence et échantillonner.
+                         Bon marché, mais approximation grossière.
+Sortie probabiliste      faire prédire au réseau moyenne ET variance (perte de
+                         log-vraisemblance gaussienne) : sépare les deux incertitudes.
+Bayésien complet         poids traités comme variables aléatoires (VI, SWAG).
+                         Élégant, coûteux, rarement meilleur qu'un ensemble profond.
+Processus gaussien       incertitude exacte par construction (module 18) — mais O(n³).
+Prédiction conforme      garantie de couverture sur n'importe quel modèle déjà
+                         entraîné (section suivante).</pre></div>
 
-    <div class="code-label">les schémas, visualisés</div>
-    <div class="code-block"><pre>KFold (K=5)                     TimeSeriesSplit
-pli 1  [test][─── train ───]    pli 1  [train][test]·············
-pli 2  [train][test][ train ]   pli 2  [── train ──][test]·······
-pli 3  [── train ─][test][──]   pli 3  [──── train ───][test]····
-pli 4  [─── train ──][test][]   pli 4  [────── train ────][test]·
-pli 5  [──── train ────][test]         ↑ on n'entraîne JAMAIS sur le futur
+    <div class="code-label">Python — régression quantile, immédiatement applicable</div>
+    <div class="code-block"><pre>from lightgbm import LGBMRegressor
 
-GroupKFold (groupe = client)
-client A ██  B ██  C ██  D ██  E ██     un client entier va d'un seul côté :
-pli 1    test    train train train      pas de client des deux côtés du découpage</pre></div>
+modeles = {}
+for alpha in (0.05, 0.5, 0.95):
+    modeles[alpha] = LGBMRegressor(objective="quantile", alpha=alpha,
+                                   n_estimators=500).fit(X_tr, y_tr)
 
-    <div class="code-label">quel schéma pour quelle structure de données</div>
-    <div class="code-block"><pre>KFold                  données i.i.d., régression                 K = 5 ou 10
-StratifiedKFold        classification : conserve les proportions  le défaut en classif
-GroupKFold             plusieurs lignes par entité (patient,      un groupe = un seul pli
-                       client, bien immobilier)
-StratifiedGroupKFold   les deux contraintes à la fois
-TimeSeriesSplit        séries temporelles : entraîner sur le      jamais de mélange
-                       passé, tester sur le futur
-LeaveOneOut            très peu de données                        coûteux, variance élevée
-Nested CV              on optimise DES hyperparamètres ET on veut boucle interne = réglage
-                       une estimation non biaisée                 boucle externe = évaluation</pre></div>
+bas  = modeles[0.05].predict(X_te)
+med  = modeles[0.50].predict(X_te)
+haut = modeles[0.95].predict(X_te)
 
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>from sklearn.model_selection import GroupKFold, cross_validate
+couverture = np.mean((y_te &gt;= bas) &amp; (y_te &lt;= haut))
+print(f"couverture empirique : {couverture:.1%}")   # visée : 90 %
+# largeur variable selon les points : c'est le signe d'un bruit hétéroscédastique</pre></div>
 
-# données transactionnelles : plusieurs lignes par client → GroupKFold
-res = cross_validate(pipeline, X, y, groups=df["client_id"],
-                     cv=GroupKFold(n_splits=5),
-                     scoring=["roc_auc", "average_precision"],
-                     return_train_score=True, n_jobs=-1)
+    <h2 id="conformal">10. Prédiction conforme</h2>
+    <p>La prédiction conforme est, à mon sens, la technique la plus sous-utilisée du domaine. Elle fournit un intervalle de prédiction avec une <strong>garantie de couverture valable à échantillon fini</strong>, sans aucune hypothèse sur la distribution des données ni sur le modèle — seulement l'échangeabilité des observations, c'est-à-dire le fait que l'ordre n'a pas d'importance.</p>
 
-# l'écart train/validation mesure directement le surapprentissage
-print(f"train {res['train_roc_auc'].mean():.3f} | "
-      f"val {res['test_roc_auc'].mean():.3f} ± {res['test_roc_auc'].std():.3f}")</pre></div>
+    <p>La version par découpage tient en trois étapes. On met de côté un jeu de calibration, disjoint de l'entraînement. On y calcule les scores de non-conformité \(s_i = |y_i - \hat f(x_i)|\) — à quel point le modèle s'est trompé sur chaque point. On prend le quantile empirique \(\hat q\) d'ordre \(\lceil (n+1)(1-\alpha)\rceil / n\). L'intervalle \(\hat f(x) \pm \hat q\) vérifie alors, pour un nouveau point :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(y_{\text{nouveau}} \in \hat{C}(x_{\text{nouveau}})\big) \;\geq\; 1-\alpha \]</div>
+    <p>L'intuition : si le modèle s'est trompé de moins de \(\hat q\) sur 90 % des points de calibration, et que le nouveau point est échangeable avec ceux-là, il a 90 % de chances de tomber dans la même marge.</p>
 
-    <div class="step-block">
-      <h4>Le protocole que je considère comme correct</h4>
-      <ol>
-        <li>Mettre de côté un jeu de test <strong>dès le début</strong>, et ne l'ouvrir qu'une fois, à la fin.</li>
-        <li>Travailler en validation croisée sur le reste : exploration, variables, réglages.</li>
-        <li>Optimiser les hyperparamètres dans une boucle interne (nested CV) si l'estimation finale doit être non biaisée.</li>
-        <li>Réentraîner sur toutes les données d'entraînement avec la configuration retenue.</li>
-        <li>Évaluer une seule fois sur le test. Si le résultat déçoit et qu'on repart modifier le modèle, ce jeu de test est <em>brûlé</em> : il est devenu un jeu de validation, et son score n'est plus une estimation honnête.</li>
-      </ol>
-    </div>
+    <div class="code-label">Python — conformaliser n'importe quel modèle</div>
+    <div class="code-block"><pre>import numpy as np
 
-    <h2 id="leakage">9. Fuites de données : le catalogue</h2>
-    <p>La fuite (<em>data leakage</em>) est l'erreur la plus coûteuse de la discipline, parce qu'elle est silencieuse : elle produit d'excellents scores en validation et un modèle qui s'effondre en production, quand plus personne ne sait d'où vient le problème.</p>
+modele.fit(X_train, y_train)                       # GBM, réseau, n'importe quoi
 
-    <div class="code-label">les formes de fuite, et leur remède</div>
-    <div class="code-block"><pre>Prétraitement global     scaler, imputeur, PCA, sélection de variables ajustés sur TOUT
-                         le jeu avant le découpage.    → tout mettre dans un Pipeline
+scores = np.abs(y_calib - modele.predict(X_calib))            # non-conformité
+n, alpha = len(scores), 0.1
+q = np.quantile(scores, np.ceil((n + 1) * (1 - alpha)) / n, method="higher")
 
-Fuite temporelle         une variable utilise de l'information postérieure à la date
-                         de prédiction : moyenne calculée sur toute la période,
-                         statut final du dossier.      → figer une date de référence
+pred = modele.predict(X_test)
+bas, haut = pred - q, pred + q
+print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= haut)):.1%}")
+# ≈ 90 %, par construction — quelle que soit la qualité du modèle</pre></div>
 
-Duplication              la même observation (ou quasi) des deux côtés du découpage :
-                         doublons, utilisateur présent plusieurs fois.  → GroupKFold
+    <p>Deux raffinements importants. L'intervalle ci-dessus est de <em>largeur constante</em>, ce qui est peu satisfaisant quand le bruit varie : la variante <strong>CQR</strong> (<em>conformalized quantile regression</em>) conformalise les quantiles prédits par la section précédente, et produit des intervalles adaptatifs tout en conservant la garantie. En classification, on construit des <em>ensembles</em> de classes : sur un cas facile l'ensemble contient une seule classe, sur un cas ambigu il en contient plusieurs — une façon honnête de dire « je ne sais pas trancher », bien plus utile qu'un score de confiance non calibré, et directement exploitable pour décider de transmettre le cas à un humain (module 23).</p>
 
-Cible déguisée           une colonne qui n'existe QUE parce que l'événement a eu lieu :
-                         "date de résiliation", "montant remboursé", "motif de panne".
-
-Target encoding naïf     moyenne de cible calculée en incluant la ligne courante.
-                         → encodage en validation croisée interne
-
-Fuite par le seuil       choisir le seuil de décision sur le jeu de test.
-
-Sélection répétée        essayer 200 modèles et garder le meilleur score de test :
-                         le test devient un jeu d'entraînement déguisé.</pre></div>
-
-    <div class="step-block">
-      <h4>Comment la détecter</h4>
-      <p>Un score anormalement élevé — une AUC de 0,99 sur un problème réputé difficile — doit déclencher une suspicion, pas une satisfaction. Trois gestes efficaces : regarder les <em>importances de variables</em> et se demander, pour la première d'entre elles, si elle serait réellement disponible au moment de la prédiction ; rejouer la chaîne complète sur une période postérieure (validation temporelle), où une fuite disparaît et fait s'effondrer le score ; et écrire pour chaque variable, noir sur blanc, <em>à quel instant elle est connue</em>. Mieux vaut découvrir cet effondrement en validation qu'en production.</p>
+    <div class="warning-block">
+      <strong>Ce que la garantie couvre, et ce qu'elle ne couvre pas.</strong> La couverture est <em>marginale</em> : elle vaut en moyenne sur l'ensemble des points, pas nécessairement pour chaque sous-groupe — d'où les variantes conditionnées par groupe. Elle suppose l'échangeabilité : si la distribution dérive (module 25) ou si les données sont temporelles, la garantie tombe, et il faut des versions adaptatives en ligne. Enfin, elle ne rend pas un mauvais modèle bon : un modèle imprécis produira simplement des intervalles très larges — ce qui est déjà une information utile, et honnête.
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Commencer par la décision que le modèle doit éclairer ; définir la cible et une baseline avant toute modélisation.</li>
-        <li>Explorer méthodiquement : structure, cible, manquants, doublons, cardinalités, temps.</li>
-        <li>Comprendre <em>pourquoi</em> une valeur manque avant de l'imputer ; garder l'indicateur de manque.</li>
-        <li>Le feature engineering paie plus que le choix d'algorithme : ratios, agrégats à fenêtre passée, encodages adaptés à la cardinalité.</li>
-        <li>Déséquilibre : changer de métrique et pondérer avant de songer à SMOTE ; ne rééchantillonner que le pli d'entraînement.</li>
-        <li>Adapter le schéma de validation à la structure des données : groupes, temps, stratification.</li>
-        <li>Tout prétraitement vit dans un pipeline. Un score trop beau est une fuite jusqu'à preuve du contraire.</li>
+        <li>Choisir une loi, c'est faire une hypothèse sur le mécanisme ; choisir une perte, c'est choisir un modèle de bruit.</li>
+        <li>Ridge et lasso sont des MAP avec a priori gaussien et laplacien : la régularisation est une croyance explicite.</li>
+        <li>Bayes renverse la conditionnelle : avec un événement rare, un test très précis produit surtout des faux positifs.</li>
+        <li>L'a posteriori combine a priori et données en pondérant par la précision ; il s'efface quand les données abondent.</li>
+        <li>NUTS/HMC rend l'inférence praticable ; toujours vérifier \(\hat R\), l'ESS, les divergences et le prédictif a posteriori.</li>
+        <li>Les modèles hiérarchiques font du regroupement partiel : la meilleure réponse aux groupes à faibles effectifs.</li>
+        <li>Distinguer incertitude aléatoire (irréductible, à dimensionner) et épistémique (réductible, signal de hors-domaine).</li>
+        <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour cinq lignes de code.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m09.html" class="btn btn-secondary">← Module 9 : Inférence bayésienne</a>
-    <a href="project7-m11.html" class="btn btn-primary">Module 11 : Peu d'étiquettes →</a>
+    <a href="project7-m09.html" class="btn btn-secondary">← Module 9 : Statistique inférentielle</a>
+    <a href="project7-m11.html" class="btn btn-primary">Module 11 : Data science en pratique →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">EDA</span><span class="tag">Feature engineering</span><span class="tag">Imputation</span><span class="tag">Validation croisée</span><span class="tag">Data leakage</span></div>
+  <div class="project-meta"><span class="tag">Bayésien</span><span class="tag">MCMC</span><span class="tag">PyMC</span><span class="tag">Hiérarchique</span><span class="tag">Incertitude</span><span class="tag">Conformal</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -415,7 +326,7 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 10</div>
-    <h1>Data science in practice: from problem to dataset</h1>
+    <h1>Probability, Bayesian inference and uncertainty quantification</h1>
   </div>
 
   <div class="project-content course-content">
@@ -425,15 +336,16 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
 
     <h2>What this module covers</h2>
     <ul>
-      <li>The real shape of a data project, and the one question to answer first: which decision will change because of this model?</li>
-      <li>Framing: defining the target, the observation unit, and a baseline worth beating.</li>
-      <li>An exploration checklist, automated profiling, and the "disguised identifier" trap.</li>
-      <li>Visualisation rules that actually improve readability.</li>
-      <li>Missing data: Rubin's MCAR / MAR / MNAR typology, imputation strategies, and why imputation belongs inside the pipeline.</li>
-      <li>Feature engineering: categorical encodings (including smoothed, cross-fitted target encoding), transformations, cyclical time features, windowed aggregates, feature selection.</li>
-      <li>Imbalanced classes: metrics first, class weights, threshold tuning, and an honest assessment of SMOTE.</li>
-      <li>Cross-validation schemes matched to data structure (groups, time series, stratification), nested CV, and a protocol that keeps the test set honest.</li>
-      <li>A catalogue of data leakage patterns and how to detect them.</li>
+      <li>Common distributions as modelling primitives, chosen from the mechanism rather than from the histogram (Poisson vs negative binomial, Weibull for reliability, log-normal for multiplicative effects).</li>
+      <li>Likelihood, maximum likelihood and MAP — and the fact that every loss function in this course is a noise model in disguise.</li>
+      <li>Ridge and lasso derived as MAP estimates under Gaussian and Laplace priors: regularisation as an explicit belief.</li>
+      <li>Bayes' rule as an update, conjugate priors, and a ten-line Bayesian A/B test that reports expected loss rather than a p-value.</li>
+      <li>MCMC: Metropolis-Hastings, Gibbs, and Hamiltonian Monte Carlo / NUTS — plus the diagnostics that decide whether anything may be interpreted (R-hat, ESS, divergences, posterior predictive checks).</li>
+      <li>Hierarchical models and partial pooling: the principled answer to small groups, with a non-centred PyMC example.</li>
+      <li>Variational inference and the ELBO, and why mean-field posteriors are systematically too narrow.</li>
+      <li>Aleatoric vs epistemic uncertainty, and why confusing them leads either to over-engineering or to trusting extrapolation.</li>
+      <li>Practical UQ for ML models: quantile regression, deep ensembles, MC dropout, probabilistic outputs.</li>
+      <li>Conformal prediction: finite-sample, distribution-free coverage on top of any trained model, with CQR for adaptive intervals — and the precise limits of the guarantee.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -444,26 +356,27 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><strong>Data science in practice: from problem to dataset</strong></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><strong>Probability, Bayesian inference and uncertainty quantification</strong></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

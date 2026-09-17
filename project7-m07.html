@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 7 - Mathématiques du ML : optimisation, algèbre linéaire, SVD et PCA - Nils Malmberg</title>
+  <title>Module 7 - Ingénierie des données : formats, pipelines et flux - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 <header><div class="header-inner">
@@ -41,411 +40,678 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 7</div>
-    <h1>Mathématiques du ML : optimisation, algèbre linéaire, SVD et PCA</h1>
+    <h1>Ingénierie des données : formats, pipelines et flux</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Presque tout l'apprentissage automatique se ramène à deux objets : un problème d'optimisation que l'on résout par descente de gradient, et des décompositions matricielles qui révèlent la structure des données. Ce module traite les deux depuis le problème qu'ils posent, avec une insistance particulière sur la SVD et la PCA — les deux outils qui reviennent partout, de la compression à la détection d'anomalies.</p>
+    <p>Les modules précédents ont montré comment écrire du code propre, le paralléliser, manipuler des tableaux, interroger une base et livrer une application dans un conteneur. Il manque une pièce, et c'est souvent celle qui occupe le plus de temps en entreprise : <strong>faire arriver les données jusqu'au point où l'analyse commence</strong>, de façon fiable, répétable et pas trop chère. C'est le métier de l'ingénierie des données. Un modèle ne vaut jamais mieux que la table sur laquelle il s'entraîne, et cette table ne se matérialise pas toute seule.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cadre">Apprendre, c'est minimiser un risque</a></li>
-        <li><a href="#gradient">Descente de gradient : le mécanisme</a></li>
-        <li><a href="#conditionnement">Pourquoi ça converge lentement</a></li>
-        <li><a href="#variantes">SGD, momentum, Adam</a></li>
-        <li><a href="#algebre">Algèbre linéaire : résoudre sans inverser</a></li>
-        <li><a href="#svd">La SVD, en détail</a></li>
-        <li><a href="#pca">La PCA, en détail</a></li>
-        <li><a href="#metriques">Métriques d'évaluation</a></li>
+        <li><a href="#probleme">Le problème : le modèle n'est que la partie visible</a></li>
+        <li><a href="#formats">Ligne ou colonne : CSV, Parquet, Arrow</a></li>
+        <li><a href="#partition">Partitionner : ranger pour ne pas tout lire</a></li>
+        <li><a href="#sale">Lire ce qui n'est pas propre : JSON, logs, expressions régulières</a></li>
+        <li><a href="#elt">ETL, ELT, et pourquoi l'ordre s'est inversé</a></li>
+        <li><a href="#etoile">Modéliser pour l'analyse : le schéma en étoile</a></li>
+        <li><a href="#dbt">dbt : du SQL versionné, testé, documenté</a></li>
+        <li><a href="#orchestration">Orchestration : DAG, idempotence, backfill</a></li>
+        <li><a href="#temps">Le temps, cette source de bugs</a></li>
+        <li><a href="#flux">Par lots ou en flux : Kafka et les fenêtres</a></li>
+        <li><a href="#qualite">Qualité : contrats de données et observabilité</a></li>
+        <li><a href="#archi">Quelle architecture pour quelle taille</a></li>
       </ol>
     </div>
 
-    <h2 id="cadre">1. Apprendre, c'est minimiser un risque</h2>
-    <p>On cherche une fonction \(f_\theta\), paramétrée par \(\theta\), qui prédit \(y\) à partir de \(x\). L'idéal serait de minimiser le <em>risque</em>, c'est-à-dire l'erreur moyenne sur la distribution réelle des données :</p>
-    <div style="text-align:center;overflow-x:auto">\[ R(\theta) = \mathbb{E}_{(x,y)\sim \mathcal{D}}\big[\ell(f_\theta(x), y)\big] \]</div>
-    <p>Mais cette distribution \(\mathcal{D}\) est inconnue : on n'observe qu'un échantillon. On minimise donc le <strong>risque empirique</strong>, la moyenne de l'erreur sur les données dont on dispose, complété d'un terme de régularisation qui pénalise la complexité :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \hat{R}(\theta) = \frac{1}{n}\sum_{i=1}^{n} \ell\big(f_\theta(x_i), y_i\big) \;+\; \lambda\,\Omega(\theta) \]</div>
+    <h2 id="probleme">1. Le problème : le modèle n'est que la partie visible</h2>
+    <p>Une étude souvent citée de Google sur la dette technique du machine learning — on y revient au module 25 — résume la situation par un schéma : dans un système de ML en production, le code du modèle occupe une petite boîte au centre, entourée de boîtes bien plus grosses qui s'appellent collecte, vérification, transformation, stockage, service, surveillance. Le rapport de taille n'est pas une métaphore : c'est le rapport des efforts réels.</p>
 
-    <p>Tout le vocabulaire du ML se lit dans cette formule, et il vaut la peine de s'y arrêter. La <strong>fonction de perte</strong> \(\ell\) encode ce que l'on considère comme une erreur — c'est un choix, pas une donnée. Le <strong>surapprentissage</strong> est exactement l'écart entre \(\hat R\), que l'on minimise, et \(R\), qui nous intéresse : un modèle peut atteindre un risque empirique nul en mémorisant les données sans rien avoir appris. La <strong>régularisation</strong> \(\Omega\) — typiquement \(\|\theta\|_2^2\) ou \(\|\theta\|_1\) — restreint l'espace des fonctions accessibles pour réduire cet écart ; le module 9 montre qu'elle équivaut à une croyance a priori sur l'ordre de grandeur des paramètres.</p>
-
-    <div class="code-label">les pertes usuelles et ce qu'elles supposent</div>
-    <div class="code-block"><pre>Quadratique   (ŷ - y)²            régression. Pénalise les grandes erreurs au CARRÉ :
-                                  un point aberrant tire tout le modèle vers lui.
-Absolue (MAE) |ŷ - y|             robuste aux aberrants, non dérivable en 0.
-Huber         quadratique près    le compromis : quadratique au centre, linéaire
-              de 0, linéaire loin  au-delà d'un seuil δ.
-Entropie      -Σ y_k log(ŷ_k)     classification. Pénalise la CONFIANCE dans une
-croisée                           erreur, pas seulement l'erreur.
-Hinge         max(0, 1 - y·ŷ)     marge (SVM, module 12).
-Pinball       asymétrique         régression sur un quantile (module 15).</pre></div>
-
-    <div class="step-block">
-      <h4>Pourquoi ne pas optimiser directement le taux d'erreur ?</h4>
-      <p>En classification, ce qui nous intéresse est souvent le taux de bonnes réponses. On ne peut pourtant pas l'optimiser directement : c'est une fonction <em>en escalier</em>, de gradient nul presque partout et indéfini aux sauts — la descente de gradient n'a rien à suivre. L'entropie croisée est une approximation continue et dérivable de cet objectif : c'est ce qu'on appelle une perte de substitution. Il faut garder cette distinction en tête, car elle explique qu'un modèle puisse améliorer sa perte sans améliorer sa métrique métier.</p>
-    </div>
-
-    <h2 id="gradient">2. Descente de gradient : le mécanisme</h2>
-    <p>Le gradient \(\nabla \hat R(\theta)\) est le vecteur des dérivées partielles : il pointe dans la direction de plus forte croissance de la fonction. Pour minimiser, on avance donc à l'opposé, d'un pas \(\eta\) appelé <em>taux d'apprentissage</em> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \theta_{t+1} = \theta_t - \eta\, \nabla \hat{R}(\theta_t) \]</div>
-
-    <p>L'image usuelle est celle d'un randonneur dans le brouillard : il ne voit pas la vallée, mais il sent la pente sous ses pieds et descend dans la direction la plus raide. Deux questions se posent immédiatement, et ce sont les seules qui comptent : <em>quelle taille de pas ?</em> et <em>quand s'arrêter ?</em></p>
-
-    <div class="code-label">Python — la descente de gradient, écrite à la main</div>
-    <div class="code-block"><pre>import numpy as np
-
-def descente(X, y, eta=0.01, n_iter=1000):
-    """Régression linéaire par descente de gradient, sans bibliothèque."""
-    n, p = X.shape
-    theta = np.zeros(p)
-    historique = []
-
-    for t in range(n_iter):
-        residus = X @ theta - y                 # erreur de prédiction
-        perte = (residus ** 2).mean()           # risque empirique (MSE)
-        gradient = 2 / n * X.T @ residus        # dérivée analytique du MSE
-        theta -= eta * gradient                 # LE pas de descente
-        historique.append(perte)
-
-        if t &gt; 0 and abs(historique[-2] - perte) &lt; 1e-10:   # critère d'arrêt
-            break
-    return theta, historique</pre></div>
-
-    <div class="code-label">l'effet du taux d'apprentissage</div>
-    <div class="code-block"><pre>η trop petit (1e-5)    la perte descend, mais il faudrait 100 000 itérations.
-                       Symptôme : courbe presque plate, qui descend encore à la fin.
-
-η bien réglé (1e-2)    décroissance rapide puis plateau. C'est ce qu'on veut.
-
-η trop grand (1.0)     la perte OSCILLE, puis explose vers l'infini ou NaN.
-                       Symptôme : perte qui remonte, ou nan au bout de 3 itérations.
-
-  perte │╲                      perte │╲    ╱╲                perte │╲
-        │ ╲___                        │ ╲__╱  ╲                     │ ╲
-        │     ╲____                   │        ╲_                   │  ╲___________
-        └──────────── trop petit      └──────────── trop grand      └──────── correct
-</pre></div>
-
-    <p>Deux garde-fous théoriques valent d'être connus. Si \(\hat R\) est convexe — une seule vallée, pas de minimum local — et si son gradient est \(L\)-lipschitzien, la méthode converge vers le minimum global pour tout \(0 \lt \eta \lt 2/L\), où \(L\) est la plus grande courbure de la fonction. En pratique on ne connaît pas \(L\), d'où la recherche empirique du taux (module 14). Et en deep learning, la fonction n'est pas convexe : on ne cherche plus le minimum global, on se contente d'un bon minimum local — ce qui, empiriquement, suffit largement.</p>
-
-    <h2 id="conditionnement">3. Pourquoi ça converge lentement</h2>
-    <p>Pour une fonction quadratique de matrice hessienne \(H\) (la matrice des dérivées secondes, qui décrit la courbure), la vitesse de convergence dépend du <strong>conditionnement</strong> \(\kappa = \lambda_{\max}/\lambda_{\min}\), rapport de la plus grande à la plus petite valeur propre. L'erreur décroît comme :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \left(\frac{\kappa - 1}{\kappa + 1}\right)^t \]</div>
-    <p>Pour \(\kappa = 10\), le facteur vaut 0,82 par itération : la convergence est rapide. Pour \(\kappa = 10^4\), il vaut 0,9998 : il faut des dizaines de milliers d'itérations pour progresser.</p>
-
-    <div class="code-label">la géométrie du problème</div>
-    <div class="code-block"><pre>  κ ≈ 1 : lignes de niveau CIRCULAIRES     κ ≫ 1 : vallée ALLONGÉE
-  le gradient pointe vers le minimum        le gradient pointe vers les PAROIS
-
-        ╭───────╮                          ╭─────────────────────────╮
-      ╭─┤   ·───┼─► minimum              ╭─┤ ·╲                      │
-      │ ╰───────╯                        │ │   ╲╱╲╱╲╱╲──► minimum    │
-      ╰─────────╯                        │ ╰──────────────────────── ╯
-                                         ╰───────────────────────────╯
-      trajet direct                       zigzag : on rebondit d'une paroi à l'autre
-                                          et on avance très peu dans le bon sens</pre></div>
-
-    <div class="warning-block">
-      <strong>La conséquence pratique la plus importante de tout le module.</strong> Des variables d'échelles très différentes — une surface en m² (valeurs autour de 70), un nombre de pièces (autour de 3), un prix en euros (autour de 250 000) — produisent un conditionnement catastrophique : la fonction de coût est une vallée extrêmement allongée, et la descente de gradient y rampe. <strong>Standardiser les variables</strong> (soustraire la moyenne, diviser par l'écart type) rend les lignes de niveau presque circulaires et peut accélérer la convergence d'un facteur mille. Ce n'est pas une coquetterie statistique : c'est ce qui rend l'optimisation possible. C'est aussi pourquoi la <em>batch normalization</em> aide tant en deep learning (module 14) — elle re-conditionne le problème à chaque couche.
-    </div>
-
-    <h2 id="variantes">4. SGD, momentum, Adam</h2>
-
-    <h3>Le problème du coût</h3>
-    <p>Calculer \(\nabla \hat R\) demande de parcourir les \(n\) exemples. Avec un million d'images, un seul pas devient hors de prix — et il en faut des milliers. La <strong>descente stochastique</strong> (SGD) estime le gradient sur un petit lot tiré au hasard :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \nabla \hat{R}(\theta) \;\approx\; \frac{1}{|B|}\sum_{i \in B} \nabla \ell\big(f_\theta(x_i), y_i\big) \]</div>
-    <p>L'estimation est bruitée mais <em>non biaisée</em> — elle vise juste en moyenne — et surtout mille fois moins coûteuse. On fait donc mille pas approximatifs au lieu d'un pas exact, un échange presque toujours gagnant. Le bruit a même une vertu : il aide à s'échapper des points selles, ces zones plates qui ne sont ni des minima ni des maxima et qui sont omniprésentes en grande dimension — bien plus que les minima locaux, contrairement à une idée reçue.</p>
-
-    <h3>Momentum : lisser la trajectoire</h3>
-    <p>Pour traverser la vallée allongée de la section précédente sans zigzaguer, on accumule une vitesse, comme une bille lourde qui ne change pas de direction à chaque bosse :</p>
-    <div style="text-align:center;overflow-x:auto">\[ v_{t+1} = \beta v_t + \nabla \hat R(\theta_t), \qquad \theta_{t+1} = \theta_t - \eta\, v_{t+1} \]</div>
-    <p>Avec \(\beta = 0{,}9\), le pas effectif est amplifié d'un facteur \(1/(1-\beta) = 10\) dans les directions où le gradient reste constant, tandis que les composantes qui oscillent s'annulent d'un pas sur l'autre. La variante de Nesterov évalue le gradient au point extrapolé plutôt qu'au point courant, ce qui la rend un peu plus stable.</p>
-
-    <h3>Adam : un taux par paramètre</h3>
-    <p>L'idée des méthodes adaptatives : les paramètres n'ont pas tous la même échelle de gradient, donc pas la même taille de pas idéale. <strong>Adam</strong> combine le momentum (moment d'ordre 1) et une normalisation par l'amplitude typique du gradient (moment d'ordre 2) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ m_t = \beta_1 m_{t-1} + (1-\beta_1)g_t, \qquad v_t = \beta_2 v_{t-1} + (1-\beta_2)g_t^2 \]</div>
-    <div style="text-align:center;overflow-x:auto">\[ \hat m_t = \frac{m_t}{1-\beta_1^t}, \quad \hat v_t = \frac{v_t}{1-\beta_2^t}, \qquad \theta_{t+1} = \theta_t - \eta\,\frac{\hat m_t}{\sqrt{\hat v_t} + \varepsilon} \]</div>
-    <p>Le rapport \(\hat m_t / \sqrt{\hat v_t}\) est une sorte de « rapport signal sur bruit » du gradient : un paramètre dont le gradient est constamment dans le même sens avance vite, un paramètre dont le gradient oscille avance lentement. Les corrections de biais \(\hat m, \hat v\) compensent l'initialisation à zéro des moments, qui sous-estimerait fortement les premiers pas. Valeurs usuelles : \(\beta_1 = 0{,}9\), \(\beta_2 = 0{,}999\), \(\varepsilon = 10^{-8}\).</p>
-
-    <div class="code-label">Python — Adam en douze lignes, pour voir ce qu'il fait</div>
-    <div class="code-block"><pre>def adam(gradient_fn, theta, eta=1e-3, b1=0.9, b2=0.999, eps=1e-8, n_iter=1000):
-    m = np.zeros_like(theta)          # moyenne mobile du gradient
-    v = np.zeros_like(theta)          # moyenne mobile du gradient AU CARRÉ
-
-    for t in range(1, n_iter + 1):
-        g = gradient_fn(theta)
-        m = b1 * m + (1 - b1) * g
-        v = b2 * v + (1 - b2) * g ** 2
-        m_corr = m / (1 - b1 ** t)    # correction de biais : sans elle, les premiers
-        v_corr = v / (1 - b2 ** t)    # pas seraient beaucoup trop petits
-        theta -= eta * m_corr / (np.sqrt(v_corr) + eps)
-    return theta</pre></div>
-
-    <p><strong>AdamW</strong> corrige un défaut subtil mais réel : dans Adam, la pénalité \(L^2\) ajoutée à la perte est elle aussi divisée par \(\sqrt{\hat v_t}\), si bien que la régularisation n'est plus uniforme entre paramètres. AdamW <em>découple</em> la décroissance des poids du gradient adaptatif ; c'est aujourd'hui le choix par défaut pour les transformers.</p>
-
-    <div class="code-label">quel optimiseur choisir</div>
-    <div class="code-block"><pre>SGD + momentum   converge souvent vers de MEILLEURS minima (meilleure généralisation),
-                 mais demande un réglage soigneux du taux et d'un planificateur.
-                 Référence en vision, pour des CNN entraînés de zéro.
-Adam / AdamW     robuste, marche presque tout de suite. Défaut en NLP, transformers,
-                 et sur tout problème aux gradients hétérogènes ou creux.
-L-BFGS           second ordre approché : excellent sur les petits problèmes lisses et
-                 déterministes (peu de paramètres, pas de mini-lots). Inutilisable en
-                 deep learning : mémoire et incompatibilité avec le bruit stochastique.</pre></div>
-
-    <h3>Planification et écrêtage</h3>
-    <p>Un taux constant finit par empêcher la convergence fine : on tourne autour du minimum sans jamais s'en approcher. On le fait donc décroître. Le schéma <em>cosine annealing</em> avec <em>warmup</em> est devenu standard : quelques centaines de pas de montée linéaire — le temps que les statistiques des moments adaptatifs se stabilisent —, puis une décroissance en cosinus jusqu'à presque zéro.</p>
-    <p>S'y ajoute le <strong>gradient clipping</strong>, qui borne la norme du gradient : \(g \leftarrow \min(1, c/\|g\|)\,g\). Un seul lot atypique peut produire un gradient énorme qui projette les paramètres dans une zone absurde et détruit des heures d'entraînement ; l'écrêtage garde la <em>direction</em> mais limite la <em>longueur</em> du pas. Indispensable sur les RNN et les transformers.</p>
-
-    <div class="code-label">Python — en pratique, avec PyTorch</div>
-    <div class="code-block"><pre>opt = torch.optim.AdamW(modele.parameters(), lr=3e-4, weight_decay=0.01)
-sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=3e-4,
-                                            total_steps=n_epoques * len(chargeur))
-for xb, yb in chargeur:
-    opt.zero_grad(set_to_none=True)
-    perte_fn(modele(xb), yb).backward()
-    torch.nn.utils.clip_grad_norm_(modele.parameters(), max_norm=1.0)   # écrêtage
-    opt.step()
-    sched.step()                                    # le taux évolue à CHAQUE pas</pre></div>
-
-    <h2 id="algebre">5. Algèbre linéaire : résoudre sans inverser</h2>
-    <p>La règle la plus utile de tout ce module : <strong>on n'inverse jamais une matrice</strong>. Pour résoudre \(Ax = b\), calculer \(A^{-1}\) puis multiplier coûte environ deux fois plus cher et est numériquement bien moins stable que de résoudre directement le système. L'inverse est un objet mathématique commode, pas un objet numérique.</p>
-
-    <div class="code-label">Python</div>
-    <div class="code-block"><pre>import numpy as np
-from scipy.linalg import cho_factor, cho_solve
-
-# À NE PAS FAIRE
-x = np.linalg.inv(A) @ b
-
-# À FAIRE : factorisation LU avec pivot
-x = np.linalg.solve(A, b)
-
-# Si A est symétrique définie positive (matrice de covariance, noyau de GP) :
-# Cholesky, deux fois plus rapide encore
-c, low = cho_factor(A)
-x = cho_solve((c, low), b)
-
-# Si le système est surdéterminé (moindres carrés) : QR, sans jamais former AᵀA
-beta, residus, rang, valeurs_sing = np.linalg.lstsq(A, b, rcond=None)</pre></div>
-
-    <div class="code-label">les décompositions à connaître</div>
-    <div class="code-block"><pre>LU        A = PLU     systèmes carrés généraux               O(n³/3)
-Cholesky  A = LLᵀ     A symétrique définie positive          O(n³/6) — la plus rapide
-QR        A = QR      moindres carrés, orthogonalisation     O(2mn²)
-Spectrale A = QΛQᵀ    A symétrique : axes et valeurs propres réels
-SVD       A = UΣVᵀ    TOUTE matrice, même rectangulaire      la plus informative</pre></div>
-
-    <h3>Le cas des moindres carrés</h3>
-    <p>La solution analytique \(\hat\beta = (X^\top X)^{-1} X^\top y\) est correcte en mathématiques et dangereuse en calcul : former \(X^\top X\) <strong>élève le conditionnement au carré</strong>, puisque \(\kappa(X^\top X) = \kappa(X)^2\). Avec des variables corrélées — donc un \(\kappa(X)\) déjà élevé —, la précision s'effondre, et l'on peut obtenir des coefficients aberrants sur des données parfaitement propres. C'est pourquoi <code>lstsq</code> passe par une QR ou une SVD, et pourquoi <code>sklearn.linear_model.LinearRegression</code> appelle <code>scipy.linalg.lstsq</code> plutôt que la formule fermée.</p>
-
-    <h2 id="svd">6. La SVD, en détail</h2>
-    <p>La décomposition en valeurs singulières s'applique à <em>n'importe quelle</em> matrice réelle \(A\) de taille \(m \times n\) — carrée ou non, inversible ou non :</p>
-    <div style="text-align:center;overflow-x:auto">\[ A = U \Sigma V^\top, \qquad U \in \mathbb{R}^{m\times m},\; \Sigma \in \mathbb{R}^{m\times n},\; V \in \mathbb{R}^{n\times n} \]</div>
-    <p>avec \(U\) et \(V\) orthogonales (\(U^\top U = I\) : leurs colonnes forment une base orthonormée) et \(\Sigma\) diagonale à coefficients positifs décroissants \(\sigma_1 \geq \sigma_2 \geq \dots \geq 0\), les <strong>valeurs singulières</strong>.</p>
-
-    <h3>Intuition géométrique</h3>
-    <p>Toute application linéaire, aussi compliquée soit-elle, se décompose en trois opérations élémentaires : <strong>une rotation</strong> (\(V^\top\)), <strong>une dilatation selon les axes</strong> (\(\Sigma\)), <strong>une seconde rotation</strong> (\(U\)). Autrement dit, l'image de la sphère unité par \(A\) est toujours un ellipsoïde : les \(\sigma_i\) sont les longueurs de ses demi-axes, et les colonnes de \(U\) leurs directions. Une valeur singulière quasi nulle signifie que \(A\) écrase complètement une direction de l'espace — c'est la signature d'une redondance dans les données.</p>
-
-    <h3>Liens utiles</h3>
+    <p>La raison est simple. Un fichier CSV posé sur un bureau se charge en une ligne de pandas. Une source de données vivante, elle, arrive en continu, change de schéma sans prévenir, contient des doublons, arrive parfois en retard, parfois deux fois, et doit être relue entièrement le jour où l'on découvre un bug dans une transformation d'il y a trois mois. Tout ce module traite de ces quatre difficultés :</p>
     <ul>
-      <li>\(A^\top A = V \Sigma^\top\Sigma V^\top\) : les \(\sigma_i^2\) sont les valeurs propres de \(A^\top A\), et \(V\) en donne les vecteurs propres. <em>Calculer la SVD directement reste plus stable que diagonaliser \(A^\top A\)</em>, pour la raison de conditionnement vue plus haut.</li>
-      <li>Le <strong>rang</strong> de \(A\) est le nombre de \(\sigma_i\) non nuls ; numériquement, le nombre de \(\sigma_i\) au-dessus d'un seuil.</li>
-      <li>Le <strong>conditionnement</strong> vaut \(\kappa = \sigma_1/\sigma_r\) : la SVD le donne donc directement.</li>
-      <li>La <strong>pseudo-inverse</strong> \(A^{+} = V\Sigma^{+}U^\top\) (où \(\Sigma^+\) inverse les \(\sigma_i\) non nuls et laisse les autres à zéro) fournit la solution de norme minimale des moindres carrés, y compris pour un système sous-déterminé.</li>
+      <li><strong>le volume</strong> — comment stocker et relire des données qui ne tiennent plus en mémoire, sans tout relire ;</li>
+      <li><strong>le changement</strong> — comment survivre à une colonne qui disparaît ou qui change de type ;</li>
+      <li><strong>la répétition</strong> — comment relancer un traitement sans créer de doublons ni de trous ;</li>
+      <li><strong>le temps</strong> — comment raisonner sur des événements qui n'arrivent pas dans l'ordre où ils se sont produits.</li>
     </ul>
 
-    <h3>Approximation de rang faible : Eckart–Young</h3>
-    <p>En ne gardant que les \(k\) premiers termes de la somme :</p>
-    <div style="text-align:center;overflow-x:auto">\[ A_k = \sum_{i=1}^{k}\sigma_i u_i v_i^\top \]</div>
-    <p>on obtient <strong>la meilleure approximation de rang \(k\) qui existe</strong>, au sens des normes de Frobenius et spectrale. Aucune autre matrice de rang \(k\), obtenue par quelque méthode que ce soit, ne fait mieux — et l'erreur commise est connue exactement :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \|A - A_k\|_F^2 = \sum_{i \gt k} \sigma_i^2 \]</div>
-    <p>Ce théorème fonde la compression par SVD, la PCA, le débruitage et les systèmes de recommandation par factorisation matricielle (module 21).</p>
-
-    <div class="code-label">Python — compression d'image, pour voir le théorème à l'œuvre</div>
-    <div class="code-block"><pre>import numpy as np, matplotlib.pyplot as plt
-
-img = plt.imread("photo.png").mean(axis=2)          # niveaux de gris, (m, n)
-U, s, Vt = np.linalg.svd(img, full_matrices=False)
-
-# combien de composantes pour conserver 95 % de "l'énergie" ?
-energie = np.cumsum(s ** 2) / np.sum(s ** 2)
-k = int(np.searchsorted(energie, 0.95) + 1)
-
-approx = (U[:, :k] * s[:k]) @ Vt[:k]                # reconstruction de rang k
-taux = k * (img.shape[0] + img.shape[1] + 1) / img.size
-print(f"k={k} : {taux:.1%} des coefficients d'origine, 95 % de l'énergie conservée")
-# une photo 1024×1024 se reconstruit souvent avec k ≈ 60, soit 12 % des données</pre></div>
-
     <div class="step-block">
-      <h4>Coût et passage à l'échelle</h4>
-      <p>La SVD complète coûte \(O(\min(mn^2, m^2n))\) — impraticable sur une grande matrice. Deux issues : la SVD tronquée par méthode de Lanczos (<code>scipy.sparse.linalg.svds</code>), efficace sur les matrices creuses, et surtout la <strong>SVD randomisée</strong> (la fonction <code>randomized_svd</code> de <code>sklearn.utils.extmath</code>), qui projette d'abord les données sur un sous-espace aléatoire de dimension \(k+p\) et coûte \(O(mnk)\). Sur une matrice 100 000 × 10 000 dont on veut 50 composantes, c'est la différence entre quelques secondes et plusieurs heures. L'idée sous-jacente est remarquable : une projection aléatoire préserve approximativement les distances (lemme de Johnson-Lindenstrauss), donc capture l'essentiel du sous-espace dominant.</p>
-    </div>
-
-    <h3>Où la SVD apparaît</h3>
-    <ul>
-      <li><strong>PCA</strong> — section suivante : c'est littéralement une SVD des données centrées ;</li>
-      <li><strong>Ridge</strong> — la régularisation s'y lit comme un filtrage spectral (voir plus bas) ;</li>
-      <li><strong>LSA</strong> — réduction d'une matrice terme-document, ancêtre des embeddings (module 20) ;</li>
-      <li><strong>Recommandation</strong> — factorisation d'une matrice utilisateurs × items très creuse (module 21) ;</li>
-      <li><strong>Débruitage et détection d'anomalies</strong> — le signal se concentre dans les grandes valeurs singulières, le bruit se répartit sur les petites ;</li>
-      <li><strong>Réduction de modèle</strong> — la POD des simulations physiques est une SVD de champs (module 19) ;</li>
-      <li><strong>LoRA</strong> — l'adaptation de LLM par matrices de rang faible repose sur la même intuition (module 20).</li>
-    </ul>
-
-    <h3>Ridge vu par la SVD</h3>
-    <p>En écrivant \(X = U\Sigma V^\top\), la prédiction de la régression ridge devient :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \hat{y}_{\text{ridge}} = \sum_{i=1}^{p} u_i \frac{\sigma_i^2}{\sigma_i^2 + \lambda}\, u_i^\top y \]</div>
-    <p>La lecture est limpide : ridge projette \(y\) sur les directions principales et <em>rétrécit</em> chacune d'un facteur \(\sigma_i^2/(\sigma_i^2+\lambda)\), compris entre 0 et 1. Les directions de forte variance (\(\sigma_i^2 \gg \lambda\)) sont conservées presque intactes ; celles de faible variance — précisément celles où l'estimation est instable — sont écrasées. La régularisation n'est donc pas un bricolage numérique : c'est un filtrage spectral qui atténue ce qui est mal déterminé.</p>
-
-    <h2 id="pca">7. La PCA, en détail</h2>
-    <p>L'analyse en composantes principales cherche un système d'axes orthogonaux, ordonnés, sur lesquels projeter les données en perdant le moins d'information possible.</p>
-
-    <h3>Deux formulations équivalentes</h3>
-    <p><strong>Variance maximale.</strong> On cherche la direction unitaire \(w\) qui maximise la variance des projections. Avec \(X\) centré et \(C = \frac{1}{n-1}X^\top X\) la matrice de covariance :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \max_{\|w\|=1}\; \operatorname{Var}(Xw) = \max_{\|w\|=1}\; w^\top C\, w \]</div>
-    <p>Le lagrangien \(w^\top C w - \lambda(w^\top w - 1)\), dérivé et annulé, donne \(Cw = \lambda w\) : <strong>les directions principales sont les vecteurs propres de la covariance</strong>, et la variance capturée par chacune est sa valeur propre. On itère en imposant l'orthogonalité aux directions déjà retenues.</p>
-
-    <p><strong>Erreur de reconstruction minimale.</strong> On cherche le sous-espace de dimension \(k\) minimisant \(\sum_i \|x_i - \Pi_k x_i\|^2\), où \(\Pi_k\) est la projection sur ce sous-espace. C'est exactement le problème d'Eckart–Young : la solution est donnée par les \(k\) premiers vecteurs singuliers. Les deux formulations coïncident — maximiser la variance conservée, c'est minimiser ce qu'on jette.</p>
-
-    <h3>Le lien avec la SVD</h3>
-    <p>Si \(X\) (centré) se décompose en \(U\Sigma V^\top\), alors \(C = \frac{1}{n-1}V\Sigma^2V^\top\). Donc :</p>
-    <ul>
-      <li>les <strong>axes principaux</strong> sont les colonnes de \(V\) (les <em>loadings</em>) ;</li>
-      <li>les <strong>composantes principales</strong> (coordonnées projetées, ou <em>scores</em>) valent \(XV = U\Sigma\) ;</li>
-      <li>la <strong>variance expliquée</strong> par l'axe \(i\) vaut \(\sigma_i^2/(n-1)\).</li>
-    </ul>
-    <p>C'est pourquoi toutes les implémentations sérieuses passent par la SVD de \(X\) plutôt que par la diagonalisation de \(X^\top X\) : même résultat, bien meilleure stabilité numérique.</p>
-
-    <div class="code-label">Python — PCA à la main, puis avec scikit-learn</div>
-    <div class="code-block"><pre>import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-
-X = np.random.randn(500, 20) @ np.random.randn(20, 20)   # données corrélées
-
-# ── version manuelle ──
-Xs = StandardScaler().fit_transform(X)          # centrer ET réduire (voir encadré)
-U, s, Vt = np.linalg.svd(Xs, full_matrices=False)
-
-scores = U * s                                   # = Xs @ Vt.T : les composantes
-var_expliquee = s ** 2 / np.sum(s ** 2)
-print(np.cumsum(var_expliquee)[:5])              # part de variance cumulée
-
-# reconstruction avec k composantes, et erreur associée
-k = 5
-X_reconstruit = scores[:, :k] @ Vt[:k]
-erreur = np.linalg.norm(Xs - X_reconstruit) ** 2 / np.linalg.norm(Xs) ** 2
-print(f"erreur relative avec {k} composantes : {erreur:.1%}")
-
-# ── version scikit-learn (identique, au signe des axes près) ──
-pca = PCA(n_components=0.95)                     # garder 95 % de la variance
-Z = pca.fit_transform(Xs)
-print(Z.shape, pca.explained_variance_ratio_.sum())
-print(pca.components_[0])                        # le premier axe, en fonction des variables</pre></div>
-
-    <div class="warning-block">
-      <strong>Centrer et réduire, ou rien ne va.</strong> La PCA maximise une variance : une variable exprimée en mètres et une autre en millimètres n'ont pas le même poids, et l'axe principal suivra simplement l'unité la plus grande. Sur des variables d'unités hétérogènes, la standardisation est <em>obligatoire</em> — cela revient à faire la PCA sur la matrice de <em>corrélation</em> plutôt que de covariance. Sur des variables déjà homogènes — des pixels, les longueurs d'onde d'un spectre —, centrer seulement peut être préférable, car réduire amplifierait le bruit des canaux peu variables.
-    </div>
-
-    <h3>Combien de composantes garder ?</h3>
-    <ul>
-      <li><strong>Variance cumulée</strong> — le plus courant : garder 90 ou 95 % de la variance ;</li>
-      <li><strong>Coude du <em>scree plot</em></strong> — la rupture de pente du spectre des \(\sigma_i^2\), là où les composantes suivantes n'apportent presque plus rien ;</li>
-      <li><strong>Critère de Kaiser</strong> — sur données standardisées, garder les valeurs propres supérieures à 1 : une composante doit expliquer plus qu'une variable d'origine ; grossier mais commode ;</li>
-      <li><strong>Validation croisée</strong> — si la PCA sert d'étape de prétraitement, le nombre de composantes est un hyperparamètre comme un autre, à optimiser sur la performance finale.</li>
-    </ul>
-
-    <h3>Interpréter, et ne pas sur-interpréter</h3>
-    <p>Les <em>loadings</em> (colonnes de \(V\)) disent comment chaque variable d'origine contribue à chaque axe : ils permettent parfois de nommer un axe — « taille globale », « contraste chaud/froid ». Mais une composante principale reste une combinaison linéaire de <em>toutes</em> les variables : elle n'a aucune raison d'avoir un sens physique, et le signe des axes est arbitraire (rien ne distingue \(w\) de \(-w\)). Pour une décomposition interprétable à coefficients positifs, la <strong>NMF</strong> est souvent plus parlante ; pour séparer des sources indépendantes, c'est l'<strong>ICA</strong>.</p>
-
-    <h3>Usages, limites et variantes</h3>
-    <div class="code-label">PCA : à quoi ça sert vraiment</div>
-    <div class="code-block"><pre>Décorréler des variables     les composantes sont orthogonales par construction
-Compresser / débruiter       le bruit se disperse dans les petites valeurs propres
-Visualiser en 2D             projection sur les 2 axes de plus forte variance
-Accélérer un modèle          moins de dimensions = moins de calcul
-Détecter des anomalies       erreur de reconstruction élevée = point atypique
-Traiter la colinéarité       évite l'explosion de variance des coefficients</pre></div>
-
-    <p><strong>Limites.</strong> La PCA est <em>linéaire</em> : elle ne capture pas une variété courbe (un rouleau enroulé sur lui-même). Elle est <em>non supervisée</em> : rien ne garantit que les axes de forte variance soient ceux qui prédisent \(y\) — on peut parfaitement jeter la direction la plus informative, ce que corrigent la PLS ou une LDA en classification. Elle est <em>sensible aux valeurs aberrantes</em>, puisqu'une variance se calcule au carré. Et elle détruit l'interprétabilité des variables d'origine.</p>
-    <p><strong>Variantes utiles</strong> : <code>IncrementalPCA</code> (par lots, pour des données hors mémoire), la version <em>randomisée</em> (par défaut dans scikit-learn dès que la matrice est grande), la <em>kernel PCA</em> (version non linéaire par astuce du noyau, module 12), la <em>sparse PCA</em> (axes à peu de variables non nulles, donc lisibles), et pour la visualisation pure, <strong>UMAP</strong> ou <strong>t-SNE</strong> — non linéaires, excellents visuellement, mais non paramétriques, non reproductibles d'une exécution à l'autre, et dont les distances entre groupes ne veulent rien dire.</p>
-
-    <div class="warning-block">
-      <strong>PCA et fuite de données.</strong> La PCA doit être ajustée <em>sur le pli d'entraînement seulement</em>. L'ajuster sur l'ensemble des données avant la validation croisée fait entrer l'information du jeu de test dans la définition des axes : le score obtenu est optimiste, et l'écart n'apparaît qu'en production. La seule protection fiable est de la placer dans un <code>Pipeline</code> (module 3).
-    </div>
-
-    <h2 id="metriques">8. Métriques d'évaluation</h2>
-    <p>Une métrique traduit un objectif métier en un nombre à optimiser. Se tromper de métrique, c'est optimiser efficacement la mauvaise chose — et c'est irrattrapable par la suite.</p>
-
-    <h3>Régression</h3>
-    <div class="code-label">métriques de régression</div>
-    <div class="code-block"><pre>MSE    moyenne des carrés d'erreur    pénalise fortement les grandes erreurs
-RMSE   racine du MSE                  même unité que la cible : interprétable
-MAE    moyenne des écarts absolus     robuste aux aberrants ; erreur "typique"
-MAPE   erreur relative en %           parlante, mais explose si y proche de 0
-                                      et pénalise plus les surestimations
-R²     1 - SSE/SST                    part de variance expliquée ; peut être NÉGATIF
-                                      si le modèle fait pire que la moyenne</pre></div>
-    <p>RMSE et MAE ne répondent pas à la même question, et ce n'est pas un détail : minimiser le RMSE conduit à prédire la <em>moyenne</em> conditionnelle, minimiser le MAE la <em>médiane</em> conditionnelle. Sur des données à queue lourde — des prix, des durées — les deux modèles optimaux diffèrent réellement, et le choix doit venir de l'usage.</p>
-
-    <h3>Classification</h3>
-    <p>Tout part de la matrice de confusion, qui croise vérité et prédiction :</p>
-    <div class="code-label">matrice de confusion</div>
-    <div class="code-block"><pre>                    prédit positif      prédit négatif
-  réel positif      VP (vrai positif)   FN (faux négatif) ← on l'a raté
-  réel négatif      FP (faux positif)   VN (vrai négatif)
-                    ↑ fausse alerte</pre></div>
-    <div style="text-align:center;overflow-x:auto">\[ \text{Précision} = \frac{VP}{VP+FP}, \qquad \text{Rappel} = \frac{VP}{VP+FN}, \qquad F_1 = 2\,\frac{P \cdot R}{P + R} \]</div>
-    <p>La précision répond à « parmi mes alertes, combien sont justes ? », le rappel à « parmi les cas réels, combien ai-je attrapés ? ». Les deux s'opposent par le seuil de décision : le baisser augmente le rappel et dégrade la précision. Le \(F_1\) est leur moyenne harmonique, qui pénalise le déséquilibre entre les deux.</p>
-
-    <div class="code-label">Python — les métriques en pratique</div>
-    <div class="code-block"><pre>from sklearn.metrics import (classification_report, confusion_matrix,
-                             roc_auc_score, average_precision_score,
-                             log_loss, brier_score_loss)
-
-p = modele.predict_proba(X_test)[:, 1]
-y_pred = (p &gt;= 0.5).astype(int)
-
-print(confusion_matrix(y_test, y_pred))
-print(classification_report(y_test, y_pred, digits=3))   # précision, rappel, F1 par classe
-print("ROC-AUC :", roc_auc_score(y_test, p))
-print("PR-AUC  :", average_precision_score(y_test, p))   # à préférer en déséquilibre
-print("log-loss:", log_loss(y_test, p))                  # évalue les PROBABILITÉS
-print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></div>
-
-    <div class="step-block">
-      <h4>ROC-AUC ou PR-AUC ?</h4>
-      <p>L'AUC-ROC mesure la probabilité qu'un positif tiré au hasard soit mieux classé qu'un négatif. Son défaut : le taux de faux positifs \(FP/(FP+VN)\) a un dénominateur énorme quand les négatifs dominent, si bien qu'une AUC de 0,95 peut masquer une précision de 3 % sur un problème à 0,1 % de positifs. <strong>En classe très déséquilibrée — fraude, défaut, maladie rare — la courbe précision-rappel est la bonne lecture</strong>, car ses deux axes ne dépendent que des positifs et des alertes.</p>
-    </div>
-
-    <p>Deux métriques souvent oubliées et pourtant essentielles : la <strong>log-loss</strong> \(-\frac{1}{n}\sum_i [y_i\log p_i + (1-y_i)\log(1-p_i)]\), qui évalue les <em>probabilités</em> et non les décisions, et le <strong>score de Brier</strong> (erreur quadratique sur les probabilités), qui mesure la <em>calibration</em>. Un modèle peut parfaitement ordonner les cas — bonne AUC — tout en annonçant des probabilités fausses, ce qui rend inexploitable toute décision fondée sur un coût attendu (module 22). On corrige par calibration isotonique ou de Platt (module 12).</p>
-
-    <p>Enfin, l'accuracy est une métrique piégeuse : sur un problème à 99 % de négatifs, prédire toujours « négatif » donne 99 % d'accuracy et un modèle sans aucune valeur. La bonne démarche part du <strong>coût métier</strong> : si un faux négatif coûte cent fois un faux positif, ce rapport doit apparaître dans le choix du seuil — c'est l'objet du module 22.</p>
-
-    <div class="step-block">
-      <h4>Ce qu'il faut retenir du module</h4>
+      <h4>Le vocabulaire, une fois pour toutes</h4>
       <ul>
-        <li>Apprendre = minimiser un risque empirique régularisé ; la perte encode ce qu'on appelle une erreur, et c'est un choix.</li>
-        <li>Le taux d'apprentissage est l'hyperparamètre critique : trop grand, ça diverge ; trop petit, ça rampe.</li>
-        <li>Le conditionnement gouverne la vitesse de convergence — d'où l'obligation de standardiser les variables.</li>
-        <li>SGD échange l'exactitude du gradient contre le nombre de pas ; momentum lisse, Adam adapte le pas par paramètre.</li>
-        <li>AdamW par défaut ; SGD + momentum quand on peut se permettre de régler finement.</li>
-        <li>Ne jamais inverser une matrice : <code>solve</code>, Cholesky, QR, SVD.</li>
-        <li>SVD = rotation · dilatation · rotation, et meilleure approximation de rang \(k\) (Eckart–Young) ; elle éclaire aussi ridge comme un filtrage spectral.</li>
-        <li>PCA = SVD des données centrées-réduites ; à ajuster dans un pipeline, linéaire, non supervisée, sensible aux aberrants.</li>
-        <li>Choisir la métrique à partir du coût métier ; PR-AUC en classes déséquilibrées ; surveiller la calibration.</li>
+        <li><strong>Pipeline</strong> — une suite de traitements automatisés qui transforment une donnée brute en donnée exploitable. Rien de plus qu'un enchaînement de scripts, mais planifié et surveillé.</li>
+        <li><strong>Lac de données</strong> (<em>data lake</em>) — un stockage de fichiers bon marché où l'on dépose les données telles qu'elles arrivent, sans schéma imposé.</li>
+        <li><strong>Entrepôt de données</strong> (<em>data warehouse</em>) — une base structurée, organisée pour l'analyse, où les données sont propres et modélisées.</li>
+        <li><strong>Ingestion</strong> — l'étape qui fait entrer une donnée extérieure dans le système.</li>
+        <li><strong>Batch</strong> (par lots) contre <strong>streaming</strong> (en flux) — traiter un paquet de données à intervalle régulier, ou traiter chaque événement à mesure qu'il arrive.</li>
       </ul>
     </div>
+
+    <h2 id="formats">2. Ligne ou colonne : CSV, Parquet, Arrow</h2>
+
+    <h3>Le problème</h3>
+    <p>Le CSV est universel et illisible par une machine : aucun type (tout est du texte, il faut deviner), aucune compression, aucune structure interne. Lire la colonne <code>prix</code> d'un CSV de 40 Go impose de lire les 40 Go, puis de convertir chaque champ en nombre. Sur un entrepôt où les requêtes touchent cinq colonnes sur deux cents, c'est un gâchis considérable.</p>
+
+    <h3>L'intuition : deux façons de poser des données sur un disque</h3>
+    <p>Un fichier est une suite d'octets, donc un tableau à deux dimensions doit être <em>aplati</em>. Il y a deux manières de le faire, et tout découle de ce choix.</p>
+
+    <div class="code-label">le même tableau, deux dispositions</div>
+    <div class="code-block"><pre>Table logique
+  id | ville     | prix   | surface
+  ---+-----------+--------+--------
+   1 | Lyon      | 320000 | 68
+   2 | Nantes    | 245000 | 54
+   3 | Lille     | 198000 | 61
+
+ORIENTÉ LIGNE (CSV, PostgreSQL classique)
+  [1,Lyon,320000,68][2,Nantes,245000,54][3,Lille,198000,61]
+   └── une ligne entière, puis la suivante
+   → lire UN bien : une seule lecture contiguë      ✓ rapide
+   → lire TOUS les prix : sauter partout            ✗ lent
+
+ORIENTÉ COLONNE (Parquet, DuckDB, ClickHouse)
+  [1,2,3][Lyon,Nantes,Lille][320000,245000,198000][68,54,61]
+   └── toute une colonne, puis la suivante
+   → lire TOUS les prix : une seule lecture         ✓ rapide
+   → lire UN bien entier : quatre lectures          ✗ moins bon</pre></div>
+
+    <p>La disposition en colonnes a une seconde vertu, moins évidente et souvent plus décisive que la première : <strong>une colonne est homogène</strong>. Mille prix à la suite sont mille nombres qui se ressemblent, donc qui se compressent très bien ; mille villes à la suite contiennent quelques dizaines de valeurs distinctes, qu'on remplace par un dictionnaire et des entiers courts. Un CSV mélange types et magnitudes à chaque ligne, ce qui ruine toute compression. En pratique, un CSV de 40 Go devient couramment un Parquet de 3 à 6 Go, sans perte.</p>
+
+    <div class="step-block">
+      <h4>Ce que Parquet ajoute au fait d'être colonne</h4>
+      <ol>
+        <li><strong>Un schéma</strong> — le type de chaque colonne est écrit dans le fichier. Plus de <code>dtype</code> à deviner, plus de code postal transformé en flottant.</li>
+        <li><strong>Des statistiques par bloc</strong> — les données sont découpées en groupes de lignes, et chaque groupe stocke le min et le max de chaque colonne. Une requête filtrant sur <code>prix &gt; 500000</code> saute les blocs dont le max vaut 300000 sans les lire. C'est ce qu'on appelle l'élagage de blocs.</li>
+        <li><strong>Une compression par colonne</strong> — chaque colonne peut utiliser le codec qui lui convient.</li>
+        <li><strong>Une lecture partielle</strong> — on demande trois colonnes, on lit trois colonnes.</li>
+      </ol>
+    </div>
+
+    <div class="code-label">python — mesurer la différence</div>
+    <div class="code-block"><pre>import time, pathlib
+import numpy as np, pandas as pd
+
+rng = np.random.default_rng(0)
+n = 2_000_000
+df = pd.DataFrame({
+    "id": np.arange(n),
+    "ville": rng.choice(["Lyon", "Nantes", "Lille", "Rennes"], n),
+    "prix": rng.integers(80_000, 900_000, n),
+    "surface": rng.integers(15, 200, n),
+})
+
+df.to_csv("biens.csv", index=False)
+df.to_parquet("biens.parquet")          # nécessite pyarrow
+
+for f in ("biens.csv", "biens.parquet"):
+    mo = pathlib.Path(f).stat().st_size / 1e6
+    print(f"{f:16s} {mo:7.1f} Mo")
+# biens.csv           78.9 Mo
+# biens.parquet       10.2 Mo      → 7,7× plus petit
+
+# lire UNE colonne
+t = time.perf_counter()
+pd.read_csv("biens.csv", usecols=["prix"])
+print(f"csv     : {time.perf_counter() - t:.2f} s")      # ~0.75 s
+
+t = time.perf_counter()
+pd.read_parquet("biens.parquet", columns=["prix"])
+print(f"parquet : {time.perf_counter() - t:.2f} s")      # ~0.02 s</pre></div>
+
+    <p>Le facteur n'est pas un détail d'optimisation : à l'échelle d'un entrepôt, il décide de ce qui est faisable interactivement et de ce qui ne l'est pas.</p>
+
+    <h3>Et Arrow, alors ?</h3>
+    <p>Confusion fréquente, qui vaut d'être levée nettement. <strong>Parquet est un format de disque ; Arrow est un format de mémoire.</strong> Parquet est compressé et encodé, donc compact mais inexploitable tel quel : il faut le décoder. Arrow décrit comment un tableau colonne est disposé dans la RAM, non compressé, prêt à être lu par le processeur.</p>
+    <p>L'intérêt d'Arrow est ailleurs : c'est une convention <em>partagée</em>. Quand polars, DuckDB, pandas 2 et un moteur Java utilisent tous la disposition Arrow, passer une table de l'un à l'autre ne coûte rien — aucune conversion, aucune copie, on se transmet un pointeur. Avant Arrow, chaque échange entre deux outils imposait une sérialisation complète. C'est ce qui explique qu'on puisse interroger en SQL, avec DuckDB, un objet polars présent en mémoire sans rien recopier (module 4).</p>
+
+    <div class="warning-block">
+      <strong>Quand garder du CSV.</strong> Pour échanger avec un humain, pour un fichier de moins de quelques mégaoctets, ou quand l'outil d'en face ne sait rien lire d'autre. Dès qu'un fichier est relu plus d'une fois par un programme, Parquet est le bon défaut. Notez que <code>read_csv</code> est lui-même piégeux : la ligne <code>NA</code> d'une colonne texte devient un manquant, un identifiant à zéros non significatifs perd ses zéros. Parquet supprime la question.
+    </div>
+
+    <h2 id="partition">3. Partitionner : ranger pour ne pas tout lire</h2>
+    <p>Un fichier Parquet unique de 500 Go pose un problème que la compression ne résout pas : toute requête doit l'ouvrir. La solution est de <strong>découper les données en répertoires dont le nom porte l'information de filtrage</strong>.</p>
+
+    <div class="code-label">une arborescence partitionnée</div>
+    <div class="code-block"><pre>annonces/
+├── annee=2025/
+│   ├── mois=11/
+│   │   ├── part-0000.parquet
+│   │   └── part-0001.parquet
+│   └── mois=12/
+│       └── part-0000.parquet
+└── annee=2026/
+    └── mois=01/
+        └── part-0000.parquet
+
+Requête : « les annonces de janvier 2026 »
+→ le moteur lit le nom des répertoires, ouvre UN fichier,
+  ignore les autres sans les toucher. C'est l'élagage de partitions.</pre></div>
+
+    <div class="code-label">python — écrire et relire un jeu partitionné</div>
+    <div class="code-block"><pre>import polars as pl
+
+df.write_parquet("annonces/", partition_by=["annee", "mois"])
+
+# la lecture ne touche que la partition utile
+q = (
+    pl.scan_parquet("annonces/**/*.parquet", hive_partitioning=True)
+      .filter((pl.col("annee") == 2026) & (pl.col("mois") == 1))
+      .group_by("ville")
+      .agg(pl.col("prix").median().alias("prix_median"))
+)
+print(q.collect())</pre></div>
+
+    <div class="step-block">
+      <h4>Choisir sa clé de partition</h4>
+      <p>La règle : <strong>partitionner sur ce qui apparaît dans le <code>WHERE</code> de la plupart des requêtes</strong>, presque toujours une date. Deux erreurs symétriques :</p>
+      <ul>
+        <li><strong>Trop fin</strong> — partitionner par heure et par ville produit des centaines de milliers de répertoires contenant chacun quelques kilo-octets. Ouvrir un fichier a un coût fixe, et il finit par dominer : c'est le problème dit des « petits fichiers ». Visez des fichiers de 100 Mo à 1 Go.</li>
+        <li><strong>Trop grossier</strong> — partitionner par année sur dix ans d'historique oblige à lire un dixième des données pour une requête portant sur un jour.</li>
+      </ul>
+    </div>
+
+    <h2 id="sale">4. Lire ce qui n'est pas propre : JSON, logs, expressions régulières</h2>
+    <p>Les données rarement arrivent sous forme de table. Elles arrivent en JSON imbriqué depuis une API, en lignes de journal depuis un serveur, en champs libres saisis par des humains. Trois outils suffisent à couvrir l'essentiel.</p>
+
+    <h3>Aplatir du JSON imbriqué</h3>
+    <div class="code-label">python — du JSON arborescent à une table</div>
+    <div class="code-block"><pre>import pandas as pd
+
+reponse = [
+    {"id": 1, "bien": {"ville": "Lyon", "prix": 320000},
+     "options": ["balcon", "cave"]},
+    {"id": 2, "bien": {"ville": "Nantes", "prix": 245000},
+     "options": []},
+]
+
+# json_normalize déplie les dictionnaires imbriqués en colonnes
+df = pd.json_normalize(reponse, sep="_")
+print(df.columns.tolist())
+# ['id', 'options', 'bien_ville', 'bien_prix']
+
+# une liste dans une cellule n'est pas une table : on la déplie en lignes
+df_opt = df.explode("options")[["id", "options"]]
+print(df_opt)
+#    id options
+# 0   1  balcon
+# 0   1    cave
+# 1   2     NaN</pre></div>
+
+    <p>Le choix de fond, ici, est de décider ce qui devient une colonne et ce qui devient une ligne. Une liste d'options par annonce peut rester un tableau dans une colonne (Parquet sait le stocker) ou devenir une table séparée avec une ligne par option — la forme normalisée du module 4. La table séparée se joint et s'agrège facilement ; la colonne-tableau évite une jointure. On tranche selon l'usage dominant.</p>
+
+    <h3>Les expressions régulières, le minimum utile</h3>
+    <p>Une expression régulière est un motif décrivant une famille de chaînes de caractères. C'est l'outil standard pour extraire un champ d'un texte non structuré. Trois quarts des usages tiennent en une poignée de symboles.</p>
+
+    <div class="code-label">le vocabulaire minimal</div>
+    <div class="code-block"><pre>\d   un chiffre            \w   lettre, chiffre ou _      .    n'importe quoi
+\s   une espace            +    une fois ou plus          *    zéro fois ou plus
+?    zéro ou une fois      {2,4} entre 2 et 4 fois        |    ou
+[]   un caractère parmi    ()   un GROUPE à capturer      ^ $  début, fin
+\.   un point littéral (l'antislash « échappe » le sens spécial)</pre></div>
+
+    <div class="code-label">python — extraire des champs d'un texte libre</div>
+    <div class="code-block"><pre>import re
+import pandas as pd
+
+annonces = pd.Series([
+    "T3 de 68 m2 - 320 000 EUR - Lyon 3e",
+    "Studio 21m2, 148500 EUR, Nantes",
+    "Maison 140 m2 | 495 000 EUR | Rennes",
+])
+
+# (?P&lt;nom&gt;...) nomme le groupe capturé : il devient le nom de colonne
+motif = r"(?P&lt;surface&gt;\d+)\s?m2.*?(?P&lt;prix&gt;[\d\s]+)\s?EUR"
+extrait = annonces.str.extract(motif)
+extrait["prix"] = extrait["prix"].str.replace(r"\s", "", regex=True)
+print(extrait.astype({"surface": int, "prix": int}))
+#    surface    prix
+# 0       68  320000
+# 1       21  148500
+# 2      140  495000</pre></div>
+
+    <div class="warning-block">
+      <strong>Les limites, qu'il faut connaître avant d'y perdre une journée.</strong> Une expression régulière décrit un motif <em>régulier</em> : elle ne sait pas compter les imbrications. Analyser du HTML ou du JSON avec une expression régulière finit toujours mal — utilisez un analyseur syntaxique (module 27 pour le HTML). Par ailleurs, un motif comportant plusieurs quantificateurs imbriqués, comme <code>(a+)+b</code>, peut exploser en temps exponentiel sur une entrée bien choisie : c'est une faille de déni de service connue. Préférez des motifs simples, ancrés, testés sur des cas réels.
+    </div>
+
+    <h2 id="elt">5. ETL, ELT, et pourquoi l'ordre s'est inversé</h2>
+    <p>Trois lettres qui décrivent l'ordre des opérations entre la source et l'entrepôt.</p>
+
+    <div class="code-label">deux ordres, deux époques</div>
+    <div class="code-block"><pre>ETL — Extract, Transform, Load          (années 1990-2010)
+  source ──► serveur de traitement ──► entrepôt
+             │ nettoyage, jointures,
+             │ agrégations
+             └─ AVANT le chargement
+
+  Pourquoi : l'entrepôt était une machine coûteuse et peu extensible.
+  On n'y chargeait que le strict nécessaire, déjà propre.
+  Conséquence : la donnée brute n'existe plus. Un bug de transformation
+  d'il y a six mois est irréparable — on n'a plus la source.
+
+ELT — Extract, Load, Transform          (depuis ~2015)
+  source ──► entrepôt (brut) ──► entrepôt (transformé)
+                                 └─ transformations EN SQL, dans l'entrepôt
+
+  Pourquoi : le stockage objet coûte ~20 € le téraoctet-mois, et les
+  moteurs analytiques passent à l'échelle horizontalement.
+  Conséquence : la donnée brute est conservée. On peut TOUT rejouer.</pre></div>
+
+    <p>Le basculement n'est donc pas une mode : c'est la conséquence directe de l'effondrement du coût du stockage. Garder la donnée brute pour rien coûte moins cher que de devoir la redemander à la source — quand c'est encore possible. La conséquence pratique, pour vous, est que les transformations s'écrivent désormais en SQL sur l'entrepôt (module 4) plutôt qu'en Python sur une machine intermédiaire, ce qui est aussi plus facile à tester et à relire.</p>
+
+    <div class="step-block">
+      <h4>Les trois couches, un vocabulaire très répandu</h4>
+      <p>La plupart des entrepôts s'organisent en trois niveaux de raffinage — souvent appelés <em>bronze / argent / or</em>, ou <em>raw / staging / marts</em> :</p>
+      <ol>
+        <li><strong>Brut</strong> — copie fidèle de la source, aucune transformation, on n'y touche jamais. C'est le filet de sécurité.</li>
+        <li><strong>Intermédiaire</strong> — typage, renommage, déduplication, une table par entité source. Toujours au grain de la source.</li>
+        <li><strong>Exposé</strong> — les tables que consomment les analystes et les modèles : modélisées, agrégées, documentées, stables.</li>
+      </ol>
+      <p>La règle qui donne toute sa valeur à ce découpage : <strong>une couche ne lit que la couche immédiatement en dessous</strong>. Sans elle, on retombe sur un réseau de dépendances impossible à démêler.</p>
+    </div>
+
+    <h2 id="etoile">6. Modéliser pour l'analyse : le schéma en étoile</h2>
+
+    <h3>Le problème</h3>
+    <p>Le module 4 a présenté la normalisation : éviter la redondance, une information en un seul endroit. C'est la bonne réponse pour une base transactionnelle, où l'on écrit beaucoup et où toute duplication est un risque d'incohérence. Pour l'analyse, l'objectif est inverse : on écrit une fois, on lit des millions de fois, et chaque jointure supplémentaire coûte. Un schéma parfaitement normalisé impose huit jointures pour répondre à « chiffre d'affaires par région et par mois ».</p>
+
+    <h3>L'intuition</h3>
+    <p>On sépare les données en deux natures. Les <strong>faits</strong> sont des événements mesurables, nombreux, qui ne changent pas : une vente, un clic, une annonce publiée. Les <strong>dimensions</strong> sont les axes selon lesquels on veut découper ces faits : le temps, le client, le produit, la ville. Une table de faits au centre, entourée de tables de dimensions — d'où le nom.</p>
+
+    <div class="code-label">un schéma en étoile</div>
+    <div class="code-block"><pre>        dim_date                      dim_ville
+   ┌──────────────────┐          ┌──────────────────┐
+   │ date_id (PK)     │          │ ville_id (PK)    │
+   │ jour, mois, année│          │ nom, departement │
+   │ jour_semaine     │          │ region, population│
+   │ est_ferie        │          └────────┬─────────┘
+   └────────┬─────────┘                   │
+            │        fait_annonce         │
+            │   ┌─────────────────────┐   │
+            └──►│ date_id      (FK)   │◄──┘
+                │ ville_id     (FK)   │
+                │ bien_id      (FK)   │◄──┐
+                │─────────────────────│   │
+                │ prix        (mesure)│   │   dim_bien
+                │ surface     (mesure)│   │ ┌──────────────┐
+                │ nb_vues     (mesure)│   └─│ bien_id (PK) │
+                └─────────────────────┘     │ type, etage  │
+                                            │ dpe, meuble  │
+   FAITS : beaucoup de lignes, que des      └──────────────┘
+           clés et des mesures numériques
+   DIMENSIONS : peu de lignes, beaucoup de colonnes descriptives</pre></div>
+
+    <div class="code-label">sql — ce que le schéma rend facile</div>
+    <div class="code-block"><pre>-- « prix médian au m2 par région, pour les annonces de 2026,
+--    hors jours fériés » : deux jointures, lisible d'un coup d'œil
+SELECT v.region,
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY f.prix / f.surface)
+         AS prix_m2_median,
+       COUNT(*) AS n
+FROM fait_annonce f
+JOIN dim_ville v ON v.ville_id = f.ville_id
+JOIN dim_date  d ON d.date_id  = f.date_id
+WHERE d.annee = 2026
+  AND NOT d.est_ferie
+GROUP BY v.region
+ORDER BY prix_m2_median DESC;</pre></div>
+
+    <p>La table <code>dim_date</code> mérite un mot : la construire explicitement, avec une ligne par jour et des colonnes pré-calculées (trimestre, semaine ISO, jour férié, période de vacances), évite de réécrire cette logique dans chaque requête — et surtout évite qu'elle diverge d'une requête à l'autre.</p>
+
+    <div class="step-block">
+      <h4>Les dimensions qui changent dans le temps</h4>
+      <p>Un client déménage de Lyon à Bordeaux. Faut-il que ses commandes passées soient désormais attribuées à Bordeaux ? Presque jamais : on veut savoir où il habitait <em>au moment de l'achat</em>. C'est le problème des <em>dimensions à évolution lente</em>, et il a trois réponses standard :</p>
+      <ul>
+        <li><strong>Type 1 — on écrase.</strong> La ville est mise à jour, l'historique est perdu. Acceptable pour corriger une faute de frappe.</li>
+        <li><strong>Type 2 — on ajoute une ligne.</strong> Chaque version du client devient une ligne avec <code>valide_du</code>, <code>valide_au</code> et un indicateur <code>est_actuel</code>. Le fait pointe vers la version en vigueur à sa date. C'est la réponse correcte dans la grande majorité des cas.</li>
+        <li><strong>Type 3 — on garde la valeur précédente</strong> dans une colonne dédiée. Utile quand une seule étape d'historique suffit.</li>
+      </ul>
+      <p>Ce point n'est pas qu'une subtilité d'entrepôt : c'est exactement le même piège que la fuite de données en ML (module 11). Utiliser la ville actuelle pour expliquer un achat passé, c'est faire entrer dans le modèle une information qui n'existait pas encore.</p>
+    </div>
+
+    <h2 id="dbt">7. dbt : du SQL versionné, testé, documenté</h2>
+
+    <h3>Le problème</h3>
+    <p>Une fois qu'on transforme en SQL dans l'entrepôt, on se retrouve avec deux cents requêtes qui se lisent les unes les autres, copiées dans une interface web, sans historique, sans tests, et dont personne ne sait dans quel ordre les lancer. On a réinventé le pire du code — sauf qu'on a tout ce qu'il faut pour bien faire : Git (module 1), des tests (module 1), des environnements.</p>
+
+    <h3>Le principe</h3>
+    <p><strong>dbt</strong> (<em>data build tool</em>) applique les pratiques du développement logiciel au SQL analytique. Chaque transformation est un fichier <code>.sql</code> dans un dépôt Git, contenant un simple <code>SELECT</code>. dbt se charge du reste : il déduit l'ordre d'exécution, matérialise les résultats en tables ou en vues, et exécute des tests.</p>
+
+    <div class="code-label">models/marts/annonces_journalier.sql</div>
+    <div class="code-block"><pre>-- Le SELECT seul suffit : dbt l'enveloppe en CREATE TABLE AS.
+{{ config(materialized='incremental', unique_key='jour_ville') }}
+
+WITH base AS (
+    -- ref() déclare la dépendance : dbt en déduit l'ordre d'exécution
+    SELECT * FROM {{ ref('stg_annonces') }}
+)
+SELECT
+    date_trunc('day', publiee_le)           AS jour,
+    ville,
+    date_trunc('day', publiee_le) || ville   AS jour_ville,
+    COUNT(*)                                AS n_annonces,
+    APPROX_QUANTILES(prix, 100)[OFFSET(50)] AS prix_median
+FROM base
+{% if is_incremental() %}
+  -- au premier lancement : tout. Ensuite : seulement le nouveau.
+  WHERE publiee_le &gt; (SELECT MAX(jour) FROM {{ this }})
+{% endif %}
+GROUP BY jour, ville</pre></div>
+
+    <p>Les accolades doubles sont du Jinja — le moteur de gabarits rencontré au module 6 avec FastAPI, réutilisé ici pour générer du SQL. <code>ref()</code> est le mécanisme central : en écrivant <code>ref('stg_annonces')</code> plutôt que le nom réel de la table, on déclare une dépendance. dbt en construit le graphe complet et sait donc quoi reconstruire, dans quel ordre, et ce qu'un changement casse en aval.</p>
+
+    <div class="code-label">models/marts/schema.yml — tests et documentation</div>
+    <div class="code-block"><pre>version: 2
+models:
+  - name: annonces_journalier
+    description: "Une ligne par jour et par ville."
+    columns:
+      - name: jour_ville
+        description: "Clé composite jour + ville."
+        tests: [unique, not_null]
+      - name: prix_median
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 10000
+              max_value: 5000000</pre></div>
+
+    <div class="code-label">bash — le cycle de travail</div>
+    <div class="code-block"><pre>dbt run                      # construit tous les modèles, dans l'ordre
+dbt run --select stg_annonces+   # ce modèle ET tout ce qui en dépend
+dbt test                     # exécute les tests déclarés
+dbt build                    # run + test, modèle par modèle : s'arrête
+                             # au premier échec, avant de propager l'erreur
+dbt docs generate &amp;&amp; dbt docs serve   # documentation + graphe navigable</pre></div>
+
+    <p>Le gain réel n'est pas la syntaxe, c'est le changement de statut : une transformation devient un objet relu en revue de code, testé automatiquement, dont on connaît les dépendances. Alternatives dans le même esprit : SQLMesh, ou un simple ensemble de scripts SQL orchestrés à la main quand le projet est petit — l'essentiel est le principe, pas l'outil.</p>
+
+    <h2 id="orchestration">8. Orchestration : DAG, idempotence, backfill</h2>
+
+    <h3>Le problème</h3>
+    <p><code>cron</code> lance un script à heure fixe. Il ne sait pas si le script précédent a réussi, ne réessaie pas, ne prévient personne, et ne garde aucune trace. Dès qu'un traitement en attend un autre, il faut un outil qui connaisse les dépendances : un <strong>orchestrateur</strong> (Airflow, Dagster, Prefect).</p>
+
+    <p>Le modèle commun est le <strong>graphe orienté acyclique</strong> : des tâches, des flèches de dépendance, et aucun cycle — sinon rien ne pourrait démarrer. L'orchestrateur exécute en parallèle tout ce qui peut l'être, réessaie ce qui échoue, et journalise tout.</p>
+
+    <div class="code-label">un graphe de tâches typique</div>
+    <div class="code-block"><pre>  extraire_api ──┐
+                 ├──► valider ──► charger_brut ──► dbt_build ──► alerter
+  extraire_sql ──┘                                     │
+                                                       └──► rafraichir_modele
+
+  · extraire_api et extraire_sql : en parallèle, rien ne les lie
+  · valider attend les deux
+  · si dbt_build échoue, alerter et rafraichir_modele ne partent pas</pre></div>
+
+    <h3>Les deux propriétés qui rendent un pipeline exploitable</h3>
+    <p>Elles paraissent techniques ; elles décident en réalité de la quantité de nuits blanches par an.</p>
+
+    <div class="step-block">
+      <h4>Idempotence</h4>
+      <p>Relancer une tâche sur la même période doit produire exactement le même résultat, pas un résultat doublé. Un <code>INSERT</code> nu n'est pas idempotent : deux exécutions, deux fois les lignes. Trois façons de le devenir :</p>
+      <ul>
+        <li><strong>Écraser la partition</strong> — la tâche du 12 janvier supprime puis réécrit la partition du 12 janvier. Simple et robuste.</li>
+        <li><strong>Insérer ou mettre à jour</strong> — <code>INSERT ... ON CONFLICT (cle) DO UPDATE</code> en PostgreSQL, <code>MERGE</code> ailleurs.</li>
+        <li><strong>Déduplication à la lecture</strong> — on insère toujours, et une vue ne garde que la dernière version de chaque clé.</li>
+      </ul>
+    </div>
+
+    <div class="step-block">
+      <h4>Exécution paramétrée par la date</h4>
+      <p>Une tâche ne doit jamais écrire <code>WHERE date = CURRENT_DATE</code>. Elle reçoit en paramètre la date de la période qu'elle traite. La différence est invisible au quotidien, et décisive le jour où l'on doit <strong>rejouer l'historique</strong> (<em>backfill</em>) : corriger un bug découvert tardivement se réduit alors à relancer la tâche pour chaque jour concerné. Avec <code>CURRENT_DATE</code> en dur, il n'y a aucun moyen de reconstruire le passé.</p>
+    </div>
+
+    <div class="code-label">python — un DAG Airflow minimal et idempotent</div>
+    <div class="code-block"><pre>from datetime import datetime
+from airflow.decorators import dag, task
+
+@dag(schedule="0 3 * * *",            # tous les jours à 3 h UTC
+     start_date=datetime(2026, 1, 1),
+     catchup=True,                    # rejoue les jours manqués
+     max_active_runs=1,               # pas deux exécutions concurrentes
+     default_args={"retries": 3})
+def annonces_quotidien():
+
+    @task
+    def extraire(jour: str) -> str:
+        """Écrit UNE partition, celle du jour reçu en paramètre."""
+        chemin = f"s3://lac/annonces/jour={jour}/"
+        # ... extraction ...
+        return chemin
+
+    @task
+    def charger(chemin: str, jour: str) -> None:
+        # idempotent : on efface la partition avant de la réécrire
+        execute(f"DELETE FROM brut.annonces WHERE jour = '{jour}'")
+        execute(f"COPY brut.annonces FROM '{chemin}'")
+
+    # {{ ds }} = date de la période traitée, pas la date du jour
+    jour = "{{ ds }}"
+    charger(extraire(jour), jour)
+
+annonces_quotidien()</pre></div>
+
+    <p>Notez <code>catchup=True</code> : si l'orchestrateur est arrêté trois jours, il lancera au redémarrage les trois exécutions manquantes, chacune avec sa propre date. C'est la combinaison du paramétrage par la date et de l'idempotence qui rend cela sûr.</p>
+
+    <h2 id="temps">9. Le temps, cette source de bugs</h2>
+    <p>Le sujet paraît trivial. Il est responsable d'une proportion remarquable des incidents en production, et il faut trois règles pour s'en prémunir.</p>
+
+    <div class="step-block">
+      <h4>Règle 1 — tout stocker en UTC</h4>
+      <p>Un instant absolu et sa représentation locale sont deux choses différentes. On stocke l'instant en UTC, on convertit à l'affichage seulement. Le passage à l'heure d'été suffit à montrer pourquoi : en France, le dernier dimanche d'octobre, 2 h 30 du matin existe <em>deux fois</em>. Une date locale, seule, est ambiguë ; l'UTC ne l'est jamais.</p>
+    </div>
+
+    <div class="code-label">python — manipuler des instants sans se tromper</div>
+    <div class="code-block"><pre>from datetime import datetime, timezone
+from zoneinfo import ZoneInfo          # standard depuis Python 3.9
+
+# ✗ naïf : aucun fuseau attaché, on ne sait pas ce que ça représente
+mauvais = datetime(2026, 10, 25, 2, 30)
+
+# ✓ conscient du fuseau
+paris = ZoneInfo("Europe/Paris")
+t = datetime(2026, 10, 25, 2, 30, tzinfo=paris)
+print(t.astimezone(timezone.utc))      # 2026-10-25 00:30:00+00:00
+print(t.utcoffset())                   # 2:00:00 — mais 2 h 30 existe 2 fois !
+
+# la règle sûre : raisonner en UTC, convertir à l'affichage
+maintenant = datetime.now(timezone.utc)
+print(maintenant.astimezone(paris).strftime("%d/%m/%Y %H:%M"))</pre></div>
+
+    <div class="step-block">
+      <h4>Règle 2 — distinguer trois dates</h4>
+      <ul>
+        <li><strong>Temps d'événement</strong> — quand la chose s'est produite (l'annonce a été publiée).</li>
+        <li><strong>Temps d'ingestion</strong> — quand la donnée est entrée dans le système.</li>
+        <li><strong>Temps de traitement</strong> — quand le calcul a eu lieu.</li>
+      </ul>
+      <p>Les trois diffèrent, parfois de plusieurs jours. Une analyse métier se fait sur le temps d'événement ; une surveillance de pipeline sur le temps d'ingestion. Conserver les trois colonnes coûte quelques octets et évite des discussions sans fin.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Règle 3 — se méfier des données en retard</h4>
+      <p>Le tableau de bord du lundi affiche les chiffres de dimanche. Le mercredi, ces mêmes chiffres ont augmenté : des événements de dimanche sont arrivés avec deux jours de retard. Rien n'est cassé — c'est la nature des données distribuées. Il faut le décider explicitement : ou bien on fige à J+3 (et on l'écrit), ou bien on recalcule sur une fenêtre glissante (et on assume que l'historique bouge).</p>
+    </div>
+
+    <h2 id="flux">10. Par lots ou en flux : Kafka et les fenêtres</h2>
+
+    <h3>Le problème</h3>
+    <p>Traiter par lots signifie attendre. Un pipeline quotidien donne une réponse avec vingt-quatre heures de retard, ce qui convient parfaitement à un tableau de bord commercial et pas du tout à la détection d'une fraude sur une carte bancaire. Le traitement en flux traite chaque événement à mesure qu'il arrive.</p>
+
+    <h3>L'intuition : le journal</h3>
+    <p>La bonne image pour comprendre Kafka n'est ni une file d'attente ni une base : c'est un <strong>journal</strong>, au sens d'un registre où l'on écrit à la suite sans jamais raturer. Les producteurs ajoutent des lignes à la fin. Les consommateurs lisent en avançant à leur rythme, chacun mémorisant simplement la ligne où il en est. Rien n'est effacé à la lecture, et un nouveau consommateur peut revenir au début.</p>
+
+    <div class="code-label">le journal partitionné</div>
+    <div class="code-block"><pre>Sujet « annonces », 3 partitions
+
+partition 0 : [e0][e1][e2][e3][e4][e5]───►  écriture toujours à la fin
+                          ▲         ▲
+                   groupe A│  groupe B│     chacun avance à son rythme
+                   (offset 3)  (offset 5)
+
+partition 1 : [e0][e1][e2]───►
+partition 2 : [e0][e1][e2][e3]───►
+
+· l'ordre n'est garanti QUE dans une partition
+· la clé de l'événement décide de sa partition : tous les événements
+  d'une même annonce tombent dans la même partition, donc restent ordonnés
+· la rétention est une durée (7 jours) ou une taille, pas « jusqu'à lecture »</pre></div>
+
+    <p>Cette rétention change tout par rapport à une file classique : on peut <strong>rejouer</strong>. Un bug dans le consommateur ? On corrige, on remet le curseur trois jours en arrière, on relit. C'est le même principe que la conservation de la donnée brute vue plus haut, appliqué aux événements.</p>
+
+    <div class="code-label">python — produire et consommer</div>
+    <div class="code-block"><pre>from kafka import KafkaProducer, KafkaConsumer
+import json
+
+prod = KafkaProducer(
+    bootstrap_servers="localhost:9092",
+    value_serializer=lambda v: json.dumps(v).encode(),
+    key_serializer=lambda k: k.encode(),
+)
+# la clé fixe la partition → ordre garanti par annonce
+prod.send("annonces", key="a-4821",
+          value={"id": "a-4821", "prix": 320000, "ts": "2026-01-12T09:00:00Z"})
+prod.flush()
+
+conso = KafkaConsumer(
+    "annonces",
+    bootstrap_servers="localhost:9092",
+    group_id="indexeur",              # le groupe porte la position de lecture
+    enable_auto_commit=False,         # on valide APRÈS traitement
+    value_deserializer=lambda b: json.loads(b),
+)
+for msg in conso:
+    traiter(msg.value)                # si ça échoue, on ne valide pas
+    conso.commit()                    # → le message sera relu au redémarrage</pre></div>
+
+    <h3>Fenêtres : agréger un flux qui n'a pas de fin</h3>
+    <p>Sur un flux infini, <code>GROUP BY</code> n'a pas de sens : on ne peut pas attendre la fin. On agrège donc sur des <strong>fenêtres</strong> de temps.</p>
+
+    <div class="code-label">trois découpages, trois usages</div>
+    <div class="code-block"><pre>FIXE (tumbling) — se suivent, ne se recouvrent pas
+  |--- 10:00-10:05 ---|--- 10:05-10:10 ---|--- 10:10-10:15 ---|
+  usage : « nombre d'annonces publiées par tranche de 5 minutes »
+
+GLISSANTE (sliding) — se recouvrent
+  |--- 10:00-10:05 ---|
+       |--- 10:01-10:06 ---|
+            |--- 10:02-10:07 ---|
+  usage : « moyenne sur les 5 dernières minutes, rafraîchie chaque minute »
+
+DE SESSION — délimitée par une période d'inactivité
+  [clic clic clic] ....30 min de silence.... [clic clic]
+  └─ session 1 ─┘                            └─ sess. 2 ┘
+  usage : « durée d'une visite », sans durée fixée a priori</pre></div>
+
+    <div class="step-block">
+      <h4>Les trois sémantiques de livraison</h4>
+      <p>Une question qui revient en entretien, et surtout en incident :</p>
+      <ul>
+        <li><strong>Au plus une fois</strong> — on valide la position avant de traiter. Un plantage perd le message. Acceptable pour des métriques d'usage.</li>
+        <li><strong>Au moins une fois</strong> — on valide après traitement. Un plantage entre les deux provoque un doublon. C'est le réglage par défaut, et le bon.</li>
+        <li><strong>Exactement une fois</strong> — coûteux et fragile à obtenir strictement. En pratique, on prend « au moins une fois » et on rend le traitement <strong>idempotent</strong> — exactement la propriété de la section 8. Le doublon devient inoffensif.</li>
+      </ul>
+    </div>
+
+    <div class="warning-block">
+      <strong>Le flux n'est pas un objectif en soi.</strong> Il ajoute une infrastructure permanente, une surveillance, et des raisonnements délicats sur les événements en retard. La question à se poser est : <em>combien vaut une minute de fraîcheur ?</em> Pour un tableau de bord relu le matin, rien. Pour une détection de fraude, beaucoup. Un traitement par lots toutes les quinze minutes couvre une majorité de besoins « temps réel » exprimés, pour une fraction du coût.
+    </div>
+
+    <h2 id="qualite">11. Qualité : contrats de données et observabilité</h2>
+
+    <h3>Le problème</h3>
+    <p>Un pipeline qui échoue bruyamment est un bon pipeline : on le voit, on le répare. Le vrai danger est le pipeline qui <em>réussit</em> avec des données fausses. Une source change silencieusement le prix d'euros en centimes ; tout s'exécute sans erreur ; le modèle s'entraîne sur des valeurs multipliées par cent et personne ne s'en aperçoit avant trois semaines.</p>
+
+    <h3>Le contrat de données</h3>
+    <p>La réponse est de déclarer explicitement ce qu'on attend, et de faire échouer l'ingestion quand la réalité s'en écarte. C'est exactement l'idée de Pydantic (module 6), transposée à des tables entières.</p>
+
+    <div class="code-label">python — un contrat vérifié à l'entrée</div>
+    <div class="code-block"><pre>import pandera.polars as pa
+import polars as pl
+
+class Annonce(pa.DataFrameModel):
+    id: str            = pa.Field(unique=True)
+    ville: str         = pa.Field(isin=["Lyon", "Nantes", "Lille", "Rennes"])
+    prix: int          = pa.Field(gt=10_000, lt=5_000_000)
+    surface: float     = pa.Field(gt=5, lt=1_000)
+    publiee_le: pl.Datetime
+
+    class Config:
+        strict = "filter"     # une colonne inconnue est écartée, pas ignorée
+
+    @pa.check("prix")
+    def prix_au_m2_plausible(cls, data) -> bool:
+        """Une règle métier que le typage ne peut pas exprimer."""
+        return True   # calcul réel : prix / surface entre 500 et 20 000
+
+df = pl.read_parquet("brut/annonces.parquet")
+propre = Annonce.validate(df, lazy=True)   # lazy : TOUTES les erreurs d'un coup</pre></div>
+
+    <p>Le point important est <em>où</em> placer cette barrière : <strong>à la frontière</strong>, au moment où la donnée entre dans le système. Valider en sortie, c'est découvrir le problème après l'avoir propagé partout.</p>
+
+    <div class="step-block">
+      <h4>Les six vérifications qui attrapent presque tout</h4>
+      <ol>
+        <li><strong>Fraîcheur</strong> — la table a-t-elle été mise à jour depuis moins de N heures ? Détecte un pipeline arrêté.</li>
+        <li><strong>Volume</strong> — le nombre de lignes du jour est-il dans la plage habituelle ? Détecte une extraction partielle. Un fichier deux fois trop petit est plus fréquent qu'un fichier absent.</li>
+        <li><strong>Schéma</strong> — les colonnes et leurs types sont-ils ceux attendus ?</li>
+        <li><strong>Unicité</strong> — la clé primaire est-elle réellement unique ? Détecte une double ingestion.</li>
+        <li><strong>Valeurs manquantes</strong> — le taux de <code>NULL</code> par colonne a-t-il bougé ?</li>
+        <li><strong>Distribution</strong> — la moyenne et les quantiles sont-ils comparables à hier ? C'est la détection de dérive du module 25, appliquée aux données brutes.</li>
+      </ol>
+    </div>
+
+    <div class="warning-block">
+      <strong>Le piège du seuil.</strong> Une alerte qui se déclenche tous les jours n'est plus une alerte : elle est ignorée en une semaine. Mieux vaut trois vérifications fiables et bloquantes que trente alertes floues. Distinguez ce qui doit <em>arrêter</em> le pipeline (schéma cassé, clé dupliquée) de ce qui doit seulement <em>prévenir</em> (volume inhabituel).
+    </div>
+
+    <h2 id="archi">12. Quelle architecture pour quelle taille</h2>
+
+    <h3>Le <em>feature store</em>, en deux mots</h3>
+    <p>Un problème très concret survient quand un modèle passe en production. La variable « nombre d'annonces publiées par ce vendeur les 30 derniers jours » est calculée en SQL sur l'entrepôt pour l'entraînement, et réécrite en Python dans l'API pour la prédiction. Deux implémentations de la même idée : elles finissent toujours par diverger — l'une exclut le jour courant, l'autre non. Le modèle reçoit alors en production des valeurs qui ne ressemblent pas à celles vues à l'entraînement, et se dégrade sans qu'aucune alerte ne se déclenche. C'est le <strong>décalage entraînement/service</strong>.</p>
+    <p>Un <em>feature store</em> (Feast, Tecton) résout cela en imposant <strong>une seule définition</strong>, servie de deux façons : en lot pour construire le jeu d'entraînement — en respectant la date, donc sans fuite —, et à la milliseconde pour l'API. Utile à partir de plusieurs modèles partageant des variables ; superflu avant, où une fonction Python unique appelée des deux côtés suffit.</p>
+
+    <h3>Lakehouse : le compromis actuel</h3>
+    <p>Le lac de données (des fichiers, souple, pas cher) et l'entrepôt (structuré, transactionnel, cher) ont longtemps coexisté, avec des copies dans les deux sens. Les formats de table ouverts — Delta Lake, Apache Iceberg, Apache Hudi — apportent aux fichiers Parquet ce qui leur manquait : des transactions, l'évolution de schéma, et surtout le <em>voyage dans le temps</em>, c'est-à-dire la possibilité d'interroger la table telle qu'elle était il y a deux semaines. Pour la reproductibilité d'un entraînement (module 25), c'est décisif : « ce modèle a été entraîné sur la version 47 de cette table » devient une phrase vérifiable.</p>
+
+    <div class="code-label">choisir selon l'échelle, pas selon la mode</div>
+    <div class="code-block"><pre>&lt; 10 Go, une personne
+  fichiers Parquet + DuckDB + scripts Python planifiés par cron
+  → n'ajoutez rien d'autre. Cela tient sur un portable et suffit longtemps.
+
+10 Go – 1 To, petite équipe
+  stockage objet (S3) partitionné + DuckDB ou PostgreSQL
+  + dbt + un orchestrateur léger (Dagster, Prefect)
+
+1 To – 100 To, plusieurs équipes
+  entrepôt distribué (BigQuery, Snowflake, ClickHouse)
+  + format de table ouvert (Iceberg, Delta) + dbt + Airflow
+  + contrats de données à la frontière
+
+&gt; 100 To, ou besoin de latence inférieure à la minute
+  ajouter Kafka et un moteur de flux (Flink, Spark Structured Streaming)
+  ─ et seulement alors.</pre></div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir</h4>
+      <ul>
+        <li><strong>Parquet par défaut</strong> pour tout fichier relu par un programme ; Arrow est son pendant en mémoire, et permet aux outils de s'échanger des tables sans copie.</li>
+        <li><strong>Partitionner sur la date</strong>, viser des fichiers de 100 Mo à 1 Go, éviter les myriades de petits fichiers.</li>
+        <li><strong>Conserver le brut</strong> : c'est la seule chose qui rende un bug de transformation réparable.</li>
+        <li><strong>Idempotence et paramétrage par la date</strong> : les deux propriétés qui rendent un pipeline rejouable — et qui, au passage, règlent le problème des doublons en flux.</li>
+        <li><strong>Tout stocker en UTC</strong>, distinguer temps d'événement et temps d'ingestion.</li>
+        <li><strong>Valider à la frontière</strong>, avec peu de règles mais bloquantes.</li>
+        <li><strong>Choisir l'outil le plus simple qui tienne</strong> : la complexité d'une architecture se paie tous les jours, en exploitation.</li>
+      </ul>
+    </div>
+
+    <p>La suite du cours quitte la plomberie pour les mathématiques : le module 8 reprend l'optimisation et l'algèbre linéaire dont tout le machine learning découle. On retrouvera l'ingénierie des données au module 27, où le projet de bout en bout construit un pipeline complet — scraping, validation, base PostgreSQL, ingestion idempotente — en appliquant chacune des règles ci-dessus.</p>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
     <a href="project7-m06.html" class="btn btn-secondary">← Module 6 : FastAPI et Pydantic</a>
-    <a href="project7-m08.html" class="btn btn-primary">Module 8 : Statistique inférentielle →</a>
+    <a href="project7-m08.html" class="btn btn-primary">Module 8 : Mathématiques du ML →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Optimisation</span><span class="tag">Adam</span><span class="tag">Algèbre linéaire</span><span class="tag">SVD</span><span class="tag">PCA</span><span class="tag">Métriques</span></div>
+  <div class="project-meta"><span class="tag">Parquet</span><span class="tag">Arrow</span><span class="tag">dbt</span><span class="tag">Airflow</span><span class="tag">Kafka</span><span class="tag">Schéma en étoile</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -466,7 +732,7 @@ print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></di
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 7</div>
-    <h1>Math for ML: optimisation, linear algebra, SVD and PCA</h1>
+    <h1>Data engineering: formats, pipelines and streams</h1>
   </div>
 
   <div class="project-content course-content">
@@ -476,13 +742,18 @@ print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></di
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Learning as regularised empirical risk minimisation, and what the choice of loss actually encodes.</li>
-      <li>Gradient descent: step size and convergence bounds, why the condition number governs speed, and why that makes standardisation mandatory.</li>
-      <li>SGD, momentum and Nesterov, adaptive methods (AdaGrad, RMSProp, Adam, AdamW with decoupled weight decay), schedulers, warmup and gradient clipping.</li>
-      <li>Numerical linear algebra: never invert a matrix — LU, Cholesky, QR, and why the normal equations square the condition number.</li>
-      <li>SVD in depth: geometric reading, rank and pseudo-inverse, the Eckart–Young low-rank theorem, randomized SVD, image compression, and ridge regression as spectral filtering.</li>
-      <li>PCA in depth: the two equivalent formulations (maximum variance, minimum reconstruction error), its equivalence with the SVD of centred data, scaling, how many components to keep, interpretation of loadings, limitations and variants, and the leakage trap.</li>
-      <li>Evaluation metrics: regression (RMSE vs MAE and what they each target), classification (precision/recall, ROC-AUC vs PR-AUC under imbalance), log-loss and calibration.</li>
+      <li>Why the model is the small box: collection, validation, transformation and storage dominate the real effort in a production ML system.</li>
+      <li>Row versus column storage explained from first principles, with a diagram: why Parquet is 5–10× smaller and 30× faster to read one column, block statistics and predicate pruning, and the Parquet-versus-Arrow distinction (disk format versus in-memory format, and zero-copy exchange between tools).</li>
+      <li>Partitioning a data lake: directory layout, partition pruning, choosing the key, and the small-files problem.</li>
+      <li>Parsing messy input: flattening nested JSON, exploding list columns, and a practical regular-expression primer (the symbols that matter, named capture groups, and the catastrophic-backtracking trap).</li>
+      <li>ETL versus ELT: why the order flipped once storage got cheap, and the bronze/silver/gold layering rule.</li>
+      <li>Dimensional modelling: star schemas explained against normalisation, a worked SQL query, date dimensions, and slowly changing dimensions (types 1, 2 and 3) framed as the same trap as data leakage.</li>
+      <li>dbt: SQL as versioned, tested, documented software — <code>ref()</code> and the dependency graph, incremental models, schema tests, and the everyday command set.</li>
+      <li>Orchestration: DAGs, idempotence (three concrete patterns), date-parameterised runs and backfills, with a commented Airflow DAG.</li>
+      <li>Time as a bug source: store everything in UTC, the daylight-saving ambiguity, event time versus ingestion time versus processing time, and late-arriving data.</li>
+      <li>Batch versus streaming: Kafka as an append-only log (partitions, offsets, replay), tumbling, sliding and session windows, the three delivery semantics, and why idempotence replaces exactly-once in practice.</li>
+      <li>Data quality: data contracts with pandera, validating at the boundary, the six checks that catch almost everything, and alert fatigue.</li>
+      <li>Feature stores and training/serving skew, open table formats (Delta, Iceberg) and time travel, and an architecture-by-scale table from 10 GB to 100 TB.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -493,26 +764,27 @@ print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></di
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><strong>Math for ML: optimisation, linear algebra, SVD and PCA</strong></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><strong>Data engineering: formats, pipelines and streams</strong></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 25 - Équité, robustesse, confidentialité et sécurité - Nils Malmberg</title>
+  <title>Module 25 - MLOps : industrialiser un modèle - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,173 +41,252 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 25</div>
-    <h1>Équité, robustesse, confidentialité et sécurité</h1>
+    <h1>MLOps : industrialiser un modèle</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Un modèle qui décide engage une responsabilité : il peut désavantager systématiquement un groupe, se faire tromper par une entrée manipulée, ou laisser fuiter les données sur lesquelles il a été entraîné. Ces risques ne sont pas des questions de conformité à traiter à la fin : ils se traitent dans la conception, et ils ont chacun des méthodes et des métriques précises.</p>
+    <p>Un modèle en production n'est pas un artefact figé : c'est un système vivant, dont les entrées dérivent, dont les performances se dégradent en silence, et qui doit rester reproductible et réversible. Ce module traite de tout ce qui commence après le notebook — et qui détermine si le projet produit de la valeur ou de la dette.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#biais">D'où viennent les biais</a></li>
-        <li><a href="#equite">Définir l'équité — et leur incompatibilité</a></li>
-        <li><a href="#mesurer">Mesurer et atténuer</a></li>
-        <li><a href="#robustesse">Robustesse et attaques par évasion</a></li>
-        <li><a href="#chaine">Empoisonnement et chaîne d'approvisionnement</a></li>
-        <li><a href="#confidentialite">Confidentialité et fuite de données</a></li>
-        <li><a href="#dp">Confidentialité différentielle et fédéré</a></li>
-        <li><a href="#llm">Risques propres aux LLM</a></li>
-        <li><a href="#checklist">Cadre réglementaire et checklist</a></li>
+        <li><a href="#dette">La dette technique du ML</a></li>
+        <li><a href="#repro">Reproductibilité</a></li>
+        <li><a href="#versioning">Versionner code, données et modèles</a></li>
+        <li><a href="#tracking">Tracking d'expériences</a></li>
+        <li><a href="#serving">Packaging et servage</a></li>
+        <li><a href="#tests">Tester un système de ML</a></li>
+        <li><a href="#deploiement">Déploiement progressif</a></li>
+        <li><a href="#monitoring">Monitoring et dérive</a></li>
+        <li><a href="#orchestration">Orchestration et ré-entraînement</a></li>
+        <li><a href="#gouvernance">Gouvernance et checklist</a></li>
       </ol>
     </div>
 
-    <h2 id="biais">1. D'où viennent les biais</h2>
-    <p>Un modèle appris reproduit les régularités de ses données d'entraînement — y compris celles qui traduisent des inégalités passées. Les sources, à distinguer parce qu'elles n'appellent pas les mêmes remèdes :</p>
+    <h2 id="dette">1. La dette technique du ML</h2>
+    <p>L'article de Sculley et al. (Google, 2015), <em>Hidden Technical Debt in Machine Learning Systems</em>, reste la meilleure entrée en matière. Son constat, resté célèbre par son schéma : le code du modèle occupe une petite boîte au milieu d'un ensemble bien plus vaste — collecte, vérification des données, infrastructure de servage, gestion de configuration, outillage d'analyse, monitoring, gestion des ressources. Tout ce qui entoure le modèle le dépasse largement en volume comme en coût de maintenance.</p>
 
-    <div class="code-label">taxonomie des biais</div>
-    <div class="code-block"><pre>Biais historique        les données reflètent FIDÈLEMENT un monde inéquitable.
-                        Un modèle statistiquement "correct" perpétue la situation.
-                        Aucune technique statistique ne le corrige : c'est une
-                        décision de conception, donc politique.
-Biais d'échantillonnage certains groupes sont sous-représentés → variance élevée
-                        et performance dégradée POUR EUX (module 12)
-Biais de mesure         la variable cible est un PROXY imparfait : "a été arrêté"
-                        pour "a commis une infraction", "a été promu" pour "était
-                        compétent". Le proxy porte le biais du processus qui l'a produit.
-Biais d'agrégation      un modèle unique pour des sous-populations aux relations
-                        différentes : il devient optimal pour le groupe majoritaire
-                        et médiocre pour les autres.
-Biais de déploiement    le modèle est utilisé dans un contexte différent de celui
-                        pour lequel il a été validé.</pre></div>
+    <p>Deux formes de dette sont propres au ML.</p>
+    <p>Les <strong>frontières floues</strong> d'abord. En génie logiciel classique, une interface bien définie isole un module : on peut le modifier sans toucher au reste. Un modèle, lui, crée des dépendances non déclarées entre <em>toutes</em> ses entrées : modifier une source de données change son comportement sans qu'aucune interface ne le signale. Les auteurs résument cela par l'acronyme <em>CACE</em> — <em>Changing Anything Changes Everything</em>. Ajouter une variable modifie les poids de toutes les autres ; retirer une catégorie déplace toutes les frontières de décision.</p>
+    <p>Les <strong>boucles de rétroaction</strong> ensuite : un modèle de recommandation influence ce que les utilisateurs voient, donc ce qu'ils cliquent, donc les données de son prochain entraînement (modules 22 et 23). Le système apprend alors de ses propres sorties, et toute dérive devient auto-entretenue.</p>
+
+    <h2 id="repro">2. Reproductibilité</h2>
+    <p>Reproductible signifie : à partir du dépôt, on peut régénérer <em>exactement</em> le même modèle. Cela demande de figer quatre choses, et il suffit d'en oublier une pour perdre la propriété.</p>
+    <div class="code-label">les quatre niveaux</div>
+    <div class="code-block"><pre>Code           un commit Git PRÉCIS (et non "la branche main", qui bouge)
+Environnement  uv.lock + image Docker taguée par DIGEST (modules 1 et 5)
+               — un tag comme :latest ne fige rien
+Données        version ou empreinte du jeu utilisé (hash, snapshot, requête figée
+               avec sa date). "la table clients" n'est pas une version.
+Aléa           graines fixées : Python, NumPy, framework, ET ordre de chargement
+               (un DataLoader mélange aussi)</pre></div>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import os, random, numpy as np, torch
+
+def figer_alea(seed: int = 42) -&gt; None:
+    os.environ["PYTHONHASHSEED"] = str(seed)      # hachage des chaînes, lu au démarrage
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True     # au prix d'un peu de vitesse
+    torch.backends.cudnn.benchmark = False        # sinon cuDNN choisit l'algo le plus
+                                                  # rapide, qui varie d'une exécution
+                                                  # à l'autre — et change les résultats</pre></div>
+
+    <p>Le déterminisme complet sur GPU reste hors d'atteinte pour certaines opérations : les réductions atomiques additionnent les contributions dans un ordre qui dépend de l'ordonnancement des threads, et l'addition flottante n'est pas associative. L'objectif réaliste est donc un modèle <em>équivalent</em> aux fluctuations numériques près, et surtout une traçabilité complète : à partir d'une prédiction, pouvoir remonter au modèle, à son entraînement, à ses données et à son code.</p>
+
+    <h2 id="versioning">3. Versionner code, données et modèles</h2>
+    <p>Git gère le code, mais pas des fichiers de plusieurs gigaoctets (module 1). <strong>DVC</strong> résout cela élégamment : le fichier de données part sur un stockage distant (S3, disque réseau, NAS) et Git ne conserve qu'un petit fichier texte contenant son empreinte et son emplacement.</p>
+
+    <div class="code-label">bash — le principe en quatre commandes</div>
+    <div class="code-block"><pre>dvc add data/raw/transactions.parquet   # crée transactions.parquet.dvc (quelques lignes)
+git add data/raw/transactions.parquet.dvc .gitignore   # Git suit le POINTEUR
+dvc remote add -d stockage s3://mon-bucket/dvc
+dvc push                                # envoie les DONNÉES sur le stockage distant
+
+# six mois plus tard, pour retrouver un état exact :
+git checkout v1.2 &amp;&amp; dvc checkout       # le code ET les données correspondantes</pre></div>
+
+    <p>Pour les <strong>modèles</strong>, un <em>registry</em> (MLflow Model Registry, ou un simple bucket versionné avec convention de nommage) associe à chaque version : l'artefact, ses métriques de validation, le commit qui l'a produit, les données utilisées et un état (<em>staging</em>, <em>production</em>, <em>archivé</em>). C'est ce qui rend un retour arrière possible en quelques minutes — la capacité opérationnelle la plus précieuse quand un déploiement se passe mal.</p>
+
+    <h2 id="tracking">4. Tracking d'expériences</h2>
+    <p>Après deux semaines d'itérations, personne ne se souvient de la configuration qui a produit le meilleur score. Le pire scénario — un excellent résultat qu'on ne sait plus reproduire — disparaît pour quelques lignes de code.</p>
+
+    <div class="code-label">Python — MLflow</div>
+    <div class="code-block"><pre>import mlflow
+
+mlflow.set_experiment("prevision-prix")
+
+with mlflow.start_run(run_name="gbm-features-v3"):
+    # ── ce qui DÉFINIT l'expérience ──
+    mlflow.log_params({"max_depth": 6, "learning_rate": 0.05,
+                       "n_features": X.shape[1], "n_train": len(X_train)})
+    mlflow.log_param("git_sha", sha_courant())          # le code exact
+    mlflow.log_param("data_version", "dvc:8f3a91c")     # les données exactes
+
+    modele.fit(X_train, y_train)
+
+    # ── ce qu'on en retient ──
+    mlflow.log_metrics({"rmse_cv": rmse_cv, "rmse_test": rmse_test, "mae_test": mae_test})
+    mlflow.log_metric("duree_entrainement_s", duree)
+    mlflow.log_artifact("figures/residus.png")          # l'analyse d'erreurs
+    mlflow.sklearn.log_model(modele, "modele", registered_model_name="prix-immo")</pre></div>
+
+    <p>Ce qu'il faut consigner systématiquement : hyperparamètres, <em>version du code et des données</em>, métriques de validation <em>et</em> de test, durée et coût d'entraînement, et les quelques graphiques d'analyse d'erreurs. L'outil importe peu — <strong>MLflow</strong> en auto-hébergé, <strong>Weights &amp; Biases</strong> en service — mais commencer dès le premier jour est essentiel : le tracking est impossible à reconstituer rétroactivement.</p>
+
+    <h2 id="serving">5. Packaging et servage</h2>
+    <div class="code-label">modes de servage</div>
+    <div class="code-block"><pre>Batch      scoring périodique, résultats écrits en base. Le plus simple, le plus
+           robuste, et SUFFISANT dans une large majorité des cas : personne n'a
+           besoin d'un score de churn à la milliseconde.
+Online     API synchrone (module 6). Contrainte de latence, mise à l'échelle,
+           disponibilité. À ne choisir que si la fraîcheur l'exige vraiment.
+Streaming  scoring sur flux (Kafka), pour la détection de fraude en temps réel.
+Embarqué   ONNX, TFLite, CoreML : inférence sur l'appareil, sans réseau.</pre></div>
+
+    <p>Quelques points techniques qui font gagner du temps. <strong>ONNX</strong> est un format d'échange neutre : on exporte le modèle une fois, on l'exécute partout (C++, Java, navigateur) sans dépendre de Python — utile à la fois pour la performance et pour la longévité, un modèle exporté restant lisible quand la version de scikit-learn qui l'a produit aura disparu. La <strong>quantification</strong> (module 21) divise taille et latence. Le <strong>cache</strong> de prédictions est trivial et souvent très rentable quand les mêmes entrées reviennent. Et toute réponse doit porter la <strong>version du modèle</strong> qui l'a produite.</p>
 
     <div class="warning-block">
-      <strong>Supprimer la variable sensible ne suffit pas.</strong> C'est l'erreur la plus répandue, et elle est doublement nuisible. D'abord parce qu'elle ne marche pas : le code postal, le nom, l'établissement scolaire, l'historique d'achat ou l'heure de connexion sont des <em>variables corrélées</em> qui reconstruisent l'information supprimée — un modèle sans la variable « genre » peut parfaitement discriminer selon le genre. Ensuite parce que ne pas collecter l'attribut rend l'inégalité <strong>impossible à mesurer</strong>, donc à corriger. La bonne pratique est de collecter l'attribut sensible pour l'<em>audit</em>, tout en l'excluant des variables explicatives — ce que le RGPD autorise dans ce cadre précis.
+      <strong>Le décalage entraînement/servage.</strong> C'est le bug le plus fréquent et le plus coûteux en production : le prétraitement appliqué à l'inférence diffère légèrement de celui de l'entraînement — une moyenne recalculée sur d'autres données, une catégorie inconnue traitée autrement, un fuseau horaire, un arrondi. Le modèle reçoit alors des entrées qu'il n'a jamais vues sous cette forme, et se dégrade sans qu'aucune alerte ne se déclenche. La parade : sérialiser le <em>pipeline complet</em> (module 3), jamais l'estimateur seul, et tester l'égalité des prédictions entre le code d'entraînement et le service sur un échantillon de référence — c'est un test automatisé à part entière.
     </div>
 
-    <h2 id="equite">2. Définir l'équité — et leur incompatibilité</h2>
-    <p>« Équitable » n'a pas de définition unique, et c'est le cœur du problème. Les trois familles les plus utilisées, pour un attribut sensible \(A\), une prédiction \(\hat Y\) et une vérité \(Y\) :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \text{Parité démographique : } \mathbb{P}(\hat Y=1\mid A=a) \text{ identique pour tout } a \]</div>
-    <div style="text-align:center;overflow-x:auto">\[ \text{Égalité des chances : } \mathbb{P}(\hat Y=1\mid Y=1, A=a) \text{ identique pour tout } a \]</div>
-    <div style="text-align:center;overflow-x:auto">\[ \text{Calibration par groupe : } \mathbb{P}(Y=1\mid \hat p = p, A=a) = p \text{ pour tout } a \]</div>
-
-    <div class="code-label">ce que chacune exige, en français</div>
-    <div class="code-block"><pre>Parité démographique    "on sélectionne la même PROPORTION dans chaque groupe"
-                        → ignore les différences réelles de qualification
-Égalité des chances     "parmi les gens QUALIFIÉS, on en retient la même proportion
-                        dans chaque groupe" → personne de méritant n'est désavantagé
-Calibration par groupe  "un score de 0,7 signifie 70 % de chances, quel que soit
-                        le groupe" → le score veut dire la même chose pour tous</pre></div>
-
-    <div class="step-block">
-      <h4>Le théorème d'impossibilité</h4>
-      <p>Résultat démontré (Kleinberg-Mullainathan-Raghavan, Chouldechova, 2016) : si les taux de base diffèrent réellement entre groupes, <strong>calibration par groupe et égalité des taux d'erreur ne peuvent pas être satisfaites simultanément</strong>, sauf en cas de prédiction parfaite. Ce n'est pas une limite technique qu'un meilleur algorithme lèverait : c'est une incompatibilité mathématique, qui se démontre en quelques lignes à partir des définitions.</p>
-      <p>La conséquence est importante et souvent mal reçue : il faut <em>choisir</em> quelle notion d'équité s'applique, et ce choix est un arbitrage politique et métier — pas une décision technique qu'un data scientist prendrait seul dans son coin. C'est exactement le débat qui a entouré l'affaire COMPAS, où l'éditeur invoquait la calibration et les critiques l'égalité des taux de faux positifs : les deux camps avaient raison, sur des définitions différentes, et aucune reformulation technique ne pouvait les réconcilier.</p>
-    </div>
-
-    <h2 id="mesurer">3. Mesurer et atténuer</h2>
-    <p>La première étape est toujours la même, et elle suffit souvent à découvrir un problème : <strong>ventiler toutes les métriques par sous-groupe</strong>. Une performance globale excellente masque régulièrement un groupe pour lequel le modèle est inutilisable.</p>
-
-    <div class="code-label">Python — fairlearn</div>
-    <div class="code-block"><pre>from fairlearn.metrics import (MetricFrame, demographic_parity_difference,
-                               equalized_odds_difference, selection_rate)
-from sklearn.metrics import recall_score, precision_score, accuracy_score
-
-mf = MetricFrame(
-    metrics={"accuracy": accuracy_score, "rappel": recall_score,
-             "précision": precision_score, "taux_selection": selection_rate},
-    y_true=y_test, y_pred=y_pred, sensitive_features=A_test,
-)
-print(mf.by_group)                 # LE tableau à regarder en premier
-print(mf.difference(method="between_groups"))   # l'écart max entre groupes
-
-print(demographic_parity_difference(y_test, y_pred, sensitive_features=A_test))
-print(equalized_odds_difference(y_test, y_pred, sensitive_features=A_test))
-
-# et pour les sous-groupes CROISÉS, souvent les plus mal servis :
-A_croise = A_test.astype(str) + "_" + age_groupe.astype(str)
-print(MetricFrame(metrics=recall_score, y_true=y_test, y_pred=y_pred,
-                  sensitive_features=A_croise).by_group)</pre></div>
-
-    <p>Les leviers d'atténuation se classent par moment d'intervention : <strong>en amont</strong> (rééquilibrer l'échantillon, corriger les étiquettes, retirer des variables trop corrélées à l'attribut sensible), <strong>pendant</strong> (contrainte d'équité dans l'optimisation, réduction lagrangienne, apprentissage adversarial où un discriminateur tente de retrouver l'attribut à partir des représentations), <strong>en aval</strong> (seuils différenciés par groupe — techniquement très efficace, mais juridiquement délicat, car c'est une différence de traitement explicite).</p>
-    <p>Deux limites à garder en tête : ces méthodes supposent l'attribut sensible <em>observé</em>, ce qui est rarement le cas ; et corriger selon un attribut peut dégrader l'équité selon un autre, ou selon leur intersection — un modèle équitable « par genre » et « par âge » pris séparément peut être très inéquitable pour un sous-groupe croisé, d'où le calcul ci-dessus.</p>
-
-    <h2 id="robustesse">4. Robustesse et attaques par évasion</h2>
-    <p>La robustesse recouvre deux choses distinctes : la résistance à une variation <em>naturelle</em> des données (dérive, changement de capteur, nouveau segment — module 24) et la résistance à une manipulation <em>délibérée</em>.</p>
-    <p>Les <strong>exemples adverses</strong> exploitent une propriété structurelle des modèles à haute dimension : il existe presque toujours une perturbation minuscule \(\delta\), imperceptible pour un humain, telle que la prédiction change complètement. On la trouve par ascension de gradient sur la perte, sous contrainte de norme :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \max_{\|\delta\|_\infty \leq \varepsilon} \; \ell\big(f_\theta(x+\delta),\, y\big) \]</div>
-    <p>L'intuition : la frontière de décision d'un réseau est proche de presque tous les points, parce qu'en dimension élevée le volume se concentre près des surfaces. Il suffit donc d'un petit déplacement dans la bonne direction — celle du gradient — pour la franchir.</p>
-
-    <p>Les défenses : l'<em>entraînement adversarial</em> (inclure ces exemples dans l'entraînement — efficace, mais coûteux et au prix d'un peu de précision nominale), la <em>détection</em> d'entrées anormales, et les méthodes <em>certifiées</em> (lissage aléatoire) qui donnent une garantie prouvée dans un rayon donné, au prix de performances modestes.</p>
-    <p>En contexte industriel, cela dit, la menace prioritaire n'est généralement pas l'attaque adverse au pixel près, mais le <strong>contournement de règles</strong> par des acteurs économiques — fraudeurs, spammeurs, optimiseurs de référencement — qui adaptent leur comportement dès qu'ils comprennent le critère. La parade est organisationnelle autant que technique : réentraîner fréquemment, ne pas publier les variables discriminantes, et privilégier des variables coûteuses à manipuler (un historique long plutôt qu'un champ déclaratif).</p>
-    <p>Enfin, les <strong>tests de stress</strong> sont l'outil le plus rentable : perturber systématiquement les entrées — bruit, valeurs manquantes, unités changées, catégories inconnues, valeurs extrêmes — et vérifier que le modèle se dégrade de façon <em>progressive et détectable</em> plutôt que de basculer silencieusement.</p>
-
-    <h2 id="chaine">5. Empoisonnement et chaîne d'approvisionnement</h2>
+    <h2 id="tests">6. Tester un système de ML</h2>
+    <p>Aux tests logiciels classiques (module 1) s'ajoutent trois familles propres au ML :</p>
     <ul>
-      <li><strong>Empoisonnement des données</strong> — un attaquant injecte des exemples dans le corpus d'entraînement, soit pour dégrader la performance, soit pour installer une <em>porte dérobée</em> : le modèle se comporte normalement sauf en présence d'un déclencheur précis (un motif dans une image, une séquence dans un texte). Le risque est réel dès que les données d'entraînement proviennent d'utilisateurs, du web, ou de contributions externes. Défenses : validation et provenance des données (module 24), détection d'anomalies sur le corpus, entraînement robuste, réentraînement depuis des sources vérifiées.</li>
-      <li><strong>Vol et inversion de modèle</strong> — un accès à l'API permet d'interroger massivement le modèle pour en entraîner une copie (distillation non consentie), ou de reconstruire des informations sur ses données d'entraînement. L'<em>inférence d'appartenance</em> détermine si un individu précis figurait dans le corpus — une fuite de données personnelles à part entière. Limitation du débit, restriction de la granularité des scores renvoyés (arrondir plutôt que donner 15 décimales) et confidentialité différentielle atténuent ces risques.</li>
-      <li><strong>Chaîne d'approvisionnement logicielle</strong> — point concret et sous-estimé : un fichier de poids au format <code>pickle</code> <em>exécute du code arbitraire</em> à son chargement, par construction. Télécharger un modèle depuis un dépôt public revient donc à exécuter du code inconnu avec les droits de son processus. Préférer le format <code>safetensors</code> (qui ne contient que des tenseurs, sans code), vérifier les empreintes, épingler les versions de modèles et de dépendances (module 1), et scanner les images de conteneurs.</li>
+      <li><strong>Tests de données</strong> — schéma, types, bornes, taux de valeurs manquantes, cardinalités, distributions attendues. Des outils comme <em>Great Expectations</em> ou <em>pandera</em> déclarent ces attentes et cassent le pipeline quand elles sont violées. C'est la protection la plus rentable de tout le dispositif : l'immense majorité des incidents de production vient des données, pas du modèle.</li>
+      <li><strong>Tests de modèle</strong> — performance minimale sur un jeu de référence figé, comportements attendus sur des cas connus (tests <em>behavioral</em> : invariance à une reformulation, monotonie « à surface égale, plus de pièces ne baisse pas le prix »), absence de régression par rapport à la version en production, équité entre sous-groupes (module 26).</li>
+      <li><strong>Tests d'intégration</strong> — la chaîne complète, de la donnée brute à la réponse de l'API, sur un mini-jeu versionné dans le dépôt.</li>
     </ul>
 
-    <h2 id="confidentialite">6. Confidentialité et fuite de données</h2>
-    <p>L'anonymisation naïve ne fonctionne pas : la ré-identification par croisement est un résultat classique — quelques attributs quasi-identifiants (code postal, date de naissance, genre) suffisent à isoler une personne dans une population de millions d'individus. Le <em>k-anonymat</em> et ses raffinements (l-diversité, t-proximité) formalisent une protection en exigeant que chaque combinaison d'attributs soit partagée par au moins \(k\) personnes, mais restent vulnérables aux attaques par connaissance auxiliaire.</p>
-    <p>Un modèle entraîné <em>mémorise</em> aussi une partie de ses données : un réseau de grande capacité peut restituer textuellement des séquences rares de son corpus, ce qui a été démontré à plusieurs reprises sur les modèles de langage — numéros de téléphone, clés d'API, extraits de documents. La règle pratique à retenir : <strong>un modèle entraîné sur des données sensibles doit être traité comme une donnée sensible</strong>, avec les mêmes contrôles d'accès.</p>
+    <div class="code-label">Python — un test de données déclaratif</div>
+    <div class="code-block"><pre>import pandera.polars as pa
 
-    <h2 id="dp">7. Confidentialité différentielle et fédéré</h2>
-    <p>La <strong>confidentialité différentielle</strong> est la seule garantie formelle du domaine. Un mécanisme \(M\) est \((\varepsilon,\delta)\)-différentiellement privé si, pour deux jeux de données différant d'un <em>seul individu</em> :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(M(D)\in S\big) \;\leq\; e^{\varepsilon}\,\mathbb{P}\big(M(D')\in S\big) + \delta \]</div>
-    <p>Autrement dit : la présence ou l'absence d'une personne ne change quasiment pas la distribution des résultats, donc <em>rien de spécifique à cette personne</em> ne peut en être déduit — quelle que soit la connaissance annexe de l'attaquant, ce qui est la force du cadre. \(\varepsilon\) quantifie le budget de confidentialité : plus il est petit, plus la protection est forte et plus l'utilité diminue.</p>
-    <p>En apprentissage, <strong>DP-SGD</strong> applique le principe en deux temps : écrêter la norme du gradient de <em>chaque exemple</em> (pour borner l'influence d'un individu), puis ajouter un bruit gaussien calibré. Le coût est réel — perte de précision, entraînement plus lent, sensibilité accrue aux hyperparamètres — mais c'est la seule approche qui offre une garantie démontrable plutôt qu'une bonne intention. Deux propriétés la rendent utilisable : la <em>composition</em> (les budgets s'additionnent sur plusieurs requêtes, ce qui permet de raisonner sur un pipeline entier) et l'<em>immunité au post-traitement</em> (rien de ce qu'on fait ensuite ne dégrade la garantie).</p>
+schema = pa.DataFrameSchema({
+    "prix":        pa.Column(float, pa.Check.in_range(10_000, 5_000_000)),
+    "surface":     pa.Column(float, pa.Check.in_range(8, 1000)),
+    "code_postal": pa.Column(str,   pa.Check.str_matches(r"^\d{5}$")),
+    "n_pieces":    pa.Column(int,   pa.Check.in_range(1, 20), nullable=True),
+})
 
-    <p>L'<strong>apprentissage fédéré</strong> répond à un autre problème : entraîner sans centraliser les données. Chaque participant entraîne localement, seuls les gradients ou les poids sont envoyés et moyennés. Utile en santé, en industrie multi-sites, sur téléphone. Deux nuances importantes : les gradients <em>fuient</em> de l'information sur les données locales — des reconstructions d'images à partir de gradients ont été démontrées —, d'où la nécessité de combiner avec de l'agrégation sécurisée et de la confidentialité différentielle ; et l'hétérogénéité des données entre participants dégrade la convergence, ce qui reste un problème de recherche actif.</p>
+df_valide = schema.validate(df)          # lève une erreur DÉTAILLÉE si le contrat
+                                         # n'est pas respecté — et arrête le pipeline
+                                         # AVANT d'entraîner sur des données corrompues</pre></div>
 
-    <h2 id="llm">8. Risques propres aux LLM</h2>
+    <div class="code-label">CI/CD pour le ML</div>
+    <div class="code-block"><pre>À chaque commit        lint, types, tests unitaires, tests d'intégration rapides
+Sur la branche main    entraînement complet, validation sur jeu figé,
+                       COMPARAISON à la version en production
+Si validation OK       enregistrement dans le registry en "staging"
+Promotion              manuelle ou automatique selon le risque, puis déploiement
+                       progressif (section 7)
+Toujours               possibilité de revenir en arrière en une commande</pre></div>
+
+    <h2 id="deploiement">7. Déploiement progressif</h2>
+    <p>Un modèle validé hors ligne peut échouer en ligne — décalage de prétraitement, latence, distribution réelle différente. On ne bascule donc jamais 100 % du trafic d'un coup.</p>
     <ul>
-      <li><strong>Injection de prompt</strong> (module 20) — le modèle ne distingue pas instructions et données. Le traitement est architectural : privilèges minimaux, validation des sorties, confirmation humaine pour les actions irréversibles.</li>
-      <li><strong>Fuite par le contexte</strong> — tout ce qui est envoyé dans un prompt quitte le périmètre ; et un index RAG mal cloisonné expose à un utilisateur des documents auxquels il n'a pas droit. Les droits d'accès doivent être appliqués <em>au moment de la récupération</em> — en filtrant l'index par les permissions de l'utilisateur — et non espérés du modèle, qui n'a aucun moyen de les faire respecter.</li>
-      <li><strong>Contenus préjudiciables et hallucinations</strong> — filtrage en entrée et en sortie, refus explicite prévu dans le prompt, et journalisation pour audit.</li>
-      <li><strong>Agents</strong> — un modèle capable d'agir (outils, code, achats) transforme une erreur de raisonnement en conséquence réelle. Le principe de moindre privilège et la validation humaine des actions irréversibles ne sont pas négociables.</li>
+      <li><strong>Shadow</strong> — le nouveau modèle reçoit le trafic réel et ses prédictions sont enregistrées, mais <em>non utilisées</em>. Aucun risque, et l'on vérifie latence, taux d'erreur et cohérence sur les vraies données. C'est l'étape que l'on saute le plus souvent à tort, alors qu'elle coûte presque rien.</li>
+      <li><strong>Canary</strong> — 1 %, puis 5 %, puis 25 % du trafic, avec surveillance des métriques techniques et métier à chaque palier, et une règle d'arrêt définie <em>à l'avance</em>.</li>
+      <li><strong>A/B test</strong> — la seule façon de mesurer l'effet <em>causal</em> du nouveau modèle sur l'indicateur métier (module 9). Un meilleur RMSE hors ligne ne garantit en rien un meilleur résultat en ligne (module 22).</li>
+      <li><strong>Retour arrière</strong> — préparé, testé, exécutable en une commande. Si le retour arrière n'a jamais été essayé, il ne fonctionne pas : c'est une certitude empirique.</li>
     </ul>
 
-    <h2 id="checklist">9. Cadre réglementaire et checklist</h2>
-    <p>Le <strong>RGPD</strong> encadre le traitement des données personnelles : base légale, minimisation, durée de conservation, droits d'accès et d'effacement, et — article 22 — encadrement des décisions entièrement automatisées produisant des effets significatifs, avec droit à une intervention humaine et à une explication.</p>
-    <p>L'<strong>AI Act</strong> européen classe les systèmes par risque : les usages à haut risque (crédit, emploi, éducation, infrastructures critiques, forces de l'ordre) imposent gestion des risques, qualité des données, documentation technique, journalisation, transparence, supervision humaine et robustesse. Ces exigences recoupent très largement les bonnes pratiques du module 24 — ce qui est une bonne nouvelle : les satisfaire ne demande pas un dispositif séparé, mais de faire correctement ce qu'on devrait faire de toute façon, et de le documenter.</p>
+    <h2 id="monitoring">8. Monitoring et dérive</h2>
+    <p>La performance d'un modèle se dégrade avec le temps : c'est la règle, pas l'exception. On distingue trois phénomènes, qui appellent des réponses différentes :</p>
+    <ul>
+      <li><strong>Dérive des données</strong> (<em>covariate shift</em>) — la distribution des entrées \(P(X)\) change : nouvelle clientèle, capteur remplacé, changement d'interface qui modifie les saisies. Le modèle reste valide, mais il est utilisé hors de son domaine habituel.</li>
+      <li><strong>Dérive du concept</strong> — la relation \(P(Y\mid X)\) elle-même change : les comportements évoluent, une réglementation modifie les règles du jeu. Plus grave, car même un réentraînement ne rattrape le retard qu'après coup, une fois les nouvelles étiquettes disponibles.</li>
+      <li><strong>Dérive des étiquettes</strong> — la distribution de la cible change (le taux de fraude double).</li>
+    </ul>
+
+    <p>Pour détecter une dérive sans attendre les étiquettes — qui arrivent souvent avec des semaines de retard —, on surveille les distributions d'entrée. L'indice de stabilité de population compare les proportions par intervalle entre référence et période courante :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{PSI} = \sum_{i=1}^{B} (p_i - q_i)\,\ln\!\frac{p_i}{q_i} \]</div>
+
+    <div class="code-label">Python — calculer et interpréter un PSI</div>
+    <div class="code-block"><pre>import numpy as np
+
+def psi(reference, courant, n_bins=10):
+    # les bornes viennent de la RÉFÉRENCE : on mesure le déplacement par rapport à elle
+    bornes = np.percentile(reference, np.linspace(0, 100, n_bins + 1))
+    bornes[0], bornes[-1] = -np.inf, np.inf
+    p = np.histogram(reference, bins=bornes)[0] / len(reference)
+    q = np.histogram(courant,   bins=bornes)[0] / len(courant)
+    p, q = np.clip(p, 1e-6, None), np.clip(q, 1e-6, None)   # éviter log(0)
+    return float(np.sum((q - p) * np.log(q / p)))
+
+# lecture usuelle :  &lt; 0,1 stable | 0,1–0,25 à surveiller | &gt; 0,25 dérive significative
+for col in colonnes:
+    v = psi(ref[col], prod[col])
+    if v &gt; 0.25:
+        print(f"ALERTE dérive sur {col} : PSI = {v:.3f}")</pre></div>
+
+    <p>On complète par un test de Kolmogorov-Smirnov pour les variables continues et un chi² pour les catégorielles (module 9) — en se rappelant que sur de gros volumes, ces tests détectent des écarts statistiquement significatifs mais opérationnellement négligeables. C'est l'<em>ampleur</em> qui doit déclencher l'alerte, pas la p-value.</p>
+
+    <div class="code-label">ce qu'il faut surveiller, par ordre de priorité</div>
+    <div class="code-block"><pre>1. Santé technique      latence (p50, p95, p99), taux d'erreur, disponibilité, coût
+2. Qualité des entrées  taux de manquants, valeurs hors domaine, catégories inconnues
+3. Distribution         PSI par variable, dérive des embeddings pour le non-tabulaire
+4. Sorties du modèle    distribution des scores, taux de prédictions positives
+5. Performance réelle   dès que les étiquettes arrivent : métriques PAR SEGMENT
+6. Impact métier        LA mesure qui compte : conversion, coût évité, satisfaction</pre></div>
+
+    <p>Les couches 1 à 4 sont disponibles immédiatement ; la 5 arrive en différé ; la 6 exige souvent une expérimentation. Un tableau de bord qui ne montre que la couche 1 donne une fausse impression de contrôle — un modèle peut répondre en 20 ms avec une disponibilité parfaite tout en étant devenu complètement faux.</p>
+
+    <h2 id="orchestration">9. Orchestration et ré-entraînement</h2>
+    <p>Les pipelines (extraction, variables, entraînement, validation, déploiement) sont décrits comme des graphes de tâches et planifiés par un orchestrateur : <strong>Airflow</strong> (le standard historique, très répandu), <strong>Prefect</strong> ou <strong>Dagster</strong> (plus modernes, Dagster étant construit autour des <em>actifs de données</em>, ce qui correspond bien au ML), ou <strong>Kubeflow</strong> si l'on vit déjà dans Kubernetes (module 5).</p>
+
+    <div class="code-label">quand ré-entraîner</div>
+    <div class="code-block"><pre>Périodique         chaque semaine ou chaque mois. Simple, prévisible, souvent suffisant.
+Sur déclenchement  quand le monitoring détecte une dérive au-delà d'un seuil (section 8)
+Sur volume         quand N nouvelles observations ÉTIQUETÉES sont disponibles
+En continu         apprentissage en ligne. Réservé aux cas qui l'exigent vraiment :
+                   difficile à déboguer, très exposé aux boucles de rétroaction.</pre></div>
+
+    <p>Un ré-entraînement automatique n'est acceptable qu'avec des <strong>garde-fous</strong> : validation sur un jeu figé, comparaison obligatoire avec le modèle en place, et refus automatique de promotion si la performance recule. Sans cela, un pipeline automatisé propage en production un modèle entraîné sur des données corrompues — plus vite et plus sûrement qu'un humain ne l'aurait fait.</p>
+
+    <h2 id="gouvernance">10. Gouvernance et checklist</h2>
+    <p>La <em>model card</em> documente, en une page : l'usage prévu et les usages exclus, les données d'entraînement et leurs biais connus, les performances globales <em>et par sous-groupe</em>, les limites, et le contact responsable. Ce n'est pas de la bureaucratie : c'est ce qui permet à quelqu'un d'autre — ou à soi-même dans un an — de savoir si le modèle peut être utilisé dans un contexte donné.</p>
+    <p>Le cadre réglementaire européen ajoute des obligations concrètes, détaillées au module 26 : le RGPD encadre les données personnelles et prévoit un droit à l'explication pour les décisions automatisées ; l'AI Act classe les systèmes par niveau de risque et impose documentation, traçabilité et supervision humaine pour les usages à haut risque. Ces exigences se traitent en amont — journalisation des prédictions, explicabilité, tests d'équité — bien plus facilement qu'après coup.</p>
 
     <div class="step-block">
-      <h4>Checklist responsabilité</h4>
+      <h4>Checklist avant mise en production</h4>
       <ul>
-        <li>Les métriques sont ventilées par sous-groupe, y compris intersectionnels, et le tableau figure dans la model card (module 24).</li>
-        <li>La notion d'équité visée est explicitement choisie et justifiée — en sachant qu'elle en exclut d'autres.</li>
-        <li>L'attribut sensible est collecté pour l'audit, exclu des variables explicatives, et les proxys ont été recherchés.</li>
-        <li>Des tests de stress vérifient une dégradation progressive et détectable, pas un basculement silencieux.</li>
-        <li>La provenance des données d'entraînement est tracée ; les modèles téléchargés sont vérifiés et chargés dans un format sûr.</li>
-        <li>L'accès au modèle est limité en débit et en granularité si les données d'entraînement sont sensibles.</li>
-        <li>Les droits d'accès sont appliqués à la récupération dans tout système RAG.</li>
-        <li>Une voie de recours humaine existe pour les décisions à effet significatif, et les prédictions sont journalisées pour pouvoir les expliquer.</li>
+        <li>Le pipeline complet (prétraitement inclus) est sérialisé et versionné.</li>
+        <li>Le modèle est reproductible : commit, environnement, version des données, graines.</li>
+        <li>Les prédictions du service sont identiques à celles du code d'entraînement sur un échantillon de référence.</li>
+        <li>Les tests de données bloquent le pipeline en cas de schéma ou de distribution anormale.</li>
+        <li>Une baseline est déployée en parallèle pour comparaison.</li>
+        <li>La latence et le coût par prédiction sont mesurés sous charge réaliste.</li>
+        <li>Le monitoring couvre santé technique, qualité des entrées, dérive et sorties.</li>
+        <li>Les alertes ont un destinataire et un mode d'emploi, pas seulement un seuil.</li>
+        <li>Le retour arrière a été testé pour de vrai.</li>
+        <li>La model card existe, et les performances par sous-groupe ont été vérifiées.</li>
       </ul>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Retirer l'attribut sensible ne supprime pas la discrimination et empêche de la mesurer.</li>
-        <li>Les définitions d'équité sont mathématiquement incompatibles : le choix est un arbitrage, pas un calcul.</li>
-        <li>Ventiler les métriques par sous-groupe est le geste d'audit le plus rentable.</li>
-        <li>La menace réaliste est souvent le contournement économique plutôt que l'attaque adverse au pixel près.</li>
-        <li>Un modèle entraîné sur des données sensibles est lui-même une donnée sensible.</li>
-        <li>La confidentialité différentielle est la seule garantie formelle ; elle se paie en utilité.</li>
-        <li>Charger un modèle est une exécution de code : format sûr, provenance vérifiée, versions épinglées.</li>
+        <li>Le code du modèle est la petite partie ; le système autour est le vrai travail.</li>
+        <li>Reproductibilité = code + environnement + données + aléa, tous versionnés ensemble.</li>
+        <li>Tracker chaque expérience dès le premier jour : c'est rétroactivement impossible.</li>
+        <li>Sérialiser le pipeline entier, jamais l'estimateur seul.</li>
+        <li>Les tests de données sont la protection la plus rentable qui existe.</li>
+        <li>Shadow, puis canary, puis A/B ; retour arrière testé.</li>
+        <li>Surveiller la dérive sans attendre les étiquettes ; alerter sur l'ampleur, pas sur la p-value.</li>
+        <li>Le ré-entraînement automatique exige des garde-fous, sinon il automatise l'erreur.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m24.html" class="btn btn-secondary">← Module 24 : MLOps</a>
-    <a href="project7-m26.html" class="btn btn-primary">Module 26 : Projet de A à Z →</a>
+    <a href="project7-m24.html" class="btn btn-secondary">← Module 24 : Passer à l'échelle</a>
+    <a href="project7-m26.html" class="btn btn-primary">Module 26 : Équité et sécurité →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Équité</span><span class="tag">fairlearn</span><span class="tag">Adversarial</span><span class="tag">Vie privée</span><span class="tag">DP-SGD</span><span class="tag">AI Act</span></div>
+  <div class="project-meta"><span class="tag">MLflow</span><span class="tag">DVC</span><span class="tag">CI/CD</span><span class="tag">Monitoring</span><span class="tag">Drift</span><span class="tag">Gouvernance</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -228,7 +307,7 @@ print(MetricFrame(metrics=recall_score, y_true=y_test, y_pred=y_pred,
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 25</div>
-    <h1>Fairness, robustness, privacy and security</h1>
+    <h1>MLOps: taking a model to production</h1>
   </div>
 
   <div class="project-content course-content">
@@ -238,16 +317,16 @@ print(MetricFrame(metrics=recall_score, y_true=y_test, y_pred=y_pred,
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Where bias comes from: historical, sampling, measurement, aggregation and deployment bias — and why removing the sensitive attribute neither prevents discrimination nor allows measuring it.</li>
-      <li>Formal fairness definitions (demographic parity, equalised odds, group calibration) and the impossibility theorem that makes the choice a policy decision rather than a technical one.</li>
-      <li>Auditing with subgroup-disaggregated metrics (fairlearn), and pre-, in- and post-processing mitigations with their legal and intersectional limits.</li>
-      <li>Robustness: natural distribution shift versus deliberate manipulation, adversarial examples formalised, adversarial training and certified defences — and why economic gaming is usually the realistic threat.</li>
-      <li>Stress testing for graceful, detectable degradation.</li>
-      <li>Data poisoning and backdoors, model stealing and membership inference, and supply-chain risk (pickle weights execute code; prefer safetensors).</li>
-      <li>Privacy: the failure of naive anonymisation, memorisation by trained models, and treating a model as sensitive data.</li>
-      <li>Differential privacy defined, DP-SGD and its costs, federated learning and the fact that gradients leak.</li>
-      <li>LLM-specific risks: prompt injection, context leakage, RAG access control, and agents with real-world side effects.</li>
-      <li>GDPR and the EU AI Act, plus a practical accountability checklist.</li>
+      <li>Hidden technical debt in ML systems: entanglement (CACE) and feedback loops.</li>
+      <li>Reproducibility across four levels: code, environment, data and randomness — and why full GPU determinism is out of reach.</li>
+      <li>Versioning data with DVC and models with a registry, so a rollback takes minutes.</li>
+      <li>Experiment tracking with MLflow, and what must always be logged.</li>
+      <li>Serving modes (batch, online, streaming, embedded), ONNX, and the training/serving skew that causes most production bugs.</li>
+      <li>Testing an ML system: data tests (the highest-return safeguard there is), behavioural model tests, integration tests, and what a CI/CD pipeline for ML runs at each stage.</li>
+      <li>Progressive rollout: shadow deployment, canary releases, online A/B tests, and a rollback that has actually been tested.</li>
+      <li>Monitoring: data drift vs concept drift vs label drift, the population stability index, and the six layers worth watching in priority order.</li>
+      <li>Orchestration, retraining policies and the guardrails automated retraining requires.</li>
+      <li>Governance: model cards, GDPR and the AI Act, and a pre-production checklist.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -258,26 +337,27 @@ print(MetricFrame(metrics=recall_score, y_true=y_test, y_pred=y_pred,
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><strong>Fairness, robustness, privacy and security</strong></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><strong>MLOps: taking a model to production</strong></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

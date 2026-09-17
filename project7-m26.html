@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 26 - Projet de A à Z : annonces immobilières, du scraping à la prédiction - Nils Malmberg</title>
+  <title>Module 26 - Équité, robustesse, confidentialité et sécurité - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 <header><div class="header-inner">
@@ -40,891 +41,173 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 26</div>
-    <h1>Projet de A à Z : annonces immobilières, du scraping à la prédiction</h1>
+    <h1>Équité, robustesse, confidentialité et sécurité</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Vingt-cinq modules de notions, et maintenant un projet complet où elles servent ensemble. L'objectif : partir d'annonces immobilières publiées sur le web, les collecter, les nettoyer, les stocker dans une base, entraîner un modèle de prédiction de prix, l'exposer derrière une API conteneurisée, et automatiser le tout avec une chaîne d'intégration continue. Rien d'exceptionnel techniquement — c'est précisément l'intérêt : c'est la forme qu'a réellement un projet de data science en entreprise.</p>
+    <p>Un modèle qui décide engage une responsabilité : il peut désavantager systématiquement un groupe, se faire tromper par une entrée manipulée, ou laisser fuiter les données sur lesquelles il a été entraîné. Ces risques ne sont pas des questions de conformité à traiter à la fin : ils se traitent dans la conception, et ils ont chacun des méthodes et des métriques précises.</p>
 
     <div class="tuto-toc">
-      <h4>📋 Le pipeline, étape par étape</h4>
+      <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#cadrage">Cadrage et architecture</a></li>
-        <li><a href="#sources">Choisir une source de données (et le droit)</a></li>
-        <li><a href="#scraping">Collecte : le scraper</a></li>
-        <li><a href="#nettoyage">Nettoyage et validation</a></li>
-        <li><a href="#base">Stockage en base de données</a></li>
-        <li><a href="#modele">Modélisation et évaluation</a></li>
-        <li><a href="#api">API et conteneurisation</a></li>
-        <li><a href="#cicd">CI/CD avec GitHub Actions</a></li>
-        <li><a href="#suite">Ce qui resterait à faire</a></li>
+        <li><a href="#biais">D'où viennent les biais</a></li>
+        <li><a href="#equite">Définir l'équité — et leur incompatibilité</a></li>
+        <li><a href="#mesurer">Mesurer et atténuer</a></li>
+        <li><a href="#robustesse">Robustesse et attaques par évasion</a></li>
+        <li><a href="#chaine">Empoisonnement et chaîne d'approvisionnement</a></li>
+        <li><a href="#confidentialite">Confidentialité et fuite de données</a></li>
+        <li><a href="#dp">Confidentialité différentielle et fédéré</a></li>
+        <li><a href="#llm">Risques propres aux LLM</a></li>
+        <li><a href="#checklist">Cadre réglementaire et checklist</a></li>
       </ol>
     </div>
 
-    <h2 id="cadrage">1. Cadrage et architecture</h2>
+    <h2 id="biais">1. D'où viennent les biais</h2>
+    <p>Un modèle appris reproduit les régularités de ses données d'entraînement — y compris celles qui traduisent des inégalités passées. Les sources, à distinguer parce qu'elles n'appellent pas les mêmes remèdes :</p>
 
-    <h3>La question, avant le code</h3>
-    <p>Le module 10 insiste sur un point : commencer par la décision que le modèle doit éclairer. Ici, elle est simple — <em>ce bien est-il affiché au-dessus ou en dessous de son prix de marché ?</em> Cela fixe tout le reste :</p>
-    <ul>
-      <li><strong>Cible</strong> : le prix affiché en euros. On modélisera en réalité son logarithme (voir section 6).</li>
-      <li><strong>Unité d'observation</strong> : une annonce à un instant donné.</li>
-      <li><strong>Métrique</strong> : l'erreur relative compte plus que l'erreur absolue — se tromper de 20 000 € sur un studio ou sur un hôtel particulier n'a pas le même sens. On retient la <strong>MAE sur le logarithme du prix</strong>, interprétable en pourcentage, complétée par la médiane de l'erreur absolue en pourcentage (module 7).</li>
-      <li><strong>Baseline</strong> : le prix médian au m² de la commune, multiplié par la surface. Tout modèle qui ne bat pas cela ne sert à rien.</li>
-      <li><strong>Contrainte</strong> : prédiction en moins de 100 ms, et une estimation de l'incertitude, puisqu'une fourchette est bien plus honnête qu'un nombre unique.</li>
-    </ul>
-
-    <div class="code-label">architecture cible</div>
-    <div class="code-block"><pre>  ┌──────────────┐   JSONL brut   ┌──────────────┐   Parquet    ┌──────────────┐
-  │   COLLECTE   │ ─────────────► │  NETTOYAGE   │ ───────────► │  INGESTION   │
-  │ httpx async  │  (immuable)    │   polars     │  (validé)    │  PostgreSQL  │
-  │  §3          │                │   §4         │              │   §5         │
-  └──────────────┘                └──────────────┘              └──────┬───────┘
-                                                                       │ SQL
-                                                                       ▼
-  ┌──────────────┐   image        ┌──────────────┐   pipeline   ┌──────────────┐
-  │   CI/CD      │ ◄───────────── │  API FastAPI │ ◄─────────── │ ENTRAÎNEMENT │
-  │ GitHub Act.  │   Docker       │   + Docker   │  .joblib     │  LightGBM    │
-  │  §8          │                │   §7         │              │   §6         │
-  └──────────────┘                └──────────────┘              └──────────────┘</pre></div>
-
-    <div class="code-label">arborescence du projet (module 1)</div>
-    <div class="code-block"><pre>immo-prix/
-├── pyproject.toml
-├── uv.lock
-├── compose.yaml                 # API + PostgreSQL          (module 5)
-├── Dockerfile
-├── .dockerignore  .gitignore  .pre-commit-config.yaml
-├── .github/workflows/ci.yml     # intégration continue      (module 24)
-├── sql/
-│   ├── 001_schema.sql           # tables, index, vues       (module 4)
-│   └── 002_vues.sql
-├── src/immo/
-│   ├── config.py                # pydantic-settings         (module 6)
-│   ├── schemas.py               # modèles Pydantic partagés
-│   ├── scrape.py                # §3
-│   ├── clean.py                 # §4
-│   ├── ingest.py                # §5
-│   ├── features.py              # §6
-│   ├── train.py                 # §6
-│   └── api.py                   # §7
-├── tests/
-└── data/                        # ignoré par Git
-    ├── raw/                     # JSONL horodatés, jamais modifiés
-    └── clean/                   # Parquet</pre></div>
-
-    <div class="step-block">
-      <h4>Une règle qui structure tout le projet : les données brutes sont immuables</h4>
-      <p>Ce qui est collecté est écrit une fois, horodaté, et n'est plus jamais modifié. Toute transformation produit un <em>nouveau</em> fichier. Pourquoi : quand on découvre trois semaines plus tard que la fonction de nettoyage confondait « 3 pièces » et « 3 chambres », on veut pouvoir tout recalculer depuis la source — ce qui est impossible si le nettoyage a écrasé les données d'origine. C'est le même principe que l'immuabilité d'une configuration (module 1), appliqué aux données.</p>
-    </div>
-
-    <h2 id="sources">2. Choisir une source de données (et le droit)</h2>
-
-    <h3>Le cadre juridique, en clair</h3>
-    <p>Collecter automatiquement des pages web n'est pas neutre juridiquement, et c'est le premier sujet à traiter — pas le dernier.</p>
-    <ul>
-      <li><strong>Les conditions générales d'utilisation</strong> du site s'imposent. La plupart des grands portails immobiliers <em>interdisent explicitement</em> l'extraction automatisée. Passer outre expose à des poursuites, et des décisions de justice françaises et européennes ont déjà sanctionné l'aspiration massive de bases d'annonces.</li>
-      <li><strong>Le droit des bases de données</strong> (directive européenne de 1996, transposée en France) protège le producteur d'une base contre l'extraction d'une « partie substantielle » de son contenu, même si les données individuelles ne sont pas protégées par le droit d'auteur.</li>
-      <li><strong>Le RGPD</strong> s'applique dès qu'une donnée permet d'identifier une personne : nom d'un vendeur particulier, numéro de téléphone, photo où l'on distingue quelqu'un. Un prix et une surface ne sont pas des données personnelles ; le contact d'un particulier l'est.</li>
-      <li><strong><code>robots.txt</code></strong> n'a pas de valeur contraignante en soi, mais il exprime la volonté de l'éditeur : l'ignorer affaiblit toute position défendable.</li>
-      <li><strong>La charge</strong> imposée au serveur peut constituer un trouble en elle-même. Un scraper qui envoie cent requêtes par seconde peut être assimilé à une attaque.</li>
-    </ul>
+    <div class="code-label">taxonomie des biais</div>
+    <div class="code-block"><pre>Biais historique        les données reflètent FIDÈLEMENT un monde inéquitable.
+                        Un modèle statistiquement "correct" perpétue la situation.
+                        Aucune technique statistique ne le corrige : c'est une
+                        décision de conception, donc politique.
+Biais d'échantillonnage certains groupes sont sous-représentés → variance élevée
+                        et performance dégradée POUR EUX (module 13)
+Biais de mesure         la variable cible est un PROXY imparfait : "a été arrêté"
+                        pour "a commis une infraction", "a été promu" pour "était
+                        compétent". Le proxy porte le biais du processus qui l'a produit.
+Biais d'agrégation      un modèle unique pour des sous-populations aux relations
+                        différentes : il devient optimal pour le groupe majoritaire
+                        et médiocre pour les autres.
+Biais de déploiement    le modèle est utilisé dans un contexte différent de celui
+                        pour lequel il a été validé.</pre></div>
 
     <div class="warning-block">
-      <strong>La conclusion pratique.</strong> Pour un projet destiné à être publié, la bonne source est <strong>l'open data</strong>. En France, la base <em>DVF</em> (Demandes de Valeurs Foncières) publie l'ensemble des transactions immobilières réelles — prix, surface, nombre de pièces, localisation, date — sous licence ouverte, avec une API officielle. C'est mieux que du scraping à tous points de vue : ce sont des <em>prix de vente</em> et non des prix affichés, la couverture est exhaustive, et l'usage est explicitement autorisé. Le code de la section suivante reste écrit comme un vrai scraper — c'est une compétence à part entière, utile sur un site interne ou sur un site qui l'autorise — mais il s'exerce ici sur un domaine d'exemple, et la vérification préalable fait partie du programme.
+      <strong>Supprimer la variable sensible ne suffit pas.</strong> C'est l'erreur la plus répandue, et elle est doublement nuisible. D'abord parce qu'elle ne marche pas : le code postal, le nom, l'établissement scolaire, l'historique d'achat ou l'heure de connexion sont des <em>variables corrélées</em> qui reconstruisent l'information supprimée — un modèle sans la variable « genre » peut parfaitement discriminer selon le genre. Ensuite parce que ne pas collecter l'attribut rend l'inégalité <strong>impossible à mesurer</strong>, donc à corriger. La bonne pratique est de collecter l'attribut sensible pour l'<em>audit</em>, tout en l'excluant des variables explicatives — ce que le RGPD autorise dans ce cadre précis.
     </div>
 
-    <div class="code-label">Python — src/immo/sources.py : la source open data</div>
-    <div class="code-block"><pre>import httpx, polars as pl
+    <h2 id="equite">2. Définir l'équité — et leur incompatibilité</h2>
+    <p>« Équitable » n'a pas de définition unique, et c'est le cœur du problème. Les trois familles les plus utilisées, pour un attribut sensible \(A\), une prédiction \(\hat Y\) et une vérité \(Y\) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \text{Parité démographique : } \mathbb{P}(\hat Y=1\mid A=a) \text{ identique pour tout } a \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \text{Égalité des chances : } \mathbb{P}(\hat Y=1\mid Y=1, A=a) \text{ identique pour tout } a \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \text{Calibration par groupe : } \mathbb{P}(Y=1\mid \hat p = p, A=a) = p \text{ pour tout } a \]</div>
 
-def transactions_dvf(code_commune: str, annee: int) -&gt; pl.DataFrame:
-    """Transactions réelles issues de l'open data DVF (licence ouverte)."""
-    r = httpx.get("https://api.cquest.org/dvf",
-                  params={"code_commune": code_commune}, timeout=30)
-    r.raise_for_status()
-    return (
-        pl.DataFrame(r.json()["resultats"])
-          .filter(pl.col("date_mutation").str.starts_with(str(annee)))
-          .select("date_mutation", "valeur_fonciere", "surface_relle_bati",
-                  "nombre_pieces_principales", "type_local", "code_postal", "commune")
-    )</pre></div>
-
-    <h2 id="scraping">3. Collecte : le scraper</h2>
-
-    <h3>Avant d'écrire la moindre requête</h3>
-    <div class="code-label">Python — src/immo/scrape.py (1/4) : la vérification préalable</div>
-    <div class="code-block"><pre>from urllib.robotparser import RobotFileParser
-from urllib.parse import urljoin
-
-AGENT = "immo-prix-bot/1.0 (+https://nils-malmberg.fr/project7-m26.html)"
-
-def autorise(base_url: str, chemin: str) -&gt; tuple[bool, float]:
-    """Lit robots.txt : (le chemin est-il autorisé, délai demandé entre requêtes)."""
-    rp = RobotFileParser()
-    rp.set_url(urljoin(base_url, "/robots.txt"))
-    rp.read()
-    delai = rp.crawl_delay(AGENT) or 1.0        # délai demandé, 1 s par défaut
-    return rp.can_fetch(AGENT, urljoin(base_url, chemin)), float(delai)
-
-ok, delai = autorise("https://immo-exemple.fr", "/annonces/")
-if not ok:
-    raise SystemExit("robots.txt interdit cette section : on s'arrête ici.")</pre></div>
-
-    <p>Le <code>User-Agent</code> déclaré mérite un commentaire : il est honnête, identifie le projet et donne un moyen de contact. Se faire passer pour un navigateur est techniquement possible et juridiquement indéfendable ; un administrateur qui voit passer un agent identifié peut demander l'arrêt plutôt que bannir en silence.</p>
-
-    <h3>Récupérer les pages</h3>
-    <p>C'est l'application directe du module 2 : des requêtes HTTP sont des opérations d'entrée/sortie, donc <code>asyncio</code> avec un sémaphore pour brider la charge, et une politique de reprise pour les erreurs passagères.</p>
-
-    <div class="code-label">Python — src/immo/scrape.py (2/4) : la récupération</div>
-    <div class="code-block"><pre>import asyncio, hashlib, random
-from pathlib import Path
-import httpx
-
-CACHE = Path("data/cache")
-CACHE.mkdir(parents=True, exist_ok=True)
-
-async def recuperer(client: httpx.AsyncClient, url: str,
-                    sem: asyncio.Semaphore, delai: float) -&gt; str | None:
-    """Renvoie le HTML d'une page, avec cache disque, reprise et politesse."""
-    fichier = CACHE / (hashlib.sha256(url.encode()).hexdigest()[:16] + ".html")
-    if fichier.exists():                       # cache : on ne redemande jamais deux fois
-        return fichier.read_text(encoding="utf-8")
-
-    async with sem:                            # au plus N requêtes simultanées
-        for essai in range(4):
-            try:
-                r = await client.get(url, timeout=20, follow_redirects=True)
-                if r.status_code == 429:       # trop de requêtes : on ralentit
-                    await asyncio.sleep(float(r.headers.get("Retry-After", 30)))
-                    continue
-                r.raise_for_status()
-                fichier.write_text(r.text, encoding="utf-8")
-                # politesse : délai demandé + un peu d'aléa pour ne pas être régulier
-                await asyncio.sleep(delai + random.uniform(0, 0.5))
-                return r.text
-            except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
-                if essai == 3:
-                    print(f"abandon {url}: {e!r}")
-                    return None
-                await asyncio.sleep(2 ** essai)      # attente exponentielle : 1, 2, 4 s</pre></div>
+    <div class="code-label">ce que chacune exige, en français</div>
+    <div class="code-block"><pre>Parité démographique    "on sélectionne la même PROPORTION dans chaque groupe"
+                        → ignore les différences réelles de qualification
+Égalité des chances     "parmi les gens QUALIFIÉS, on en retient la même proportion
+                        dans chaque groupe" → personne de méritant n'est désavantagé
+Calibration par groupe  "un score de 0,7 signifie 70 % de chances, quel que soit
+                        le groupe" → le score veut dire la même chose pour tous</pre></div>
 
     <div class="step-block">
-      <h4>Pourquoi un cache disque dès le premier jour</h4>
-      <p>Pendant le développement, on relance le script vingt fois pour corriger l'extraction. Sans cache, ce sont vingt fois les mêmes requêtes envoyées au site — inutile, impoli, et c'est ce qui fait bannir. Avec le cache, seule la première exécution touche le réseau ; les suivantes travaillent sur des fichiers locaux, et sont instantanées. C'est aussi ce qui rend l'extraction <em>reproductible</em> : on peut rejouer exactement le même HTML après avoir corrigé le parseur.</p>
+      <h4>Le théorème d'impossibilité</h4>
+      <p>Résultat démontré (Kleinberg-Mullainathan-Raghavan, Chouldechova, 2016) : si les taux de base diffèrent réellement entre groupes, <strong>calibration par groupe et égalité des taux d'erreur ne peuvent pas être satisfaites simultanément</strong>, sauf en cas de prédiction parfaite. Ce n'est pas une limite technique qu'un meilleur algorithme lèverait : c'est une incompatibilité mathématique, qui se démontre en quelques lignes à partir des définitions.</p>
+      <p>La conséquence est importante et souvent mal reçue : il faut <em>choisir</em> quelle notion d'équité s'applique, et ce choix est un arbitrage politique et métier — pas une décision technique qu'un data scientist prendrait seul dans son coin. C'est exactement le débat qui a entouré l'affaire COMPAS, où l'éditeur invoquait la calibration et les critiques l'égalité des taux de faux positifs : les deux camps avaient raison, sur des définitions différentes, et aucune reformulation technique ne pouvait les réconcilier.</p>
     </div>
 
-    <h3>Extraire les champs</h3>
-    <p>Le HTML est transformé en données structurées par des sélecteurs CSS. J'utilise <code>selectolax</code>, nettement plus rapide que BeautifulSoup sur de gros volumes, avec une API très proche.</p>
+    <h2 id="mesurer">3. Mesurer et atténuer</h2>
+    <p>La première étape est toujours la même, et elle suffit souvent à découvrir un problème : <strong>ventiler toutes les métriques par sous-groupe</strong>. Une performance globale excellente masque régulièrement un groupe pour lequel le modèle est inutilisable.</p>
 
-    <div class="code-label">Python — src/immo/scrape.py (3/4) : l'extraction typée</div>
-    <div class="code-block"><pre>import re
-from selectolax.parser import HTMLParser
-from pydantic import BaseModel, Field, field_validator
+    <div class="code-label">Python — fairlearn</div>
+    <div class="code-block"><pre>from fairlearn.metrics import (MetricFrame, demographic_parity_difference,
+                               equalized_odds_difference, selection_rate)
+from sklearn.metrics import recall_score, precision_score, accuracy_score
 
-class AnnonceBrute(BaseModel):
-    """Ce qu'on extrait d'une page. Pydantic (module 6) fait la validation ici."""
-    url: str
-    titre: str
-    prix_texte: str
-    surface_texte: str | None = None
-    pieces_texte: str | None = None
-    ville: str
-    code_postal: str = Field(pattern=r"^\d{5}$")
-    description: str = ""
-    collecte_le: str                        # horodatage ISO
+mf = MetricFrame(
+    metrics={"accuracy": accuracy_score, "rappel": recall_score,
+             "précision": precision_score, "taux_selection": selection_rate},
+    y_true=y_test, y_pred=y_pred, sensitive_features=A_test,
+)
+print(mf.by_group)                 # LE tableau à regarder en premier
+print(mf.difference(method="between_groups"))   # l'écart max entre groupes
 
-    @field_validator("titre", "ville")
-    @classmethod
-    def non_vide(cls, v: str) -&gt; str:
-        v = v.strip()
-        if not v:
-            raise ValueError("champ vide")
-        return v
+print(demographic_parity_difference(y_test, y_pred, sensitive_features=A_test))
+print(equalized_odds_difference(y_test, y_pred, sensitive_features=A_test))
 
-def texte(noeud, selecteur: str, defaut: str = "") -&gt; str:
-    """Renvoie le texte d'un sélecteur, ou une valeur par défaut s'il est absent."""
-    trouve = noeud.css_first(selecteur)
-    return trouve.text(strip=True) if trouve else defaut
+# et pour les sous-groupes CROISÉS, souvent les plus mal servis :
+A_croise = A_test.astype(str) + "_" + age_groupe.astype(str)
+print(MetricFrame(metrics=recall_score, y_true=y_test, y_pred=y_pred,
+                  sensitive_features=A_croise).by_group)</pre></div>
 
-def extraire(html: str, url: str) -&gt; AnnonceBrute | None:
-    arbre = HTMLParser(html)
-    try:
-        return AnnonceBrute(
-            url=url,
-            titre=texte(arbre, "h1.annonce-titre"),
-            prix_texte=texte(arbre, "[data-testid='prix']"),
-            surface_texte=texte(arbre, "li.critere-surface") or None,
-            pieces_texte=texte(arbre, "li.critere-pieces") or None,
-            ville=texte(arbre, "span.localisation-ville"),
-            code_postal=re.search(r"\b\d{5}\b", texte(arbre, "span.localisation")).group(),
-            description=texte(arbre, "div.description"),
-            collecte_le=datetime.now(timezone.utc).isoformat(),
-        )
-    except (ValidationError, AttributeError) as e:
-        print(f"page ignorée {url}: {e}")     # structure inattendue → on saute, sans planter
-        return None</pre></div>
+    <p>Les leviers d'atténuation se classent par moment d'intervention : <strong>en amont</strong> (rééquilibrer l'échantillon, corriger les étiquettes, retirer des variables trop corrélées à l'attribut sensible), <strong>pendant</strong> (contrainte d'équité dans l'optimisation, réduction lagrangienne, apprentissage adversarial où un discriminateur tente de retrouver l'attribut à partir des représentations), <strong>en aval</strong> (seuils différenciés par groupe — techniquement très efficace, mais juridiquement délicat, car c'est une différence de traitement explicite).</p>
+    <p>Deux limites à garder en tête : ces méthodes supposent l'attribut sensible <em>observé</em>, ce qui est rarement le cas ; et corriger selon un attribut peut dégrader l'équité selon un autre, ou selon leur intersection — un modèle équitable « par genre » et « par âge » pris séparément peut être très inéquitable pour un sous-groupe croisé, d'où le calcul ci-dessus.</p>
 
-    <p>Deux choix importants ici. D'abord, on extrait le <strong>texte brut</strong> (<code>prix_texte = "249 500 €"</code>) sans le convertir : la conversion est une décision de nettoyage, qui appartient à l'étape suivante et doit pouvoir être corrigée sans recollecter. Ensuite, une page dont la structure a changé produit une erreur de validation attrapée localement : une annonce est perdue, pas l'exécution entière — un site modifie son HTML sans prévenir, et un scraper qui plante sur la première anomalie ne collecte jamais rien.</p>
+    <h2 id="robustesse">4. Robustesse et attaques par évasion</h2>
+    <p>La robustesse recouvre deux choses distinctes : la résistance à une variation <em>naturelle</em> des données (dérive, changement de capteur, nouveau segment — module 25) et la résistance à une manipulation <em>délibérée</em>.</p>
+    <p>Les <strong>exemples adverses</strong> exploitent une propriété structurelle des modèles à haute dimension : il existe presque toujours une perturbation minuscule \(\delta\), imperceptible pour un humain, telle que la prédiction change complètement. On la trouve par ascension de gradient sur la perte, sous contrainte de norme :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \max_{\|\delta\|_\infty \leq \varepsilon} \; \ell\big(f_\theta(x+\delta),\, y\big) \]</div>
+    <p>L'intuition : la frontière de décision d'un réseau est proche de presque tous les points, parce qu'en dimension élevée le volume se concentre près des surfaces. Il suffit donc d'un petit déplacement dans la bonne direction — celle du gradient — pour la franchir.</p>
 
-    <div class="code-label">Python — src/immo/scrape.py (4/4) : l'orchestration et l'écriture</div>
-    <div class="code-block"><pre>import json
-from datetime import datetime, timezone
+    <p>Les défenses : l'<em>entraînement adversarial</em> (inclure ces exemples dans l'entraînement — efficace, mais coûteux et au prix d'un peu de précision nominale), la <em>détection</em> d'entrées anormales, et les méthodes <em>certifiées</em> (lissage aléatoire) qui donnent une garantie prouvée dans un rayon donné, au prix de performances modestes.</p>
+    <p>En contexte industriel, cela dit, la menace prioritaire n'est généralement pas l'attaque adverse au pixel près, mais le <strong>contournement de règles</strong> par des acteurs économiques — fraudeurs, spammeurs, optimiseurs de référencement — qui adaptent leur comportement dès qu'ils comprennent le critère. La parade est organisationnelle autant que technique : réentraîner fréquemment, ne pas publier les variables discriminantes, et privilégier des variables coûteuses à manipuler (un historique long plutôt qu'un champ déclaratif).</p>
+    <p>Enfin, les <strong>tests de stress</strong> sont l'outil le plus rentable : perturber systématiquement les entrées — bruit, valeurs manquantes, unités changées, catégories inconnues, valeurs extrêmes — et vérifier que le modèle se dégrade de façon <em>progressive et détectable</em> plutôt que de basculer silencieusement.</p>
 
-async def collecter(urls: list[str], sortie: Path, concurrence: int = 4) -&gt; int:
-    ok, delai = autorise("https://immo-exemple.fr", "/annonces/")
-    if not ok:
-        raise SystemExit("collecte non autorisée")
+    <h2 id="chaine">5. Empoisonnement et chaîne d'approvisionnement</h2>
+    <ul>
+      <li><strong>Empoisonnement des données</strong> — un attaquant injecte des exemples dans le corpus d'entraînement, soit pour dégrader la performance, soit pour installer une <em>porte dérobée</em> : le modèle se comporte normalement sauf en présence d'un déclencheur précis (un motif dans une image, une séquence dans un texte). Le risque est réel dès que les données d'entraînement proviennent d'utilisateurs, du web, ou de contributions externes. Défenses : validation et provenance des données (module 25), détection d'anomalies sur le corpus, entraînement robuste, réentraînement depuis des sources vérifiées.</li>
+      <li><strong>Vol et inversion de modèle</strong> — un accès à l'API permet d'interroger massivement le modèle pour en entraîner une copie (distillation non consentie), ou de reconstruire des informations sur ses données d'entraînement. L'<em>inférence d'appartenance</em> détermine si un individu précis figurait dans le corpus — une fuite de données personnelles à part entière. Limitation du débit, restriction de la granularité des scores renvoyés (arrondir plutôt que donner 15 décimales) et confidentialité différentielle atténuent ces risques.</li>
+      <li><strong>Chaîne d'approvisionnement logicielle</strong> — point concret et sous-estimé : un fichier de poids au format <code>pickle</code> <em>exécute du code arbitraire</em> à son chargement, par construction. Télécharger un modèle depuis un dépôt public revient donc à exécuter du code inconnu avec les droits de son processus. Préférer le format <code>safetensors</code> (qui ne contient que des tenseurs, sans code), vérifier les empreintes, épingler les versions de modèles et de dépendances (module 1), et scanner les images de conteneurs.</li>
+    </ul>
 
-    sem = asyncio.Semaphore(concurrence)     # 4 requêtes simultanées, pas 400
-    n = 0
-    async with httpx.AsyncClient(headers={"User-Agent": AGENT}, http2=True) as client:
-        # JSONL : une ligne = un objet JSON. Écriture au fil de l'eau, sans tout
-        # garder en mémoire — le principe des générateurs du module 1.
-        with sortie.open("w", encoding="utf-8") as f:
-            taches = [recuperer(client, u, sem, delai) for u in urls]
-            for future, url in zip(asyncio.as_completed(taches), urls):
-                html = await future
-                if html and (annonce := extraire(html, url)):
-                    f.write(annonce.model_dump_json() + "\n")
-                    n += 1
-    return n
+    <h2 id="confidentialite">6. Confidentialité et fuite de données</h2>
+    <p>L'anonymisation naïve ne fonctionne pas : la ré-identification par croisement est un résultat classique — quelques attributs quasi-identifiants (code postal, date de naissance, genre) suffisent à isoler une personne dans une population de millions d'individus. Le <em>k-anonymat</em> et ses raffinements (l-diversité, t-proximité) formalisent une protection en exigeant que chaque combinaison d'attributs soit partagée par au moins \(k\) personnes, mais restent vulnérables aux attaques par connaissance auxiliaire.</p>
+    <p>Un modèle entraîné <em>mémorise</em> aussi une partie de ses données : un réseau de grande capacité peut restituer textuellement des séquences rares de son corpus, ce qui a été démontré à plusieurs reprises sur les modèles de langage — numéros de téléphone, clés d'API, extraits de documents. La règle pratique à retenir : <strong>un modèle entraîné sur des données sensibles doit être traité comme une donnée sensible</strong>, avec les mêmes contrôles d'accès.</p>
 
-if __name__ == "__main__":
-    horodatage = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-    sortie = Path(f"data/raw/annonces_{horodatage}.jsonl")   # fichier HORODATÉ, immuable
-    print(f"{asyncio.run(collecter(lire_urls(), sortie))} annonces écrites dans {sortie}")</pre></div>
+    <h2 id="dp">7. Confidentialité différentielle et fédéré</h2>
+    <p>La <strong>confidentialité différentielle</strong> est la seule garantie formelle du domaine. Un mécanisme \(M\) est \((\varepsilon,\delta)\)-différentiellement privé si, pour deux jeux de données différant d'un <em>seul individu</em> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \mathbb{P}\big(M(D)\in S\big) \;\leq\; e^{\varepsilon}\,\mathbb{P}\big(M(D')\in S\big) + \delta \]</div>
+    <p>Autrement dit : la présence ou l'absence d'une personne ne change quasiment pas la distribution des résultats, donc <em>rien de spécifique à cette personne</em> ne peut en être déduit — quelle que soit la connaissance annexe de l'attaquant, ce qui est la force du cadre. \(\varepsilon\) quantifie le budget de confidentialité : plus il est petit, plus la protection est forte et plus l'utilité diminue.</p>
+    <p>En apprentissage, <strong>DP-SGD</strong> applique le principe en deux temps : écrêter la norme du gradient de <em>chaque exemple</em> (pour borner l'influence d'un individu), puis ajouter un bruit gaussien calibré. Le coût est réel — perte de précision, entraînement plus lent, sensibilité accrue aux hyperparamètres — mais c'est la seule approche qui offre une garantie démontrable plutôt qu'une bonne intention. Deux propriétés la rendent utilisable : la <em>composition</em> (les budgets s'additionnent sur plusieurs requêtes, ce qui permet de raisonner sur un pipeline entier) et l'<em>immunité au post-traitement</em> (rien de ce qu'on fait ensuite ne dégrade la garantie).</p>
 
-    <p>Le format <strong>JSONL</strong> (un objet JSON par ligne) est celui qui convient à une collecte : on peut écrire au fil de l'eau, reprendre après interruption sans corrompre le fichier, et le relire en flux avec un générateur. Un unique gros tableau JSON obligerait à tout garder en mémoire et serait invalide si l'exécution s'arrêtait en cours de route.</p>
+    <p>L'<strong>apprentissage fédéré</strong> répond à un autre problème : entraîner sans centraliser les données. Chaque participant entraîne localement, seuls les gradients ou les poids sont envoyés et moyennés. Utile en santé, en industrie multi-sites, sur téléphone. Deux nuances importantes : les gradients <em>fuient</em> de l'information sur les données locales — des reconstructions d'images à partir de gradients ont été démontrées —, d'où la nécessité de combiner avec de l'agrégation sécurisée et de la confidentialité différentielle ; et l'hétérogénéité des données entre participants dégrade la convergence, ce qui reste un problème de recherche actif.</p>
+
+    <h2 id="llm">8. Risques propres aux LLM</h2>
+    <ul>
+      <li><strong>Injection de prompt</strong> (module 21) — le modèle ne distingue pas instructions et données. Le traitement est architectural : privilèges minimaux, validation des sorties, confirmation humaine pour les actions irréversibles.</li>
+      <li><strong>Fuite par le contexte</strong> — tout ce qui est envoyé dans un prompt quitte le périmètre ; et un index RAG mal cloisonné expose à un utilisateur des documents auxquels il n'a pas droit. Les droits d'accès doivent être appliqués <em>au moment de la récupération</em> — en filtrant l'index par les permissions de l'utilisateur — et non espérés du modèle, qui n'a aucun moyen de les faire respecter.</li>
+      <li><strong>Contenus préjudiciables et hallucinations</strong> — filtrage en entrée et en sortie, refus explicite prévu dans le prompt, et journalisation pour audit.</li>
+      <li><strong>Agents</strong> — un modèle capable d'agir (outils, code, achats) transforme une erreur de raisonnement en conséquence réelle. Le principe de moindre privilège et la validation humaine des actions irréversibles ne sont pas négociables.</li>
+    </ul>
+
+    <h2 id="checklist">9. Cadre réglementaire et checklist</h2>
+    <p>Le <strong>RGPD</strong> encadre le traitement des données personnelles : base légale, minimisation, durée de conservation, droits d'accès et d'effacement, et — article 22 — encadrement des décisions entièrement automatisées produisant des effets significatifs, avec droit à une intervention humaine et à une explication.</p>
+    <p>L'<strong>AI Act</strong> européen classe les systèmes par risque : les usages à haut risque (crédit, emploi, éducation, infrastructures critiques, forces de l'ordre) imposent gestion des risques, qualité des données, documentation technique, journalisation, transparence, supervision humaine et robustesse. Ces exigences recoupent très largement les bonnes pratiques du module 25 — ce qui est une bonne nouvelle : les satisfaire ne demande pas un dispositif séparé, mais de faire correctement ce qu'on devrait faire de toute façon, et de le documenter.</p>
 
     <div class="step-block">
-      <h4>Les bonnes pratiques de scraping, résumées</h4>
+      <h4>Checklist responsabilité</h4>
       <ul>
-        <li>Vérifier CGU et <code>robots.txt</code> <em>avant</em>, et s'arrêter si c'est interdit.</li>
-        <li>User-Agent honnête, avec un moyen de contact.</li>
-        <li>Concurrence faible (2 à 5) et délai entre requêtes ; respecter les codes 429.</li>
-        <li>Cache disque systématique pendant le développement.</li>
-        <li>Préférer l'API officielle ou l'open data quand ils existent — presque toujours.</li>
-        <li>Extraire brut, convertir plus tard ; horodater chaque collecte.</li>
-        <li>Ne jamais collecter de données personnelles dont on n'a pas besoin.</li>
-        <li>Surveiller le taux d'échec d'extraction : une hausse brutale signale un changement de structure du site, pas un problème de données.</li>
+        <li>Les métriques sont ventilées par sous-groupe, y compris intersectionnels, et le tableau figure dans la model card (module 25).</li>
+        <li>La notion d'équité visée est explicitement choisie et justifiée — en sachant qu'elle en exclut d'autres.</li>
+        <li>L'attribut sensible est collecté pour l'audit, exclu des variables explicatives, et les proxys ont été recherchés.</li>
+        <li>Des tests de stress vérifient une dégradation progressive et détectable, pas un basculement silencieux.</li>
+        <li>La provenance des données d'entraînement est tracée ; les modèles téléchargés sont vérifiés et chargés dans un format sûr.</li>
+        <li>L'accès au modèle est limité en débit et en granularité si les données d'entraînement sont sensibles.</li>
+        <li>Les droits d'accès sont appliqués à la récupération dans tout système RAG.</li>
+        <li>Une voie de recours humaine existe pour les décisions à effet significatif, et les prédictions sont journalisées pour pouvoir les expliquer.</li>
       </ul>
-    </div>
-
-    <h2 id="nettoyage">4. Nettoyage et validation</h2>
-
-    <p>Les données brutes sont hétérogènes : « 249 500 € », « 249500 EUR », « Nous consulter ». Le nettoyage transforme ce texte en valeurs exploitables et — tout aussi important — <em>documente ce qu'il a jeté</em>. C'est l'application du module 10.</p>
-
-    <div class="code-label">Python — src/immo/clean.py (1/2) : parsing et normalisation</div>
-    <div class="code-block"><pre>import re
-import polars as pl                       # module 3 : lazy, rapide, expressif
-
-def nettoyer(chemin_jsonl: str) -&gt; pl.DataFrame:
-    brut = pl.read_ndjson(chemin_jsonl)
-
-    return (
-        brut
-        # ── 1. extraction numérique depuis le texte ──
-        .with_columns(
-            prix=pl.col("prix_texte")
-                   .str.replace_all(r"[^\d]", "")      # ne garder que les chiffres
-                   .cast(pl.Float64, strict=False),    # "Nous consulter" → null
-            surface=pl.col("surface_texte")
-                      .str.extract(r"(\d+[,.]?\d*)")   # "72,5 m²" → "72,5"
-                      .str.replace(",", ".")
-                      .cast(pl.Float64, strict=False),
-            n_pieces=pl.col("pieces_texte")
-                       .str.extract(r"(\d+)")
-                       .cast(pl.Int8, strict=False),
-        )
-        # ── 2. normalisation des chaînes ──
-        .with_columns(
-            ville=pl.col("ville").str.to_uppercase()
-                    .str.replace_all(r"[-']", " ")
-                    .str.replace_all(r"\s+", " ").str.strip_chars(),
-            departement=pl.col("code_postal").str.slice(0, 2),
-            collecte_le=pl.col("collecte_le").str.to_datetime(),
-        )
-        # ── 3. features dérivées utiles au contrôle qualité ──
-        .with_columns(
-            prix_m2=pl.col("prix") / pl.col("surface"),
-            surface_par_piece=pl.col("surface") / pl.col("n_pieces"),
-            a_ascenseur=pl.col("description").str.contains("(?i)ascenseur"),
-            a_balcon=pl.col("description").str.contains("(?i)balcon|terrasse"),
-        )
-    )</pre></div>
-
-    <div class="code-label">Python — src/immo/clean.py (2/2) : doublons, aberrants, rapport</div>
-    <div class="code-block"><pre>def filtrer(df: pl.DataFrame) -&gt; tuple[pl.DataFrame, dict]:
-    """Renvoie les données retenues ET le compte de ce qui a été écarté."""
-    n0 = len(df)
-    rapport = {"initial": n0}
-
-    # ── doublons ──
-    df = df.unique(subset=["url"], keep="last")           # même annonce recollectée
-    rapport["doublons_url"] = n0 - len(df); n1 = len(df)
-
-    # quasi-doublons : même bien republié sous une autre URL
-    df = df.unique(subset=["ville", "surface", "n_pieces", "prix"], keep="first")
-    rapport["doublons_contenu"] = n1 - len(df); n2 = len(df)
-
-    # ── valeurs manquantes sur les colonnes indispensables ──
-    df = df.drop_nulls(["prix", "surface"])
-    rapport["sans_prix_ou_surface"] = n2 - len(df); n3 = len(df)
-
-    # ── aberrants : bornes MÉTIER, pas statistiques ──
-    df = df.filter(
-        (pl.col("surface").is_between(8, 1000))           # &lt; 8 m² : impossible en France
-        &amp; (pl.col("prix").is_between(10_000, 5_000_000))
-        &amp; (pl.col("prix_m2").is_between(300, 25_000))     # hors de ces bornes = erreur
-        &amp; (pl.col("n_pieces").is_null() | pl.col("n_pieces").is_between(1, 20))
-    )
-    rapport["aberrants"] = n3 - len(df)
-    rapport["retenu"] = len(df)
-    rapport["taux_retenu"] = round(len(df) / n0, 3)
-    return df, rapport</pre></div>
-
-    <div class="warning-block">
-      <strong>Écarter des lignes n'est jamais anodin.</strong> Filtrer sur <code>prix_m2 &lt; 25 000</code> supprime les erreurs de saisie <em>et</em> les biens de luxe réels : le modèle ne saura plus les estimer, et il faut le dire explicitement plutôt que le découvrir en production. D'où le rapport chiffré à chaque étape — si le taux retenu tombe de 92 % à 60 % d'une collecte à l'autre, c'est le site qui a changé, pas le marché. Ce rapport est journalisé à chaque exécution, et un seuil déclenche une alerte (module 24).
-    </div>
-
-    <p>Dernière étape avant le stockage : une <strong>vérification de schéma</strong> qui échoue bruyamment si les données ne respectent pas le contrat attendu. C'est le test de données du module 24, et c'est la protection la plus rentable de tout le pipeline.</p>
-
-    <div class="code-label">Python — contrôle du contrat de données</div>
-    <div class="code-block"><pre>ATTENDU = {"prix": pl.Float64, "surface": pl.Float64, "n_pieces": pl.Int8,
-           "ville": pl.String, "code_postal": pl.String, "collecte_le": pl.Datetime}
-
-def verifier(df: pl.DataFrame) -&gt; None:
-    for colonne, dtype in ATTENDU.items():
-        assert colonne in df.columns, f"colonne manquante : {colonne}"
-        assert df[colonne].dtype == dtype, f"{colonne}: {df[colonne].dtype} ≠ {dtype}"
-    assert df["prix"].min() &gt; 0
-    assert df["code_postal"].str.contains(r"^\d{5}$").all()
-    assert df["prix"].null_count() == 0
-    taux_manquants = df["n_pieces"].null_count() / len(df)
-    assert taux_manquants &lt; 0.30, f"trop de n_pieces manquants : {taux_manquants:.0%}"
-
-df_propre, rapport = filtrer(nettoyer("data/raw/annonces_20260316T090000.jsonl"))
-verifier(df_propre)
-print(rapport)   # {'initial': 4820, 'doublons_url': 112, 'doublons_contenu': 340,
-                 #  'sans_prix_ou_surface': 87, 'aberrants': 61,
-                 #  'retenu': 4220, 'taux_retenu': 0.876}
-df_propre.write_parquet("data/clean/annonces_20260316.parquet")</pre></div>
-
-    <p>Le format <strong>Parquet</strong> remplace ici le CSV : il conserve les types (une date reste une date, un entier reste un entier), il se compresse cinq à dix fois mieux, et il se lit par colonnes — ce qui accélère toutes les lectures partielles (module 4).</p>
-
-    <h2 id="base">5. Stockage en base de données</h2>
-
-    <h3>Pourquoi une base, puisqu'on a du Parquet</h3>
-    <p>Le Parquet est parfait pour l'entraînement : un fichier, lu d'un coup, en colonnes. Il l'est beaucoup moins pour le reste : l'API doit chercher des biens comparables en quelques millisecondes, chaque collecte ajoute des lignes et met à jour des annonces existantes, et plusieurs processus y accèdent en même temps. Ce sont exactement les cas où une base s'impose (module 4). On garde donc les deux : PostgreSQL comme source de vérité, Parquet comme export figé pour l'entraînement.</p>
-
-    <div class="code-label">sql/001_schema.sql</div>
-    <div class="code-block"><pre>CREATE TABLE IF NOT EXISTS annonces (
-    annonce_id     BIGSERIAL PRIMARY KEY,
-    url            TEXT        NOT NULL UNIQUE,   -- la clé métier : une URL = un bien
-    titre          TEXT        NOT NULL,
-    prix           NUMERIC(12,2) NOT NULL CHECK (prix &gt; 0),
-    surface        REAL        NOT NULL CHECK (surface BETWEEN 8 AND 1000),
-    n_pieces       SMALLINT    CHECK (n_pieces BETWEEN 1 AND 20),
-    ville          TEXT        NOT NULL,
-    code_postal    CHAR(5)     NOT NULL CHECK (code_postal ~ '^\d{5}$'),
-    departement    CHAR(2)     GENERATED ALWAYS AS (LEFT(code_postal, 2)) STORED,
-    a_ascenseur    BOOLEAN     NOT NULL DEFAULT FALSE,
-    a_balcon       BOOLEAN     NOT NULL DEFAULT FALSE,
-    description    TEXT,
-    collecte_le    TIMESTAMPTZ NOT NULL,
-    maj_le         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    prix_m2        NUMERIC(10,2) GENERATED ALWAYS AS (prix / surface) STORED
-);
-
--- index : jointures et filtres les plus fréquents (module 4)
-CREATE INDEX IF NOT EXISTS idx_annonces_cp     ON annonces(code_postal);
-CREATE INDEX IF NOT EXISTS idx_annonces_date   ON annonces(collecte_le DESC);
-CREATE INDEX IF NOT EXISTS idx_annonces_comp   ON annonces(code_postal, surface);
-
--- historique des prix : une annonce republiée moins cher est un signal fort
-CREATE TABLE IF NOT EXISTS historique_prix (
-    annonce_id  BIGINT      NOT NULL REFERENCES annonces(annonce_id) ON DELETE CASCADE,
-    prix        NUMERIC(12,2) NOT NULL,
-    constate_le TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (annonce_id, constate_le)
-);
-
--- suivi des exécutions : indispensable pour le monitoring (module 24)
-CREATE TABLE IF NOT EXISTS executions (
-    execution_id  BIGSERIAL PRIMARY KEY,
-    lance_le      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    fichier_source TEXT,
-    n_collectees  INTEGER,
-    n_retenues    INTEGER,
-    taux_retenu   REAL,
-    rapport       JSONB                  -- le dict de la section 4, tel quel
-);</pre></div>
-
-    <p>Trois choses méritent d'être remarquées. Les colonnes <code>GENERATED ALWAYS AS … STORED</code> sont calculées par la base : il est <em>impossible</em> d'avoir un <code>prix_m2</code> incohérent avec le prix et la surface, alors qu'une colonne recopiée par le script aurait dérivé tôt ou tard. Les contraintes <code>CHECK</code> dupliquent volontairement les règles du nettoyage : c'est une seconde barrière, active quel que soit le programme qui écrit. Et la colonne <code>JSONB</code> permet de stocker le rapport de qualité sans figer son schéma — le bon usage du JSON dans une base relationnelle.</p>
-
-    <h3>L'ingestion : idempotente</h3>
-    <p>Une exécution peut échouer au milieu, être relancée, ou traiter un fichier déjà traité. Le script d'ingestion doit donc être <strong>idempotent</strong> : le relancer deux fois sur les mêmes données donne exactement le même résultat qu'une seule fois. C'est ce que garantit l'instruction <code>INSERT … ON CONFLICT</code> (un « upsert »).</p>
-
-    <div class="code-label">Python — src/immo/ingest.py</div>
-    <div class="code-block"><pre>import json
-import polars as pl
-from sqlalchemy import create_engine, text
-from immo.config import parametres          # pydantic-settings (module 6)
-
-moteur = create_engine(parametres.database_url, pool_pre_ping=True)
-
-UPSERT = text("""
-    INSERT INTO annonces (url, titre, prix, surface, n_pieces, ville, code_postal,
-                          a_ascenseur, a_balcon, description, collecte_le)
-    VALUES (:url, :titre, :prix, :surface, :n_pieces, :ville, :code_postal,
-            :a_ascenseur, :a_balcon, :description, :collecte_le)
-    ON CONFLICT (url) DO UPDATE SET          -- l'annonce existe déjà : on met à jour
-        prix   = EXCLUDED.prix,
-        maj_le = now()
-    RETURNING annonce_id, (xmax = 0) AS insertion    -- xmax = 0 → c'était un INSERT
-""")
-
-def ingerer(chemin_parquet: str, rapport: dict) -&gt; dict:
-    df = pl.read_parquet(chemin_parquet)
-    lignes = df.to_dicts()
-
-    with moteur.begin() as con:              # TRANSACTION : tout ou rien (module 4)
-        n_nouvelles = 0
-        for lot in (lignes[i:i + 500] for i in range(0, len(lignes), 500)):
-            for ligne in lot:
-                res = con.execute(UPSERT, ligne).one()
-                n_nouvelles += int(res.insertion)
-                # on garde la trace du prix à chaque passage
-                con.execute(text("""INSERT INTO historique_prix (annonce_id, prix)
-                                    VALUES (:id, :prix)
-                                    ON CONFLICT DO NOTHING"""),
-                            {"id": res.annonce_id, "prix": ligne["prix"]})
-
-        con.execute(text("""INSERT INTO executions
-                            (fichier_source, n_collectees, n_retenues, taux_retenu, rapport)
-                            VALUES (:f, :c, :r, :t, CAST(:j AS jsonb))"""),
-                    {"f": chemin_parquet, "c": rapport["initial"], "r": rapport["retenu"],
-                     "t": rapport["taux_retenu"], "j": json.dumps(rapport)})
-
-    return {"nouvelles": n_nouvelles, "mises_a_jour": len(lignes) - n_nouvelles}</pre></div>
-
-    <div class="code-label">sql/002_vues.sql — l'analyse, côté base</div>
-    <div class="code-block"><pre>-- prix médian au m² par commune : c'est la BASELINE du modèle (section 1)
-CREATE OR REPLACE VIEW v_reference_commune AS
-SELECT code_postal,
-       COUNT(*)                                             AS n_annonces,
-       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY prix_m2) AS prix_m2_median,
-       PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY prix_m2) AS prix_m2_p10,
-       PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY prix_m2) AS prix_m2_p90
-FROM annonces
-WHERE collecte_le &gt; now() - INTERVAL '90 days'
-GROUP BY code_postal
-HAVING COUNT(*) &gt;= 20;            -- pas de référence sur 3 annonces
-
--- baisses de prix : fonction de fenêtre (module 4)
-CREATE OR REPLACE VIEW v_baisses AS
-SELECT a.url, a.ville, h.prix AS prix_actuel,
-       FIRST_VALUE(h.prix) OVER (PARTITION BY h.annonce_id
-                                 ORDER BY h.constate_le) AS prix_initial,
-       h.prix / FIRST_VALUE(h.prix) OVER (PARTITION BY h.annonce_id
-                                          ORDER BY h.constate_le) - 1 AS variation
-FROM historique_prix h JOIN annonces a USING (annonce_id);</pre></div>
-
-    <h2 id="modele">6. Modélisation et évaluation</h2>
-
-    <h3>Les features</h3>
-    <div class="code-label">Python — src/immo/features.py</div>
-    <div class="code-block"><pre>import numpy as np, polars as pl
-
-def construire_features(df: pl.DataFrame, reference: pl.DataFrame) -&gt; pl.DataFrame:
-    """reference = la vue v_reference_commune, calculée sur le passé uniquement."""
-    return (
-        df.join(reference, on="code_postal", how="left")
-          .with_columns(
-              # la variable la plus prédictive : le niveau de prix local
-              prix_m2_median=pl.col("prix_m2_median").fill_null(
-                  pl.col("prix_m2_median").median()),          # commune inconnue
-              # non-linéarités simples, utiles aux modèles linéaires (module 12)
-              log_surface=pl.col("surface").log(),
-              surface_par_piece=pl.col("surface") / pl.col("n_pieces").fill_null(2),
-              # indicateur de manquant : le FAIT de manquer est informatif (module 10)
-              pieces_manquant=pl.col("n_pieces").is_null().cast(pl.Int8),
-              n_pieces=pl.col("n_pieces").fill_null(-1),       # sentinelle pour les arbres
-              # saisonnalité : le marché n'est pas le même en août (module 15)
-              mois=pl.col("collecte_le").dt.month(),
-              mois_sin=(2 * np.pi * pl.col("collecte_le").dt.month() / 12).sin(),
-              mois_cos=(2 * np.pi * pl.col("collecte_le").dt.month() / 12).cos(),
-          )
-    )
-
-COLONNES = ["surface", "log_surface", "n_pieces", "pieces_manquant",
-            "surface_par_piece", "prix_m2_median", "a_ascenseur", "a_balcon",
-            "mois_sin", "mois_cos", "departement"]</pre></div>
-
-    <div class="warning-block">
-      <strong>Deux fuites de données évitées ici (module 10).</strong> La référence communale est calculée <em>sur la période d'entraînement uniquement</em> : la calculer sur tout le jeu ferait entrer l'information du test dans les features, et le score serait flatteur mais faux. Et le découpage train/test est <strong>temporel</strong>, pas aléatoire : on entraîne sur les annonces d'avant une date et on teste sur les suivantes, puisque c'est exactement la situation d'usage — prédire le prix d'une annonce qui vient de paraître.
-    </div>
-
-    <h3>Entraînement</h3>
-    <div class="code-label">Python — src/immo/train.py</div>
-    <div class="code-block"><pre>import joblib, numpy as np, polars as pl, mlflow
-from lightgbm import LGBMRegressor, early_stopping
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder
-from sklearn.metrics import mean_absolute_error
-
-VERSION = "1.0.0"
-
-def preparer(df: pl.DataFrame, date_coupure: str):
-    train = df.filter(pl.col("collecte_le") &lt;  pl.lit(date_coupure).str.to_datetime())
-    test  = df.filter(pl.col("collecte_le") &gt;= pl.lit(date_coupure).str.to_datetime())
-    # cible : le LOGARITHME du prix. L'erreur devient relative, et la distribution
-    # fortement asymétrique des prix (module 9) devient à peu près symétrique.
-    return (train[COLONNES].to_pandas(), np.log(train["prix"].to_numpy()),
-            test[COLONNES].to_pandas(),  np.log(test["prix"].to_numpy()))
-
-def entrainer(X_tr, y_tr, X_te, y_te):
-    pre = ColumnTransformer(
-        [("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
-          ["departement"])],
-        remainder="passthrough",
-    )
-    modele = Pipeline([                       # pipeline COMPLET : protège des fuites
-        ("pre", pre),
-        ("gbm", LGBMRegressor(n_estimators=3000, learning_rate=0.03, num_leaves=31,
-                              min_child_samples=30, subsample=0.8, colsample_bytree=0.8,
-                              random_state=42)),
-    ])
-    modele.fit(X_tr, y_tr,
-               gbm__eval_set=[(pre.fit(X_tr).transform(X_te), y_te)],
-               gbm__callbacks=[early_stopping(100, verbose=False)])
-    return modele
-
-def evaluer(modele, X_te, y_te, baseline_m2, surfaces) -&gt; dict:
-    pred_log = modele.predict(X_te)
-    prix_reel, prix_pred = np.exp(y_te), np.exp(pred_log)
-
-    return {
-        "mae_log":   mean_absolute_error(y_te, pred_log),        # ≈ erreur relative
-        "mape_med":  float(np.median(np.abs(prix_pred / prix_reel - 1))),
-        "dans_10pct": float(np.mean(np.abs(prix_pred / prix_reel - 1) &lt; 0.10)),
-        # LA comparaison qui compte : bat-on la baseline ? (module 10)
-        "mape_med_baseline": float(np.median(np.abs(baseline_m2 * surfaces / prix_reel - 1))),
-    }</pre></div>
-
-    <div class="code-label">résultats typiques sur ce genre de jeu</div>
-    <div class="code-block"><pre>baseline (prix médian au m² × surface)   erreur médiane : 18,4 %
-LightGBM                                 erreur médiane :  9,1 %   ← division par deux
-                                         62 % des biens estimés à ±10 %
-                                         MAE sur log(prix) : 0,118</pre></div>
-
-    <p>Deux compléments valent le détour. <strong>SHAP</strong> (module 12) explique une estimation individuelle : « ce bien est estimé 18 000 € au-dessus de la moyenne du quartier parce qu'il est grand et a un ascenseur » — c'est ce qui rend l'outil utilisable par un humain, bien plus qu'un nombre seul. Et un <strong>intervalle de prédiction</strong> vaut mieux qu'un point : on peut entraîner deux modèles quantiles supplémentaires (<code>objective="quantile", alpha=0.1</code> et <code>0.9</code>), ou conformaliser le modèle existant pour obtenir une couverture garantie (module 9) :</p>
-
-    <div class="code-label">Python — intervalle conforme, cinq lignes</div>
-    <div class="code-block"><pre># jeu de calibration disjoint de l'entraînement
-scores = np.abs(y_calib - modele.predict(X_calib))
-n, alpha = len(scores), 0.1
-q = np.quantile(scores, np.ceil((n + 1) * (1 - alpha)) / n, method="higher")
-# en log : un écart constant devient un FACTEUR multiplicatif sur le prix
-print(f"intervalle à 90 % : ×{np.exp(-q):.2f} à ×{np.exp(q):.2f}")   # ×0,82 à ×1,22</pre></div>
-
-    <div class="code-label">Python — journaliser l'expérience (module 24)</div>
-    <div class="code-block"><pre>mlflow.set_experiment("immo-prix")
-with mlflow.start_run(run_name=f"lgbm-{VERSION}"):
-    mlflow.log_params({"n_estimators": 3000, "learning_rate": 0.03,
-                       "date_coupure": DATE_COUPURE, "n_train": len(X_tr)})
-    mlflow.log_param("git_sha", sha_courant())
-    mlflow.log_metrics(metriques)
-    mlflow.sklearn.log_model(modele, "modele", registered_model_name="immo-prix")
-
-joblib.dump({"pipeline": modele, "version": VERSION, "colonnes": COLONNES,
-             "q_conforme": q, "entraine_le": datetime.now(timezone.utc).isoformat()},
-            f"models/immo-{VERSION}.joblib")     # le pipeline ENTIER, pas l'estimateur seul</pre></div>
-
-    <h2 id="api">7. API et conteneurisation</h2>
-
-    <div class="code-label">Python — src/immo/api.py</div>
-    <div class="code-block"><pre>from contextlib import asynccontextmanager
-import anyio, joblib, numpy as np, pandas as pd
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, text
-
-etat: dict = {}
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    artefact = joblib.load("models/immo-1.0.0.joblib")     # chargé UNE fois (module 6)
-    etat.update(artefact)
-    etat["moteur"] = create_engine(parametres.database_url, pool_pre_ping=True)
-    yield
-    etat.clear()
-
-app = FastAPI(title="Estimation de prix immobilier", version="1.0.0", lifespan=lifespan)
-
-class Bien(BaseModel):
-    surface: float = Field(gt=8, le=1000, description="surface habitable en m²")
-    n_pieces: int | None = Field(default=None, ge=1, le=20)
-    code_postal: str = Field(pattern=r"^\d{5}$")
-    a_ascenseur: bool = False
-    a_balcon: bool = False
-
-class Estimation(BaseModel):
-    prix_estime: float
-    prix_bas: float
-    prix_haut: float
-    prix_m2_estime: float
-    reference_locale_m2: float | None
-    n_comparables: int
-    version_modele: str
-
-@app.get("/health")
-def health() -&gt; dict:
-    return {"status": "ok", "modele": etat.get("version")}
-
-@app.post("/estimer", response_model=Estimation)
-async def estimer(bien: Bien) -&gt; Estimation:
-    # référence locale : une requête SQL indexée, quelques millisecondes (module 4)
-    with etat["moteur"].connect() as con:
-        ref = con.execute(text("""SELECT prix_m2_median, n_annonces
-                                  FROM v_reference_commune WHERE code_postal = :cp"""),
-                          {"cp": bien.code_postal}).one_or_none()
-    if ref is None:
-        raise HTTPException(404, "commune sans référence : pas assez d'annonces")
-
-    X = construire_ligne(bien, prix_m2_median=float(ref.prix_m2_median))
-    log_prix = await anyio.to_thread.run_sync(etat["pipeline"].predict, X)   # module 2
-
-    prix = float(np.exp(log_prix[0]))
-    q = etat["q_conforme"]
-    return Estimation(
-        prix_estime=round(prix, -2),
-        prix_bas=round(prix * float(np.exp(-q)), -2),
-        prix_haut=round(prix * float(np.exp(q)), -2),
-        prix_m2_estime=round(prix / bien.surface, 1),
-        reference_locale_m2=float(ref.prix_m2_median),
-        n_comparables=int(ref.n_annonces),
-        version_modele=etat["version"],
-    )</pre></div>
-
-    <div class="code-label">compose.yaml — la pile complète (module 5)</div>
-    <div class="code-block"><pre>services:
-  api:
-    build: .
-    ports: ["8000:8000"]
-    environment:
-      DATABASE_URL: postgresql+psycopg://immo:${POSTGRES_PASSWORD}@base:5432/immo
-    volumes:
-      - ./models:/app/models:ro          # le modèle, monté en lecture seule
-    depends_on:
-      base: { condition: service_healthy }
-    restart: unless-stopped
-
-  base:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: immo
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: immo
-    volumes:
-      - donnees-pg:/var/lib/postgresql/data
-      - ./sql:/docker-entrypoint-initdb.d:ro     # schéma appliqué au 1er démarrage
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U immo"]
-      interval: 5s
-      retries: 10
-
-volumes:
-  donnees-pg:</pre></div>
-
-    <div class="code-block"><pre>docker compose up -d --build
-curl -X POST localhost:8000/estimer -H "Content-Type: application/json" \
-     -d '{"surface": 72.5, "n_pieces": 3, "code_postal": "38000", "a_ascenseur": true}'
-# {"prix_estime":248300.0,"prix_bas":203600.0,"prix_haut":302900.0,
-#  "prix_m2_estime":3425.5,"reference_locale_m2":3180.0,"n_comparables":412,
-#  "version_modele":"1.0.0"}</pre></div>
-
-    <h2 id="cicd">8. CI/CD avec GitHub Actions</h2>
-
-    <h3>Ce qu'on automatise, et pourquoi</h3>
-    <p>Trois automatisations distinctes, à ne pas confondre : la <strong>vérification</strong> du code à chaque modification (intégration continue), la <strong>publication</strong> d'une image lorsqu'une version est prête (livraison continue), et l'<strong>exécution planifiée</strong> de la collecte. GitHub Actions couvre les trois. Le vocabulaire : un <em>workflow</em> est un fichier YAML déclenché par un <em>événement</em> ; il contient des <em>jobs</em> qui tournent chacun sur une machine neuve ; un job enchaîne des <em>steps</em>.</p>
-
-    <div class="code-label">.github/workflows/ci.yml</div>
-    <div class="code-block"><pre>name: CI
-
-on:                                   # QUAND ce workflow se déclenche
-  push:
-    branches: [main]
-  pull_request:                       # sur chaque proposition de modification
-
-jobs:
-  qualite:
-    runs-on: ubuntu-latest
-    services:                         # PostgreSQL éphémère pour les tests d'intégration
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: immo
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: immo_test
-        ports: ["5432:5432"]
-        options: &gt;-
-          --health-cmd pg_isready --health-interval 5s --health-retries 10
-
-    steps:
-      - uses: actions/checkout@v4                   # récupère le code
-
-      - name: Installer uv                          # module 1
-        uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true                        # cache des dépendances entre exécutions
-
-      - name: Installer les dépendances
-        run: uv sync --frozen                       # --frozen : échoue si uv.lock a dérivé
-
-      - name: Lint et formatage
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-
-      - name: Types
-        run: uv run mypy src/
-
-      - name: Tests
-        env:
-          DATABASE_URL: postgresql+psycopg://immo:test@localhost:5432/immo_test
-        run: uv run pytest -q --cov=src --cov-report=term-missing
-
-      - name: Vérifier que le schéma SQL s'applique
-        env:
-          PGPASSWORD: test
-        run: psql -h localhost -U immo -d immo_test -f sql/001_schema.sql
-
-  image:
-    needs: qualite                                  # ne démarre que si la qualité passe
-    if: github.ref == 'refs/heads/main'             # uniquement sur main
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write                               # droit de publier l'image
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}     # fourni automatiquement
-      - uses: docker/build-push-action@v6
-        with:
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-          cache-from: type=gha                      # cache des couches Docker
-          cache-to: type=gha,mode=max</pre></div>
-
-    <div class="code-label">.github/workflows/collecte.yml — l'exécution planifiée</div>
-    <div class="code-block"><pre>name: Collecte quotidienne
-
-on:
-  schedule:
-    - cron: "17 4 * * *"          # tous les jours à 4 h 17 UTC (heure creuse)
-  workflow_dispatch:              # et déclenchable à la main depuis l'interface
-
-jobs:
-  collecter:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45           # garde-fou : un scraper bloqué ne tourne pas 6 h
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync --frozen
-
-      - name: Collecte, nettoyage, ingestion
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}    # SECRET, jamais dans le code
-        run: |
-          uv run python -m immo.scrape
-          uv run python -m immo.clean
-          uv run python -m immo.ingest
-
-      - name: Contrôle qualité              # échoue si le taux retenu s'effondre
-        run: uv run python -m immo.checks --seuil-taux-retenu 0.75
-
-      - name: Alerter en cas d'échec
-        if: failure()
-        run: echo "::error::La collecte a échoué — vérifier la structure du site"</pre></div>
-
-    <div class="step-block">
-      <h4>Les points qui font la différence dans une CI de projet data</h4>
-      <ul>
-        <li><strong>Un service PostgreSQL éphémère</strong> permet de tester réellement l'ingestion et les requêtes, pas seulement des fonctions isolées. C'est là que se trouvent la plupart des bugs.</li>
-        <li><strong><code>uv sync --frozen</code></strong> échoue si le lockfile n'est pas à jour : impossible de fusionner du code dont les dépendances n'ont pas été résolues.</li>
-        <li><strong>Les mêmes vérifications que pre-commit</strong> (module 1), mais ici personne ne peut les contourner avec <code>--no-verify</code>.</li>
-        <li><strong>Les secrets</strong> passent par le coffre GitHub et sont masqués dans les journaux. Une chaîne de connexion en clair dans un fichier YAML est une fuite définitive, puisque l'historique Git la conserve.</li>
-        <li><strong>Un contrôle qualité qui échoue bruyamment</strong> : la collecte silencieusement vide est le pire scénario, parce qu'on continue à entraîner sur des données figées sans s'en rendre compte.</li>
-        <li><strong>L'image est étiquetée par le SHA du commit</strong> : chaque prédiction en production peut être reliée à une version précise du code (module 24).</li>
-      </ul>
-    </div>
-
-    <h2 id="suite">9. Ce qui resterait à faire</h2>
-    <p>Le pipeline tourne, mais un projet réel ne s'arrête pas là. Par ordre de priorité :</p>
-    <ul>
-      <li><strong>Surveillance de la dérive</strong> (module 24) — comparer chaque mois la distribution des surfaces, des prix au m² et des communes à celle du jeu d'entraînement (indice PSI), et déclencher un ré-entraînement au-delà d'un seuil. Le marché immobilier dérive lentement mais sûrement.</li>
-      <li><strong>Suivi de la performance réelle</strong> — les prix affichés ne sont pas les prix de vente. Rapprocher les annonces des transactions DVF publiées quelques mois plus tard permettrait de mesurer l'erreur <em>vraie</em>, et non l'erreur sur le prix demandé.</li>
-      <li><strong>Enrichissement géographique</strong> — géocoder les adresses, ajouter la distance au centre, aux transports, aux écoles ; ces variables expliquent une grande part du résidu. Les données de l'IGN et de l'INSEE sont ouvertes.</li>
-      <li><strong>Texte des annonces</strong> (module 16) — « refait à neuf », « travaux à prévoir », « vue dégagée » portent une information réelle, qu'un TF-IDF ou un embedding capterait.</li>
-      <li><strong>Découpage par groupe</strong> (module 10) — une même annonce republiée sous plusieurs URL peut se retrouver des deux côtés du découpage ; grouper par bien (surface, pièces, localisation) fiabiliserait l'évaluation.</li>
-      <li><strong>Interface</strong> (module 6) — une page Jinja avec un formulaire et la décomposition SHAP rendrait l'outil utilisable sans passer par curl.</li>
-    </ul>
-
-    <div class="step-block">
-      <h4>Les notions du cours mobilisées, et où</h4>
-      <div class="code-block"><pre>Module  Notion                              Où, dans ce projet
-──────────────────────────────────────────────────────────────────────────────
-1       src layout, UV, dataclass,          structure du projet, config, écriture
-        générateurs, pre-commit             JSONL au fil de l'eau, hooks
-2       asyncio, sémaphore, reprise         le scraper (§3)
-3       polars, lazy, Parquet               le nettoyage (§4)
-4       schéma, contraintes, index,         la base (§5), la vue de référence,
-        upsert, fenêtres, transactions      l'historique des prix
-5       Dockerfile, Compose, volumes        la pile de développement (§7)
-6       Pydantic, FastAPI, lifespan         extraction typée (§3), API (§7)
-7       métriques, log-cible                choix de la MAE sur log, évaluation (§6)
-9       prédiction conforme                 l'intervalle d'estimation (§6)
-10      fuite de données, baseline,         split temporel, référence calculée sur
-        manquants, feature engineering      le train seul, indicateurs de manquant
-12      gradient boosting, SHAP             le modèle et son explication (§6)
-15      saisonnalité                        features cycliques mois_sin/mois_cos
-16      texte des annonces                  piste d'amélioration (§9)
-24      MLflow, CI/CD, tests de données,    journalisation, GitHub Actions (§8),
-        monitoring                          contrôle qualité, dérive (§9)
-25      RGPD, CGU, droit des bases          le cadre juridique de la collecte (§2)</pre></div>
     </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Le droit se traite avant le code : CGU, <code>robots.txt</code>, RGPD, et l'open data quand il existe.</li>
-        <li>Les données brutes sont immuables et horodatées ; toute transformation produit un nouveau fichier.</li>
-        <li>Extraire brut, convertir ensuite : le nettoyage doit pouvoir être corrigé sans recollecter.</li>
-        <li>Chaque filtre est compté et journalisé : un taux de rejet qui change signale un problème en amont.</li>
-        <li>La base garantit ce que le script ne peut pas garantir : unicité, bornes, cohérence, transactions.</li>
-        <li>Ingestion idempotente : relancer deux fois ne doit rien changer.</li>
-        <li>Découpage temporel, référence calculée sur le passé, pipeline complet sérialisé : trois protections contre la fuite.</li>
-        <li>Une fourchette vaut mieux qu'un nombre ; une explication vaut mieux qu'une fourchette.</li>
-        <li>La CI vérifie ce que personne ne peut contourner, et la collecte planifiée échoue bruyamment quand le site change.</li>
+        <li>Retirer l'attribut sensible ne supprime pas la discrimination et empêche de la mesurer.</li>
+        <li>Les définitions d'équité sont mathématiquement incompatibles : le choix est un arbitrage, pas un calcul.</li>
+        <li>Ventiler les métriques par sous-groupe est le geste d'audit le plus rentable.</li>
+        <li>La menace réaliste est souvent le contournement économique plutôt que l'attaque adverse au pixel près.</li>
+        <li>Un modèle entraîné sur des données sensibles est lui-même une donnée sensible.</li>
+        <li>La confidentialité différentielle est la seule garantie formelle ; elle se paie en utilité.</li>
+        <li>Charger un modèle est une exécution de code : format sûr, provenance vérifiée, versions épinglées.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m25.html" class="btn btn-secondary">← Module 25 : Équité et sécurité</a>
-    <a href="project7.html" class="btn btn-primary">Retour au sommaire du cours</a>
+    <a href="project7-m25.html" class="btn btn-secondary">← Module 25 : MLOps</a>
+    <a href="project7-m27.html" class="btn btn-primary">Module 27 : Projet de A à Z →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">Scraping</span><span class="tag">polars</span><span class="tag">PostgreSQL</span><span class="tag">LightGBM</span><span class="tag">FastAPI</span><span class="tag">Docker</span><span class="tag">GitHub Actions</span></div>
+  <div class="project-meta"><span class="tag">Équité</span><span class="tag">fairlearn</span><span class="tag">Adversarial</span><span class="tag">Vie privée</span><span class="tag">DP-SGD</span><span class="tag">AI Act</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -945,7 +228,7 @@ jobs:
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 26</div>
-    <h1>End-to-end project: property listings, from scraping to price prediction</h1>
+    <h1>Fairness, robustness, privacy and security</h1>
   </div>
 
   <div class="project-content course-content">
@@ -955,16 +238,16 @@ jobs:
 
     <h2>What this module covers</h2>
     <ul>
-      <li>A complete, realistic pipeline: property listings from collection to a deployed price-estimation API.</li>
-      <li>Framing first: the decision the model serves, the target, the metric (median relative error), the baseline to beat, and the target architecture.</li>
-      <li>The legal side before any code: terms of service, the EU database right, GDPR, <code>robots.txt</code>, server load — and why French open data (DVF) is the better source for a published project.</li>
-      <li>A real async scraper: robots.txt checking, an honest user agent, semaphore-limited concurrency, exponential backoff, a disk cache, typed extraction with Pydantic, per-page error isolation, and timestamped immutable JSONL output.</li>
-      <li>Cleaning with polars: parsing text into numbers, normalisation, exact and near duplicates, business-rule outlier bounds, a quality report at every step, a data contract check, and Parquet output.</li>
-      <li>A PostgreSQL schema with generated columns, check constraints, indexes, a price-history table and a run-tracking table; an idempotent upsert ingestion inside a transaction; SQL views providing the model baseline and price-drop detection.</li>
-      <li>Modelling: leakage-safe features, a temporal split, a log-price target, LightGBM with early stopping, evaluation against the baseline, SHAP explanations, conformal prediction intervals, and MLflow tracking.</li>
-      <li>Serving: a FastAPI endpoint combining a SQL lookup and the model, a Docker Compose stack, and a sample request.</li>
-      <li>CI/CD with GitHub Actions: a quality workflow with an ephemeral PostgreSQL service, image publishing to GHCR tagged by commit SHA, and a scheduled collection workflow with quality gates and secrets.</li>
-      <li>What would come next — drift monitoring, true sale prices, geographic enrichment, listing text — and a table mapping every course module to where it is used in the project.</li>
+      <li>Where bias comes from: historical, sampling, measurement, aggregation and deployment bias — and why removing the sensitive attribute neither prevents discrimination nor allows measuring it.</li>
+      <li>Formal fairness definitions (demographic parity, equalised odds, group calibration) and the impossibility theorem that makes the choice a policy decision rather than a technical one.</li>
+      <li>Auditing with subgroup-disaggregated metrics (fairlearn), and pre-, in- and post-processing mitigations with their legal and intersectional limits.</li>
+      <li>Robustness: natural distribution shift versus deliberate manipulation, adversarial examples formalised, adversarial training and certified defences — and why economic gaming is usually the realistic threat.</li>
+      <li>Stress testing for graceful, detectable degradation.</li>
+      <li>Data poisoning and backdoors, model stealing and membership inference, and supply-chain risk (pickle weights execute code; prefer safetensors).</li>
+      <li>Privacy: the failure of naive anonymisation, memorisation by trained models, and treating a model as sensitive data.</li>
+      <li>Differential privacy defined, DP-SGD and its costs, federated learning and the fact that gradients leak.</li>
+      <li>LLM-specific risks: prompt injection, context leakage, RAG access control, and agents with real-world side effects.</li>
+      <li>GDPR and the EU AI Act, plus a practical accountability checklist.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -975,26 +258,27 @@ jobs:
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><strong>End-to-end project: property listings, from scraping to price prediction</strong></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><strong>Fairness, robustness, privacy and security</strong></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

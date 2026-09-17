@@ -297,7 +297,7 @@ GPU               PyTorch, CuPy, cuDF                 si le calcul est massiveme
       <li><code>transform(X)</code> — applique la transformation apprise ;</li>
       <li><code>predict(X)</code> / <code>predict_proba(X)</code> — produit la prédiction.</li>
     </ul>
-    <p>La conséquence est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur. La validation croisée réajuste donc <em>toute</em> la chaîne à chaque pli, ce qui constitue la protection la plus efficace contre la fuite de données (module 10) — un <code>StandardScaler</code> ajusté hors du pipeline aurait appris la moyenne du jeu de validation.</p>
+    <p>La conséquence est majeure : un <code>Pipeline</code> qui enchaîne des étapes se comporte lui-même comme un estimateur. La validation croisée réajuste donc <em>toute</em> la chaîne à chaque pli, ce qui constitue la protection la plus efficace contre la fuite de données (module 11) — un <code>StandardScaler</code> ajusté hors du pipeline aurait appris la moyenne du jeu de validation.</p>
 
     <div class="code-label">Python — un pipeline complet</div>
     <div class="code-block"><pre>from sklearn.compose import ColumnTransformer
@@ -345,7 +345,7 @@ class ClipOutliers(BaseEstimator, TransformerMixin):
     <h2 id="torch">10. PyTorch et la différentiation automatique</h2>
     <p>Un framework de deep learning apporte trois choses : des tenseurs qui vivent sur GPU, la différentiation automatique, et une bibliothèque de couches et d'optimiseurs. Un <strong>tenseur</strong> ressemble à un <code>ndarray</code>, avec deux attributs en plus : un <em>device</em> (processeur ou GPU) et la capacité d'enregistrer les opérations qu'il subit.</p>
 
-    <p>La <strong>différentiation automatique</strong> est le cœur du système. Pendant le calcul, PyTorch construit un graphe des opérations effectuées ; <code>backward()</code> le remonte en appliquant la règle de dérivation des fonctions composées, et dépose le gradient dans l'attribut <code>.grad</code> de chaque tenseur concerné. On n'écrit donc jamais de dérivée à la main (module 7).</p>
+    <p>La <strong>différentiation automatique</strong> est le cœur du système. Pendant le calcul, PyTorch construit un graphe des opérations effectuées ; <code>backward()</code> le remonte en appliquant la règle de dérivation des fonctions composées, et dépose le gradient dans l'attribut <code>.grad</code> de chaque tenseur concerné. On n'écrit donc jamais de dérivée à la main (module 8).</p>
 
     <div class="code-label">Python — autograd, pas à pas</div>
     <div class="code-block"><pre>import torch
@@ -361,7 +361,7 @@ print(x.grad)                                 # tensor([11.]) = 2x + 5 en x = 3 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-modele = nn.Sequential(                       # un perceptron multicouche (module 14)
+modele = nn.Sequential(                       # un perceptron multicouche (module 15)
     nn.Linear(10, 64), nn.ReLU(),
     nn.Linear(64, 1),
 ).to(device)
@@ -370,7 +370,7 @@ perte_fn = nn.MSELoss()
 opt = torch.optim.AdamW(modele.parameters(), lr=1e-3)
 
 for epoque in range(100):
-    for xb, yb in chargeur:                   # mini-lots (module 7)
+    for xb, yb in chargeur:                   # mini-lots (module 8)
         xb, yb = xb.to(device), yb.to(device)
 
         opt.zero_grad(set_to_none=True)       # 1. REMETTRE LES GRADIENTS À ZÉRO
@@ -385,7 +385,7 @@ for epoque in range(100):
     modele.train()</pre></div>
 
     <div class="warning-block">
-      <strong>Les gradients s'accumulent.</strong> C'est le bug numéro un des débutants : sans <code>opt.zero_grad()</code>, chaque <code>backward()</code> <em>ajoute</em> au gradient précédent au lieu de le remplacer, et l'entraînement diverge sans message d'erreur. Ce comportement n'est pas un défaut : il permet l'accumulation de gradient volontaire, qui simule un grand lot sur une petite carte (module 23). Deux autres réflexes : <code>torch.no_grad()</code> pour toute évaluation, et <code>modele.eval()</code> / <code>modele.train()</code> pour basculer le comportement du dropout et de la batch norm.
+      <strong>Les gradients s'accumulent.</strong> C'est le bug numéro un des débutants : sans <code>opt.zero_grad()</code>, chaque <code>backward()</code> <em>ajoute</em> au gradient précédent au lieu de le remplacer, et l'entraînement diverge sans message d'erreur. Ce comportement n'est pas un défaut : il permet l'accumulation de gradient volontaire, qui simule un grand lot sur une petite carte (module 24). Deux autres réflexes : <code>torch.no_grad()</code> pour toute évaluation, et <code>modele.eval()</code> / <code>modele.train()</code> pour basculer le comportement du dropout et de la batch norm.
     </div>
 
     <div class="code-label">PyTorch, TensorFlow et les autres, en 2026</div>
@@ -395,7 +395,7 @@ TensorFlow     encore présent en production, écosystème mobile mûr (TFLite).
                si l'existant de l'équipe l'impose.
 JAX            fonctions pures et transformations composables (grad, vmap, jit).
                Très utilisé en recherche scientifique et en calcul différentiable.
-BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 17) :
+BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 18) :
                optimiser un système dont chaque évaluation coûte cher.</pre></div>
 
     <div class="step-block">
@@ -468,26 +468,27 @@ BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 17
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

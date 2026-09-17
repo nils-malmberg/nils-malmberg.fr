@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 23 - Passer à l'échelle : GPU, entraînement distribué, performance - Nils Malmberg</title>
+  <title>Module 23 - Décision et action : du score à la décision - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,260 +41,215 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 23</div>
-    <h1>Passer à l'échelle : GPU, entraînement distribué, performance</h1>
+    <h1>Décision et action : du score à la décision</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Le module 2 traite la concurrence côté processeur. Ici, il s'agit du matériel qui fait réellement tourner l'apprentissage profond. Le message central tient en une phrase : sur un GPU moderne, <strong>la puissance de calcul n'est presque jamais le facteur limitant</strong> — c'est la mémoire, sa bande passante et les transferts. Comprendre cela change complètement la façon d'optimiser un entraînement.</p>
+    <p>Un modèle produit un nombre ; une organisation prend une action. Entre les deux se trouve un espace que les cours de machine learning traversent en une phrase — « on seuille à 0,5 » — et où se perd l'essentiel de la valeur des projets. Ce module traite ce chaînon : coûts d'erreur, contraintes de capacité, effet réel d'une action, et optimisation sous contraintes.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#gpu">Anatomie d'un GPU</a></li>
-        <li><a href="#roofline">Intensité arithmétique et modèle roofline</a></li>
-        <li><a href="#precision">Précision numérique et calcul mixte</a></li>
-        <li><a href="#memoire">Le budget mémoire d'un entraînement</a></li>
-        <li><a href="#profiler">Profiler avant d'optimiser</a></li>
-        <li><a href="#dataloader">Le pipeline d'entrée, goulot n° 1</a></li>
-        <li><a href="#distribue">Entraînement distribué</a></li>
-        <li><a href="#inference">Optimiser l'inférence</a></li>
-        <li><a href="#cout">Coût, énergie, louer ou posséder</a></li>
+        <li><a href="#utilite">Théorie de la décision et seuil optimal</a></li>
+        <li><a href="#capacite">Décider sous contrainte de capacité</a></li>
+        <li><a href="#uplift">Uplift : agir sur les bonnes personnes</a></li>
+        <li><a href="#bandits">Bandits contextuels</a></li>
+        <li><a href="#stock">Décision sous incertitude : le vendeur de journaux</a></li>
+        <li><a href="#ro">Recherche opérationnelle</a></li>
+        <li><a href="#spo">Prédire puis optimiser : le piège</a></li>
+        <li><a href="#humain">Humain dans la boucle et effets de bord</a></li>
       </ol>
     </div>
 
-    <h2 id="gpu">1. Anatomie d'un GPU</h2>
-    <p>Un processeur est conçu pour exécuter vite une <em>séquence</em> d'instructions compliquées : quelques cœurs puissants, de gros caches, de la prédiction de branchement. Un GPU est conçu pour l'inverse : exécuter la <em>même</em> instruction sur des milliers de données simultanément. Des milliers de cœurs simples, organisés en multiprocesseurs, exécutent les threads par groupes de 32 appelés <em>warps</em>, en mode SIMT — tous les threads d'un warp exécutent la même instruction au même instant.</p>
+    <h2 id="utilite">1. Théorie de la décision et seuil optimal</h2>
+    <p>Décider, c'est choisir l'action qui maximise l'utilité espérée. Pour une décision binaire, écrivons le coût attendu de chacune des deux options en fonction de la probabilité \(p\) que l'événement se produise :</p>
 
-    <div class="code-label">la conséquence immédiate</div>
-    <div class="code-block"><pre>if (condition dépendant du thread) { A } else { B }
+    <div class="code-label">le raisonnement, en quatre lignes</div>
+    <div class="code-block"><pre>si J'AGIS (j'envoie un technicien) :       coût = C_FP × (1-p)     (intervention inutile)
+si JE N'AGIS PAS :                          coût = C_FN × p         (panne subie)
 
-Dans un warp où la moitié des threads prend A et l'autre B, le GPU exécute
-A pour tous (en masquant la moitié), PUIS B pour tous (en masquant l'autre) :
-le temps d'exécution est la SOMME des deux branches, pas le maximum.
-→ toute divergence de branche à l'intérieur d'un warp sérialise l'exécution.</pre></div>
+agir est préférable quand    C_FP × (1-p)  &lt;  C_FN × p
+                    ⟺        C_FP          &lt;  p × (C_FN + C_FP)
+                    ⟺        p             &gt;  C_FP / (C_FP + C_FN)</pre></div>
 
-    <p>Les <em>tensor cores</em>, unités dédiées au produit matriciel en précision réduite, fournissent l'essentiel de la puissance annoncée sur les fiches techniques — mais uniquement pour des opérations qui prennent cette forme.</p>
+    <div style="text-align:center;overflow-x:auto">\[ p^\star = \frac{C_{FP}}{C_{FP}+C_{FN}} \]</div>
 
-    <p>La hiérarchie mémoire est ce qui gouverne les performances réelles :</p>
-    <div class="code-label">de la plus rapide à la plus lente</div>
-    <div class="code-block"><pre>registres              ~ 0 cycle       quelques Ko par multiprocesseur
-mémoire partagée       ~ 20 cycles     ~100 Ko par multiprocesseur, gérée à la main
-cache L2               ~ 200 cycles    quelques dizaines de Mo
-mémoire globale (HBM)  ~ 500 cycles    des dizaines de Go, ~2-3 To/s de bande passante
-mémoire hôte (RAM)     ~ 10 000 cycles via PCIe : ~30 Go/s → 100× plus lent que la HBM</pre></div>
+    <p>La formule vaut mieux qu'un long discours : si rater une panne coûte cent fois plus qu'une inspection inutile, le seuil optimal est à 1 % — et non à 50 %. Le seuil par défaut de 0,5 n'est justifié que dans le cas très particulier où les deux erreurs coûtent exactement pareil, ce qui n'arrive presque jamais.</p>
+    <p>La conséquence pratique : <strong>obtenir de l'interlocuteur métier le rapport des coûts</strong> est une étape de modélisation à part entière. Elle n'exige pas des chiffres exacts — un ordre de grandeur suffit à déplacer le seuil de façon décisive, et la question « est-ce dix fois pire, ou cent fois pire ? » est presque toujours répondable, là où « combien exactement ? » ne l'est pas.</p>
 
-    <h2 id="roofline">2. Intensité arithmétique et modèle roofline</h2>
-    <p>L'<strong>intensité arithmétique</strong> — le nombre d'opérations effectuées par octet lu en mémoire — décide du régime dans lequel on se trouve :</p>
-    <div style="text-align:center;overflow-x:auto">\[ I = \frac{\text{FLOP}}{\text{octets transférés}}, \qquad \text{performance} \leq \min\big(P_{\max},\; I \times BP\big) \]</div>
+    <div class="code-label">Python — seuil choisi sur le gain, pas sur le F1</div>
+    <div class="code-block"><pre>import numpy as np
 
-    <div class="code-label">le modèle roofline, et où tombent les opérations réelles</div>
-    <div class="code-block"><pre>  perf │                    ┌──────────────── P_max (limite de CALCUL)
- (FLOP/s)│                 ╱ │
-        │              ╱    │      matmul de grande taille (I ≈ 100)
-        │           ╱       │      → limité par le CALCUL
-        │        ╱          │
-        │     ╱  ← pente = bande passante mémoire
-        │  ╱ │
-        │╱   │ addition, ReLU, normalisation (I ≈ 0,5-2)
-        └────┴──────────────────────► intensité arithmétique I
-             └── limité par la MÉMOIRE : le GPU attend, ses unités de calcul
-                 tournent à vide l'essentiel du temps</pre></div>
+cout_fp, cout_fn = 50.0, 4_000.0      # inspection inutile / panne subie
+p = modele.predict_proba(X_val)[:, 1]
 
-    <p>Un produit matriciel de grande taille lit \(2n^2\) valeurs et fait \(2n^3\) opérations : son intensité croît avec \(n\), il sature donc le calcul. Une addition élément par élément lit deux valeurs, en écrit une et fait une opération : son intensité est de l'ordre de 0,1 — elle est <strong>limitée par la bande passante</strong>, et le GPU passe son temps à attendre la mémoire.</p>
+seuils = np.linspace(0.001, 0.5, 500)
+cout = [(((p &gt;= s) &amp; (y_val == 0)).sum() * cout_fp +
+         ((p &lt;  s) &amp; (y_val == 1)).sum() * cout_fn) for s in seuils]
 
-    <div class="step-block">
-      <h4>La conséquence pratique : fusionner les noyaux</h4>
-      <p>Enchaîner trois opérations élémentaires — multiplier, ajouter un biais, appliquer une activation — demande trois allers-retours complets en mémoire globale : lire, écrire, relire, réécrire, relire, réécrire. Les <em>fusionner</em> en un seul noyau qui fait les trois opérations pendant que la donnée est dans les registres divise le trafic par trois, et le temps d'autant. C'est précisément ce que fait <code>torch.compile</code> automatiquement, et ce que fait <em>FlashAttention</em> à la main pour l'attention (module 14) : au lieu de matérialiser la matrice d'attention \(n \times n\) en mémoire globale, elle la calcule par blocs dans la mémoire partagée. Le gain ne vient pas d'un calcul plus malin — le nombre d'opérations est identique — mais de la mémoire économisée.</p>
-    </div>
+s_opt = seuils[int(np.argmin(cout))]
+print(f"seuil optimal empirique = {s_opt:.3f}")
+print(f"seuil théorique         = {cout_fp / (cout_fp + cout_fn):.3f}")
+print(f"économie vs seuil 0,5   = {cout[np.argmin(np.abs(seuils - 0.5))] - min(cout):.0f} €")</pre></div>
 
-    <h2 id="precision">3. Précision numérique et calcul mixte</h2>
-    <div class="code-label">formats et usages</div>
-    <div class="code-block"><pre>          signe+exposant+mantisse   plage        précision   usage
-FP32      1 + 8 + 23                ±10³⁸        ~7 chiffres  référence historique
-TF32      1 + 8 + 10                ±10³⁸        ~3 chiffres  matmul FP32 sur tensor cores
-FP16      1 + 5 + 10                ±65 504      ~3 chiffres  rapide, mais DÉBORDE facilement
-BF16      1 + 8 + 7                 ±10³⁸        ~2 chiffres  même plage que FP32 : stable
-FP8       1 + 4 + 3                 restreinte               très grands modèles
-INT8      entier                                             inférence quantifiée (module 20)</pre></div>
-
-    <p>La ligne à retenir : <strong>BF16 sacrifie de la précision, FP16 sacrifie de la plage</strong>. Or en apprentissage, les gradients sont souvent minuscules (\(10^{-7}\)) : en FP16 ils tombent à zéro, alors qu'en BF16, dont l'exposant est identique à celui du FP32, ils restent représentables. C'est pourquoi BF16 est devenu le défaut dès que le matériel le supporte.</p>
-
-    <p>Le <strong>calcul en précision mixte</strong> stocke une copie maîtresse des poids en FP32 mais effectue les passes avant et arrière en 16 bits : mémoire divisée par deux, débit multiplié par deux à trois, sans perte mesurable. Avec FP16, le <em>loss scaling</em> est indispensable — on multiplie la perte par un grand facteur pour remonter les petits gradients dans la plage représentable, puis on divise avant la mise à jour.</p>
-
-    <div class="code-label">Python — PyTorch</div>
-    <div class="code-block"><pre>from torch.amp import autocast, GradScaler
-
-scaler = GradScaler()                      # inutile en bf16, indispensable en fp16
-for x, y in loader:
-    opt.zero_grad(set_to_none=True)        # set_to_none : moins de trafic mémoire
-    with autocast("cuda", dtype=torch.bfloat16):
-        perte = critere(modele(x), y)
-    scaler.scale(perte).backward()
-    scaler.step(opt); scaler.update()</pre></div>
-
-    <h2 id="memoire">4. Le budget mémoire d'un entraînement</h2>
-    <p>La question « pourquoi ce modèle ne tient-il pas sur ma carte ? » se répond par une addition. Pour \(N\) paramètres entraînés avec Adam en précision mixte :</p>
-
-    <div class="code-label">décomposition de la mémoire</div>
-    <div class="code-block"><pre>Poids (bf16)                  2N octets
-Copie maîtresse (fp32)        4N
-Gradients                     4N
-États Adam (m et v, fp32)     8N     ← Adam stocke DEUX moments par paramètre
-──────────────────────────────────────
-Total "statique"             ~18N octets  → un modèle de 1 Md de paramètres = ~18 Go
-                                            AVANT la moindre activation
-
-Activations                  ∝ BATCH × profondeur × longueur de séquence
-                             et c'est presque toujours ce qui fait déborder la carte</pre></div>
-
-    <p>Les leviers, par ordre de coût croissant :</p>
-    <ul>
-      <li><strong>Réduire la taille de lot</strong> et compenser par <em>accumulation de gradient</em> : on fait quatre passes avant/arrière sans mettre à jour, puis une seule mise à jour. Le lot effectif est identique, la mémoire d'activations divisée par quatre.</li>
-      <li><strong>Gradient checkpointing</strong> — ne conserver que certaines activations et <em>recalculer</em> les autres pendant la passe arrière. Environ 30 % de temps en plus pour une réduction mémoire d'un facteur cinq à dix : l'échange est souvent excellent.</li>
-      <li><strong>Optimiseur moins gourmand</strong> — SGD avec momentum coûte 4N au lieu de 8N, Adafactor bien moins encore.</li>
-      <li><strong>Distribuer les états d'optimiseur</strong> entre plusieurs cartes (ZeRO, section 7).</li>
-    </ul>
-
-    <div class="code-block"><pre># accumulation de gradient : lot effectif = 4 × taille du mini-lot
-for i, (x, y) in enumerate(loader):
-    with autocast("cuda", dtype=torch.bfloat16):
-        perte = critere(modele(x), y) / 4          # on moyenne sur les 4 micro-lots
-    perte.backward()                                # les gradients S'ACCUMULENT (module 3)
-    if (i + 1) % 4 == 0:
-        opt.step(); opt.zero_grad(set_to_none=True)
-
-modele.gradient_checkpointing_enable()              # recalcul plutôt que stockage</pre></div>
-
-    <p>Par ailleurs, la fragmentation de l'allocateur explique beaucoup d'erreurs de mémoire insuffisante alors qu'il « reste » de la place : la variable d'environnement <code>PYTORCH_CUDA_ALLOC_CONF</code>, réglée sur <code>expandable_segments:True</code>, aide souvent.</p>
-
-    <h2 id="profiler">5. Profiler avant d'optimiser</h2>
     <div class="warning-block">
-      <strong>L'intuition se trompe presque toujours.</strong> Avant d'acheter une carte plus puissante ou de réécrire un noyau, la seule question utile est : <em>le GPU travaille-t-il ?</em> Un <code>nvidia-smi</code> qui affiche 30 % d'utilisation signale un problème en amont — chargement des données, transferts, synchronisations — que le matériel ne résoudra pas. Un entraînement limité par un décodage d'images sur processeur ne va pas plus vite sur une carte deux fois plus chère.
+      <strong>Décider avec des probabilités exige qu'elles soient calibrées.</strong> Toute cette arithmétique suppose que « 0,012 » signifie réellement 1,2 % de chances. Or un gradient boosting ou un réseau de neurones produisent des scores mal calibrés (modules 8 et 13) : le seuil calculé serait alors faux, et d'autant plus faux qu'il est extrême. Calibrer (Platt, isotonique) sur un jeu dédié <em>avant</em> de raisonner en coûts, et vérifier par un diagramme de fiabilité — qui trace la fréquence observée en fonction de la probabilité annoncée, et doit suivre la diagonale.
     </div>
 
-    <div class="code-label">Python — profiler PyTorch</div>
-    <div class="code-block"><pre>from torch.profiler import profile, ProfilerActivity, schedule
+    <h2 id="capacite">2. Décider sous contrainte de capacité</h2>
+    <p>Dans la réalité, le seuil n'est souvent même pas le bon objet : une équipe de maintenance peut traiter vingt interventions par semaine, un service client rappeler cent clients par jour. Peu importe alors que trois mille cas dépassent le seuil — on en traitera vingt. La décision devient un problème de <strong>sélection sous budget</strong>.</p>
+    <p>Quand chaque action a un coût et un gain variables, c'est un problème de sac à dos : on classe par <em>ratio gain espéré sur coût</em> plutôt que par score brut. Un cas à 80 % de risque coûtant trois jours d'intervention peut passer après deux cas à 50 % coûtant une heure chacun.</p>
+    <p>Et l'évaluation change de métrique : ni AUC ni F1, mais la <strong>courbe de gain cumulé</strong> — combien de valeur capturée en traitant les \(k\) premiers — et le <em>lift</em> aux rangs qui correspondent à la capacité réelle.</p>
 
-with profile(
-    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-    schedule=schedule(wait=1, warmup=1, active=3),   # ignorer les premières itérations
-    record_shapes=True, profile_memory=True,
-    on_trace_ready=torch.profiler.tensorboard_trace_handler("./logs"),
-) as prof:
-    for i, (x, y) in enumerate(loader):
-        etape_entrainement(x, y)
-        prof.step()
-        if i &gt; 6: break
+    <div class="code-label">Python — la seule courbe qui compte sous contrainte</div>
+    <div class="code-block"><pre>ordre = np.argsort(-p)                       # du plus risqué au moins risqué
+gain_cumule = np.cumsum(gain_reel[ordre])    # valeur réellement capturée
+cout_cumule = np.cumsum(cout_action[ordre])
 
-print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))</pre></div>
+capacite = 20                                # ce qu'on peut traiter par semaine
+print(f"gain sur les {capacite} premiers : {gain_cumule[capacite-1]:.0f} €")
+print(f"lift@{capacite} = "
+      f"{gain_cumule[capacite-1] / (capacite * gain_reel.mean()):.1f}× le hasard")</pre></div>
+    <p>Un modèle avec une AUC inférieure peut très bien être meilleur sur les 2 % de cas que l'on traitera effectivement — et c'est cela qu'il faut optimiser, pas une métrique globale qui pondère également des cas qu'on ne regardera jamais.</p>
 
-    <div class="code-label">les signaux à chercher dans la trace</div>
-    <div class="code-block"><pre>Longs trous entre noyaux CUDA     le GPU ATTEND les données → section 6
-Beaucoup de temps dans            transferts hôte↔GPU excessifs → réduire les
-  aten::copy_                     allers-retours, utiliser pin_memory
-Multitude de petits noyaux        candidats à la FUSION → torch.compile
-  élément par élément
-Appels bloquants                  .item(), print(tenseur), .cpu() DANS la boucle :
-                                  chacun force une SYNCHRONISATION et casse le
-                                  pipeline asynchrone. Accumuler et n'afficher
-                                  qu'en fin d'époque.</pre></div>
+    <h2 id="uplift">3. Uplift : agir sur les bonnes personnes</h2>
+    <p>Voici l'erreur de raisonnement la plus coûteuse du domaine. Un modèle de churn identifie les clients qui vont partir ; on leur envoie une offre de rétention. Mais certains partiront quoi qu'on fasse, d'autres restaient de toute façon, et certains — c'est documenté — <em>partent parce que</em> l'offre leur rappelle qu'ils peuvent partir. Cibler la probabilité d'événement, c'est confondre prédiction et effet d'une action (module 9).</p>
 
-    <h2 id="dataloader">6. Le pipeline d'entrée, goulot n° 1</h2>
+    <p>L'<strong>uplift</strong> (ou effet de traitement individuel) estime la bonne quantité :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \tau(x) = \mathbb{E}\big[Y \mid T=1, X=x\big] - \mathbb{E}\big[Y \mid T=0, X=x\big] \]</div>
+
+    <div class="code-label">les quatre populations</div>
+    <div class="code-block"><pre>                          Reste si TRAITÉ          Part si TRAITÉ
+  Reste si NON traité     SÛRS                     À NE PAS DÉRANGER
+                          (gain nul, coût réel)    (l'action NUIT : uplift négatif)
+  Part si NON traité      PERSUADABLES             CAUSES PERDUES
+                          ← LA SEULE CIBLE UTILE   (gain nul, coût réel)
+
+  Un modèle de churn classique cible "part si non traité", donc il mélange
+  les PERSUADABLES et les CAUSES PERDUES — et ignore complètement le fait que
+  les "à ne pas déranger" font perdre de l'argent DEUX fois.</pre></div>
+
+    <p>Estimer \(\tau\) demande des données expérimentales — un A/B test où une partie de la population n'a pas été traitée (module 9) — ou des hypothèses causales fortes. Les approches usuelles : <em>T-learner</em> (un modèle par bras, différence des prédictions — simple, mais la différence de deux modèles bruités est très bruitée), <em>S-learner</em> (un seul modèle avec le traitement comme variable — risque de le sous-pondérer parmi cent autres), <em>X-learner</em> (meilleur quand les groupes sont déséquilibrés) et les <strong>forêts causales</strong> (<code>econml</code>, <code>causalml</code>), qui partitionnent l'espace pour maximiser l'<em>hétérogénéité de l'effet</em> plutôt que la pureté de la cible.</p>
+
+    <div class="code-label">Python — estimer et évaluer un uplift</div>
+    <div class="code-block"><pre>from causalml.inference.tree import UpliftRandomForestClassifier
+from causalml.metrics import plot_qini, qini_score
+
+modele = UpliftRandomForestClassifier(control_name="controle", n_estimators=300)
+modele.fit(X_train, treatment=t_train, y=y_train)      # t = "traite" / "controle"
+
+uplift = modele.predict(X_test)
+
+# évaluation : on ordonne par uplift décroissant et on vérifie que le gain
+# INCRÉMENTAL réel suit. Une courbe plate = le modèle ne trouve rien.
+print(qini_score(df_test, outcome_col="y", treatment_col="t"))
+plot_qini(df_test, outcome_col="y", treatment_col="t")</pre></div>
+
+    <p>Le raisonnement vaut bien au-delà du marketing : traiter préventivement un équipement, envoyer un technicien, accorder une remise, prioriser un contrôle. Dans tous ces cas, la question utile n'est jamais « que va-t-il se passer ? » mais « qu'est-ce que <em>mon action</em> change ? ».</p>
+
+    <h2 id="bandits">4. Bandits contextuels</h2>
+    <p>Quand plusieurs actions sont possibles et que l'on observe le résultat immédiatement, on peut apprendre <em>en agissant</em> plutôt que de figer un test A/B pendant trois semaines. Un bandit contextuel choisit une action selon le contexte, observe la récompense, et met à jour sa politique — c'est le cas particulier du RL (module 19) <em>sans transition d'état</em> : l'action d'aujourd'hui ne change pas la situation de demain. D'où une méthode bien plus simple, plus stable et plus sûre.</p>
+
+    <div class="code-label">stratégies et positionnement</div>
+    <div class="code-block"><pre>ε-greedy          trivial à implémenter, exploration non ciblée
+LinUCB            borne supérieure de confiance sur un modèle linéaire du contexte :
+                  on essaie ce qui est soit bon, soit mal connu (module 18)
+Thompson sampling échantillonner dans le postérieur (module 10) : excellent en pratique,
+                  naturellement parallélisable, presque aucun réglage
+Bandit + coût     intégrer le coût de chaque action dans la récompense
+
+A/B test          quand il faut une MESURE causale propre à communiquer
+Bandit            quand il faut MAXIMISER le résultat pendant l'apprentissage
+                  (moins de trafic gaspillé sur les mauvaises variantes)</pre></div>
+
+    <p>Deux précautions. Un bandit crée des données <em>biaisées par sa propre politique</em> — les bonnes actions sont sur-représentées — ce qui complique toute analyse a posteriori : il faut journaliser les <em>probabilités de sélection</em> pour permettre une évaluation hors ligne non biaisée par pondération inverse (même mécanique qu'au module 22). Et la non-stationnarité doit être traitée explicitement (oubli exponentiel des observations anciennes), sinon le bandit reste bloqué sur une action devenue mauvaise.</p>
+
+    <h2 id="stock">5. Décision sous incertitude : le vendeur de journaux</h2>
+    <p>Le problème du <em>newsvendor</em> illustre parfaitement pourquoi une prévision ponctuelle ne suffit pas. On commande une quantité \(q\) avant de connaître la demande \(D\) ; le surstock coûte \(c_o\) par unité, la rupture \(c_u\).</p>
+
+    <div class="code-label">le raisonnement marginal</div>
+    <div class="code-block"><pre>Commander une unité de plus est rentable tant que :
+   (probabilité qu'elle SERVE) × c_u   >   (probabilité qu'elle reste) × c_o
+              P(D ≥ q) × c_u           >          P(D &lt; q) × c_o
+À l'optimum, égalité :  P(D &lt; q*) = c_u / (c_u + c_o)</pre></div>
+
+    <div style="text-align:center;overflow-x:auto">\[ q^\star = F_D^{-1}\!\left(\frac{c_u}{c_u + c_o}\right) \]</div>
+
+    <p>La quantité optimale n'est donc pas la demande moyenne, mais un <strong>quantile</strong> de sa distribution. Si une rupture coûte trois fois un surstock, il faut commander le quantile 75 %. C'est ce qui justifie la prévision probabiliste du module 16 : la distribution complète est l'<em>entrée</em> de la décision, la moyenne n'en est qu'un résumé souvent inadapté. Le même raisonnement gouverne le dimensionnement d'une marge de sécurité, d'une réserve d'énergie, d'un effectif de garde ou d'un stock de pièces de rechange.</p>
+
+    <h2 id="ro">6. Recherche opérationnelle</h2>
+    <p>Beaucoup de décisions industrielles ne sont pas des prédictions mais des <em>allocations sous contraintes</em> : planifier une production, affecter des équipes, optimiser des tournées, choisir un plan de maintenance. Le ML estime des paramètres (durées, demandes, probabilités de panne) ; la recherche opérationnelle décide. Ignorer cette seconde moitié conduit à livrer des prédictions que personne ne sait transformer en planning.</p>
+
+    <div class="code-label">Python — affectation sous contraintes avec OR-Tools</div>
+    <div class="code-block"><pre>from ortools.linear_solver import pywraplp
+
+s = pywraplp.Solver.CreateSolver("SCIP")               # solveur MILP
+
+# VARIABLES DE DÉCISION : x[i,j] = 1 si l'équipe i traite l'intervention j
+x = {(i, j): s.BoolVar(f"x_{i}_{j}") for i in equipes for j in interventions}
+
+# CONTRAINTES
+for j in interventions:                                # chaque intervention couverte
+    s.Add(sum(x[i, j] for i in equipes) == 1)          #   exactement une fois
+for i in equipes:                                      # capacité hebdomadaire
+    s.Add(sum(duree[j] * x[i, j] for j in interventions) &lt;= capacite[i])
+for j in urgentes:                                     # les urgences sont prioritaires
+    s.Add(sum(x[i, j] for i in equipes_qualifiees) == 1)
+
+# OBJECTIF : maximiser le risque évité, estimé par le modèle de survie (module 16)
+s.Maximize(sum(risque_evite[j] * x[i, j] for i in equipes for j in interventions))
+
+statut = s.Solve()
+if statut == pywraplp.Solver.OPTIMAL:
+    print(f"valeur optimale : {s.Objective().Value():.0f}")
+    plan = [(i, j) for (i, j), v in x.items() if v.solution_value() &gt; 0.5]</pre></div>
+
+    <p>Les outils : <strong>OR-Tools</strong> (Google — solveurs LP/MILP, programmation par contraintes, tournées de véhicules), <strong>PuLP</strong> ou <strong>Pyomo</strong> pour la modélisation, <strong>HiGHS</strong> comme solveur libre performant, Gurobi ou CPLEX en commercial.</p>
+    <p>Ce qu'il faut retenir du fonctionnement : un problème <em>linéaire continu</em> se résout en temps polynomial, mais l'ajout de variables <em>entières</em> le rend NP-difficile — d'où l'importance de la formulation. Une bonne formulation résout en secondes ce qu'une mauvaise ne résout jamais, parce qu'elle donne au solveur des bornes plus serrées pour élaguer son arbre de recherche. Et quand l'optimalité exacte n'est pas nécessaire, les métaheuristiques (recuit simulé, tabou, algorithmes génétiques) donnent de bonnes solutions rapidement.</p>
+
+    <h2 id="spo">7. Prédire puis optimiser : le piège</h2>
+    <p>La démarche standard entraîne le modèle à minimiser une erreur de prédiction, puis optimise la décision à partir des prédictions. Le problème : <strong>ces deux objectifs ne sont pas alignés</strong>.</p>
+
+    <div class="code-label">le même RMSE, deux conséquences opposées</div>
+    <div class="code-block"><pre>Deux routes, coûts réels : A = 10, B = 12. Le modèle doit choisir la moins chère.
+
+modèle 1 : prédit A = 11, B = 13     erreur = 1 sur chaque       → choisit A ✓ CORRECT
+modèle 2 : prédit A = 11, B =  9     erreur = 1 sur chaque       → choisit B ✗ FAUX
+
+Même RMSE, décisions opposées. Le RMSE ne voit pas que la seule chose qui
+compte est l'ORDRE des deux prédictions, pas leur exactitude absolue.</pre></div>
+
+    <p>L'<em>apprentissage orienté décision</em> (SPO+, optimisation différentiable) intègre le problème d'optimisation dans l'entraînement, de sorte que le modèle apprenne à bien prédire <em>là où cela change la décision</em>. C'est un domaine encore jeune, mais l'idée est immédiatement exploitable même sans ces méthodes : <strong>évaluer toute chaîne prédiction-décision sur le résultat final</strong> — coût total, risque évité, valeur capturée — et non sur la métrique intermédiaire du modèle. C'est le prolongement exact du principe du module 11 : la métrique doit venir de la décision.</p>
+
+    <h2 id="humain">8. Humain dans la boucle et effets de bord</h2>
     <ul>
-      <li><strong>Plusieurs workers</strong> — <code>num_workers</code> à 4-8 par GPU, avec <code>persistent_workers=True</code> et <code>prefetch_factor</code> pour que le chargement recouvre le calcul. C'est du parallélisme de processus (module 2), avec les mêmes contraintes de sérialisation.</li>
-      <li><strong>Mémoire épinglée</strong> — <code>pin_memory=True</code> plus <code>.to(device, non_blocking=True)</code> permettent un transfert asynchrone par DMA pendant que le GPU calcule. Sans mémoire épinglée, le système doit d'abord recopier dans une zone verrouillée, ce qui sérialise.</li>
-      <li><strong>Format de stockage</strong> — des millions de petits fichiers écroulent n'importe quel système de fichiers (chaque ouverture est un aller-retour). Regrouper en archives séquentielles (WebDataset, TFRecord) ou en Parquet transforme des accès aléatoires en lecture séquentielle, souvent un facteur dix.</li>
-      <li><strong>Décodage</strong> — le décodage JPEG et les augmentations sur processeur saturent vite : les déporter sur GPU (NVIDIA DALI, <code>torchvision.io</code> avec décodage matériel) libère le goulot.</li>
-      <li><strong>Prétraitement figé</strong> — tout ce qui est déterministe (redimensionnement, normalisation, tokenisation) se calcule <em>une fois</em> et se stocke, plutôt qu'à chaque époque.</li>
+      <li><strong>Déléguer partiellement</strong> — la bonne architecture est souvent à trois zones : décision automatique quand le modèle est confiant et l'enjeu faible, transmission à un humain quand il hésite, procédure de référence quand l'entrée est hors domaine. Les ensembles conformes du module 10 formalisent exactement ce « je ne sais pas trancher » : quand l'ensemble prédit contient plusieurs classes, on transmet.</li>
+      <li><strong>Mesurer le système, pas le modèle</strong> — ce qui compte est la performance de l'ensemble humain + modèle. Un modèle un peu moins performant mais dont les erreurs sont <em>détectables</em> par l'opérateur produit un meilleur système qu'un modèle opaque légèrement plus précis.</li>
+      <li><strong>Anticiper les boucles de rétroaction</strong> (module 25) — un modèle qui déclenche des inspections ne verra plus jamais les pannes qu'il a évitées : ses futures données d'entraînement sont modifiées par ses propres décisions, et il finit par « apprendre » que les cas qu'il signale ne tombent jamais en panne. Conserver une petite fraction de cas traités <em>aléatoirement</em> — un groupe témoin permanent — est ce qui permet de continuer à mesurer honnêtement.</li>
+      <li><strong>Prévoir le détournement</strong> — dès qu'une décision a des conséquences, les personnes concernées s'adaptent à la règle. Un critère devenu cible cesse d'être un bon critère ; les variables les plus faciles à manipuler doivent donc être écartées des modèles qui décident. C'est le même mécanisme que le détournement de récompense en RL (module 19).</li>
     </ul>
-
-    <h2 id="distribue">7. Entraînement distribué</h2>
-    <div class="code-label">les stratégies de parallélisme</div>
-    <div class="code-block"><pre>DONNÉES (DDP)     chaque GPU a une COPIE COMPLÈTE du modèle et traite un sous-lot
-                  différent ; les gradients sont moyennés par all-reduce.
-                  Simple, efficace, LE DÉFAUT — tant que le modèle tient sur une carte.
-
-ZeRO / FSDP       on PARTITIONNE états d'optimiseur, puis gradients, puis paramètres
-                  entre les GPU, rassemblés à la demande couche par couche.
-                  Permet d'entraîner des modèles bien plus gros que la mémoire d'une
-                  carte, au prix de communications supplémentaires.
-
-TENSEUR           une même couche est découpée entre plusieurs GPU (les matrices sont
-                  partitionnées). Communication intense à chaque couche : réservé à
-                  l'intérieur d'un nœud, où les liens sont rapides (NVLink).
-
-PIPELINE          les couches sont réparties par étages ; les micro-lots circulent.
-                  Attention à la "bulle" : les premiers étages attendent pendant que
-                  les derniers finissent.
-
-CONTEXTE          découpe la dimension de séquence, pour les très longs contextes.</pre></div>
-
-    <div class="code-label">Python — DDP, l'essentiel</div>
-    <div class="code-block"><pre># lancement : torchrun --nproc_per_node=4 entrainement.py
-import os, torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data.distributed import DistributedSampler
-
-dist.init_process_group("nccl")                  # NCCL : la bibliothèque de
-rang_local = int(os.environ["LOCAL_RANK"])       # communication GPU de NVIDIA
-torch.cuda.set_device(rang_local)
-
-modele = DDP(modele.to(rang_local), device_ids=[rang_local])
-echantillonneur = DistributedSampler(dataset)    # partition SANS recouvrement
-
-for epoque in range(n):
-    echantillonneur.set_epoch(epoque)            # sinon le même ordre à chaque époque
-    for xb, yb in loader:
-        ...                                      # DDP moyenne les gradients
-                                                 # automatiquement au backward()
-    if rang_local == 0:                          # journaliser et sauvegarder
-        torch.save(modele.module.state_dict(), "ckpt.pt")   # .module : le vrai modèle</pre></div>
-
-    <p>Trois points de vigilance. L'<strong>efficacité de passage à l'échelle</strong> n'est jamais de 100 % : la communication (all-reduce) croît avec le nombre de cartes, et huit GPU donnent typiquement un facteur six à sept, pas huit — il faut la mesurer, pas la supposer. Le <strong>lot effectif</strong> est multiplié par le nombre de GPU, ce qui impose d'ajuster le taux d'apprentissage et le warmup (module 7) ; sinon la convergence se dégrade sans qu'on comprenne pourquoi. Enfin, la <strong>reproductibilité</strong> demande de gérer les graines par rang et l'ordre de l'échantillonneur.</p>
-
-    <h2 id="inference">8. Optimiser l'inférence</h2>
-    <p>En production, le coût cumulé de l'inférence dépasse largement celui de l'entraînement : un modèle s'entraîne une fois et répond des millions de fois. C'est donc là que l'optimisation rapporte le plus. Les leviers, par ordre de rentabilité :</p>
-    <ul>
-      <li><strong>Regroupement dynamique</strong> — traiter plusieurs requêtes ensemble améliore radicalement le débit, car l'inférence d'un petit lot est limitée par la bande passante et non par le calcul (section 2) : charger les poids coûte pareil pour une requête ou pour trente-deux. C'est ce que font vLLM et Triton (module 20).</li>
-      <li><strong>Quantification</strong> — INT8 ou 4 bits : mémoire divisée, latence réduite, dégradation faible avec les schémas modernes.</li>
-      <li><strong>Compilation</strong> — <code>torch.compile</code>, ONNX Runtime, TensorRT : fusion de noyaux et spécialisation aux formes d'entrée, souvent un facteur deux sans rien changer au modèle.</li>
-      <li><strong>Cache KV</strong> — en génération, conserver les clés et valeurs déjà calculées évite de tout recalculer à chaque jeton ; sa gestion mémoire est le principal enjeu du service de LLM.</li>
-      <li><strong>Distillation</strong> — entraîner un petit modèle à imiter le grand : le gain le plus important quand la charge est massive et stable.</li>
-      <li><strong>Ne pas utiliser de GPU</strong> — pour un gradient boosting ou un petit réseau, un processeur bien utilisé (ONNX Runtime, threads correctement bornés — module 2) est moins cher et plus simple à exploiter.</li>
-    </ul>
-    <p>L'arbitrage de fond reste <em>latence contre débit</em> : un gros lot maximise le débit et dégrade la latence individuelle, puisque la première requête attend que le lot se remplisse. La bonne cible se déduit du contrat de service, pas d'un réflexe d'optimisation.</p>
-
-    <h2 id="cout">9. Coût, énergie, louer ou posséder</h2>
-    <p>Un calcul de coin de table vaut mieux qu'une intuition : coût \(\approx\) prix horaire de l'instance \(\times\) nombre de GPU \(\times\) durée. À quelques euros de l'heure par carte, un entraînement d'une semaine sur huit GPU se chiffre en milliers d'euros — ce qui justifie largement de passer deux jours à profiler avant de lancer. Les instances <em>spot</em> ou préemptibles divisent la facture par deux ou trois, à condition que l'entraînement sache reprendre depuis un point de contrôle, ce qui est de toute façon une bonne pratique.</p>
-    <p>Sur l'énergie : la consommation se calcule à partir de la puissance des cartes, du PUE du centre de données et de l'intensité carbone du réseau électrique — <code>codecarbon</code> l'automatise. Le choix du fournisseur et de la région pèse davantage que la plupart des optimisations logicielles, et c'est une information qui a sa place dans une model card (module 24).</p>
-    <p>Enfin, l'arbitrage louer/posséder : au-delà d'une utilisation soutenue, une machine locale devient rentable — c'est ce qui m'a conduit à installer un GPU dans mon <a href="project6.html">NAS</a> pour l'inférence de modèles locaux. Il faut simplement compter le coût complet : matériel, électricité, refroidissement, temps d'administration, et l'impossibilité de changer d'échelle rapidement.</p>
-
-    <div class="step-block">
-      <h4>Avant de passer à l'échelle</h4>
-      <p>La bonne question n'est pas « comment répartir ce calcul sur huit GPU ? » mais « ce calcul est-il nécessaire ? ». Réduire la résolution des images, échantillonner les données, utiliser un modèle pré-entraîné plus petit (module 11), élaguer l'espace d'hyperparamètres par <em>successive halving</em> (module 12) ou par recherche bayésienne (module 17) : ces décisions font gagner des ordres de grandeur, là où la distribution en fait gagner un facteur huit au mieux. Passer à l'échelle est la dernière étape, pas la première.</p>
-    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>La plupart des opérations d'un réseau sont limitées par la bande passante mémoire, pas par le calcul : fusionner les noyaux est le levier principal.</li>
-        <li>BF16 en précision mixte est le défaut actuel ; FP16 impose le loss scaling car sa plage est étroite.</li>
-        <li>Un entraînement Adam coûte environ 18 octets par paramètre avant les activations ; accumulation et checkpointing sont les premiers leviers mémoire.</li>
-        <li>Profiler avant d'optimiser : le goulot est souvent le chargement des données ou une synchronisation accidentelle.</li>
-        <li>DDP par défaut ; FSDP/ZeRO quand le modèle ne tient plus ; ajuster le taux d'apprentissage au lot effectif.</li>
-        <li>En production, l'inférence coûte plus que l'entraînement : regroupement, quantification, compilation, distillation.</li>
-        <li>Réduire le travail à faire bat toujours la parallélisation de ce travail.</li>
+        <li>Le seuil optimal découle du rapport des coûts d'erreur, pas de la convention 0,5 — et suppose des probabilités calibrées.</li>
+        <li>Sous contrainte de capacité, évaluer par courbe de gain cumulé aux rangs réellement traités.</li>
+        <li>Cibler l'uplift, pas la probabilité d'événement : certaines actions nuisent à une partie de la population.</li>
+        <li>Un bandit contextuel apprend en agissant ; journaliser les propensions pour pouvoir évaluer après coup.</li>
+        <li>Une décision sous incertitude se prend sur un quantile, d'où la prévision probabiliste.</li>
+        <li>La moitié des problèmes industriels sont des problèmes d'allocation : la recherche opérationnelle complète le ML.</li>
+        <li>Évaluer la chaîne complète sur la valeur finale, pas le modèle sur sa métrique intermédiaire.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m22.html" class="btn btn-secondary">← Module 22 : Du score à la décision</a>
-    <a href="project7-m24.html" class="btn btn-primary">Module 24 : MLOps →</a>
+    <a href="project7-m22.html" class="btn btn-secondary">← Module 22 : Recherche et recommandation</a>
+    <a href="project7-m24.html" class="btn btn-primary">Module 24 : Passer à l'échelle →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">GPU</span><span class="tag">CUDA</span><span class="tag">Mixed precision</span><span class="tag">DDP</span><span class="tag">FSDP</span><span class="tag">Profiling</span></div>
+  <div class="project-meta"><span class="tag">Coûts d'erreur</span><span class="tag">Uplift</span><span class="tag">Bandits</span><span class="tag">Newsvendor</span><span class="tag">MILP</span><span class="tag">OR-Tools</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -315,7 +270,7 @@ for epoque in range(n):
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 23</div>
-    <h1>Scaling up: GPUs, distributed training, performance</h1>
+    <h1>From scores to decisions</h1>
   </div>
 
   <div class="project-content course-content">
@@ -325,16 +280,14 @@ for epoque in range(n):
 
     <h2>What this module covers</h2>
     <ul>
-      <li>GPU anatomy, warps and the memory hierarchy; arithmetic intensity and the roofline model, and why most neural network operations are bandwidth-bound rather than compute-bound.</li>
-      <li>Kernel fusion as the main lever, and what <code>torch.compile</code> and FlashAttention actually do.</li>
-      <li>Numeric formats (FP32, TF32, FP16, BF16, FP8, INT8), mixed-precision training and loss scaling.</li>
-      <li>The training memory budget: roughly 18 bytes per parameter with Adam before activations, plus gradient accumulation, checkpointing, lighter optimisers and allocator fragmentation.</li>
-      <li>Profiling before optimising: reading a PyTorch trace, spotting idle gaps, excessive host-device copies, tiny element-wise kernels and accidental synchronisations.</li>
-      <li>The input pipeline as the most common bottleneck: workers, pinned memory, sequential storage formats, GPU decoding, precomputed deterministic preprocessing.</li>
-      <li>Distributed training: DDP, ZeRO/FSDP, tensor, pipeline and sequence parallelism, scaling efficiency, effective batch size and learning-rate adjustment, reproducibility across ranks.</li>
-      <li>Inference optimisation: dynamic batching, quantisation, compilation, KV caching, distillation — and when a CPU is the better answer.</li>
-      <li>Cost and energy estimation, spot instances and checkpointing, and the rent-versus-own trade-off.</li>
-      <li>Why reducing the work beats parallelising it.</li>
+      <li>Decision theory: the optimal threshold as a ratio of error costs, why 0.5 is almost never right, and why calibrated probabilities are a prerequisite.</li>
+      <li>Deciding under capacity constraints: top-k selection, knapsack-style ranking by gain-to-cost, and cumulative gain curves instead of AUC or F1.</li>
+      <li>Uplift modelling: individual treatment effects, the four populations including the "do not disturb" group, T/S/X-learners and causal forests, and Qini evaluation.</li>
+      <li>Contextual bandits: LinUCB and Thompson sampling, when a bandit beats an A/B test, and logging propensities for unbiased offline evaluation.</li>
+      <li>The newsvendor problem: why an optimal order quantity is a quantile of the predictive distribution, not its mean.</li>
+      <li>Operations research: LP and MILP formulations with OR-Tools, why integrality makes problems NP-hard, and when metaheuristics suffice.</li>
+      <li>The predict-then-optimise trap: prediction error and decision error are not aligned, and every pipeline should be evaluated on final value.</li>
+      <li>Human-in-the-loop architectures, conformal abstention, feedback loops, permanent control groups and gaming of decision rules.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -345,26 +298,27 @@ for epoque in range(n):
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><a href="project7-m16.html">Non-tabular data: text, images, audio, graphs</a></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><strong>Scaling up: GPUs, distributed training, performance</strong></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><a href="project7-m16.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><strong>From scores to decisions</strong></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 

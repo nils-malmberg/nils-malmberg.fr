@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
-  <title>Module 16 - Données non tabulaires : texte, images, audio, graphes - Nils Malmberg</title>
+  <title>Module 16 - Séries temporelles, signaux et durées de vie - Nils Malmberg</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,215 +41,305 @@
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
   <div class="project-page-header">
     <div class="section-label">Cours data science &amp; ML · Module 16</div>
-    <h1>Données non tabulaires : texte, images, audio, graphes</h1>
+    <h1>Séries temporelles, signaux et durées de vie</h1>
   </div>
 
   <div class="project-content course-content">
-    <p>Un modèle ne consomme que des nombres. Tout le travail, sur ces données, consiste donc à construire une représentation — et le choix de cette représentation pèse bien plus lourd que le choix de l'algorithme qui vient après. Ce module traite les quatre modalités que l'on rencontre le plus souvent, avec une insistance particulière sur les graphes, absents de la plupart des cours généralistes alors qu'ils modélisent naturellement beaucoup de systèmes d'ingénierie.</p>
+    <p>Dès que le temps entre en jeu, l'hypothèse d'indépendance des observations — sur laquelle repose tout le reste du cours — tombe. Validation croisée, tests statistiques, feature engineering : tout doit être repensé. Ce module couvre les trois familles de problèmes temporels que l'on rencontre réellement : prévoir une trajectoire, analyser un signal, et estimer une durée avant événement.</p>
 
     <div class="tuto-toc">
       <h4>📋 Au programme</h4>
       <ol>
-        <li><a href="#texte">Texte : du TF-IDF aux transformers</a></li>
-        <li><a href="#taches-nlp">Tâches classiques du NLP</a></li>
-        <li><a href="#images">Images : au-delà de la classification</a></li>
-        <li><a href="#audio">Audio et signaux perceptifs</a></li>
-        <li><a href="#graphes">Graphes : représentation et mesures</a></li>
-        <li><a href="#gnn">Réseaux de neurones sur graphes</a></li>
-        <li><a href="#multimodal">Multimodal</a></li>
-        <li><a href="#annotation">Annotation et qualité</a></li>
+        <li><a href="#specificites">Ce que le temps change</a></li>
+        <li><a href="#decomposition">Décomposition et stationnarité</a></li>
+        <li><a href="#acf">Lire une ACF et une PACF</a></li>
+        <li><a href="#classiques">Modèles classiques : ETS et ARIMA</a></li>
+        <li><a href="#ml">Approche ML : variables et gradient boosting</a></li>
+        <li><a href="#dl">Deep learning et modèles de fondation</a></li>
+        <li><a href="#proba">Prévision probabiliste et évaluation</a></li>
+        <li><a href="#kalman">Espace d'états et filtre de Kalman</a></li>
+        <li><a href="#rupture">Ruptures et anomalies</a></li>
+        <li><a href="#spectral">Analyse spectrale et filtrage</a></li>
+        <li><a href="#survie">Durées de vie, censure et fiabilité</a></li>
       </ol>
     </div>
 
-    <h2 id="texte">1. Texte : du TF-IDF aux transformers</h2>
-
-    <h3>Le problème</h3>
-    <p>Un modèle attend un vecteur de nombres ; on lui donne « la pompe P-204 fuit au niveau du presse-étoupe ». La première solution historique, le <em>sac de mots</em>, consiste à compter les occurrences de chaque mot du vocabulaire : chaque document devient un vecteur de la taille du vocabulaire, presque entièrement nul. On perd l'ordre des mots, mais on obtient quelque chose d'exploitable immédiatement.</p>
-
-    <p><strong>TF-IDF</strong> raffine ce comptage en pondérant chaque terme par sa fréquence dans le document et sa <em>rareté</em> dans le corpus :</p>
-    <div style="text-align:center;overflow-x:auto">\[ \text{tfidf}(t,d) = \underbrace{f_{t,d}}_{\text{fréquence locale}} \times \underbrace{\log\frac{N}{1+n_t}}_{\text{rareté globale}} \]</div>
-
-    <div class="code-label">l'effet, sur un corpus de rapports de maintenance</div>
-    <div class="code-block"><pre>terme          présent dans      log(N/nₜ)    poids si présent 3 fois
-"le"           9 900 / 10 000    0,01         0,03   → quasi ignoré
-"pompe"        3 000 / 10 000    1,20         3,60   → informatif
-"presse-       12 / 10 000       6,73        20,19   → très discriminant
- étoupe"</pre></div>
-
-    <p><strong>BM25</strong> va plus loin sur deux points : il <em>sature</em> la fréquence (le dixième « pompe » n'apporte presque rien de plus que le troisième) et normalise par la longueur du document, pour qu'un rapport de dix pages ne domine pas mécaniquement. C'est la composante lexicale de la recherche hybride des modules 20 et 21.</p>
-
-    <div class="code-label">Python — baseline de classification de texte</div>
-    <div class="code-block"><pre>from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-
-modele = make_pipeline(
-    TfidfVectorizer(
-        ngram_range=(1, 2),      # mots seuls ET paires : capture "non conforme"
-        min_df=3,                # ignorer ce qui apparaît moins de 3 fois (bruit)
-        max_df=0.7,              # ignorer ce qui apparaît dans 70 % des documents
-        sublinear_tf=True,       # log(1+tf) : sature les répétitions
-        strip_accents="unicode",
-    ),
-    LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced"),
-).fit(textes_train, y_train)
-
-# interprétabilité gratuite : les n-grammes les plus discriminants
-noms = modele[0].get_feature_names_out()
-poids = modele[-1].coef_[0]
-print("en faveur :", [noms[i] for i in poids.argsort()[-15:]])
-print("en défaveur :", [noms[i] for i in poids.argsort()[:15]])</pre></div>
+    <h2 id="specificites">1. Ce que le temps change</h2>
+    <div class="code-label">quatre conséquences directes</div>
+    <div class="code-block"><pre>Autocorrélation   les observations voisines se ressemblent : la taille d'échantillon
+                  EFFECTIVE est bien inférieure à n. Un test qui l'ignore déclare
+                  significatif ce qui ne l'est pas (module 9).
+Non-stationnarité moyenne, variance et saisonnalité évoluent. Le passé lointain
+                  peut être trompeur plutôt qu'informatif.
+Ordre imposé      entraîner sur le futur pour prédire le passé n'a aucun sens :
+                  la validation devient séquentielle (module 11).
+Horizon           prévoir à J+1 et à J+30 sont deux problèmes différents, avec des
+                  variables et des performances différentes.</pre></div>
 
     <div class="step-block">
-      <h4>Quand le classique suffit — et quand il ne suffit plus</h4>
-      <p>TF-IDF et régression logistique restent excellents quand le vocabulaire est <em>discriminant par lui-même</em> : tri de tickets, détection de spam, classification thématique de documents techniques. L'approche échoue dès que le sens dépend de l'ordre, de la négation ou du contexte — « ce n'est pas un défaut » et « c'est un défaut » ont presque le même sac de mots. C'est là que les embeddings contextuels et les modèles de langage (module 20) deviennent nécessaires. La bonne démarche reste de mesurer l'écart : si la baseline lexicale atteint 95 % de la performance d'un transformer pour un millième du coût et avec une explication par mot, la question est tranchée.</p>
+      <h4>L'autocorrélation, concrètement</h4>
+      <p>Si la température d'aujourd'hui ressemble fortement à celle d'hier, 365 mesures quotidiennes ne contiennent pas 365 informations indépendantes — peut-être l'équivalent de trente. Toutes les formules du module 9 en \(\sqrt{n}\) deviennent alors optimistes : un intervalle de confiance calculé naïvement sur des données autocorrélées est beaucoup trop étroit, et l'on conclut à des effets qui n'existent pas. C'est la raison pour laquelle on ne peut pas appliquer directement les outils des modules précédents à une série temporelle.</p>
     </div>
-
-    <p>Sur le prétraitement, deux remarques. La <strong>lemmatisation</strong> (ramener « fuyaient » à « fuir », avec spaCy) est utile en français, langue fortement fléchie, là où la racinisation brutale dégrade souvent le sens. Et la suppression des <em>mots vides</em> n'est pas toujours souhaitable : la négation et les mots-outils portent parfois exactement l'information recherchée.</p>
-
-    <h2 id="taches-nlp">2. Tâches classiques du NLP</h2>
-    <ul>
-      <li><strong>Classification</strong> — thématique, sentiment, intention. Métriques du module 7, attention au déséquilibre.</li>
-      <li><strong>Reconnaissance d'entités (NER)</strong> — extraire personnes, dates, références produit, valeurs avec unités. Évaluation par F1 <em>au niveau de l'entité</em> : une entité partiellement détectée compte comme fausse, ce qui est bien plus sévère qu'une évaluation par jeton.</li>
-      <li><strong>Extraction structurée</strong> — passer d'un rapport libre à un enregistrement exploitable. Historiquement des règles et des expressions régulières, aujourd'hui souvent un LLM à sortie contrainte (module 20) — mais les règles restent supérieures sur les formats rigides, et elles sont déterministes et gratuites.</li>
-      <li><strong>Topic modeling</strong> — LDA (modèle génératif bayésien, module 9), NMF (factorisation à coefficients positifs, plus lisible, module 7) ou BERTopic (embeddings + clustering + c-TF-IDF), qui donne aujourd'hui les regroupements les plus interprétables.</li>
-      <li><strong>Résumé, traduction, question-réponse</strong> — domaine des modèles génératifs ; la difficulté s'y déplace entièrement vers l'<em>évaluation</em> (module 20).</li>
-    </ul>
-
-    <h2 id="images">3. Images : au-delà de la classification</h2>
-    <p>Le module 14 traite les CNN et la classification. En pratique, les tâches utiles sont souvent d'un autre type :</p>
-
-    <div class="code-label">tâches de vision et leurs métriques</div>
-    <div class="code-block"><pre>Classification        une étiquette par image                  accuracy, F1
-Détection d'objets    boîtes + classes (YOLO, DETR)            mAP à IoU 0,5 / 0,5:0,95
-Segmentation sém.     une classe par PIXEL (U-Net, DeepLab)    IoU, Dice
-Segmentation d'inst.  objets séparés (Mask R-CNN, SAM)         mAP masque
-Estimation de pose    points clés                              PCK, OKS
-OCR                   texte dans l'image (docTR, Tesseract)    CER, WER
-Recherche d'images    similarité par embedding (module 20)     recall@k</pre></div>
-
-    <div class="code-label">IoU et Dice, sur un exemple</div>
-    <div class="code-block"><pre>  vérité terrain ███████          prédiction  ░░░███████
-                                  intersection = 5 pixels
-                                  union        = 9 pixels
-  IoU  = 5/9 = 0,56               Dice = 2×5/(7+7) = 0,71
-
-  Le Dice est toujours ≥ l'IoU et pénalise moins durement les petits objets :
-  c'est pourquoi il est préféré en imagerie médicale et scientifique, où
-  l'objet d'intérêt occupe souvent 1 % de l'image.</pre></div>
-
-    <p>Pour un profil d'ingénieur, les cas d'usage les plus fréquents ne sont d'ailleurs pas les photographies : segmentation de micrographies pour quantifier une microstructure (taille de grains, porosité, fraction de phase), détection de défauts sur des images de contrôle non destructif, analyse d'images de simulation ou de tomographie. Trois particularités y changent la méthode : les jeux annotés sont <em>très</em> petits (d'où le transfert et une augmentation agressive, module 11), les images sont souvent en niveaux de gris et à haute résolution (d'où le découpage en tuiles, avec recouvrement pour éviter les artefacts de bord), et la sortie attendue est généralement une <em>mesure physique</em> — ce qui déplace l'évaluation du score de segmentation vers l'erreur sur la grandeur mesurée.</p>
 
     <div class="warning-block">
-      <strong>L'augmentation doit respecter la physique.</strong> Une symétrie horizontale est anodine sur une photo de chat, désastreuse sur un caractère manuscrit ou une image où la chiralité a un sens. Une variation de contraste change la valeur de gris qui, en tomographie, <em>code une densité</em>. L'augmentation encode des invariances : elle n'est valide que si l'invariance existe réellement dans le phénomène — et c'est au métier de le dire, pas à la bibliothèque.
+      <strong>La première question à poser.</strong> S'agit-il vraiment d'une prévision ? Beaucoup de problèmes présentés comme temporels sont en réalité des régressions ordinaires où la date sert de variable explicative parmi d'autres. On ne fait de la prévision que lorsqu'il faut extrapoler <em>au-delà</em> de la dernière observation, sans connaître les variables explicatives futures. Si les régresseurs futurs sont connus (un calendrier, une météo prévue, un plan de production), le problème est plus simple et les outils du module 13 suffisent.
     </div>
 
-    <h2 id="audio">4. Audio et signaux perceptifs</h2>
-    <p>La chaîne standard transforme le son en image : découpage en fenêtres qui se recouvrent, FFT sur chaque fenêtre (module 15), passage sur l'échelle de Mel — qui reproduit la résolution non linéaire de l'oreille, plus fine dans les graves —, puis un CNN ou un transformer sur le spectrogramme obtenu. Les <strong>MFCC</strong> (coefficients cepstraux) restent une représentation compacte utile pour les tâches légères sur processeur.</p>
-    <p>Trois précautions spécifiques : l'augmentation se fait sur le signal (bruit additif, variation de vitesse, réverbération) <em>et</em> sur le spectrogramme (<em>SpecAugment</em>, qui masque des bandes de temps et de fréquence) ; la découpe train/test doit se faire par <em>locuteur</em> ou par <em>appareil</em>, jamais par extrait, sous peine de fuite (module 10) ; et pour la reconnaissance vocale, un modèle pré-entraîné comme Whisper rend l'entraînement de zéro sans objet dans l'immense majorité des cas.</p>
+    <h2 id="decomposition">2. Décomposition et stationnarité</h2>
+    <p>Une série se lit d'abord comme la somme (ou le produit) de trois composantes : <strong>tendance</strong> (l'évolution de fond), <strong>saisonnalité</strong> (le motif qui se répète à période fixe) et <strong>résidu</strong> (ce qui reste). La décomposition <strong>STL</strong>, par lissage local, est l'outil de référence : robuste aux valeurs aberrantes, elle accepte une saisonnalité qui évolue lentement.</p>
 
-    <h2 id="graphes">5. Graphes : représentation et mesures</h2>
-    <p>Un graphe modélise des entités (les <em>nœuds</em>) et leurs relations (les <em>arêtes</em>). Beaucoup de systèmes techniques en sont naturellement : un réseau électrique ou hydraulique, un maillage de calcul, une molécule, un graphe de dépendances logicielles, un circuit, une chaîne d'approvisionnement, un réseau social. Ignorer cette structure et aplatir en tableau revient à jeter l'information la plus spécifique du problème — c'est comme décrire un plan de métro par la seule liste des stations.</p>
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import polars as pl, pandas as pd
+from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.stattools import adfuller, kpss
 
-    <div class="code-label">mesures structurelles et ce qu'elles disent</div>
-    <div class="code-block"><pre>Degré                 nombre de voisins : popularité, connectivité locale
-Intermédiarité        fréquence d'apparition sur les plus courts chemins entre
-(betweenness)         toutes les paires. Identifie les points de passage obligés,
-                      donc les points de FRAGILITÉ d'un réseau technique.
-PageRank              importance récursive : est important qui est pointé par
-                      des nœuds importants
-Coefficient de        propension des voisins d'un nœud à être voisins entre eux :
-clustering            mesure la "densité locale" du réseau
-Communautés           partition en groupes densément connectés (Louvain, Leiden)
-Composantes           parties déconnectées : souvent la première chose à regarder
-Assortativité         les nœuds semblables se connectent-ils entre eux ?</pre></div>
+serie = pd.read_csv("conso.csv", index_col="date", parse_dates=True)["valeur"].asfreq("D")
 
-    <div class="code-label">Python — NetworkX</div>
-    <div class="code-block"><pre>import networkx as nx
+res = STL(serie, period=7, robust=True).fit()
+res.plot()                                   # tendance, saison, résidu
 
-G = nx.from_pandas_edgelist(df, "source", "cible", edge_attr="poids")
+print("ADF  p =", adfuller(serie)[1])        # H0 = racine unitaire (NON stationnaire)
+print("KPSS p =", kpss(serie, regression="c")[1])   # H0 = stationnarité</pre></div>
 
-print(f"{G.number_of_nodes()} nœuds, {G.number_of_edges()} arêtes, "
-      f"densité {nx.density(G):.4f}, {nx.number_connected_components(G)} composantes")
+    <p>Une série est <strong>stationnaire</strong> si ses propriétés statistiques ne dépendent pas de la date : même moyenne, même variance, même structure de dépendance à tout moment. Les modèles classiques l'exigent, parce qu'ils estiment des coefficients supposés constants. On s'y ramène par différenciation (\(\nabla y_t = y_t - y_{t-1}\), qui élimine une tendance linéaire), différenciation saisonnière (\(y_t - y_{t-s}\)) ou transformation stabilisante (logarithme si la variance croît avec le niveau).</p>
+    <p>Utiliser ADF et KPSS <em>ensemble</em> est plus sûr : leurs hypothèses nulles sont inversées, donc un désaccord signale une situation ambiguë qu'il vaut mieux examiner graphiquement plutôt que trancher mécaniquement.</p>
 
-centralite = nx.betweenness_centrality(G, weight="poids")     # points critiques
-communautes = nx.community.louvain_communities(G, seed=0)
+    <h2 id="acf">3. Lire une ACF et une PACF</h2>
+    <p>L'<strong>autocorrélation</strong> (ACF) au décalage \(k\) mesure la corrélation entre la série et elle-même décalée de \(k\) pas. La <strong>PACF</strong> mesure la même chose en <em>retirant</em> l'effet des décalages intermédiaires — la corrélation directe entre \(y_t\) et \(y_{t-k}\), une fois les \(k-1\) précédents pris en compte.</p>
 
-# CES MESURES DEVIENNENT DES VARIABLES TABULAIRES pour un modèle classique (module 12)
-df_noeuds["pagerank"]     = df_noeuds.index.map(nx.pagerank(G))
-df_noeuds["degre"]        = df_noeuds.index.map(dict(G.degree()))
-df_noeuds["clustering"]   = df_noeuds.index.map(nx.clustering(G))
-df_noeuds["intermediar."] = df_noeuds.index.map(centralite)</pre></div>
+    <div class="code-label">ce que chaque forme signale</div>
+    <div class="code-block"><pre>ACF qui décroît TRÈS LENTEMENT        → série non stationnaire : différencier
+ACF avec un pic à 7, 14, 21…          → saisonnalité hebdomadaire
+ACF qui se coupe net après q          → processus MA(q)
+PACF qui se coupe net après p         → processus AR(p)
+ACF et PACF décroissant toutes deux   → ARMA mixte : laisser l'auto-sélection choisir
 
-    <p>Les quatre dernières lignes méritent d'être soulignées : dans bien des projets, la meilleure façon d'exploiter un graphe n'est pas d'entraîner un modèle de graphe, mais d'en <strong>extraire des variables</strong> et de les donner à un gradient boosting. C'est simple, robuste, interprétable, et souvent suffisant. Les plongements de nœuds (<em>node2vec</em>, DeepWalk), qui appliquent l'idée de word2vec à des marches aléatoires sur le graphe, constituent l'étape intermédiaire.</p>
+  ACF │█                               PACF │█
+      │█ █                                  │█
+      │█ █ █ ▄                              │█ ▄
+      │█ █ █ █ ▄ ▂                          │─ ─ ─ ─ ─ ─  ← coupure après 2
+      └──────────────► décalage             └──────────────► décalage
+      décroissance lente = AR               → AR(2)</pre></div>
 
-    <h2 id="gnn">6. Réseaux de neurones sur graphes</h2>
-    <p>Un GNN généralise la convolution à une structure irrégulière. Sur une image, chaque pixel a exactement huit voisins disposés de façon régulière, ce qui permet un noyau fixe ; dans un graphe, un nœud peut avoir deux ou deux mille voisins, sans ordre. Le principe, appelé <strong>passage de messages</strong> : chaque nœud met à jour sa représentation en agrégeant celles de ses voisins.</p>
+    <div class="code-block"><pre>from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+plot_acf(serie.diff().dropna(), lags=40)     # sur la série DIFFÉRENCIÉE
+plot_pacf(serie.diff().dropna(), lags=40)</pre></div>
 
-    <div class="code-label">une couche de passage de messages</div>
-    <div class="code-block"><pre>        ○ B (h_B)
-         ╲                  1. MESSAGE  : chaque voisin envoie ψ(h_A, h_v, e)
-   C ○───● A (h_A)          2. AGRÉGATION : on combine les messages reçus par une
-         ╱                     opération INVARIANTE PAR PERMUTATION (somme, moyenne,
-        ○ D (h_D)               max) — le résultat ne doit pas dépendre de l'ordre
-                              arbitraire des voisins
-   h_A ← φ(h_A, ⊕{messages de B, C, D})
-                           3. MISE À JOUR : on combine avec l'état précédent
+    <h2 id="classiques">4. Modèles classiques : ETS et ARIMA</h2>
+    <p><strong>Lissage exponentiel (ETS)</strong> — l'idée tient en une ligne : une moyenne pondérée du passé dont les poids décroissent géométriquement, de sorte que le passé récent compte davantage. Holt-Winters ajoute une tendance et une saisonnalité, chacune avec son propre coefficient de lissage :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \ell_t = \alpha\,(y_t - s_{t-m}) + (1-\alpha)(\ell_{t-1}+b_{t-1}), \qquad \hat y_{t+h} = \ell_t + h\,b_t + s_{t+h-m} \]</div>
+    <p>où \(\ell\) est le niveau, \(b\) la pente et \(s\) la composante saisonnière. Simple, rapide, et étonnamment difficile à battre sur des séries métier courtes et régulières.</p>
 
-   Après K couches, un nœud "voit" son voisinage à distance K.</pre></div>
+    <p><strong>ARIMA(p,d,q)</strong> — \(d\) différenciations pour se ramener à la stationnarité, \(p\) termes autorégressifs (le passé de la série) et \(q\) termes de moyenne mobile (le passé des <em>erreurs</em>) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla^d y_t = c + \sum_{i=1}^{p}\phi_i \nabla^d y_{t-i} + \sum_{j=1}^{q}\theta_j \varepsilon_{t-j} + \varepsilon_t \]</div>
+    <p>La partie AR dit « la valeur d'aujourd'hui ressemble à celles d'hier » ; la partie MA dit « l'erreur d'aujourd'hui ressemble à celles d'hier », ce qui capte les chocs dont l'effet se dissipe. SARIMA ajoute les mêmes termes à la fréquence saisonnière, SARIMAX ajoute des régresseurs externes.</p>
 
-    <div style="text-align:center;overflow-x:auto">\[ h_v^{(k+1)} = \phi\Big(h_v^{(k)},\; \bigoplus_{u \in \mathcal{N}(v)} \psi\big(h_v^{(k)}, h_u^{(k)}, e_{uv}\big)\Big) \]</div>
+    <div class="code-label">Python — sélection automatique et prévision</div>
+    <div class="code-block"><pre>from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive
 
-    <p>Les variantes diffèrent par le choix de \(\psi\) et de l'agrégation : <strong>GCN</strong> (moyenne normalisée par les degrés), <strong>GraphSAGE</strong> (échantillonnage d'un nombre fixe de voisins, ce qui permet de passer à l'échelle), <strong>GAT</strong> (pondération des voisins par attention, module 14), <strong>MPNN</strong> (formulation générale avec attributs d'arêtes, la plus utilisée en chimie).</p>
+sf = StatsForecast(
+    models=[AutoARIMA(season_length=7), AutoETS(season_length=7),
+            SeasonalNaive(season_length=7)],      # LA baseline à battre
+    freq="D", n_jobs=-1,
+)
+sf.fit(df)                                        # df : unique_id, ds, y
+prev = sf.forecast(h=28, level=[80, 95])          # avec intervalles de prédiction
+print(prev.head())</pre></div>
 
-    <div class="code-label">trois niveaux de tâches</div>
-    <div class="code-block"><pre>Nœud     classification ou régression par nœud   détection de fraude, rôle dans
-                                                 un réseau, propriété d'un atome
-Arête    prédiction de lien                      recommandation, complétion de
-                                                 graphe de connaissances
-Graphe   propriété du graphe ENTIER              propriété d'une molécule, d'un
-         (après agrégation globale)              circuit, d'une structure</pre></div>
+    <div class="step-block">
+      <h4>Quand les modèles classiques battent le machine learning</h4>
+      <p>Systématiquement quand : la série est <em>courte</em> (moins de quelques centaines de points), il y en a <em>peu</em> (une ou dix, pas dix mille), la structure est régulière, et il faut des intervalles de prévision fiables. Les compétitions M4 et M5 l'ont confirmé : les méthodes statistiques simples, et surtout les <em>combinaisons</em> de méthodes simples, restent redoutables. Le ML prend l'avantage quand on doit prévoir des milliers de séries apparentées simultanément, avec beaucoup de régresseurs externes — une chaîne de magasins, un parc de capteurs — parce qu'il apprend alors des motifs communs à toutes les séries.</p>
+    </div>
 
-    <p>Les applications les plus convaincantes sont scientifiques : prédiction de propriétés moléculaires et de matériaux (le graphe atomes-liaisons est la représentation naturelle), simulation physique apprise sur maillage — un maillage de calcul <em>est</em> un graphe, et les GNN y apprennent des opérateurs de propagation, ce qui rejoint le <a href="project7-m19.html">module 19</a> —, prévision de trafic sur réseau routier, et détection de fraude par anneaux de comptes liés.</p>
+    <h2 id="ml">5. Approche ML : variables et gradient boosting</h2>
+    <p>On transforme la prévision en régression tabulaire en construisant des variables exclusivement passées, puis on applique le module 13.</p>
+
+    <div class="code-label">Python — polars, fenêtres strictement passées</div>
+    <div class="code-block"><pre>import numpy as np, polars as pl
+
+df = (
+    df.sort("date")
+      .with_columns(
+          # décalages : la valeur d'il y a 1, 7 et 364 jours (même jour de semaine)
+          *[pl.col("y").shift(k).over("serie_id").alias(f"lag_{k}") for k in (1, 7, 364)],
+
+          # moyennes glissantes sur le PASSÉ uniquement — le shift(1) est ESSENTIEL
+          pl.col("y").shift(1).rolling_mean(7).over("serie_id").alias("ma_7"),
+          pl.col("y").shift(1).rolling_mean(28).over("serie_id").alias("ma_28"),
+          pl.col("y").shift(1).rolling_std(28).over("serie_id").alias("sd_28"),
+          # tendance courte : rapport des deux moyennes
+          (pl.col("y").shift(1).rolling_mean(7) /
+           pl.col("y").shift(1).rolling_mean(28)).over("serie_id").alias("ratio_7_28"),
+
+          # calendrier et saisonnalité cyclique (module 11)
+          pl.col("date").dt.weekday().alias("jour_semaine"),
+          (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).sin().alias("an_sin"),
+          (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).cos().alias("an_cos"),
+      )
+)</pre></div>
+
+    <p>Deux décisions structurent ensuite le travail. <strong>Stratégie d'horizon</strong> : la prévision <em>récursive</em> réinjecte ses propres prédictions pour avancer pas à pas (simple, mais les erreurs s'accumulent) ; la prévision <em>directe</em> entraîne un modèle par horizon (plus coûteux, plus stable au-delà de quelques pas). <strong>Validation</strong> : uniquement en avançant dans le temps, avec une fenêtre glissante ou extensible, et en respectant un <em>écart</em> égal à l'horizon entre entraînement et test — sans quoi on évalue une situation impossible en production.</p>
 
     <div class="warning-block">
-      <strong>Trois limites à connaître avant de s'y lancer.</strong> Le <em>lissage excessif</em> : à chaque couche, les représentations se mélangent un peu plus, et au-delà de trois ou quatre couches, tous les nœuds finissent par se ressembler — les GNN sont des réseaux <em>peu profonds</em>, contrairement aux CNN. Le <em>passage à l'échelle</em> : un nœud très connecté fait exploser le voisinage à agréger, d'où l'échantillonnage (GraphSAGE) ou le découpage en sous-graphes. Le <em>pouvoir d'expression</em> : les GNN standards ne distinguent pas certains graphes non isomorphes (limite du test de Weisfeiler-Lehman). Enfin, la fuite de données prend ici une forme particulière : découper les nœuds au hasard laisse des arêtes reliant train et test, si bien que l'information circule d'un côté à l'autre pendant l'entraînement — il faut un découpage par sous-graphe ou par période.
+      <strong>Le piège qui invalide silencieusement un projet de prévision.</strong> Une moyenne glissante calculée sans <code>shift(1)</code> inclut la valeur courante : le modèle « prédit » en lisant sa propre cible, et le score est spectaculaire jusqu'à la mise en production. Le second piège est la <em>disponibilité</em> : une variable peut être passée mais ne pas être encore <em>connue</em> au moment où la prévision doit être produite — un chiffre consolidé publié avec trois jours de retard. Toujours raisonner en « que sais-je à l'instant où je prédis ? », pas en « quelle est la date de cette ligne ? ».
     </div>
 
-    <h2 id="multimodal">7. Multimodal</h2>
-    <p>Combiner plusieurs modalités se fait de trois façons : <em>fusion précoce</em> (concaténer les données brutes, rarement efficace car les échelles et les structures n'ont rien à voir), <em>fusion tardive</em> (un modèle par modalité, puis combinaison des prédictions — simple et robuste), et <em>fusion intermédiaire</em> (concaténer les représentations apprises, le meilleur compromis en général).</p>
-    <p>Les modèles contrastifs type <strong>CLIP</strong> vont plus loin en alignant deux modalités dans un <em>espace commun</em> : une image et sa description y sont voisines, ce qui permet la recherche d'images par texte et la classification sans aucun exemple étiqueté (module 11). En contexte industriel, le cas le plus fréquent est la combinaison d'un tableau de mesures, d'un texte libre (rapport d'intervention) et d'une image ou d'un signal. La recette qui marche : encoder chaque modalité en un vecteur, les concaténer, et laisser un gradient boosting faire la synthèse.</p>
-
-    <h2 id="annotation">8. Annotation et qualité</h2>
-    <p>Sur ces données, la performance est presque toujours limitée par les annotations, pas par le modèle. Quelques principes qui économisent beaucoup de temps :</p>
+    <h2 id="dl">6. Deep learning et modèles de fondation</h2>
     <ul>
-      <li><strong>Écrire un guide d'annotation</strong> avant d'annoter, et le tester sur vingt exemples avec deux annotateurs. Les désaccords révèlent les cas limites que la définition du problème n'avait pas tranchés — et c'est le vrai livrable de cette étape.</li>
-      <li><strong>Mesurer l'accord inter-annotateurs</strong> (kappa de Cohen, alpha de Krippendorff). Il plafonne la performance atteignable : si deux experts ne sont d'accord qu'à 80 %, aucun modèle n'ira significativement au-delà, et un score de 85 % doit éveiller les soupçons plutôt que la satisfaction.</li>
-      <li><strong>Annoter en priorité les cas informatifs</strong> plutôt qu'au hasard : c'est l'apprentissage actif du <a href="project7-m11.html">module 11</a>.</li>
-      <li><strong>Vérifier les étiquettes existantes</strong> : les jeux de référence publics contiennent eux-mêmes des erreurs, et un modèle très confiant en désaccord avec l'étiquette est un excellent détecteur d'annotation fautive (<code>cleanlab</code>, module 11).</li>
+      <li><strong>N-BEATS / N-HiTS</strong> — empilements de blocs résiduels, sans composante récurrente ; performances solides et entraînement rapide.</li>
+      <li><strong>DeepAR</strong> — modèle autorégressif probabiliste entraîné sur un ensemble de séries apparentées : il apprend des motifs partagés, ce qui aide beaucoup les séries courtes.</li>
+      <li><strong>Temporal Fusion Transformer</strong> — attention sur les séquences (module 15) avec gestion propre des covariables connues à l'avance (calendrier, promotions) et une part d'interprétabilité.</li>
+      <li><strong>Modèles de fondation</strong> (Chronos, TimesFM, Moirai, TimeGPT) — pré-entraînés sur d'énormes corpus de séries, utilisables en <em>zero-shot</em>. Intéressants pour obtenir une baseline sans entraînement ; pas systématiquement meilleurs qu'un bon modèle spécifique, et à manier avec précaution quand la série contient de l'information confidentielle (module 26).</li>
     </ul>
+    <p>La bibliothèque <code>nixtla</code> (statsforecast / mlforecast / neuralforecast) donne accès aux trois familles avec la même interface, ce qui permet de les comparer honnêtement — la seule façon de trancher.</p>
+
+    <h2 id="proba">7. Prévision probabiliste et évaluation</h2>
+    <p>Une prévision ponctuelle est rarement suffisante : dimensionner un stock ou une réserve d'énergie demande un quantile, pas une moyenne (module 23). On entraîne donc directement sur la <strong>perte pinball</strong>, qui pénalise asymétriquement selon le quantile visé :</p>
+    <div style="text-align:center;overflow-x:auto">\[ L_\tau(y,\hat y) = \max\big(\tau(y-\hat y),\; (\tau-1)(y-\hat y)\big) \]</div>
+    <p>Pour \(\tau = 0{,}9\), sous-estimer coûte neuf fois plus cher que surestimer : le modèle apprend donc à viser haut, et sa prédiction converge vers le quantile 90 %.</p>
+
+    <div class="code-label">métriques de prévision</div>
+    <div class="code-block"><pre>MAE / RMSE   interprétables, mais non comparables entre séries d'échelles différentes
+MAPE         en pourcentage ; explose si y proche de 0 et pénalise asymétriquement
+             (surestimer de 100 % est borné, sous-estimer ne l'est pas)
+sMAPE        version symétrique, un peu moins instable
+MASE         erreur rapportée à celle de la prévision NAÏVE : &lt; 1 = mieux que naïf.
+             LA métrique à préférer pour comparer des séries hétérogènes.
+Pinball      évalue un quantile donné
+CRPS         évalue toute la distribution prédictive ; se réduit à la MAE pour une
+             prévision ponctuelle. La référence en prévision probabiliste.</pre></div>
+
+    <p>Et la règle d'or : toujours comparer à la <strong>prévision naïve</strong> — la dernière valeur, ou la valeur de la même période l'an dernier. Un modèle qui ne bat pas la naïve saisonnière ne sert à rien, et c'est plus fréquent qu'on ne le croit.</p>
+
+    <h2 id="kalman">8. Espace d'états et filtre de Kalman</h2>
+    <p>Un modèle espace-état sépare ce qu'on cherche à connaître — un <em>état caché</em> \(x_t\) qui évolue selon une dynamique — de ce qu'on observe — \(z_t\), bruité et parfois indirect :</p>
+    <div style="text-align:center;overflow-x:auto">\[ x_t = F x_{t-1} + B u_t + w_t, \qquad z_t = H x_t + v_t, \qquad w_t\sim\mathcal{N}(0,Q),\; v_t\sim\mathcal{N}(0,R) \]</div>
+
+    <p>Le <strong>filtre de Kalman</strong> alterne deux étapes à chaque instant :</p>
+    <div class="code-label">prédiction puis correction</div>
+    <div class="code-block"><pre>PRÉDICTION   x̂ = F·x̂      "d'après mon modèle de dynamique, voilà où je devrais être"
+             P  = F·P·Fᵀ + Q   l'incertitude AUGMENTE (le modèle n'est pas parfait)
+
+CORRECTION   K  = P·Hᵀ(H·P·Hᵀ + R)⁻¹     le GAIN : combien croire la mesure ?
+             x̂ = x̂ + K(z - H·x̂)          on corrige avec l'écart à la mesure
+             P  = (I - K·H)·P             l'incertitude DIMINUE
+
+Si R est grand (capteur bruité) → K petit → on fait confiance au modèle
+Si Q est grand (modèle grossier) → K grand → on fait confiance à la mesure</pre></div>
+
+    <p>C'est l'estimateur optimal au sens de la variance minimale dans le cas linéaire-gaussien, et il est <em>récursif</em> : coût constant par pas, mémoire constante, quelle que soit la longueur de l'historique. D'où son omniprésence en navigation, en poursuite de cible et en fusion de capteurs. Les extensions traitent le cas non linéaire : EKF (linéarisation locale), UKF (propagation de points sigma, plus stable), et filtres particulaires (Monte-Carlo séquentiel, sans hypothèse gaussienne).</p>
+    <p>Pour un ingénieur, l'intérêt est double : lisser un signal bruité en temps réel, et estimer des grandeurs <em>non mesurables directement</em> à partir de mesures indirectes — ce qui relie ce module à l'assimilation de données du <a href="project7-m20.html">module 20</a>.</p>
+
+    <h2 id="rupture">9. Ruptures et anomalies</h2>
+    <ul>
+      <li><strong>Détection de rupture</strong> — identifier les dates où le régime change (changement de moyenne, de variance, de tendance). La bibliothèque <code>ruptures</code> implémente PELT et la segmentation binaire ; CUSUM reste la méthode de référence pour une surveillance en ligne. Usage concret : savoir <em>à partir de quand</em> les données sont encore représentatives, donc à partir de quand réentraîner (module 25).</li>
+      <li><strong>Anomalies ponctuelles</strong> — un point s'écarte fortement de la prévision : on compare le résidu à un intervalle de prédiction plutôt qu'à un seuil fixe, ce qui rend la détection insensible à la saisonnalité (un pic le samedi n'est pas une anomalie si tous les samedis font un pic).</li>
+      <li><strong>Anomalies collectives</strong> — un motif anormal sur une fenêtre, détectable par distance entre sous-séquences (<em>matrix profile</em>) ou par erreur de reconstruction d'un autoencodeur (module 15).</li>
+      <li><strong>Un rappel utile</strong> — sur un flux, tester en continu revient à faire des milliers de tests : sans contrôle du taux de fausses alertes (module 9), le système d'alerte devient du bruit et finit ignoré.</li>
+    </ul>
+
+    <h2 id="spectral">10. Analyse spectrale et filtrage</h2>
+    <p>Sur un signal physique — vibration, acoustique, mesure de capteur —, le domaine fréquentiel révèle souvent ce que le domaine temporel cache. La FFT donne le périodogramme, la méthode de Welch le lisse en moyennant des segments (ce qui réduit la variance de l'estimation au prix de la résolution), et la densité spectrale de puissance identifie les composantes périodiques : une fréquence de rotation, une résonance, un harmonique de défaut de roulement.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import signal
+
+f, Pxx = signal.welch(x, fs=25_600, nperseg=4096)        # densité spectrale de puissance
+pic = f[np.argmax(Pxx)]
+print(f"fréquence dominante : {pic:.1f} Hz")
+
+# spectrogramme : évolution du contenu fréquentiel DANS LE TEMPS
+f, t, Sxx = signal.spectrogram(x, fs=25_600, nperseg=1024)
+
+# filtrage passe-bande SANS déphasage (filtrage aller-retour)
+sos = signal.butter(4, [50, 2000], btype="band", fs=25_600, output="sos")
+x_filtre = signal.sosfiltfilt(sos, x)      # filtfilt : phase nulle, ordre doublé</pre></div>
+
+    <p>Deux usages en machine learning. D'abord, le spectre fournit d'excellentes <strong>variables</strong> : énergie par bande, fréquence dominante, kurtosis spectral, coefficients cepstraux — c'est la base de la maintenance prédictive sur signaux vibratoires. Ensuite, le <strong>spectrogramme</strong> transforme un signal unidimensionnel en image bidimensionnelle, ce qui permet d'appliquer directement un CNN (modules 15 et 17) — l'approche standard en classification audio.</p>
+    <p>Deux pièges classiques du traitement du signal restent valables ici : le <em>repliement de spectre</em> (respecter Shannon, filtrer avant d'échantillonner, sinon les hautes fréquences se déguisent en basses) et les <em>fuites spectrales</em> (utiliser une fenêtre de Hann plutôt qu'une troncature brutale, qui introduit des discontinuités artificielles). Et pour les phénomènes non stationnaires, la transformée en ondelettes offre un meilleur compromis temps-fréquence que la FFT à fenêtre.</p>
+
+    <h2 id="survie">11. Durées de vie, censure et fiabilité</h2>
+    <p>Troisième famille temporelle, et la plus mal traitée en pratique : on veut prédire le <em>temps avant un événement</em> — panne d'un composant, résiliation d'un client, rechute d'un patient. La difficulté s'appelle la <strong>censure</strong> : à la fin de l'étude, beaucoup d'unités n'ont pas encore connu l'événement.</p>
+
+    <div class="code-label">pourquoi on ne peut pas ignorer la censure</div>
+    <div class="code-block"><pre>  unité 1  ├──────────✕                      ✕ = panne observée (durée connue : 8 mois)
+  unité 2  ├───────────────────────→         → = toujours en service à la fin
+  unité 3  ├────✕                                 (durée INCONNUE, mais ≥ 14 mois)
+  unité 4  ├──────────────────→
+           └──────────────────────────► temps
+
+  Les EXCLURE   → on ne garde que les pannes précoces → durée de vie SOUS-ESTIMÉE
+  Les compter   → on suppose qu'elles tombent en panne à la date de fin d'étude
+  comme pannes     → encore sous-estimée
+  → il faut une méthode qui utilise l'information "a survécu AU MOINS 14 mois"</pre></div>
+
+    <p>Deux fonctions suffisent à tout exprimer — la survie et le taux de défaillance instantané :</p>
+    <div style="text-align:center;overflow-x:auto">\[ S(t) = \mathbb{P}(T \gt t), \qquad h(t) = \lim_{dt\to 0}\frac{\mathbb{P}(t \leq T \lt t+dt \mid T \geq t)}{dt}, \qquad S(t) = e^{-\int_0^t h(u)\,du} \]</div>
+    <p>\(h(t)\) se lit « sachant que l'unité a tenu jusqu'à \(t\), quel est son risque de tomber maintenant ? » — c'est la quantité qui intéresse un ingénieur fiabiliste, et elle est directement reliée à la survie par l'exponentielle de son intégrale.</p>
+
+    <div class="code-label">les outils, par ordre d'usage</div>
+    <div class="code-block"><pre>Kaplan-Meier      estimation non paramétrique de S(t), gérant la censure.
+                  Le point de départ, toujours.
+Test du log-rank  comparer deux courbes de survie (deux lots, deux traitements).
+Cox (PH)          h(t|x) = h₀(t)·exp(βᵀx) : les covariables agissent de façon
+                  MULTIPLICATIVE sur le risque, sans qu'on spécifie h₀.
+                  exp(β) se lit comme un rapport de risques.
+                  Hypothèse à vérifier : risques proportionnels (résidus de Schoenfeld).
+Weibull / AFT     modèle paramétrique : les covariables ACCÉLÈRENT le temps.
+                  Permet d'EXTRAPOLER au-delà de la fenêtre d'observation,
+                  ce que Cox ne fait pas.
+Survie par ML     Random Survival Forest, gradient boosting de Cox, DeepSurv :
+                  capturent non-linéarités et interactions.</pre></div>
+
+    <p>Le paramètre de forme de la <strong>loi de Weibull</strong> se lit directement comme un diagnostic de mode de défaillance : \(k \lt 1\) correspond à un taux décroissant (mortalité infantile, défauts de fabrication), \(k = 1\) à un taux constant (défaillances aléatoires, loi exponentielle sans mémoire), \(k \gt 1\) à un taux croissant (usure). C'est la lecture de la courbe en baignoire de la fiabilité, et c'est ce qui permet de distinguer un problème de qualité d'un problème de vieillissement — deux situations qui appellent des actions opposées.</p>
+
+    <div class="code-label">Python — lifelines</div>
+    <div class="code-block"><pre>from lifelines import KaplanMeierFitter, CoxPHFitter, WeibullFitter
+from lifelines.statistics import logrank_test
+
+# evenement = 1 si la panne a été observée, 0 si l'unité était encore en service
+km = KaplanMeierFitter().fit(durees, evenement_observe)
+km.plot_survival_function()
+print("durée médiane de survie :", km.median_survival_time_)
+
+# comparer deux lots
+print(logrank_test(d_lotA, d_lotB, e_lotA, e_lotB).p_value)
+
+cox = CoxPHFitter().fit(df, duration_col="duree", event_col="panne")
+cox.print_summary()                      # rapports de risques et intervalles
+cox.check_assumptions(df)                # test des risques proportionnels
+
+wb = WeibullFitter().fit(durees, evenement_observe)
+print(f"paramètre de forme ρ = {wb.rho_:.2f}")   # &lt; 1 rodage, ≈ 1 aléatoire, &gt; 1 usure</pre></div>
+
+    <div class="step-block">
+      <h4>Le lien avec la maintenance prédictive</h4>
+      <p>Prédire la <em>durée de vie résiduelle</em> (RUL) d'un équipement combine tout ce module : variables spectrales issues des capteurs (section 10), modèle de dégradation en espace d'états (section 8), et modèle de survie pour la probabilité de défaillance à un horizon donné (section 11). Deux exigences industrielles s'ajoutent : une <strong>prédiction probabiliste</strong>, parce qu'une décision de remplacement se prend sur un quantile bas et non sur une espérance (module 23), et une <strong>anticipation suffisante</strong> — un modèle qui prédit la panne deux heures avant est exact et inutile. La métrique doit donc incorporer le coût asymétrique entre une intervention inutile et une défaillance subie.</p>
+    </div>
 
     <div class="step-block">
       <h4>Ce qu'il faut retenir du module</h4>
       <ul>
-        <li>Sur données non structurées, la représentation compte plus que l'algorithme.</li>
-        <li>TF-IDF et régression logistique restent une baseline honnête, et interprétable mot par mot ; mesurer l'écart avant de sortir un transformer.</li>
-        <li>En vision, les tâches utiles sont souvent détection et segmentation ; le Dice et l'IoU y remplacent l'accuracy, et l'augmentation doit respecter la physique.</li>
-        <li>L'audio se ramène à une image temps-fréquence ; découper les jeux par locuteur ou appareil.</li>
-        <li>Un graphe s'exploite d'abord par des variables structurelles données à un modèle classique.</li>
-        <li>Les GNN agrègent les voisins de façon invariante par permutation ; ils sont peu profonds, sensibles au lissage excessif, et exigent un découpage adapté.</li>
-        <li>La qualité et la cohérence des annotations plafonnent la performance : les mesurer avant de changer de modèle.</li>
+        <li>L'autocorrélation réduit l'information effective : les tests et la validation doivent en tenir compte.</li>
+        <li>Décomposer et stationnariser avant de modéliser ; ACF et PACF restent les graphiques les plus instructifs.</li>
+        <li>ETS et ARIMA battent souvent le ML sur peu de séries courtes ; le ML gagne sur beaucoup de séries avec covariables.</li>
+        <li>Toute variable doit être strictement passée <em>et</em> réellement disponible au moment de la prévision.</li>
+        <li>Comparer systématiquement à la prévision naïve, et préférer MASE et CRPS.</li>
+        <li>Kalman estime un état caché en temps réel, avec un coût constant par pas ; le gain arbitre entre modèle et mesure.</li>
+        <li>La censure ne s'ignore pas : Kaplan-Meier, Cox et Weibull existent pour ça, et le paramètre de forme de Weibull diagnostique le mode de défaillance.</li>
       </ul>
     </div>
   </div>
 
   <hr class="divider">
   <div class="course-nav">
-    <a href="project7-m15.html" class="btn btn-secondary">← Module 15 : Séries temporelles</a>
-    <a href="project7-m17.html" class="btn btn-primary">Module 17 : Processus gaussiens →</a>
+    <a href="project7-m15.html" class="btn btn-secondary">← Module 15 : Deep learning</a>
+    <a href="project7-m17.html" class="btn btn-primary">Module 17 : Données non tabulaires →</a>
     <a href="project7.html" class="btn btn-ghost">Sommaire</a>
   </div>
-  <div class="project-meta"><span class="tag">NLP</span><span class="tag">TF-IDF</span><span class="tag">Segmentation</span><span class="tag">Audio</span><span class="tag">Graphes</span><span class="tag">GNN</span></div>
+  <div class="project-meta"><span class="tag">ARIMA</span><span class="tag">Prévision</span><span class="tag">Kalman</span><span class="tag">FFT</span><span class="tag">Survie</span><span class="tag">Fiabilité</span></div>
 </div>
   <footer>
     <div class="footer-inner">
@@ -270,7 +360,7 @@ Graphe   propriété du graphe ENTIER              propriété d'une molécule, 
   <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
   <div class="project-page-header">
     <div class="section-label">Data science &amp; ML course · Module 16</div>
-    <h1>Non-tabular data: text, images, audio, graphs</h1>
+    <h1>Time series, signals and time-to-event data</h1>
   </div>
 
   <div class="project-content course-content">
@@ -280,15 +370,16 @@ Graphe   propriété du graphe ENTIER              propriété d'une molécule, 
 
     <h2>What this module covers</h2>
     <ul>
-      <li>Text: TF-IDF and BM25 explained, a strong classical baseline with free interpretability, and an honest test of when it stops being enough.</li>
-      <li>Classical NLP tasks: classification, entity recognition and its entity-level evaluation, structured extraction, topic modelling (LDA, NMF, BERTopic).</li>
-      <li>Vision beyond classification: detection, semantic and instance segmentation, OCR, with IoU and Dice — and the specifics of scientific imaging (tiny annotated datasets, tiling, physical measurements as the real target).</li>
-      <li>Why augmentation must respect the physics of the signal.</li>
-      <li>Audio: mel spectrograms and MFCCs, augmentation on signal and spectrogram, and splitting by speaker or device to avoid leakage.</li>
-      <li>Graphs: structural measures (degree, betweenness, PageRank, communities) and why extracting graph features for a gradient boosting model is often the right first move.</li>
-      <li>Graph neural networks: message passing formalised, GCN/GraphSAGE/GAT/MPNN, node/edge/graph-level tasks, scientific applications including learned simulation on meshes — plus over-smoothing, scalability and expressivity limits, and graph-specific leakage.</li>
-      <li>Multimodal fusion strategies and contrastive alignment (CLIP).</li>
-      <li>Annotation quality: guidelines, inter-annotator agreement as a performance ceiling, and finding label errors.</li>
+      <li>What temporal dependence breaks: effective sample size, non-stationarity, ordering and horizon — and the first question, whether this is forecasting at all.</li>
+      <li>STL decomposition, stationarity testing with ADF and KPSS together, differencing, ACF and PACF.</li>
+      <li>Exponential smoothing (ETS / Holt-Winters) and ARIMA/SARIMAX, and the cases where classical statistics still beat machine learning.</li>
+      <li>The ML approach: strictly past lag and rolling features, recursive vs direct multi-horizon strategies, time-aware validation with a gap — and the leakage trap that silently invalidates forecasting projects.</li>
+      <li>Deep learning models (N-BEATS, DeepAR, Temporal Fusion Transformer) and time-series foundation models.</li>
+      <li>Probabilistic forecasting: pinball loss, CRPS, MASE, and always benchmarking against the naive forecast.</li>
+      <li>State-space models and the Kalman filter (predict/update, EKF, UKF, particle filters) for real-time estimation of hidden states.</li>
+      <li>Change-point detection and temporal anomaly detection, including the multiple-testing issue on streaming alerts.</li>
+      <li>Spectral analysis: FFT and Welch, spectrograms as CNN inputs, band-pass filtering, aliasing and leakage, wavelets.</li>
+      <li>Time-to-event data: censoring, Kaplan-Meier, log-rank, Cox proportional hazards, Weibull/AFT models and the bathtub curve — plus how remaining-useful-life prediction combines the whole module.</li>
     </ul>
 
     <h2>Course outline</h2>
@@ -299,26 +390,27 @@ Graphe   propriété du graphe ENTIER              propriété d'une molécule, 
         <li><a href="project7-m04.html">SQL and databases</a></li>
         <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
         <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
-        <li><a href="project7-m07.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
-        <li><a href="project7-m08.html">Inferential statistics: estimate, test, decide</a></li>
-        <li><a href="project7-m09.html">Probability, Bayesian inference and uncertainty quantification</a></li>
-        <li><a href="project7-m10.html">Data science in practice: from problem to dataset</a></li>
-        <li><a href="project7-m11.html">Learning with few labels</a></li>
-        <li><a href="project7-m12.html">Classical machine learning</a></li>
-        <li><a href="project7-m13.html">Learning theory: why generalisation happens</a></li>
-        <li><a href="project7-m14.html">Deep learning</a></li>
-        <li><a href="project7-m15.html">Time series, signals and time-to-event data</a></li>
-        <li><strong>Non-tabular data: text, images, audio, graphs</strong></li>
-        <li><a href="project7-m17.html">Gaussian processes and Bayesian optimisation</a></li>
-        <li><a href="project7-m18.html">Reinforcement learning</a></li>
-        <li><a href="project7-m19.html">Machine learning for simulation and engineering</a></li>
-        <li><a href="project7-m20.html">LLMs, embeddings, RAG and adaptation</a></li>
-        <li><a href="project7-m21.html">Search, ranking and recommendation</a></li>
-        <li><a href="project7-m22.html">From scores to decisions</a></li>
-        <li><a href="project7-m23.html">Scaling up: GPUs, distributed training, performance</a></li>
-        <li><a href="project7-m24.html">MLOps: taking a model to production</a></li>
-        <li><a href="project7-m25.html">Fairness, robustness, privacy and security</a></li>
-        <li><a href="project7-m26.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m12.html">Learning with few labels</a></li>
+        <li><a href="project7-m13.html">Classical machine learning</a></li>
+        <li><a href="project7-m14.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m15.html">Deep learning</a></li>
+        <li><strong>Time series, signals and time-to-event data</strong></li>
+        <li><a href="project7-m17.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m18.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m19.html">Reinforcement learning</a></li>
+        <li><a href="project7-m20.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m21.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m22.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m23.html">From scores to decisions</a></li>
+        <li><a href="project7-m24.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m25.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m26.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m27.html">End-to-end project: property listings, from scraping to price prediction</a></li>
       </ol>
   </div>
 
