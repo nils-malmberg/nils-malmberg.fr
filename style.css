@@ -617,3 +617,65 @@ footer {
   .course-content .code-copy span { display: none; }
   .course-content .code-copy { padding: 5px; top: var(--space-2); right: var(--space-2); }
 }
+
+/* Les liens du contenu sont soulignés et colorés (.project-content a) ;
+   un lien stylé en bouton doit garder l'apparence de son variant. */
+.course-content a.btn { text-decoration: none; }
+.course-content a.btn-primary { color: var(--color-text-inverse); }
+.course-content a.btn-secondary, .course-content a.btn-secondary:hover { color: var(--color-primary); }
+.course-content a.btn-ghost { color: var(--color-text-muted); }
+.course-content a.btn-ghost:hover { color: var(--color-text); }
+
+/* ── Cours en un seul document (project7-complet) ── */
+.barre-impression {
+  max-width: 800px; margin-bottom: var(--space-10); padding: var(--space-5);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.barre-impression > p { font-size: var(--text-sm); color: var(--color-text-muted); }
+.barre-impression .course-nav { margin: var(--space-4) 0; }
+.barre-impression .note-impression { font-size: var(--text-xs); color: var(--color-text-muted); margin: 0; }
+.barre-impression .btn svg { margin-right: var(--space-2); vertical-align: -3px; }
+.course-content .module-entete {
+  margin: var(--space-16) 0 var(--space-8); padding-top: var(--space-6);
+  border-top: 2px solid var(--color-divider);
+}
+.course-content .module-entete .section-label { margin-bottom: var(--space-2); }
+.course-content h1.module-titre { font-size: var(--text-2xl); margin: 0; }
+.course-content .sommaire-complet { columns: 2; column-gap: var(--space-8); }
+.course-content .sommaire-complet li { break-inside: avoid; margin-bottom: var(--space-2); }
+.course-content .step-block .course-nav { margin-bottom: 0; }
+@media (max-width: 720px) { .course-content .sommaire-complet { columns: 1; } }
+
+/* ── Impression : produire un PDF vectoriel lisible ── */
+@media print {
+  :root, :root[data-theme="dark"], [data-theme="dark"] {
+    --color-bg: #ffffff; --color-surface: #ffffff; --color-surface-2: #f7f8fa;
+    --color-surface-offset: #f4f5f7; --color-surface-dynamic: #eef0f3;
+    --color-divider: #d0d4db; --color-border: #c4c9d2;
+    --color-text: #1a1d24; --color-text-muted: #4a5060; --color-text-faint: #6a7280;
+    --color-primary: #0a5a72; --color-accent: #b85c18;
+  }
+  @page { margin: 18mm 15mm; }
+  html, body { background: #ffffff !important; }
+  body { font-size: 10.5pt; }
+
+  header, footer, .project-back, .course-nav, .barre-impression, .project-meta,
+  .code-copy, .theme-toggle, #language-switcher, .burger, .divider { display: none !important; }
+  #project7-complet-content-fr { display: block !important; }
+  #project7-complet-content-en { display: none !important; }
+
+  .container, .project-page { max-width: none; padding: 0; margin: 0; }
+  .course-content, .course-content .code-block, .course-content .step-block,
+  .course-content .warning-block, .course-content .tuto-toc { max-width: none; }
+
+  .course-content .module-entete { break-before: page; break-inside: avoid; margin-top: 0; border-top: none; }
+  h1, h2, h3, h4 { break-after: avoid; }
+  p, li { orphans: 3; widows: 3; }
+  .code-block, .step-block, .warning-block, .tuto-toc, figure { break-inside: avoid; }
+  [data-theme="dark"] .code-block { background: #f4f5f7 !important; border-color: #c4c9d2 !important; color: #1a1d24 !important; }
+  .code-block { font-size: 8pt; }
+  .code-block pre { white-space: pre-wrap; word-break: break-word; }
+  a { color: inherit !important; text-decoration: none; }
+  .course-content .sommaire-complet { columns: 2; }
+}
