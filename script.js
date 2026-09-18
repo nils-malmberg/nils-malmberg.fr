@@ -158,3 +158,88 @@ document.addEventListener("DOMContentLoaded", function() {
         })
         .catch(error => console.error('Error loading keywords:', error));
 });
+// ── Bouton « copier » sur les blocs de code du cours ──
+(function() {
+  const ICONE_COPIE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const ICONE_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+  const LIBELLES = {
+    fr: { copier: 'Copier', copie: 'Copié', echec: 'Échec', aria: 'Copier le code' },
+    en: { copier: 'Copy',   copie: 'Copied', echec: 'Failed', aria: 'Copy code' }
+  };
+
+  function langue() {
+    return document.documentElement.lang === 'en' ? 'en' : 'fr';
+  }
+
+  async function copier(texte) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(texte); return true; } catch (e) { /* repli */ }
+    }
+    // repli pour les contextes non sécurisés et les navigateurs anciens
+    const zone = document.createElement('textarea');
+    zone.value = texte;
+    zone.setAttribute('readonly', '');
+    zone.style.position = 'fixed';
+    zone.style.top = '-1000px';
+    document.body.appendChild(zone);
+    zone.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(zone);
+    return ok;
+  }
+
+  function etiquette(btn, etat) {
+    const t = LIBELLES[langue()];
+    btn.setAttribute('aria-label', t.aria);
+    if (etat === 'ok')        btn.innerHTML = ICONE_OK + '<span>' + t.copie + '</span>';
+    else if (etat === 'ko')   btn.innerHTML = ICONE_COPIE + '<span>' + t.echec + '</span>';
+    else                      btn.innerHTML = ICONE_COPIE + '<span>' + t.copier + '</span>';
+  }
+
+  function equiper(bloc) {
+    if (bloc.parentElement && bloc.parentElement.classList.contains('code-wrap')) return;
+    const pre = bloc.querySelector('pre');
+    if (!pre) return;
+
+    // le bouton vit dans un conteneur frère du bloc : il ne défile donc pas
+    // horizontalement avec le code quand celui-ci dépasse en largeur
+    const conteneur = document.createElement('div');
+    conteneur.className = 'code-wrap';
+    bloc.parentNode.insertBefore(conteneur, bloc);
+    conteneur.appendChild(bloc);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'code-copy';
+    etiquette(btn, 'init');
+
+    let minuteur;
+    btn.addEventListener('click', async function() {
+      const ok = await copier(pre.textContent);
+      clearTimeout(minuteur);
+      btn.classList.remove('ok', 'ko');
+      btn.classList.add(ok ? 'ok' : 'ko');
+      etiquette(btn, ok ? 'ok' : 'ko');
+      minuteur = setTimeout(function() {
+        btn.classList.remove('ok', 'ko');
+        etiquette(btn, 'init');
+      }, 1800);
+    });
+
+    conteneur.appendChild(btn);
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.course-content .code-block').forEach(equiper);
+
+    // changeLanguage() met à jour documentElement.lang : on suit ce changement
+    // pour retraduire les boutons sans toucher au reste du système de langue
+    new MutationObserver(function() {
+      document.querySelectorAll('.code-copy').forEach(function(btn) {
+        if (!btn.classList.contains('ok') && !btn.classList.contains('ko')) etiquette(btn, 'init');
+      });
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  });
+})();
