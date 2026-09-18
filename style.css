@@ -586,6 +586,11 @@ footer {
   margin-bottom: var(--space-6);
 }
 
+.course-content h4.subsection {
+  font-size: var(--text-base); font-weight: 700; color: var(--color-text);
+  margin: var(--space-6) 0 var(--space-2);
+}
+
 /* ── Bouton « copier » des blocs de code du cours ── */
 .course-content .code-wrap { position: relative; }
 .course-content .code-copy {
