@@ -657,6 +657,10 @@ footer {
     --color-primary: #0a5a72; --color-accent: #b85c18;
   }
   @page { margin: 18mm 15mm; }
+  /* les aplats (fond des blocs de code, des encadrés) ne sont pas imprimés
+     par défaut selon le chemin emprunté — dialogue d'impression, --print-to-pdf
+     ou CDP ; on les impose pour que le PDF soit toujours identique */
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { background: #ffffff !important; }
   body { font-size: 10.5pt; }
 

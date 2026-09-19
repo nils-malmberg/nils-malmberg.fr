@@ -45,15 +45,15 @@
   </div>
 
   <div class="barre-impression">
-    <p>Les 28 modules et les trois annexes réunis sur une seule page : pratique pour chercher dans l'ensemble du cours, ou pour l'enregistrer en PDF et le lire hors ligne.</p>
+    <p>Les 28 modules et les trois annexes réunis sur une seule page : pratique pour chercher dans l'ensemble du cours, ou pour l'emporter hors ligne.</p>
     <div class="course-nav">
-      <button type="button" id="btn-pdf" class="btn btn-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-        Enregistrer en PDF
-      </button>
+      <a href="media/projets/project7/cours-data-science-ml.pdf" download class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Télécharger le PDF
+      </a>
       <a href="project7.html" class="btn btn-secondary">Revenir au sommaire</a>
     </div>
-    <p class="note-impression">Le bouton ouvre la fenêtre d'impression du navigateur : choisissez-y <strong>« Enregistrer au format PDF »</strong> comme destination. Le document fait environ <strong>430 pages</strong> : comptez quelques secondes de préparation, le temps que les formules mathématiques finissent d'être composées.</p>
+    <p class="note-impression">Le PDF est un fichier déjà prêt, régénéré à chaque modification du cours : environ 460 pages, texte sélectionnable et cherchable.</p>
   </div>
 
   <div class="project-content course-content">
@@ -10506,9 +10506,9 @@ RESPONSABILITÉ
     <div class="warning-block">
       <strong>This document is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it.
     </div>
-    <p>This page gathers all 28 modules and the three appendices into a single document, so the whole course can be searched at once or saved as a PDF for offline reading. Printing always produces the French version.</p>
+    <p>This page gathers all 28 modules and the three appendices into a single document, so the whole course can be searched at once or read offline. A ready-made PDF of the same content — about 460 pages — is available below.</p>
     <div class="course-nav">
-      <button type="button" id="btn-pdf-en" class="btn btn-primary">Save as PDF</button>
+      <a href="media/projets/project7/cours-data-science-ml.pdf" download class="btn btn-primary">Download the PDF</a>
       <a href="project7.html" class="btn btn-secondary">Course index</a>
     </div>
   </div>
@@ -10531,60 +10531,4 @@ RESPONSABILITÉ
 </div>
 </main>
 <script src="script.js"></script>
-<script>
-// ── Export PDF : on passe par l'impression du navigateur, qui produit un PDF
-//    vectoriel — texte sélectionnable et recherchable, contrairement à une
-//    capture d'image. Aucune bibliothèque externe n'est nécessaire.
-(function() {
-  function attendreMathJax() {
-    return new Promise(function(resoudre) {
-      var essais = 0;
-      (function verifier() {
-        if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
-          MathJax.startup.promise.then(resoudre).catch(resoudre);
-          return;
-        }
-        if (++essais > 100) { resoudre(); return; }   // 10 s au plus : on imprime quand même
-        setTimeout(verifier, 100);
-      })();
-    });
-  }
-
-  function preparer(bouton) {
-    var libelle = bouton ? bouton.innerHTML : null;
-    if (bouton) { bouton.disabled = true; bouton.textContent = 'Préparation…'; }
-    // le document doit toujours s'imprimer en français et en thème clair
-    if (typeof changeLanguage === 'function') changeLanguage('fr');
-    return Promise.all([
-      attendreMathJax(),
-      document.fonts ? document.fonts.ready : Promise.resolve()
-    ]).then(function() {
-      return new Promise(function(r) { setTimeout(r, 400); });
-    }).then(function() {
-      if (bouton) { bouton.disabled = false; bouton.innerHTML = libelle; }
-      window.print();
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    ['btn-pdf', 'btn-pdf-en'].forEach(function(id) {
-      var b = document.getElementById(id);
-      if (b) b.addEventListener('click', function() { preparer(b); });
-    });
-    if (new URLSearchParams(window.location.search).has('print')) {
-      preparer(document.getElementById('btn-pdf'));
-    }
-  });
-
-  // l'impression force le thème clair, quel que soit le thème à l'écran
-  var themeAvant = null;
-  window.addEventListener('beforeprint', function() {
-    themeAvant = document.documentElement.getAttribute('data-theme');
-    document.documentElement.setAttribute('data-theme', 'light');
-  });
-  window.addEventListener('afterprint', function() {
-    if (themeAvant) document.documentElement.setAttribute('data-theme', themeAvant);
-  });
-})();
-</script>
 </body></html>

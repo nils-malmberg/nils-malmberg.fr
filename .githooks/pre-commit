@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+#
+# Régénère le PDF du cours quand sa source change, et l'ajoute au commit.
+# À activer une seule fois, après clonage :
+#
+#     git config core.hooksPath .githooks
+
+set -eu
+
+git diff --cached --name-only --diff-filter=ACM \
+  | grep -qE '^(project7-complet\.html|style\.css)$' || exit 0
+
+# Hors ligne, build-pdf refuse de produire un PDF sans formules : on garde
+# l'ancien fichier et on laisse le commit passer.
+if ./scripts/build-pdf.sh; then
+  git add media/projets/project7/cours-data-science-ml.pdf
+else
+  echo "pre-commit : PDF non régénéré, commit poursuivi." >&2
+fi
