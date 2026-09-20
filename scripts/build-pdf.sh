@@ -82,3 +82,5 @@ echo "build-pdf : génération depuis $SOURCE…"
 
 [ -s "$SORTIE" ] || { echo "build-pdf : la génération a échoué." >&2; exit 1; }
 echo "build-pdf : $SORTIE ($(du -h "$SORTIE" | cut -f1))"
+echo "build-pdf : fichier non versionné — pensez à le téléverser avec le site,"
+echo "            c'est lui que sert le bouton de téléchargement de project7.html."
