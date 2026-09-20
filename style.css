@@ -647,6 +647,23 @@ footer {
 .course-content .step-block .course-nav { margin-bottom: 0; }
 @media (max-width: 720px) { .course-content .sommaire-complet { columns: 1; } }
 
+.mention-droits {
+  max-width: 800px; margin-top: var(--space-6);
+  font-size: var(--text-xs); color: var(--color-text-faint); text-align: left;
+}
+.project-page-header .mention-droits { margin-top: var(--space-3); }
+
+/* Mention de droits répétée en bas de chaque page du PDF. Un élément en
+   position fixe ne convient pas : Chrome le rogne à la zone de texte et ne lui
+   réserve aucune place. Le <tfoot> d'un tableau, lui, est répété sur chaque
+   page imprimée ET l'espace est réservé. À l'écran, le tableau est neutralisé
+   en blocs : il ne doit rien changer à la mise en page. */
+.cadre-pdf,
+.cadre-pdf > tbody,
+.cadre-pdf > tbody > tr,
+.cadre-pdf > tbody > tr > td { display: block; }
+.cadre-pdf > tfoot { display: none; }
+
 /* ── Impression : produire un PDF vectoriel lisible ── */
 @media print {
   :root, :root[data-theme="dark"], [data-theme="dark"] {
@@ -682,4 +699,16 @@ footer {
   .code-block pre { white-space: pre-wrap; word-break: break-word; }
   a { color: inherit !important; text-decoration: none; }
   .course-content .sommaire-complet { columns: 2; }
+
+  .cadre-pdf { display: table; width: 100%; border-collapse: collapse; }
+  .cadre-pdf > tbody { display: table-row-group; }
+  .cadre-pdf > tfoot { display: table-footer-group; }
+  .cadre-pdf > tbody > tr,
+  .cadre-pdf > tfoot > tr { display: table-row; }
+  .cadre-pdf > tbody > tr > td,
+  .cadre-pdf > tfoot > tr > td { display: table-cell; padding: 0; border: 0; }
+  .pied-pdf {
+    padding-top: 8mm;
+    font-size: 7.5pt; color: #6a7280; text-align: center; letter-spacing: 0.02em;
+  }
 }
