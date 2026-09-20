@@ -67,16 +67,19 @@ fi
 
 [ -f "$SOURCE" ] || { echo "build-pdf : $SOURCE est introuvable." >&2; exit 1; }
 
-# MathJax est chargé depuis un CDN au moment du rendu. Sans réseau, les
-# formules sortiraient en LaTeX brut : mieux vaut s'arrêter et conserver le
-# PDF existant que le remplacer par une version abîmée.
+# MathJax est chargé depuis un CDN au moment du rendu : sans lui, les formules
+# sortiraient en LaTeX brut. On prévient, sans bloquer : ce test dit seulement
+# si CURL joint le CDN, alors que c'est le NAVIGATEUR qui le chargera — et il a
+# ses propres réglages de proxy et son propre magasin de certificats. Sous
+# Windows en particulier, Chrome y accède couramment quand curl échoue.
 MATHJAX="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-if command -v curl >/dev/null 2>&1; then
-  if ! curl -sf --max-time 5 -r 0-0 -o /dev/null "$MATHJAX"; then
-    echo "build-pdf : $MATHJAX est injoignable." >&2
-    echo "            sans lui les formules sortiraient en LaTeX brut ;" >&2
-    echo "            le PDF existant est conservé tel quel." >&2
-    exit 1
+if [ -z "${BUILD_PDF_SANS_TEST_RESEAU:-}" ] && command -v curl >/dev/null 2>&1; then
+  if ! curl -sfIL --max-time 15 -o /dev/null "$MATHJAX"; then
+    echo "build-pdf : curl ne joint pas le CDN MathJax." >&2
+    echo "            Si votre navigateur y accède, la génération sera correcte." >&2
+    echo "            Sinon les formules sortiront en LaTeX brut : ouvrez le PDF" >&2
+    echo "            et vérifiez qu'une formule s'affiche, au module 8 par exemple." >&2
+    echo "            (BUILD_PDF_SANS_TEST_RESEAU=1 pour passer ce test.)" >&2
   fi
 fi
 
@@ -97,10 +100,21 @@ echo "build-pdf : génération depuis $SOURCE…"
   --no-pdf-header-footer \
   --virtual-time-budget=60000 \
   $SUPPLEMENT \
-  --print-to-pdf="$RACINE/$SORTIE" \
-  "file://$RACINE/$SOURCE" >/dev/null 2>&1
+  --print-to-pdf="$RACINE/$SORTIE.tmp" \
+  "file://$RACINE/$SOURCE" >/dev/null 2>&1 || true
+# ^ sous « set -e », un code de retour non nul sortirait d'ici sans passer par
+#   la vérification ci-dessous ni par le nettoyage — et Chrome renvoie parfois
+#   un code non nul alors que le PDF a bien été produit. C'est donc le fichier
+#   obtenu, et lui seul, qui décide de la réussite.
 
-[ -s "$SORTIE" ] || { echo "build-pdf : la génération a échoué." >&2; exit 1; }
+# on ne remplace le PDF en place qu'une fois la génération réussie : une
+# interruption ou un échec laisse intact celui qui était déjà là
+if [ ! -s "$SORTIE.tmp" ]; then
+  rm -f "$SORTIE.tmp"
+  echo "build-pdf : la génération a échoué, le PDF existant est conservé." >&2
+  exit 1
+fi
+mv -f "$SORTIE.tmp" "$SORTIE"
 echo "build-pdf : $SORTIE ($(du -h "$SORTIE" | cut -f1))"
 echo "build-pdf : fichier non versionné — pensez à le téléverser avec le site,"
 echo "            c'est lui que sert le bouton de téléchargement de project7.html."

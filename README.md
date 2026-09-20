@@ -40,9 +40,14 @@ Quelques précisions :
   `style.css` : marges, saut de page avant chaque module, thème clair forcé,
   blocs de code et encadrés insécables.
 - **Une connexion est nécessaire.** MathJax est chargé depuis un CDN au moment
-  du rendu ; sans lui, les formules sortiraient en LaTeX brut. Le script
-  vérifie que le CDN répond et s'arrête sinon, en laissant le PDF existant
-  intact.
+  du rendu ; sans lui, les formules sortiraient en LaTeX brut. Le script teste
+  le CDN avec `curl` et prévient s'il ne l'atteint pas, mais **sans bloquer** :
+  c'est le navigateur qui charge MathJax, et il a ses propres réglages de proxy
+  et de certificats — il y accède souvent quand `curl` échoue. En cas
+  d'avertissement, ouvrez le PDF produit et vérifiez qu'une formule s'affiche,
+  au module 8 par exemple. `BUILD_PDF_SANS_TEST_RESEAU=1` supprime le test.
+- **Le PDF existant n'est jamais détruit par un échec** : la génération écrit
+  dans un fichier temporaire, qui ne remplace le PDF qu'une fois terminée.
 - **Pour un autre navigateur :** `CHROME=/chemin/vers/chrome ./scripts/build-pdf.sh`.
 - **Après génération**, téléverser le PDF avec le reste du site : comme il est
   dans `.gitignore`, il ne part pas avec le dépôt, et le bouton de
