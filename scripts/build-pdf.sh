@@ -10,11 +10,26 @@
 # régénérer puis le téléverser avec le reste du site après chaque modification
 # du cours.
 #
+# Sous Windows, le lancer depuis Git Bash (livré avec Git pour Windows) ;
+# cmd.exe et PowerShell ne savent pas exécuter un script shell.
+#
 # Pour imposer un autre navigateur :  CHROME=/chemin/vers/chrome ./scripts/build-pdf.sh
 
 set -eu
 
+# Git Bash réécrit les chemins POSIX en chemins Windows dans les arguments des
+# programmes natifs, ce qui abîmerait l'URL file:// passée au navigateur.
+# Ces deux variables le désactivent ; ailleurs elles sont simplement ignorées.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 cd "$(dirname "$0")/.."
+
+# Chemin absolu dans la forme que le navigateur comprend. Sous Git Bash, pwd
+# renvoie /c/Users/... que chrome.exe ne sait pas lire ; pwd -W donne C:/Users/…
+# Ailleurs, pwd -W n'existe pas et l'on retombe sur pwd.
+RACINE=$(pwd -W 2>/dev/null || pwd)
 
 SOURCE="project7-complet.html"
 SORTIE="media/projets/project7/cours-data-science-ml.pdf"
@@ -26,7 +41,12 @@ trouver_navigateur() {
   for c in \
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
     "/Applications/Chromium.app/Contents/MacOS/Chromium" \
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
+    "/c/Program Files/Google/Chrome/Application/chrome.exe" \
+    "/c/Program Files (x86)/Google/Chrome/Application/chrome.exe" \
+    "${LOCALAPPDATA:-}/Google/Chrome/Application/chrome.exe" \
+    "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" \
+    "/c/Program Files/Microsoft/Edge/Application/msedge.exe"
   do
     if [ -x "$c" ]; then printf '%s' "$c"; return 0; fi
   done
@@ -77,8 +97,8 @@ echo "build-pdf : génération depuis $SOURCE…"
   --no-pdf-header-footer \
   --virtual-time-budget=60000 \
   $SUPPLEMENT \
-  --print-to-pdf="$SORTIE" \
-  "file://$(pwd)/$SOURCE" >/dev/null 2>&1
+  --print-to-pdf="$RACINE/$SORTIE" \
+  "file://$RACINE/$SOURCE" >/dev/null 2>&1
 
 [ -s "$SORTIE" ] || { echo "build-pdf : la génération a échoué." >&2; exit 1; }
 echo "build-pdf : $SORTIE ($(du -h "$SORTIE" | cut -f1))"

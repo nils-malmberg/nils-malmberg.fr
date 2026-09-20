@@ -47,3 +47,29 @@ Quelques précisions :
 - **Après génération**, téléverser le PDF avec le reste du site : comme il est
   dans `.gitignore`, il ne part pas avec le dépôt, et le bouton de
   téléchargement renverrait une erreur 404 sans lui.
+
+### Sous Windows
+
+Le script est un script shell : il se lance depuis **Git Bash**, livré avec Git
+pour Windows, et non depuis `cmd.exe` ou PowerShell.
+
+```sh
+./scripts/build-pdf.sh
+```
+
+Il connaît les emplacements habituels de Chrome et d'Edge sous Windows. Si le
+navigateur est installé ailleurs, indiquez-le au format Git Bash :
+
+```sh
+CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe" ./scripts/build-pdf.sh
+```
+
+Si vous préférez rester dans PowerShell, la même chose sans le script :
+
+```powershell
+$racine = (Get-Location).Path
+$chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+& $chrome --headless --disable-gpu --no-pdf-header-footer --virtual-time-budget=60000 `
+  "--print-to-pdf=$racine\media\projets\project7\cours-data-science-ml.pdf" `
+  ("file:///" + ($racine -replace '\\', '/') + "/project7-complet.html")
+```
