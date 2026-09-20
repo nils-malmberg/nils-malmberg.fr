@@ -5,9 +5,10 @@
 #     ./scripts/build-pdf.sh
 #
 # Aucune dépendance à installer : le script pilote le Chrome déjà présent sur
-# la machine. Il est lancé automatiquement par .githooks/pre-commit dès que la
-# page source ou la feuille de style changent, et le fichier produit est celui
-# que sert le bouton de téléchargement de project7.html.
+# la machine. Le fichier produit est celui que sert le bouton de téléchargement
+# de project7.html ; il n'est pas versionné (voir .gitignore), il faut donc le
+# régénérer puis le téléverser avec le reste du site après chaque modification
+# du cours.
 #
 # Pour imposer un autre navigateur :  CHROME=/chemin/vers/chrome ./scripts/build-pdf.sh
 
