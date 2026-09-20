@@ -1181,6 +1181,7 @@ git diff main...HEAD                     # tout ce que la branche apporte</pre><
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 2</div>
       <h1 id="m02" class="module-titre">Concurrence en Python : GIL, threads, processus, asyncio</h1>
@@ -1552,6 +1553,7 @@ que la RAM</pre></div>
         <li>Ne jamais empiler deux niveaux de parallélisme : brider les threads BLAS quand on distribue des processus.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 3</div>
@@ -1927,6 +1929,7 @@ BoTorch        construit sur PyTorch, pour l'optimisation bayésienne (module 19
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 4</div>
       <h1 id="m04" class="module-titre">SQL et bases de données</h1>
@@ -2289,6 +2292,7 @@ df = pd.read_sql("SELECT * FROM annonces WHERE ville = %(v)s", moteur, params={"
     </div>
 
     <p>Ce module a montré comment <em>interroger</em> des données déjà en place. Le module 7 traite la question d'avant : comment elles y arrivent, sous quel format les stocker, comment organiser un entrepôt pour l'analyse, et comment faire tourner tout cela chaque nuit sans créer de doublons.</p>
+
 
     <div class="module-entete">
       <div class="section-label">Module 5</div>
@@ -2750,6 +2754,7 @@ kubectl delete -f deployment.yaml</pre></div>
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 6</div>
       <h1 id="m06" class="module-titre">Exposer un modèle : FastAPI, Pydantic, Jinja</h1>
@@ -3158,6 +3163,7 @@ async def journaliser(request, call_next):
         <li>En production : plusieurs workers (attention à la mémoire), CORS, authentification, journalisation avec identifiant de requête.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 7</div>
@@ -3824,6 +3830,7 @@ propre = Annonce.validate(df, lazy=True)   # lazy : TOUTES les erreurs d'un coup
 
     <p>La suite du cours quitte la plomberie pour les mathématiques : le module 8 reprend l'optimisation et l'algèbre linéaire dont tout le machine learning découle. On retrouvera l'ingénierie des données au module 28, où le projet de bout en bout construit un pipeline complet — scraping, validation, base PostgreSQL, ingestion idempotente — en appliquant chacune des règles ci-dessus.</p>
 
+
     <div class="module-entete">
       <div class="section-label">Module 8</div>
       <h1 id="m08" class="module-titre">Mathématiques du ML : optimisation, algèbre linéaire, SVD et PCA</h1>
@@ -4222,6 +4229,7 @@ print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></di
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 9</div>
       <h1 id="m09" class="module-titre">Statistique inférentielle : estimer, tester, décider</h1>
@@ -4524,6 +4532,7 @@ print(f"écart absolu = {taux[1]-taux[0]:+.3%}  IC95 = [{lo:+.3%}, {hi:+.3%}]  p
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 10</div>
       <h1 id="m10" class="module-titre">Probabilités, inférence bayésienne et quantification d'incertitude</h1>
@@ -4781,6 +4790,7 @@ print(f"couverture empirique : {np.mean((y_test &gt;= bas) &amp; (y_test &lt;= h
         <li>Sur un modèle existant, la prédiction conforme donne une garantie de couverture pour cinq lignes de code.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 11</div>
@@ -5263,6 +5273,7 @@ print(f"RR = 5.0 → E = {valeur_e(5.0):.2f}")   # 9.47  très solide
 
     <p>Une dernière remarque, qui vaut pour tout le reste du cours. Un modèle prédictif et un modèle causal ne s'évaluent pas de la même manière : le premier se juge sur des données de test, le second ne se juge sur rien — il n'existe pas de vérité terrain pour un effet causal, puisque le contrefactuel est manquant par construction. C'est pourquoi la crédibilité repose ici sur la <em>conception</em> de l'étude, sur les diagnostics, et sur l'énoncé explicite des hypothèses. Le module 12 reprend maintenant le fil de la pratique : comment passer d'un problème métier à un jeu de données exploitable.</p>
 
+
     <div class="module-entete">
       <div class="section-label">Module 12</div>
       <h1 id="m12" class="module-titre">Data science en pratique : du problème au dataset</h1>
@@ -5610,6 +5621,7 @@ Sélection répétée        essayer 200 modèles et garder le meilleur score de
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 13</div>
       <h1 id="m13" class="module-titre">Apprendre avec peu d'étiquettes</h1>
@@ -5852,6 +5864,7 @@ for n in (2_000, 5_000, 10_000):
         <li>La courbe d'apprentissage transforme « faut-il annoter plus ? » en décision chiffrée.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 14</div>
@@ -6207,6 +6220,7 @@ Clustering        découverte non supervisée      évaluation ambiguë         
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 15</div>
       <h1 id="m15" class="module-titre">Théorie de l'apprentissage : pourquoi ça généralise</h1>
@@ -6332,6 +6346,7 @@ physique</pre></div>
         <li>Pour un chiffre fiable, mesurer ; pour une garantie utilisable, conformaliser.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 16</div>
@@ -6605,6 +6620,7 @@ for etape in range(20_000):
         <li>Les PINN brillent sur les problèmes inverses et l'assimilation de données, pas en remplacement d'un solveur.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 17</div>
@@ -6898,6 +6914,7 @@ print(f"paramètre de forme ρ = {wb.rho_:.2f}")   # &lt; 1 rodage, ≈ 1 aléat
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 18</div>
       <h1 id="m18" class="module-titre">Données non tabulaires : texte, images, audio, graphes</h1>
@@ -7099,6 +7116,7 @@ Graphe   propriété du graphe ENTIER              propriété d'une molécule, 
         <li>La qualité et la cohérence des annotations plafonnent la performance : les mesurer avant de changer de modèle.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 19</div>
@@ -7324,6 +7342,7 @@ A/B testing adaptatif    allocation séquentielle, à la frontière des bandits 
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 20</div>
       <h1 id="m20" class="module-titre">Apprentissage par renforcement</h1>
@@ -7530,6 +7549,7 @@ Gestion de portefeuille  allocation séquentielle sous contrainte de risque</pre
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 21</div>
       <h1 id="m21" class="module-titre">ML pour la simulation et l'ingénierie</h1>
@@ -7725,6 +7745,7 @@ champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPL
         <li>Un problème inverse est mal posé par défaut : vérifier l'identifiabilité et fournir une incertitude, jamais un point seul.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 22</div>
@@ -7936,6 +7957,7 @@ Réduire latence et coût                   distillation vers  élevé, mais amo
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 23</div>
       <h1 id="m23" class="module-titre">Recherche, ranking et recommandation</h1>
@@ -8110,6 +8132,7 @@ Nouveauté / sérendipité  recommande-t-on autre chose que les best-sellers ?
         <li>Découper par date, et ne conclure qu'en ligne : le décalage hors ligne/en ligne est structurel.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 24</div>
@@ -8312,6 +8335,7 @@ compte est l'ORDRE des deux prédictions, pas leur exactitude absolue.</pre></di
         <li>Évaluer la chaîne complète sur la valeur finale, pas le modèle sur sa métrique intermédiaire.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 25</div>
@@ -8560,6 +8584,7 @@ for epoque in range(n):
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 26</div>
       <h1 id="m26" class="module-titre">MLOps : industrialiser un modèle</h1>
@@ -8799,6 +8824,7 @@ En continu         apprentissage en ligne. Réservé aux cas qui l'exigent vraim
       </ul>
     </div>
 
+
     <div class="module-entete">
       <div class="section-label">Module 27</div>
       <h1 id="m27" class="module-titre">Équité, robustesse, confidentialité et sécurité</h1>
@@ -8958,6 +8984,7 @@ print(MetricFrame(metrics=recall_score, y_true=y_test, y_pred=y_pred,
         <li>Charger un modèle est une exécution de code : format sûr, provenance vérifiée, versions épinglées.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Module 28</div>
@@ -9837,6 +9864,7 @@ jobs:
         <li>La CI vérifie ce que personne ne peut contourner, et la collecte planifiée échoue bruyamment quand le site change.</li>
       </ul>
     </div>
+
 
     <div class="module-entete">
       <div class="section-label">Annexe A1</div>
