@@ -44,7 +44,7 @@
 
   <div class="project-content">
     <h2>Objectif</h2>
-    <p>Pour préparer un hackathon interne sur l'<strong>IA agentique</strong>, je construis de A à Z un agent de code minimal en Python : un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
+    <p>Ce projet a un but simple : <strong>comprendre comment fonctionne un agent de code</strong> en le construisant de A à Z en Python. Un agent de code est un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
     <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main.</p>
     <p>Le LLM tourne en local sur mon NAS (voir le <a href="project6.html">projet NAS Lab</a>) : <strong>qwen3.5:4b</strong> servi par Ollama sur une RTX 3050 de 6 Go. Un modèle aussi petit impose des choix : peu d'outils (5 au maximum), des descriptions très claires et des résultats d'outils tronqués.</p>
 
@@ -748,6 +748,74 @@ Réponse finale (tour 2) :
           <li><strong>Boucle testable</strong> : <code>run_turn</code> reçoit la fonction <code>chat</code> en paramètre. En vrai, c'est <code>llm.chat</code> ; dans les tests, un faux modèle qui rejoue des réponses écrites à l'avance.</li>
           <li><strong>Peu d'outils</strong> : 4 ici, 5 avec <code>load_skill</code> à l'étape 7. Un 4B se perd vite si on lui en donne trop ; chaque description est courte et précise.</li>
         </ul>
+        <p>Ce sont 5 fichiers complets à créer dans <code>src/mini_agent/</code> : <code>config.py</code> (version finale), <code>llm.py</code>, <code>guards.py</code>, <code>tools.py</code> et <code>agent.py</code>, plus un fichier de tests.</p>
+        <p><code>config.py</code> prend sa forme finale : délai des requêtes, limites des garde-fous (expliquées à l'étape 6), dossier de travail, et emplacement des dossiers <code>prompts/</code> et <code>skills/</code> (étape 7). Il remplace la version de l'étape 0.</p>
+        <div class="code-label">src/mini_agent/config.py (version finale)</div>
+        <div class="code-block"><pre>"""Configuration de mini-agent.
+
+Tout ce qui peut changer d'une machine à l'autre (adresse d'Ollama, modèle,
+dossier de travail) est lu dans les variables d'environnement, avec des
+valeurs par défaut adaptées à mon NAS. Le reste (réglages du modèle, limites
+des garde-fous) est fixé ici pour que tout le projet utilise les mêmes valeurs.
+"""
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+# Valeurs par défaut : Ollama sur le NAS, modèle 4B qui tient dans 6 Go de VRAM.
+DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
+
+# Température basse : on veut un agent prévisible, pas créatif.
+TEMPERATURE = 0.2
+# Taille de la fenêtre de contexte (en tokens) demandée à Ollama.
+# 8192 est un bon compromis pour un modèle 4B sur une carte de 6 Go.
+NUM_CTX = 8192
+# Délai maximal d'une requête à Ollama, en secondes. Le premier appel est
+# lent car Ollama doit charger le modèle en VRAM.
+REQUEST_TIMEOUT = 120
+
+# Garde-fous (étape 6).
+MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
+COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
+MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
+
+# Dossiers du projet : prompts/ et skills/ sont à la racine du dépôt,
+# deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROMPTS_DIR = PROJECT_ROOT / "prompts"
+SKILLS_DIR = PROJECT_ROOT / "skills"
+
+
+@dataclass(frozen=True)
+class Config:
+    """Réglages chargés au démarrage (immuables ensuite)."""
+
+    ollama_url: str
+    model: str
+    workdir: Path  # le seul dossier où l'agent a le droit de lire et d'écrire
+    temperature: float = TEMPERATURE
+    num_ctx: int = NUM_CTX
+
+    @property
+    def chat_url(self) -&gt; str:
+        """URL de l'API native d'Ollama (et non la couche /v1 compatible OpenAI)."""
+        return f"{self.ollama_url}/api/chat"
+
+    def options(self) -&gt; dict:
+        """Bloc `options` envoyé à Ollama à chaque appel."""
+        return {"temperature": self.temperature, "num_ctx": self.num_ctx}
+
+
+def load_config() -&gt; Config:
+    """Construit la configuration à partir des variables d'environnement."""
+    url = os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL)
+    model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    # Par défaut, l'agent travaille dans le dossier où on le lance.
+    workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
+    return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
         <div class="code-label">src/mini_agent/llm.py</div>
         <div class="code-block"><pre>"""Appel au LLM via l'API native d'Ollama (/api/chat).
 
@@ -782,8 +850,30 @@ def chat(config: Config, messages: list[dict], tools: list[dict] | None = None) 
     response = requests.post(config.chat_url, json=payload, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return response.json()["message"]</pre></div>
-        <div class="code-label">src/mini_agent/tools.py — contexte et outils</div>
-        <div class="code-block"><pre># Dossiers jamais listés : sans intérêt pour le modèle et souvent énormes.
+        <div class="warning-block"><strong>À faire aussi :</strong> <code>tools.py</code> importe <code>safe_path</code> et <code>GuardError</code> depuis <code>guards.py</code>. Copie dès maintenant le fichier <code>guards.py</code> donné à l'<a href="#mini-agent-step6-fr">étape 6</a> : ses garde-fous y sont expliqués.</div>
+        <div class="code-label">src/mini_agent/tools.py (version de l'étape 5, fichier complet)</div>
+        <div class="code-block"><pre>"""Les outils mis à disposition du modèle, et leur registre.
+
+Un outil = une fonction Python + un schéma JSON qui la décrit au modèle.
+Le modèle ne voit que le schéma (nom, description, paramètres) ; c'est le
+harness qui exécute la fonction quand le modèle la demande.
+
+Pour ajouter un outil : écrire la fonction, écrire son schéma, ajouter une
+ligne dans TOOLS. La boucle agentique (agent.py) n'a pas à être modifiée.
+"""
+
+import difflib
+import json
+import os
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+from mini_agent.config import COMMAND_TIMEOUT
+from mini_agent.guards import GuardError, safe_path
+
+# Dossiers jamais listés : sans intérêt pour le modèle et souvent énormes.
 IGNORED_DIRS = {"__pycache__", "node_modules"}
 MAX_LISTED_FILES = 200
 
@@ -870,10 +960,10 @@ def run_command(ctx: ToolContext, command: str) -&gt; str:
         f"code de sortie : {result.returncode}\n"
         f"--- stdout ---\n{result.stdout}\n"
         f"--- stderr ---\n{result.stderr}"
-    )</pre></div>
-        <div class="warning-block"><strong>Note :</strong> <code>write_file</code> et <code>run_command</code> appellent déjà <code>ctx.confirm(...)</code> et <code>safe_path(...)</code> : ce sont les garde-fous de l'étape 6. On peut écrire <code>guards.py</code> tout de suite, ou commencer avec un <code>safe_path</code> qui renvoie simplement <code>workdir / path</code>.</div>
-        <div class="code-label">src/mini_agent/tools.py — le registre</div>
-        <div class="code-block"><pre>def schema(name: str, description: str, properties: dict, required: list[str]) -&gt; dict:
+    )
+
+
+def schema(name: str, description: str, properties: dict, required: list[str]) -&gt; dict:
     """Construit le schéma d'un outil au format attendu par Ollama."""
     return {
         "type": "function",
@@ -921,15 +1011,6 @@ TOOLS: dict[str, tuple[Callable[..., str], dict]] = {
             ["command"],
         ),
     ),
-    "load_skill": (
-        load_skill,
-        schema(
-            "load_skill",
-            "Charge les instructions d'une skill listée dans le prompt système.",
-            {"name": {"type": "string", "description": "Nom exact de la skill, ex. 'corriger-un-bug'."}},
-            ["name"],
-        ),
-    ),
 }
 
 
@@ -942,9 +1023,11 @@ def execute_tool(name: str, arguments: dict, ctx: ToolContext) -&gt; str:
     """Version simple de l'étape 5 (l'étape 8 y ajoute la gestion des erreurs)."""
     function, _ = TOOLS[name]
     return function(ctx, **arguments)</pre></div>
-        <p>La ligne <code>"load_skill"</code> du registre s'ajoute à l'étape 7, et <code>execute_tool</code> sera enrichie à l'étape 8.</p>
-        <div class="code-label">src/mini_agent/agent.py — la boucle (version de l'étape 5)</div>
-        <div class="code-block"><pre>from typing import Callable
+        <p>L'entrée <code>"load_skill"</code> du registre s'ajoute à l'étape 7, et <code>execute_tool</code> sera enrichie à l'étape 8.</p>
+        <div class="code-label">src/mini_agent/agent.py (version de l'étape 5, fichier complet)</div>
+        <div class="code-block"><pre>"""La boucle agentique (version de l'étape 5)."""
+
+from typing import Callable
 
 from mini_agent.config import MAX_TOURS
 from mini_agent.tools import ToolContext, execute_tool, tool_schemas
@@ -973,8 +1056,16 @@ def run_turn(chat: ChatFunction, messages: list[dict], ctx: ToolContext, max_tou
     return f"Arrêt : limite de {max_tours} tours atteinte sans réponse finale."</pre></div>
         <h3>Tests</h3>
         <p>On ajoute pytest comme dépendance de développement (<code>uv add --dev pytest</code>), puis on teste la boucle avec un faux modèle :</p>
-        <div class="code-label">tests/test_agent.py (extrait)</div>
-        <div class="code-block"><pre>class FakeChat:
+        <div class="code-label">tests/test_agent.py (version de l'étape 5, fichier complet)</div>
+        <div class="code-block"><pre>"""Tests de la boucle agentique (agent.py), avec un faux modèle."""
+
+import pytest
+
+from mini_agent.agent import run_turn
+from mini_agent.tools import ToolContext
+
+
+class FakeChat:
     """Faux client Ollama : renvoie des réponses écrites à l'avance."""
 
     def __init__(self, replies):
@@ -998,6 +1089,13 @@ def answer(text):
 def ctx(tmp_path):
     (tmp_path / "notes.txt").write_text("12, 15, 9", encoding="utf-8")
     return ToolContext(workdir=tmp_path, skills_dir=tmp_path / "skills", confirm=lambda question: True)
+
+
+def test_reponse_directe_sans_outil(ctx):
+    chat = FakeChat([answer("Bonjour !")])
+    messages = [{"role": "user", "content": "Salut"}]
+    assert run_turn(chat, messages, ctx) == "Bonjour !"
+    assert len(chat.calls) == 1
 
 
 def test_outil_execute_et_resultat_renvoye(ctx):
@@ -1029,6 +1127,7 @@ ctx = ToolContext(
 )
 messages = [{"role": "user", "content": "Liste les fichiers du projet, puis lis pyproject.toml et donne ses dépendances."}]
 print(run_turn(lambda msgs, tools: llm.chat(config, msgs, tools), messages, ctx))</pre></div>
+        <p>Toujours depuis la <strong>racine du projet</strong> (le dossier qui contient <code>pyproject.toml</code>) : pytest ne cherche les tests que sous le dossier courant. Lancé depuis <code>src/mini_agent/</code>, il affiche <code>collected 0 items</code>.</p>
         <div class="code-block"><pre>uv run python try_step5.py
 uv run pytest -q</pre></div>
         <h3>Ce qu'on doit observer</h3>
@@ -1108,7 +1207,7 @@ def truncate(text: str, max_chars: int) -&gt; str:
     half = max_chars // 2
     removed = len(text) - 2 * half
     return f"{text[:half]}\n[... {removed} caractères tronqués ...]\n{text[-half:]}"</pre></div>
-        <div class="code-label">src/mini_agent/config.py — limites et dossier de travail</div>
+        <div class="code-label">src/mini_agent/config.py — limites et dossier de travail (déjà en place depuis l'étape 5)</div>
         <div class="code-block"><pre># Garde-fous (étape 6).
 MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
 COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
@@ -1123,7 +1222,10 @@ def load_config() -&gt; Config:
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
-        <p>Dans <code>Config</code>, on ajoute le champ <code>workdir: Path</code>. Dans la boucle, une ligne suffit pour la troncature :</p>
+        <p>Dans <code>agent.py</code>, on complète les imports, puis une ligne suffit pour la troncature :</p>
+        <div class="code-label">src/mini_agent/agent.py — imports</div>
+        <div class="code-block"><pre>from mini_agent.config import MAX_OUTPUT_CHARS, MAX_TOURS
+from mini_agent.guards import truncate</pre></div>
         <div class="code-label">src/mini_agent/agent.py — dans run_turn</div>
         <div class="code-block"><pre>        for call in tool_calls:
             name = call["function"]["name"]
@@ -1131,7 +1233,7 @@ def load_config() -&gt; Config:
             result = execute_tool(name, arguments, ctx)
             result = truncate(result, MAX_OUTPUT_CHARS)  # garde-fou : résultat tronqué
             messages.append({"role": "tool", "tool_name": name, "content": result})</pre></div>
-        <p>Et le contexte des outils utilise la vraie confirmation :</p>
+        <p>Et dans <code>try_step5.py</code>, le contexte des outils utilise la vraie confirmation :</p>
         <div class="code-block"><pre>from mini_agent.guards import ask_confirmation
 
 ctx = ToolContext(workdir=config.workdir, skills_dir=SKILLS_DIR, confirm=ask_confirmation)</pre></div>
@@ -1264,6 +1366,7 @@ description: Écrire des tests pytest pour un module Python.
 6. Si un test échoue, vérifie d'abord si c'est le test ou le code qui est faux.
    Ne modifie pas le code testé sans le dire.
 7. Réponds avec la liste des tests écrits et le résultat de pytest.</pre></div>
+        <p>Trois fonctions à placer dans <code>tools.py</code> <strong>avant</strong> le dictionnaire <code>TOOLS</code>, qui y fait référence :</p>
         <div class="code-label">src/mini_agent/tools.py — skills</div>
         <div class="code-block"><pre>def load_skill(ctx: ToolContext, name: str) -&gt; str:
     """Renvoie le contenu d'une skill (fichier Markdown de skills/)."""
@@ -1298,7 +1401,41 @@ def available_skills(skills_dir: Path) -&gt; dict[str, str]:
     if not skills_dir.is_dir():
         return {}
     return {p.stem: read_skill_description(p) for p in sorted(skills_dir.glob("*.md"))}</pre></div>
-        <p>Dans le registre <code>TOOLS</code>, on ajoute l'entrée <code>"load_skill"</code> (voir l'étape 5). Le prompt est rempli par :</p>
+        <p>Dans le dictionnaire <code>TOOLS</code>, on ajoute l'entrée de <code>load_skill</code> (5e et dernier outil) :</p>
+        <div class="code-label">src/mini_agent/tools.py — dans TOOLS</div>
+        <div class="code-block"><pre>    "load_skill": (
+        load_skill,
+        schema(
+            "load_skill",
+            "Charge les instructions d'une skill listée dans le prompt système.",
+            {"name": {"type": "string", "description": "Nom exact de la skill, ex. 'corriger-un-bug'."}},
+            ["name"],
+        ),
+    ),</pre></div>
+        <p>Le prompt est rempli par <code>build_system_prompt</code>, dans <code>agent.py</code>, qui a désormais ses imports définitifs :</p>
+        <div class="code-label">src/mini_agent/agent.py — imports (version finale)</div>
+        <div class="code-block"><pre>"""La boucle agentique : le cœur de mini-agent.
+
+    tant que le modèle demande des outils :
+        exécuter chaque outil demandé
+        ajouter le résultat à la conversation
+        rappeler le modèle
+    sinon : renvoyer sa réponse finale
+
+La boucle ne connaît aucun outil en particulier : elle passe par le registre
+de tools.py. Elle ne parle pas non plus directement à Ollama : on lui donne
+une fonction `chat`, ce qui permet de la tester avec un faux modèle.
+"""
+
+import json
+import os
+import platform
+from pathlib import Path
+from typing import Callable
+
+from mini_agent.config import MAX_OUTPUT_CHARS, MAX_TOURS
+from mini_agent.guards import truncate
+from mini_agent.tools import ToolContext, execute_tool, tool_schemas</pre></div>
         <div class="code-label">src/mini_agent/agent.py</div>
         <div class="code-block"><pre>def build_system_prompt(template: str, workdir: Path, skills: dict[str, str]) -&gt; str:
     """Remplit le modèle de prompt (prompts/AGENT.md) avec l'environnement réel."""
@@ -2717,7 +2854,7 @@ def test_vrai_prompt_et_vraies_skills():
 
   <div class="project-content">
     <h2>Goal</h2>
-    <p>To prepare an internal hackathon on <strong>agentic AI</strong>, I am building a minimal coding agent in Python from scratch: a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
+    <p>This project has a simple goal: <strong>understanding how a coding agent works</strong> by building one from scratch in Python. A coding agent is a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
     <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand.</p>
     <p>The LLM runs locally on my NAS (see the <a href="project6.html">NAS Lab project</a>): <strong>qwen3.5:4b</strong> served by Ollama on a 6 GB RTX 3050. Such a small model forces some choices: few tools (5 at most), very clear descriptions and truncated tool results.</p>
 
@@ -3421,6 +3558,74 @@ Réponse finale (tour 2) :
           <li><strong>Testable loop</strong>: <code>run_turn</code> receives the <code>chat</code> function as a parameter. For real, it is <code>llm.chat</code>; in the tests, a fake model replaying pre-written answers.</li>
           <li><strong>Few tools</strong>: 4 here, 5 with <code>load_skill</code> at step 7. A 4B model gets lost quickly with too many; each description is short and precise.</li>
         </ul>
+        <p>These are 5 complete files to create in <code>src/mini_agent/</code>: <code>config.py</code> (final version), <code>llm.py</code>, <code>guards.py</code>, <code>tools.py</code> and <code>agent.py</code>, plus a test file.</p>
+        <p><code>config.py</code> takes its final shape: request timeout, guardrail limits (explained at step 6), working folder, and location of the <code>prompts/</code> and <code>skills/</code> folders (step 7). It replaces the step 0 version.</p>
+        <div class="code-label">src/mini_agent/config.py (final version)</div>
+        <div class="code-block"><pre>"""Configuration de mini-agent.
+
+Tout ce qui peut changer d'une machine à l'autre (adresse d'Ollama, modèle,
+dossier de travail) est lu dans les variables d'environnement, avec des
+valeurs par défaut adaptées à mon NAS. Le reste (réglages du modèle, limites
+des garde-fous) est fixé ici pour que tout le projet utilise les mêmes valeurs.
+"""
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+# Valeurs par défaut : Ollama sur le NAS, modèle 4B qui tient dans 6 Go de VRAM.
+DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
+
+# Température basse : on veut un agent prévisible, pas créatif.
+TEMPERATURE = 0.2
+# Taille de la fenêtre de contexte (en tokens) demandée à Ollama.
+# 8192 est un bon compromis pour un modèle 4B sur une carte de 6 Go.
+NUM_CTX = 8192
+# Délai maximal d'une requête à Ollama, en secondes. Le premier appel est
+# lent car Ollama doit charger le modèle en VRAM.
+REQUEST_TIMEOUT = 120
+
+# Garde-fous (étape 6).
+MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
+COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
+MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
+
+# Dossiers du projet : prompts/ et skills/ sont à la racine du dépôt,
+# deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROMPTS_DIR = PROJECT_ROOT / "prompts"
+SKILLS_DIR = PROJECT_ROOT / "skills"
+
+
+@dataclass(frozen=True)
+class Config:
+    """Réglages chargés au démarrage (immuables ensuite)."""
+
+    ollama_url: str
+    model: str
+    workdir: Path  # le seul dossier où l'agent a le droit de lire et d'écrire
+    temperature: float = TEMPERATURE
+    num_ctx: int = NUM_CTX
+
+    @property
+    def chat_url(self) -&gt; str:
+        """URL de l'API native d'Ollama (et non la couche /v1 compatible OpenAI)."""
+        return f"{self.ollama_url}/api/chat"
+
+    def options(self) -&gt; dict:
+        """Bloc `options` envoyé à Ollama à chaque appel."""
+        return {"temperature": self.temperature, "num_ctx": self.num_ctx}
+
+
+def load_config() -&gt; Config:
+    """Construit la configuration à partir des variables d'environnement."""
+    url = os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL)
+    model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    # Par défaut, l'agent travaille dans le dossier où on le lance.
+    workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
+    return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
         <div class="code-label">src/mini_agent/llm.py</div>
         <div class="code-block"><pre>"""Appel au LLM via l'API native d'Ollama (/api/chat).
 
@@ -3455,8 +3660,30 @@ def chat(config: Config, messages: list[dict], tools: list[dict] | None = None) 
     response = requests.post(config.chat_url, json=payload, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return response.json()["message"]</pre></div>
-        <div class="code-label">src/mini_agent/tools.py — context and tools</div>
-        <div class="code-block"><pre># Dossiers jamais listés : sans intérêt pour le modèle et souvent énormes.
+        <div class="warning-block"><strong>Also do this:</strong> <code>tools.py</code> imports <code>safe_path</code> and <code>GuardError</code> from <code>guards.py</code>. Copy the <code>guards.py</code> file given at <a href="#mini-agent-step6-en">step 6</a> right away: its guardrails are explained there.</div>
+        <div class="code-label">src/mini_agent/tools.py (step 5 version, full file)</div>
+        <div class="code-block"><pre>"""Les outils mis à disposition du modèle, et leur registre.
+
+Un outil = une fonction Python + un schéma JSON qui la décrit au modèle.
+Le modèle ne voit que le schéma (nom, description, paramètres) ; c'est le
+harness qui exécute la fonction quand le modèle la demande.
+
+Pour ajouter un outil : écrire la fonction, écrire son schéma, ajouter une
+ligne dans TOOLS. La boucle agentique (agent.py) n'a pas à être modifiée.
+"""
+
+import difflib
+import json
+import os
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+from mini_agent.config import COMMAND_TIMEOUT
+from mini_agent.guards import GuardError, safe_path
+
+# Dossiers jamais listés : sans intérêt pour le modèle et souvent énormes.
 IGNORED_DIRS = {"__pycache__", "node_modules"}
 MAX_LISTED_FILES = 200
 
@@ -3543,10 +3770,10 @@ def run_command(ctx: ToolContext, command: str) -&gt; str:
         f"code de sortie : {result.returncode}\n"
         f"--- stdout ---\n{result.stdout}\n"
         f"--- stderr ---\n{result.stderr}"
-    )</pre></div>
-        <div class="warning-block"><strong>Note:</strong> <code>write_file</code> and <code>run_command</code> already call <code>ctx.confirm(...)</code> and <code>safe_path(...)</code>: these are the step 6 guardrails. You can write <code>guards.py</code> right away, or start with a <code>safe_path</code> that simply returns <code>workdir / path</code>.</div>
-        <div class="code-label">src/mini_agent/tools.py — the registry</div>
-        <div class="code-block"><pre>def schema(name: str, description: str, properties: dict, required: list[str]) -&gt; dict:
+    )
+
+
+def schema(name: str, description: str, properties: dict, required: list[str]) -&gt; dict:
     """Construit le schéma d'un outil au format attendu par Ollama."""
     return {
         "type": "function",
@@ -3594,15 +3821,6 @@ TOOLS: dict[str, tuple[Callable[..., str], dict]] = {
             ["command"],
         ),
     ),
-    "load_skill": (
-        load_skill,
-        schema(
-            "load_skill",
-            "Charge les instructions d'une skill listée dans le prompt système.",
-            {"name": {"type": "string", "description": "Nom exact de la skill, ex. 'corriger-un-bug'."}},
-            ["name"],
-        ),
-    ),
 }
 
 
@@ -3616,8 +3834,10 @@ def execute_tool(name: str, arguments: dict, ctx: ToolContext) -&gt; str:
     function, _ = TOOLS[name]
     return function(ctx, **arguments)</pre></div>
         <p>The registry's <code>"load_skill"</code> entry is added at step 7, and <code>execute_tool</code> is extended at step 8.</p>
-        <div class="code-label">src/mini_agent/agent.py — the loop (step 5 version)</div>
-        <div class="code-block"><pre>from typing import Callable
+        <div class="code-label">src/mini_agent/agent.py (step 5 version, full file)</div>
+        <div class="code-block"><pre>"""La boucle agentique (version de l'étape 5)."""
+
+from typing import Callable
 
 from mini_agent.config import MAX_TOURS
 from mini_agent.tools import ToolContext, execute_tool, tool_schemas
@@ -3646,8 +3866,16 @@ def run_turn(chat: ChatFunction, messages: list[dict], ctx: ToolContext, max_tou
     return f"Arrêt : limite de {max_tours} tours atteinte sans réponse finale."</pre></div>
         <h3>Tests</h3>
         <p>Add pytest as a development dependency (<code>uv add --dev pytest</code>), then test the loop with a fake model:</p>
-        <div class="code-label">tests/test_agent.py (excerpt)</div>
-        <div class="code-block"><pre>class FakeChat:
+        <div class="code-label">tests/test_agent.py (step 5 version, full file)</div>
+        <div class="code-block"><pre>"""Tests de la boucle agentique (agent.py), avec un faux modèle."""
+
+import pytest
+
+from mini_agent.agent import run_turn
+from mini_agent.tools import ToolContext
+
+
+class FakeChat:
     """Faux client Ollama : renvoie des réponses écrites à l'avance."""
 
     def __init__(self, replies):
@@ -3671,6 +3899,13 @@ def answer(text):
 def ctx(tmp_path):
     (tmp_path / "notes.txt").write_text("12, 15, 9", encoding="utf-8")
     return ToolContext(workdir=tmp_path, skills_dir=tmp_path / "skills", confirm=lambda question: True)
+
+
+def test_reponse_directe_sans_outil(ctx):
+    chat = FakeChat([answer("Bonjour !")])
+    messages = [{"role": "user", "content": "Salut"}]
+    assert run_turn(chat, messages, ctx) == "Bonjour !"
+    assert len(chat.calls) == 1
 
 
 def test_outil_execute_et_resultat_renvoye(ctx):
@@ -3702,6 +3937,7 @@ ctx = ToolContext(
 )
 messages = [{"role": "user", "content": "Liste les fichiers du projet, puis lis pyproject.toml et donne ses dépendances."}]
 print(run_turn(lambda msgs, tools: llm.chat(config, msgs, tools), messages, ctx))</pre></div>
+        <p>Always from the <strong>project root</strong> (the folder containing <code>pyproject.toml</code>): pytest only looks for tests under the current folder. Started from <code>src/mini_agent/</code>, it prints <code>collected 0 items</code>.</p>
         <div class="code-block"><pre>uv run python try_step5.py
 uv run pytest -q</pre></div>
         <h3>What we should observe</h3>
@@ -3781,7 +4017,7 @@ def truncate(text: str, max_chars: int) -&gt; str:
     half = max_chars // 2
     removed = len(text) - 2 * half
     return f"{text[:half]}\n[... {removed} caractères tronqués ...]\n{text[-half:]}"</pre></div>
-        <div class="code-label">src/mini_agent/config.py — limits and working folder</div>
+        <div class="code-label">src/mini_agent/config.py — limits and working folder (already in place since step 5)</div>
         <div class="code-block"><pre># Garde-fous (étape 6).
 MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
 COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
@@ -3796,7 +4032,10 @@ def load_config() -&gt; Config:
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
-        <p>In <code>Config</code>, add the <code>workdir: Path</code> field. In the loop, one line is enough for truncation:</p>
+        <p>In <code>agent.py</code>, complete the imports, then one line is enough for truncation:</p>
+        <div class="code-label">src/mini_agent/agent.py — imports</div>
+        <div class="code-block"><pre>from mini_agent.config import MAX_OUTPUT_CHARS, MAX_TOURS
+from mini_agent.guards import truncate</pre></div>
         <div class="code-label">src/mini_agent/agent.py — in run_turn</div>
         <div class="code-block"><pre>        for call in tool_calls:
             name = call["function"]["name"]
@@ -3804,7 +4043,7 @@ def load_config() -&gt; Config:
             result = execute_tool(name, arguments, ctx)
             result = truncate(result, MAX_OUTPUT_CHARS)  # garde-fou : résultat tronqué
             messages.append({"role": "tool", "tool_name": name, "content": result})</pre></div>
-        <p>And the tool context uses the real confirmation:</p>
+        <p>And in <code>try_step5.py</code>, the tool context uses the real confirmation:</p>
         <div class="code-block"><pre>from mini_agent.guards import ask_confirmation
 
 ctx = ToolContext(workdir=config.workdir, skills_dir=SKILLS_DIR, confirm=ask_confirmation)</pre></div>
@@ -3937,6 +4176,7 @@ description: Écrire des tests pytest pour un module Python.
 6. Si un test échoue, vérifie d'abord si c'est le test ou le code qui est faux.
    Ne modifie pas le code testé sans le dire.
 7. Réponds avec la liste des tests écrits et le résultat de pytest.</pre></div>
+        <p>Three functions to put in <code>tools.py</code> <strong>before</strong> the <code>TOOLS</code> dictionary, which refers to them:</p>
         <div class="code-label">src/mini_agent/tools.py — skills</div>
         <div class="code-block"><pre>def load_skill(ctx: ToolContext, name: str) -&gt; str:
     """Renvoie le contenu d'une skill (fichier Markdown de skills/)."""
@@ -3971,7 +4211,41 @@ def available_skills(skills_dir: Path) -&gt; dict[str, str]:
     if not skills_dir.is_dir():
         return {}
     return {p.stem: read_skill_description(p) for p in sorted(skills_dir.glob("*.md"))}</pre></div>
-        <p>In the <code>TOOLS</code> registry, add the <code>"load_skill"</code> entry (see step 5). The prompt is filled by:</p>
+        <p>In the <code>TOOLS</code> dictionary, add the <code>load_skill</code> entry (5th and last tool):</p>
+        <div class="code-label">src/mini_agent/tools.py — in TOOLS</div>
+        <div class="code-block"><pre>    "load_skill": (
+        load_skill,
+        schema(
+            "load_skill",
+            "Charge les instructions d'une skill listée dans le prompt système.",
+            {"name": {"type": "string", "description": "Nom exact de la skill, ex. 'corriger-un-bug'."}},
+            ["name"],
+        ),
+    ),</pre></div>
+        <p>The prompt is filled by <code>build_system_prompt</code>, in <code>agent.py</code>, which now has its final imports:</p>
+        <div class="code-label">src/mini_agent/agent.py — imports (final version)</div>
+        <div class="code-block"><pre>"""La boucle agentique : le cœur de mini-agent.
+
+    tant que le modèle demande des outils :
+        exécuter chaque outil demandé
+        ajouter le résultat à la conversation
+        rappeler le modèle
+    sinon : renvoyer sa réponse finale
+
+La boucle ne connaît aucun outil en particulier : elle passe par le registre
+de tools.py. Elle ne parle pas non plus directement à Ollama : on lui donne
+une fonction `chat`, ce qui permet de la tester avec un faux modèle.
+"""
+
+import json
+import os
+import platform
+from pathlib import Path
+from typing import Callable
+
+from mini_agent.config import MAX_OUTPUT_CHARS, MAX_TOURS
+from mini_agent.guards import truncate
+from mini_agent.tools import ToolContext, execute_tool, tool_schemas</pre></div>
         <div class="code-label">src/mini_agent/agent.py</div>
         <div class="code-block"><pre>def build_system_prompt(template: str, workdir: Path, skills: dict[str, str]) -&gt; str:
     """Remplit le modèle de prompt (prompts/AGENT.md) avec l'environnement réel."""
