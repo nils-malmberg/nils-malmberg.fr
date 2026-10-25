@@ -45,7 +45,9 @@
   <div class="project-content copy-code">
     <h2>Objectif</h2>
     <p>Ce projet a un but simple : <strong>comprendre comment fonctionne un agent de code</strong> en le construisant de A à Z en Python. Un agent de code est un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
-    <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main. Le projet s'est appelé mini-agent pendant son développement, puis llamagent pour sa publication sur PyPI (étape 18). Le code est sur GitHub : <a href="https://github.com/nils-malmberg/llamagent">nils-malmberg/llamagent</a>.</p>
+    <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main. Le projet s'est appelé mini-agent pendant son développement, puis llamagent pour sa publication sur PyPI (étape 18). Le code est sur GitHub : <a href="https://github.com/nils-malmberg/llamagent">nils-malmberg/llamagent</a>, et le paquet sur <a href="https://pypi.org/project/llamagent/">PyPI</a>. Pour l'essayer sans suivre le tutoriel (il faut un serveur <a href="https://ollama.com">Ollama</a> avec <code>qwen3.5:4b</code>) :</p>
+    <div class="code-block"><pre>uv tool install llamagent      # ou : pipx install llamagent
+llamagent</pre></div>
     <p>Le LLM tourne en local sur mon NAS (voir le <a href="project6.html">projet NAS Lab</a>) : <strong>qwen3.5:4b</strong> servi par Ollama sur une RTX 3050 de 6 Go. Un modèle aussi petit impose des choix : peu d'outils (5 au maximum), des descriptions très claires et des résultats d'outils tronqués.</p>
     <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 18 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, capable de recevoir des fichiers tagués, de reprendre une conversation et de compacter son contexte, avec une interface soignée, jusqu'à sa publication sur PyPI.</p>
     <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="Interface de llamagent dans un terminal : la mascotte, puis chaque tour de la boucle avec le modèle, le harness et l'outil" width="639"></div>
@@ -4953,6 +4955,7 @@ $ cd projet-vierge &amp;&amp; echo /quit | llamagent
 
   vous</pre></div>
         <p>Sur GitHub, l'onglet <em>Actions</em> montre les 9 jobs de tests et le job « Paquet » ; lors d'une publication, le job « Publier sur PyPI » attend ta validation. La page du projet apparaît ensuite sur <a href="https://pypi.org/project/llamagent/">pypi.org/project/llamagent</a>, avec le README comme description.</p>
+        <p><strong>Publié pour de vrai.</strong> Ce n'est pas une simulation : la version 0.1.0 de llamagent est sur <a href="https://pypi.org/project/llamagent/">PyPI</a>, publiée par ce workflow (roue et archive source, licence MIT, liens vers ce tutoriel et vers le dépôt GitHub). <code>uv tool install llamagent</code> l'installe sur n'importe quelle machine.</p>
         <h3>Tests</h3>
         <div class="code-label">tests/test_cli.py</div>
         <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
@@ -8387,6 +8390,7 @@ MIT, voir [LICENSE](https://github.com/nils-malmberg/llamagent/blob/main/LICENSE
 
   <a href="projects.html" class="btn btn-secondary">Retour</a>
   <a href="https://github.com/nils-malmberg/llamagent" class="btn btn-primary">Lien vers GitHub</a>
+  <a href="https://pypi.org/project/llamagent/" class="btn btn-primary">Voir sur PyPI</a>
   <br><br>
   <div class="project-meta">
     <span class="tag">Python</span><span class="tag">LLM</span><span class="tag">Ollama</span>
@@ -8417,7 +8421,9 @@ MIT, voir [LICENSE](https://github.com/nils-malmberg/llamagent/blob/main/LICENSE
   <div class="project-content copy-code">
     <h2>Goal</h2>
     <p>This project has a simple goal: <strong>understanding how a coding agent works</strong> by building one from scratch in Python. A coding agent is a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
-    <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand. The project was called mini-agent during its development, then llamagent for its publication on PyPI (step 18). The code is on GitHub: <a href="https://github.com/nils-malmberg/llamagent">nils-malmberg/llamagent</a>.</p>
+    <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand. The project was called mini-agent during its development, then llamagent for its publication on PyPI (step 18). The code is on GitHub: <a href="https://github.com/nils-malmberg/llamagent">nils-malmberg/llamagent</a>, and the package on <a href="https://pypi.org/project/llamagent/">PyPI</a>. To try it without following the tutorial (you need an <a href="https://ollama.com">Ollama</a> server with <code>qwen3.5:4b</code>):</p>
+    <div class="code-block"><pre>uv tool install llamagent      # or: pipx install llamagent
+llamagent</pre></div>
     <p>The LLM runs locally on my NAS (see the <a href="project6.html">NAS Lab project</a>): <strong>qwen3.5:4b</strong> served by Ollama on a 6 GB RTX 3050. Such a small model forces some choices: few tools (5 at most), very clear descriptions and truncated tool results.</p>
     <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 18 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, able to receive tagged files, resume a conversation and compact its context, with a polished interface, up to its publication on PyPI.</p>
     <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="llamagent interface in a terminal: the mascot, then each turn of the loop with the model, the harness and the tool" width="639"></div>
@@ -13325,6 +13331,7 @@ $ cd projet-vierge &amp;&amp; echo /quit | llamagent
 
   vous</pre></div>
         <p>On GitHub, the <em>Actions</em> tab shows the 9 test jobs and the "Paquet" job; during a release, the "Publier sur PyPI" job waits for your approval. The project page then appears on <a href="https://pypi.org/project/llamagent/">pypi.org/project/llamagent</a>, with the README as description.</p>
+        <p><strong>Published for real.</strong> This is not a simulation: version 0.1.0 of llamagent is on <a href="https://pypi.org/project/llamagent/">PyPI</a>, released by this workflow (wheel and source archive, MIT licence, links to this tutorial and to the GitHub repository). <code>uv tool install llamagent</code> installs it on any machine.</p>
         <h3>Tests</h3>
         <div class="code-label">tests/test_cli.py</div>
         <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
@@ -16759,6 +16766,7 @@ MIT, voir [LICENSE](https://github.com/nils-malmberg/llamagent/blob/main/LICENSE
 
   <a href="projects.html" class="btn btn-secondary">Return</a>
   <a href="https://github.com/nils-malmberg/llamagent" class="btn btn-primary">Link to GitHub</a>
+  <a href="https://pypi.org/project/llamagent/" class="btn btn-primary">See on PyPI</a>
   <br><br>
   <div class="project-meta">
     <span class="tag">Python</span><span class="tag">LLM</span><span class="tag">Ollama</span>
