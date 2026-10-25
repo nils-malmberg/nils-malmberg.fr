@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 1 - Python moderne : typage, décorateurs, itérateurs et outillage - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m01-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 1</div>
+    <h1>Python moderne : typage, décorateurs, itérateurs et outillage</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Ce module ne réapprend pas Python : il installe l'environnement de travail d'un projet de data science, et surtout il explique en détail quatre mécanismes du langage qu'on croise partout dans le code scientifique sans forcément les avoir jamais étudiés — les <strong>décorateurs</strong>, les <strong>dataclasses</strong>, les <strong>annotations de type</strong> et les <strong>générateurs</strong> — auxquels s'ajoutent, en chemin, les méthodes spéciales et la notation <code>*args</code> / <code>**kwargs</code>. Chacun répond à un problème concret, et je pars du problème.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#projet">Structure d'un projet Python</a></li>
+        <li><a href="#uv">Environnements virtuels et UV</a></li>
+        <li><a href="#decorateurs">Les décorateurs, de zéro</a> — dont <code>*args</code> et <code>**kwargs</code></li>
+        <li><a href="#dataclasses">Méthodes spéciales et dataclasses : <code>frozen</code>, <code>slots</code> et le reste</a></li>
+        <li><a href="#typage">Les annotations de type</a></li>
+        <li><a href="#iterateurs">Itérateurs et générateurs</a></li>
+        <li><a href="#qualite">Qualité : ruff, pytest, pre-commit</a></li>
+        <li><a href="#git">Git pour un projet data</a></li>
+      </ol>
+    </div>
+
+    <h2 id="projet">1. Structure d'un projet Python</h2>
+
+    <h3>Le problème</h3>
+    <p>Un projet de data science commence toujours de la même façon : un notebook, quelques cellules, un résultat. Puis on veut relancer l'analyse sur de nouvelles données, et on s'aperçoit que le résultat dépendait de l'ordre dans lequel les cellules ont été exécutées, qu'une variable a été modifiée à la main entre deux essais, et que la fonction de nettoyage existe en trois versions dans trois notebooks différents. Le code n'est plus reproductible, et personne ne sait laquelle des trois versions a produit le modèle en cours d'utilisation.</p>
+    <p>La discipline qui évite cela tient en une phrase : <strong>dès qu'un bout de code est appelé deux fois, il quitte le notebook et devient un module importable</strong>. Le notebook reste ce qu'il est — un brouillon interactif, excellent pour regarder les données — et importe la logique au lieu de la contenir.</p>
+
+    <h3>La disposition standard</h3>
+    <div class="code-label">arborescence type</div>
+    <div class="code-block"><pre>mon-projet/
+├── pyproject.toml        # identité du projet, dépendances, config des outils
+├── uv.lock               # versions exactes installées (versionné dans Git)
+├── README.md
+├── src/
+│   └── mon_projet/       # le paquet importable : import mon_projet
+│       ├── __init__.py   # marque le dossier comme paquet (peut être vide)
+│       ├── data.py       # chargement / nettoyage
+│       ├── features.py   # transformations
+│       └── models.py     # entraînement / inférence
+├── notebooks/            # exploration ; aucune logique réutilisable ici
+├── tests/
+└── data/                 # ignoré par Git (voir section 8)</pre></div>
+
+    <p>Pourquoi ce dossier <code>src/</code> intermédiaire, qui semble n'ajouter qu'un niveau de profondeur ? Parce que sans lui, Python trouve le paquet simplement parce qu'il se trouve dans le répertoire courant. On peut alors avoir des tests qui passent alors que le paquet n'est en réalité pas installable — l'erreur n'apparaît que chez quelqu'un d'autre. Avec <code>src/</code>, le paquet n'est importable que s'il a été <em>réellement installé</em> dans l'environnement : ce qu'on teste est exactement ce qu'on distribuera.</p>
+
+    <h3>Le fichier pyproject.toml</h3>
+    <p>C'est la carte d'identité du projet, au format TOML (un format de configuration lisible, à mi-chemin entre INI et JSON). Il a remplacé l'ancien trio <code>setup.py</code> / <code>setup.cfg</code> / <code>requirements.txt</code>, et il centralise aussi la configuration des outils de qualité.</p>
+
+    <div class="code-label">pyproject.toml, commenté</div>
+    <div class="code-block"><pre>[project]
+name = "mon-projet"                 # nom de distribution (tirets autorisés)
+version = "0.1.0"
+requires-python = "&gt;=3.12"          # versions de Python acceptées
+dependencies = [                    # ce dont le projet a besoin pour FONCTIONNER
+    "numpy&gt;=2.0",
+    "polars&gt;=1.0",
+    "scikit-learn&gt;=1.5",
+]
+
+[dependency-groups]                 # ce dont on a besoin pour DÉVELOPPER
+dev = ["pytest&gt;=8", "ruff&gt;=0.6", "mypy&gt;=1.11", "pre-commit&gt;=3.8"]
+
+[build-system]                      # comment fabriquer le paquet installable
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]                         # configuration du linter/formateur
+line-length = 100
+
+[tool.pytest.ini_options]           # configuration des tests
+testpaths = ["tests"]</pre></div>
+
+    <p>La distinction entre <code>dependencies</code> et le groupe <code>dev</code> a une conséquence concrète : l'image Docker de production (module 5) n'installe que les premières, ce qui la rend plus légère et réduit sa surface d'attaque.</p>
+
+    <h3>Le système de build : à quoi sert <code>hatchling</code> ?</h3>
+
+    <p>La section <code>[build-system]</code> est celle qu'on recopie sans la comprendre. Elle mérite trois minutes, parce qu'elle explique une bonne partie de l'écosystème Python.</p>
+
+    <p><strong>Le problème.</strong> Un projet, sur le disque, est un répertoire de fichiers <code>.py</code>. Pour l'installer ailleurs — sur le serveur, dans l'image Docker, chez un collègue —, il faut le transformer en <em>paquet</em> : une archive normalisée, avec ses métadonnées (nom, version, dépendances), que <code>pip</code> ou <code>uv</code> sait déposer au bon endroit. Cette transformation s'appelle la <strong>construction</strong> (<em>build</em>), et elle produit deux formats :</p>
+
+    <div class="code-label">les deux artefacts d'un build</div>
+    <div class="code-block"><pre>mon_projet-0.1.0-py3-none-any.whl      ← la WHEEL : archive PRÊTE À POSER
+  · rien à exécuter, pip décompresse et c'est installé
+  · py3-none-any = n'importe quel Python 3, n'importe quel OS
+  · pour un paquet contenant du C compilé, on aurait par exemple
+    cp312-manylinux_x86_64 : une wheel par plateforme
+
+mon_projet-0.1.0.tar.gz                ← la SDIST : archive des SOURCES
+  · contient le code source, il faut construire avant d'installer
+  · sert de repli quand aucune wheel ne correspond à la machine</pre></div>
+
+    <p><strong>Pourquoi un « backend » séparé.</strong> Historiquement, construire un paquet consistait à lancer <code>python setup.py install</code> : un script Python arbitraire, que l'installeur exécutait en croisant les doigts. Impossible de savoir à l'avance ce dont il avait besoin, ni ce qu'il allait faire. Deux propositions d'amélioration (les PEP 517 et 518) ont coupé le problème en deux :</p>
+
+    <div class="code-label">qui fait quoi depuis PEP 517/518</div>
+    <div class="code-block"><pre>  VOUS          uv pip install .
+                     │
+                     ▼
+  FRONTEND      pip / uv / build          « je veux installer ce projet »
+                     │                     il lit [build-system], installe
+                     │                     ce qu'il demande dans un
+                     │                     environnement isolé, puis
+                     ▼                     l'appelle par une interface standard
+  BACKEND       hatchling / setuptools    « voici la wheel et la sdist »
+                     │                     lui seul sait COMMENT assembler
+                     ▼                     le paquet
+  ARTEFACTS     dist/*.whl  dist/*.tar.gz
+
+  Le frontend ne sait rien du backend, et réciproquement : c'est ce
+  découplage qui permet d'en changer en modifiant deux lignes.</pre></div>
+
+    <p>C'est exactement ce que déclarent les deux lignes du <code>pyproject.toml</code> : <code>requires</code> dit ce que le frontend doit installer pour pouvoir construire, <code>build-backend</code> dit quelle fonction appeler ensuite.</p>
+
+    <h4 class="subsection">Les backends que vous rencontrerez</h4>
+
+    <div class="code-label">choisir son backend</div>
+    <div class="code-block"><pre>hatchling            requires = ["hatchling"]
+                     build-backend = "hatchling.build"
+  Le défaut moderne, et celui que pose « uv init ». Zéro configuration
+  pour un projet Python pur, versionnage dynamique, inclusion de fichiers
+  simple à déclarer. C'est le choix par défaut à ne pas remettre en cause
+  tant qu'on n'a pas une raison précise.
+
+setuptools           requires = ["setuptools>=68"]
+                     build-backend = "setuptools.build_meta"
+  L'historique, toujours le plus répandu. Indispensable si le projet
+  contient des extensions C à compiler à l'ancienne, ou si l'on hérite
+  d'un setup.py existant. Plus verbeux, mais rien ne lui résiste.
+
+poetry-core          requires = ["poetry-core>=1.9"]
+                     build-backend = "poetry.core.masonry.api"
+  Le backend de Poetry. On le croise dans les projets gérés par Poetry ;
+  il impose sa propre section [tool.poetry] plutôt que [project].
+
+flit-core            requires = ["flit_core>=3.9"]
+                     build-backend = "flit_core.buildapi"
+  Minimaliste, pour une bibliothèque d'un seul module sans dépendance
+  de construction. Rien à configurer, rien à régler.
+
+pdm-backend          requires = ["pdm-backend"]
+                     build-backend = "pdm.backend"
+  Proche de hatchling, avec des crochets d'extension en Python.
+
+── quand le projet n'est PAS que du Python ──
+
+maturin              pour une extension écrite en Rust (pydantic-core,
+                     polars et ruff sont construits ainsi)
+scikit-build-core    pour du C/C++ avec CMake
+meson-python         pour du C/Fortran avec Meson (NumPy, SciPy)</pre></div>
+
+    <div class="code-label">bash — construire et vérifier</div>
+    <div class="code-block"><pre>uv build                    # produit dist/*.whl et dist/*.tar.gz
+ls dist/
+# mon_projet-0.1.0-py3-none-any.whl   mon_projet-0.1.0.tar.gz
+
+unzip -l dist/*.whl         # une wheel est un simple fichier ZIP :
+                            # on peut vérifier ce qu'elle contient vraiment
+
+uv pip install dist/*.whl   # installer le paquet construit
+uv publish                  # le pousser sur PyPI (ou un dépôt interne)</pre></div>
+
+    <div class="step-block">
+      <h4>Et si mon projet n'est pas une bibliothèque ?</h4>
+      <p>Beaucoup de projets de data science ne sont jamais installés : on lance des scripts depuis la racine du dépôt, point. Dans ce cas, aucun backend n'est nécessaire, et on le dit explicitement :</p>
+      <div class="code-block"><pre>[tool.uv]
+package = false      # projet « applicatif » : uv gère l'environnement
+                     # et les dépendances, mais ne construit rien</pre></div>
+      <p>L'avantage de rester tout de même un paquet, même pour un projet interne, est l'import : avec un paquet installé en mode éditable, <code>from mon_projet.features import construire</code> fonctionne depuis n'importe quel répertoire, y compris depuis un notebook et depuis les tests. Sans cela, on retombe sur les bricolages à base de <code>sys.path.append("..")</code>, qui cassent dès qu'on déplace un fichier. Pour le coût de six lignes de <code>pyproject.toml</code>, le second choix est presque toujours le bon.</p>
+    </div>
+
+    <h2 id="uv">2. Environnements virtuels et UV</h2>
+
+    <h3>Pourquoi un environnement virtuel</h3>
+    <p>Un seul Python est installé sur la machine, avec un seul jeu de bibliothèques. Deux projets qui ont besoin de versions différentes de pandas ne peuvent donc pas coexister : installer l'un casse l'autre. Un <strong>environnement virtuel</strong> résout cela en créant un dossier — par convention <code>.venv/</code> — qui contient sa propre copie de l'interpréteur et ses propres bibliothèques. Chaque projet a son atelier, avec ses outils à lui, et rien de ce qu'on y installe ne déborde sur les autres.</p>
+
+    <h3>UV en pratique</h3>
+    <p><a href="https://docs.astral.sh/uv/" target="_blank">UV</a> (écrit en Rust par Astral, les auteurs de ruff) remplace à lui seul <code>pip</code>, <code>virtualenv</code>, <code>pyenv</code>, <code>pipx</code> et <code>poetry</code>. Deux différences pratiques : il est un à deux ordres de grandeur plus rapide, et il sait aussi installer les <em>interpréteurs</em> Python eux-mêmes — on n'a plus à se soucier de la version fournie par le système.</p>
+
+    <div class="code-label">cycle de travail courant</div>
+    <div class="code-block"><pre># créer un projet : génère pyproject.toml, .venv/ et uv.lock
+uv init mon-projet &amp;&amp; cd mon-projet
+
+# installer une version précise de Python, sans toucher au Python système
+uv python install 3.12
+uv python pin 3.12              # fige la version pour ce projet
+
+# ajouter une dépendance : résolution + installation + mise à jour du lock
+uv add "polars&gt;=1.0" scikit-learn
+uv add --dev pytest ruff mypy pre-commit
+uv remove scikit-learn          # retirer proprement
+
+# recréer à l'identique l'environnement d'un collègue, ou celui de la CI
+uv sync                         # installe EXACTEMENT ce que dit uv.lock
+uv sync --no-dev                # sans les outils de développement (production)
+
+# exécuter dans l'environnement, sans avoir à l'activer
+uv run python -m mon_projet.train
+uv run pytest
+uv run ruff check .
+
+# mettre à jour volontairement
+uv lock --upgrade-package polars
+
+# script autonome, dépendances déclarées dans son propre en-tête (PEP 723)
+uv run --with pandas,matplotlib analyse.py</pre></div>
+
+    <h3>Contraintes et lockfile : la différence qui compte</h3>
+    <p>Deux fichiers, deux rôles distincts. Le <code>pyproject.toml</code> déclare des <strong>contraintes</strong> — « numpy au moins en 2.0 » — c'est-à-dire une intention. Le <code>uv.lock</code> enregistre la <strong>solution exacte</strong> retenue par le résolveur — numpy 2.1.3, avec l'empreinte cryptographique de chaque fichier téléchargé — c'est-à-dire un état reproductible. Les deux se versionnent dans Git. Résultat : <code>uv sync</code> installe les mêmes octets sur votre machine, sur celle d'un collègue et dans la chaîne d'intégration continue, aujourd'hui comme dans six mois.</p>
+    <p>C'est la différence avec un <code>requirements.txt</code> produit par <code>pip freeze</code> : celui-ci fige les versions d'une seule plateforme, mélange dépendances directes et indirectes, et ne dit pas lesquelles vous avez demandées.</p>
+
+    <div class="warning-block">
+      <strong>Le piège CUDA.</strong> En ML, ce qui casse la reproductibilité n'est presque jamais Python : c'est le couple pilote GPU / version de CUDA compilée dans les <em>wheels</em> de PyTorch. UV sait pointer un index alternatif (section <code>[tool.uv.sources]</code> vers le dépôt <code>cu124</code>, par exemple), mais l'environnement « identique » s'arrête à la frontière de la machine. C'est une des raisons de passer à Docker dès qu'un GPU entre en jeu (module 5).
+    </div>
+
+    <p><strong>Et conda ?</strong> Il reste utile quand on dépend de bibliothèques système non-Python compliquées à compiler (GDAL, certains solveurs, une MKL configurée finement). Pour un projet de ML standard, UV est plus rapide, plus simple, et son lockfile est nettement plus fiable qu'un <code>environment.yml</code>.</p>
+
+    <h2 id="decorateurs">3. Les décorateurs, de zéro</h2>
+
+    <h3>Le problème qu'ils résolvent</h3>
+    <p>Supposons que l'on veuille chronométrer trois fonctions d'entraînement. La solution naïve consiste à copier deux lignes de mesure au début et à la fin de chacune. C'est répétitif, ça mélange la mesure et la logique métier, et le jour où l'on veut aussi journaliser les arguments, il faut repasser partout.</p>
+    <p>Un <strong>décorateur</strong> est la réponse de Python à ce problème : une façon d'<em>emballer</em> une fonction dans une autre qui ajoute un comportement avant et après, sans modifier une seule ligne de la fonction d'origine. L'image est celle d'un colis qu'on emballe : le contenu ne change pas, mais tout ce qui passe par l'emballage peut être compté, tracé, mis en cache.</p>
+
+    <h3>Un détour nécessaire : <code>*args</code> et <code>**kwargs</code></h3>
+
+    <p>Le code qui suit s'appuie sur deux notations qu'on croise partout en Python sans toujours les avoir vues expliquées. Elles font une seule chose, dans les deux sens : <strong>regrouper plusieurs arguments en un seul objet, ou au contraire répandre un objet en plusieurs arguments</strong>.</p>
+
+    <h4 class="subsection">Côté définition : recevoir un nombre variable d'arguments</h4>
+    <p>Une fonction ordinaire impose sa signature : trois paramètres, trois valeurs. L'étoile lève cette contrainte.</p>
+
+    <div class="code-label">Python — ce que * et ** ramassent</div>
+    <div class="code-block"><pre>def inspecter(*args, **kwargs):
+    print("args   :", args)      # un TUPLE des arguments POSITIONNELS
+    print("kwargs :", kwargs)    # un DICTIONNAIRE des arguments NOMMÉS
+
+inspecter(1, 2, 3, alpha=0.1, verbose=True)
+# args   : (1, 2, 3)
+# kwargs : {'alpha': 0.1, 'verbose': True}
+
+inspecter()
+# args   : ()
+# kwargs : {}                    # jamais None : toujours un tuple et un dict
+
+# les noms sont une convention, pas une règle : seules les étoiles comptent.
+# def f(*valeurs, **options) fonctionne exactement pareil — mais tout le
+# monde écrit args et kwargs, alors autant faire comme tout le monde.</pre></div>
+
+    <p>L'ordre des paramètres est imposé : d'abord les paramètres normaux, puis <code>*args</code>, puis les paramètres nommés uniquement, puis <code>**kwargs</code>.</p>
+
+    <div class="code-label">Python — une signature complète, dans l'ordre</div>
+    <div class="code-block"><pre>def entrainer(donnees, *args, epochs=10, **kwargs):
+    ...
+
+entrainer(X, "extra", epochs=50, learning_rate=0.01)
+# donnees = X         (positionnel normal)
+# args    = ("extra",)
+# epochs  = 50        (nommé, capté par son nom AVANT d'atteindre kwargs)
+# kwargs  = {"learning_rate": 0.01}</pre></div>
+
+    <h4 class="subsection">Côté appel : répandre un conteneur en arguments</h4>
+    <p>Les mêmes étoiles, placées à l'appel, font l'opération inverse : elles <em>déballent</em>. C'est l'usage le plus utile au quotidien.</p>
+
+    <div class="code-label">Python — déballer une liste et un dictionnaire</div>
+    <div class="code-block"><pre>def rmse(y_vrai, y_pred, poids=None):
+    ...
+
+paire = (y_vrai, y_pred)
+rmse(*paire)                      # équivaut à rmse(y_vrai, y_pred)
+
+params = {"y_vrai": y, "y_pred": p, "poids": w}
+rmse(**params)                    # équivaut à rmse(y_vrai=y, y_pred=p, poids=w)
+
+# l'usage qui revient sans cesse : une configuration lue dans un fichier,
+# transmise telle quelle au constructeur du modèle
+config = {"n_estimators": 500, "learning_rate": 0.05, "max_depth": 6}
+modele = LGBMRegressor(**config)  # au lieu de recopier chaque paramètre
+
+# fusionner deux dictionnaires, les valeurs de droite gagnant
+defauts = {"n_estimators": 300, "random_state": 42}
+final = {**defauts, **config}     # {'n_estimators': 500, 'random_state': 42, ...}</pre></div>
+
+    <h4 class="subsection">Le cas qui justifie tout le détour : transmettre sans savoir</h4>
+    <p>Quand on écrit une fonction qui en enveloppe une autre, on ignore la signature de celle qu'on enveloppe. <code>*args, **kwargs</code> permet d'accepter n'importe quoi et de le retransmettre <em>intact</em>. C'est précisément ce que fait un décorateur, et c'est aussi la manière habituelle d'écrire une petite surcouche autour d'une bibliothèque :</p>
+
+    <div class="code-label">Python — une surcouche qui ne présume rien</div>
+    <div class="code-block"><pre>import matplotlib.pyplot as plt
+
+def courbe(x, y, titre, **kwargs):
+    """Trace avec notre style maison, tout en laissant passer
+    n'importe quelle option de matplotlib."""
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(x, y, linewidth=2, **kwargs)     # color=, linestyle=, alpha=, label=...
+    ax.set_title(titre)
+    ax.grid(alpha=0.3)
+    return ax
+
+courbe(t, y, "Perte", color="crimson", linestyle="--")
+# on n'a pas eu à prévoir color ni linestyle : ils traversent la fonction</pre></div>
+
+    <div class="step-block">
+      <h4>Deux usages secondaires, mais fréquents</h4>
+      <p><strong>Une étoile seule comme séparateur.</strong> Écrite sans nom, elle force à nommer tout ce qui suit :</p>
+      <div class="code-block"><pre>def decouper(X, y, *, test_size=0.2, stratifier=True):
+    ...
+
+decouper(X, y, 0.3)              # TypeError : 3 positionnels pour 2 attendus
+decouper(X, y, test_size=0.3)    # ✓ obligatoirement nommé</pre></div>
+      <p>L'intérêt est la lisibilité durable : <code>decouper(X, y, 0.3, True)</code> ne dit rien au lecteur, et interdit d'ajouter un paramètre au milieu sans casser tous les appels existants. C'est la raison d'être de l'option <code>kw_only</code> des dataclasses (section 4), et scikit-learn impose cette règle sur la quasi-totalité de ses fonctions.</p>
+      <p><strong>Le déballage hors des appels.</strong> L'étoile fonctionne aussi à l'affectation et dans les littéraux :</p>
+      <div class="code-block"><pre>premier, *reste = [1, 2, 3, 4]    # premier = 1 ; reste = [2, 3, 4]
+debut, *milieu, fin = plis        # utile pour isoler les extrémités
+tout = [*liste_a, *liste_b]       # concaténation lisible</pre></div>
+    </div>
+
+    <div class="warning-block">
+      <strong>Le coût de <code>**kwargs</code>.</strong> Une signature <code>def f(**kwargs)</code> n'apprend rien au lecteur, désactive l'autocomplétion de l'éditeur, et rend le vérificateur de types (section 5) aveugle : une faute de frappe dans un nom de paramètre ne sera plus signalée nulle part — elle atterrira silencieusement dans le dictionnaire. Réservez la notation aux cas où l'on <em>transmet</em> réellement à autre chose. Pour vos propres fonctions, des paramètres nommés explicitement valent toujours mieux.
+    </div>
+
+    <h3>Le mécanisme, en trois temps</h3>
+    <p>Premier point à admettre : en Python, une fonction est une <em>valeur</em> comme une autre. On peut la mettre dans une variable, la passer en argument, la renvoyer.</p>
+
+    <div class="code-label">Python — les fonctions sont des objets</div>
+    <div class="code-block"><pre>def bonjour(nom):
+    return f"Bonjour {nom}"
+
+f = bonjour              # pas d'appel : on manipule la fonction elle-même
+print(f("Nils"))         # Bonjour Nils
+print(bonjour.__name__)  # bonjour  → une fonction a des attributs</pre></div>
+
+    <p>Deuxième point : on peut donc écrire une fonction qui <em>prend</em> une fonction et en <em>renvoie</em> une nouvelle.</p>
+
+    <div class="code-label">Python — un décorateur écrit à la main, sans sucre syntaxique</div>
+    <div class="code-block"><pre>import time
+
+def chrono(fonction):                     # reçoit la fonction à emballer
+    def emballage(*args, **kwargs):       # la nouvelle fonction qui la remplacera
+        debut = time.perf_counter()
+        resultat = fonction(*args, **kwargs)   # on appelle l'originale
+        duree = time.perf_counter() - debut
+        print(f"{fonction.__name__} : {duree:.3f} s")
+        return resultat                   # on renvoie SON résultat, inchangé
+    return emballage                      # on renvoie l'emballage, pas son appel
+
+def entrainer(n):
+    time.sleep(n)
+    return "modèle"
+
+entrainer = chrono(entrainer)             # on remplace la fonction par sa version emballée
+entrainer(0.5)                            # entrainer : 0.500 s</pre></div>
+
+    <p>On retrouve ici <code>*args</code> et <code>**kwargs</code> dans leur rôle le plus caractéristique : l'emballage accepte n'importe quelle signature et la retransmet intacte. Sans eux, le décorateur ne fonctionnerait que pour des fonctions à un seul argument.</p>
+
+    <p>Troisième point : la ligne <code>entrainer = chrono(entrainer)</code> est si fréquente que Python lui donne une notation dédiée, le <code>@</code>. Les deux écritures ci-dessous sont <strong>rigoureusement équivalentes</strong> :</p>
+
+    <div class="code-label">Python — avant / après</div>
+    <div class="code-block"><pre># AVANT : réécriture explicite
+def entrainer(n): ...
+entrainer = chrono(entrainer)
+
+# APRÈS : la même chose, en une ligne au-dessus de la définition
+@chrono
+def entrainer(n): ...</pre></div>
+
+    <div class="step-block">
+      <h4>Le détail qui manque : <code>functools.wraps</code></h4>
+      <p>Tel qu'écrit plus haut, le décorateur remplace la fonction par <code>emballage</code> : <code>entrainer.__name__</code> vaut désormais <code>"emballage"</code>, la docstring a disparu, et les outils de débogage affichent le mauvais nom. <code>@functools.wraps(fonction)</code>, posé sur l'emballage, recopie ces métadonnées. Ce n'est pas optionnel — sans lui, les messages d'erreur deviennent trompeurs.</p>
+      <div class="code-block"><pre>import functools
+
+def chrono(fonction):
+    @functools.wraps(fonction)            # conserve nom, docstring, annotations
+    def emballage(*args, **kwargs):
+        ...
+    return emballage</pre></div>
+    </div>
+
+    <h3>Les décorateurs de la bibliothèque standard</h3>
+    <p>On en écrit rarement ; on en <em>utilise</em> constamment. Voici ceux qu'il faut reconnaître :</p>
+
+    <div class="code-label">Python — @property : un attribut calculé</div>
+    <div class="code-block"><pre>class Jeu:
+    def __init__(self, X, y):
+        self.X, self.y = X, y
+
+    @property
+    def taille(self):                     # se lit comme un attribut, se calcule à la demande
+        return len(self.y)
+
+    @property
+    def taux_positifs(self):
+        return float(self.y.mean())
+
+jeu = Jeu(X, y)
+print(jeu.taille)          # PAS jeu.taille() : le @property fait l'appel pour nous
+print(jeu.taux_positifs)</pre></div>
+    <p>L'intérêt : on expose une valeur <em>calculée</em> avec la même syntaxe qu'un attribut stocké. On peut donc transformer un attribut simple en valeur calculée plus tard, sans casser le code qui l'utilise.</p>
+
+    <p>Par défaut, une propriété est en <strong>lecture seule</strong> : écrire <code>jeu.taille = 1000</code> lève une erreur. C'est souvent le comportement souhaité — la taille découle des données, la fixer directement n'aurait pas de sens. Quand on veut au contraire autoriser l'écriture, on ajoute un second bloc décoré par <code>@taille.setter</code>, et c'est lui qui devient l'endroit naturel où poser la validation.</p>
+
+    <div class="code-label">Python — @taille.setter : autoriser l'écriture, en la contrôlant</div>
+    <div class="code-block"><pre>class Jeu:
+    def __init__(self, X, y):
+        self.X, self.y = X, y
+
+    @property
+    def taille(self):                     # le LECTEUR : jeu.taille
+        return len(self.y)
+
+    @taille.setter                        # l'ÉCRIVAIN : jeu.taille = ...
+    def taille(self, n):                  # même nom, c'est obligatoire
+        if not isinstance(n, int):
+            raise TypeError(f"taille doit être un entier, reçu {type(n).__name__}")
+        if not 0 &lt; n &lt;= len(self.y):
+            raise ValueError(f"taille attendue entre 1 et {len(self.y)}, reçu {n}")
+        self.X, self.y = self.X[:n], self.y[:n]   # on tronque le jeu
+
+jeu = Jeu(X, y)
+print(jeu.taille)        # 50000
+
+jeu.taille = 1000        # appelle le setter → le jeu est tronqué
+print(jeu.taille)        # 1000
+
+jeu.taille = 5000        # ValueError: taille attendue entre 1 et 1000, reçu 5000
+jeu.taille = 12.5        # TypeError: taille doit être un entier, reçu float</pre></div>
+
+    <p>Trois points à retenir. D'abord, <strong>le nom doit être identique</strong> : <code>@taille.setter</code> se lit « le setter de la propriété <code>taille</code> définie juste au-dessus », et les deux méthodes s'appellent <code>taille</code>. Ensuite, <strong>aucun code appelant ne change</strong> : <code>jeu.taille = 1000</code> ressemble à une affectation ordinaire, alors qu'une méthode complète s'exécute — c'est tout l'intérêt, on peut ajouter la validation après coup sans toucher au reste du programme. Enfin, sans setter, la même ligne produit un message parfaitement clair :</p>
+
+    <div class="code-block"><pre>jeu.taille = 1000
+# AttributeError: property 'taille' of 'Jeu' object has no setter</pre></div>
+
+    <p>Le même trio existe pour la suppression, avec <code>@taille.deleter</code>, appelé par <code>del jeu.taille</code> — nettement plus rare.</p>
+
+    <h4 class="subsection"><code>@staticmethod</code> — une fonction rangée dans la classe</h4>
+    <p><strong>Le problème :</strong> une fonction utilitaire appartient logiquement à une classe — elle traite ses données — mais n'a besoin ni de l'instance, ni de la classe. La mettre en dehors éparpille le code ; en faire une méthode normale oblige à écrire un <code>self</code> dont on ne se sert pas.</p>
+    <div class="code-label">Python — @staticmethod</div>
+    <div class="code-block"><pre>class Jeu:
+    def __init__(self, X, y):
+        self.X, self.y = X, y
+
+    @staticmethod                          # pas de self : c'est une fonction normale
+    def normaliser(x):                     # qui vit simplement dans la classe
+        return (x - x.mean()) / x.std()
+
+# appelable des deux côtés, sans avoir besoin d'un objet
+Jeu.normaliser(colonne)                    # sur la classe
+jeu.normaliser(colonne)                    # sur une instance : même résultat</pre></div>
+    <p>Le gain est l'organisation et la lisibilité : quiconque lit <code>Jeu.normaliser</code> sait immédiatement à quel domaine la fonction appartient. Le signal envoyé compte autant que la technique — <code>@staticmethod</code> dit « cette fonction ne touche à l'état d'aucun objet », ce qui la rend triviale à tester.</p>
+
+    <h4 class="subsection"><code>@classmethod</code> — un constructeur alternatif</h4>
+    <p><strong>Le problème :</strong> une classe n'a qu'un <code>__init__</code>, mais on veut souvent la construire de plusieurs façons — depuis un fichier, depuis un dictionnaire, depuis une base. Entasser tous ces cas dans <code>__init__</code> avec des arguments mutuellement exclusifs donne un constructeur illisible.</p>
+    <div class="code-label">Python — @classmethod</div>
+    <div class="code-block"><pre>import json
+from pathlib import Path
+
+class Config:
+    def __init__(self, n_estimators, learning_rate):
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
+
+    @classmethod                           # reçoit la CLASSE (cls), pas l'instance
+    def depuis_json(cls, chemin):
+        donnees = json.loads(Path(chemin).read_text())
+        return cls(**donnees)              # cls(...) construit l'objet
+
+    @classmethod
+    def par_defaut(cls):
+        return cls(n_estimators=300, learning_rate=0.05)
+
+cfg = Config.depuis_json("params.json")    # se lit comme une intention
+cfg = Config.par_defaut()</pre></div>
+    <p>Pourquoi <code>cls(...)</code> plutôt que <code>Config(...)</code> en dur ? Parce qu'une sous-classe hérite de la méthode : <code>ConfigGPU.depuis_json(...)</code> construira alors une <code>ConfigGPU</code>, et non une <code>Config</code>. C'est exactement ce que font <code>datetime.now()</code>, <code>Path.cwd()</code> ou <code>pd.DataFrame.from_dict()</code> — tous des méthodes de classe.</p>
+
+    <h4 class="subsection"><code>@functools.cached_property</code> — calculé une fois, puis retenu</h4>
+    <p><strong>Le problème :</strong> une <code>@property</code> recalcule à <em>chaque</em> lecture. Sur une valeur coûteuse — une statistique sur un million de lignes —, une boucle qui la lit mille fois la recalcule mille fois.</p>
+    <div class="code-label">Python — @property contre @cached_property</div>
+    <div class="code-block"><pre>import functools
+
+class Jeu:
+    def __init__(self, X, y):
+        self.X, self.y = X, y
+
+    @property
+    def moyenne(self):                     # recalculée à CHAQUE accès
+        print("calcul…")
+        return self.X.mean(axis=0)
+
+    @functools.cached_property
+    def correlations(self):                # calculée UNE fois, puis mémorisée
+        print("calcul lourd…")
+        return np.corrcoef(self.X, rowvar=False)
+
+jeu = Jeu(X, y)
+jeu.moyenne; jeu.moyenne          # « calcul… » deux fois
+jeu.correlations; jeu.correlations # « calcul lourd… » une seule fois
+
+del jeu.correlations               # pour forcer un recalcul : on supprime le cache</pre></div>
+    <p>Sous le capot, la valeur est simplement rangée dans l'objet lui-même. Deux conséquences : le cache disparaît avec l'objet — pas de fuite mémoire globale, contrairement à <code>@cache</code> —, mais il devient <em>faux</em> si l'on modifie les données après coup. La règle est donc : <code>cached_property</code> sur des objets qu'on ne modifie plus après construction, ce qui rejoint l'argument des dataclasses figées de la section suivante.</p>
+
+    <h4 class="subsection"><code>@functools.cache</code> et <code>@lru_cache</code> — mémoriser les appels</h4>
+    <p><strong>Le problème :</strong> une fonction pure — même entrée, même sortie — appelée plusieurs fois avec les mêmes arguments refait le même travail. Charger un référentiel depuis le disque à chaque appel dans une boucle est le cas d'école.</p>
+    <div class="code-label">Python — @cache et @lru_cache</div>
+    <div class="code-block"><pre>import functools
+import pandas as pd
+
+@functools.cache                       # cache sans limite de taille
+def charger_referentiel(annee: int) -&gt; pd.DataFrame:
+    print(f"lecture disque {annee}")
+    return pd.read_parquet(f"ref_{annee}.parquet")
+
+charger_referentiel(2025)              # lecture disque 2025
+charger_referentiel(2025)              # rien : servi depuis le cache
+
+@functools.lru_cache(maxsize=1024)     # idem, mais borné : au-delà de 1024
+def distance(a: str, b: str) -&gt; float: # entrées, la moins récemment utilisée
+    ...                                # est évincée (Least Recently Used)
+
+distance.cache_info()      # CacheInfo(hits=812, misses=1024, maxsize=1024, currsize=1024)
+charger_referentiel.cache_clear()      # vider explicitement</pre></div>
+    <p>Deux contraintes, et une mise en garde. Les arguments doivent être <strong>hachables</strong> : un entier ou une chaîne conviennent, une liste ou un DataFrame non — d'où l'intérêt des configurations immuables. Et le cache vit pour <em>toute la durée du programme</em> : sur une fonction appelée avec des millions d'arguments distincts, <code>@cache</code> est une fuite de mémoire pure et simple, alors que <code>@lru_cache(maxsize=…)</code> plafonne la consommation. En cas de doute, préférez la version bornée.</p>
+
+    <h4 class="subsection"><code>@contextlib.contextmanager</code> — fabriquer un bloc <code>with</code></h4>
+    <p><strong>Le problème :</strong> certaines actions vont par paires — ouvrir/fermer, démarrer un chronomètre/l'arrêter, changer un réglage/le remettre. Écrire la seconde moitié à la main s'oublie, surtout quand une exception coupe l'exécution au milieu.</p>
+    <div class="code-label">Python — transformer une fonction en gestionnaire de contexte</div>
+    <div class="code-block"><pre>import time
+from contextlib import contextmanager
+
+@contextmanager
+def chronometre(nom):
+    debut = time.perf_counter()
+    try:
+        yield                              # ← ici s'exécute le corps du « with »
+    finally:                               # exécuté MÊME si une exception survient
+        print(f"{nom} : {time.perf_counter() - debut:.2f} s")
+
+with chronometre("entraînement"):
+    modele.fit(X, y)
+# entraînement : 12.43 s</pre></div>
+    <p>Tout ce qui précède le <code>yield</code> s'exécute à l'entrée du bloc, tout ce qui suit à la sortie — et le <code>finally</code> garantit que la sortie a lieu même en cas d'erreur. C'est la version courte de ce qu'on écrirait sinon avec une classe et deux méthodes spéciales, <code>__enter__</code> et <code>__exit__</code>. On croise le résultat partout : <code>with open(...)</code>, <code>with torch.no_grad():</code>, <code>with mlflow.start_run():</code>.</p>
+
+    <h4 class="subsection"><code>@functools.singledispatch</code> — une fonction, plusieurs types</h4>
+    <p><strong>Le problème :</strong> une fonction doit se comporter différemment selon le type qu'elle reçoit. La version naïve est une cascade de <code>if isinstance(...)</code> qui s'allonge à chaque nouveau cas, et qu'il faut modifier pour l'étendre.</p>
+    <div class="code-label">Python — @singledispatch</div>
+    <div class="code-block"><pre>from functools import singledispatch
+import numpy as np, pandas as pd
+
+@singledispatch                            # cas par défaut
+def resumer(donnees):
+    raise TypeError(f"type non pris en charge : {type(donnees).__name__}")
+
+@resumer.register                          # le type est lu dans l'annotation
+def _(donnees: pd.DataFrame):
+    return f"DataFrame {donnees.shape[0]}×{donnees.shape[1]}"
+
+@resumer.register
+def _(donnees: np.ndarray):
+    return f"tableau {donnees.shape}, moyenne {donnees.mean():.3f}"
+
+@resumer.register
+def _(donnees: list):
+    return f"liste de {len(donnees)} éléments"
+
+resumer(df)                # DataFrame 1000×12
+resumer(np.zeros((3, 4)))  # tableau (3, 4), moyenne 0.000
+resumer("abc")             # TypeError: type non pris en charge : str</pre></div>
+    <p>L'avantage sur la cascade de <code>if</code> : on ajoute un type en écrivant une nouvelle fonction, sans toucher aux précédentes. La répartition se fait sur le type du <em>premier</em> argument seulement — d'où le nom. C'est utile pour une fonction de conversion ou d'affichage exposée à des entrées variées ; au-delà, une hiérarchie de classes est souvent plus claire.</p>
+
+    <p>Le même mécanisme se retrouve partout dans l'écosystème : <code>@pytest.fixture</code> et <code>@pytest.mark.parametrize</code> (section 7), <code>@app.get("/items")</code> dans FastAPI (module 6), <code>@task</code> dans les orchestrateurs, <code>@numba.njit</code> pour compiler une boucle, <code>@abstractmethod</code> pour déclarer une méthode qu'une sous-classe doit obligatoirement fournir. Savoir lire un <code>@</code> comme « cette fonction est emballée par ceci » suffit à comprendre ces bibliothèques.</p>
+
+    <h2 id="dataclasses">4. Dataclasses : <code>frozen</code>, <code>slots</code> et le reste</h2>
+
+    <h3>Le problème, en partant du début</h3>
+
+    <p>Commençons par le besoin. Un entraînement dépend de plusieurs réglages : un chemin de données, un nombre d'arbres, un taux d'apprentissage, une graine aléatoire. On pourrait les trimballer en quatre variables séparées ; on préfère les regrouper dans un seul objet, qu'on passe en un seul argument et qu'on peut sauvegarder tel quel. Écrivons donc la classe la plus simple possible :</p>
+
+    <div class="code-label">Python — une classe minimale, et ce qu'elle donne</div>
+    <div class="code-block"><pre>class TrainConfig:
+    def __init__(self, data_path, n_estimators=300, learning_rate=0.05):
+        self.data_path = data_path
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
+
+cfg = TrainConfig("data/train.parquet")
+
+# 1) je veux VOIR ce que contient cfg
+print(cfg)
+# &lt;__main__.TrainConfig object at 0x7f3a2c1d5e50&gt;      ← inutilisable
+
+# 2) je veux comparer deux configurations identiques
+a = TrainConfig("data/train.parquet")
+b = TrainConfig("data/train.parquet")
+print(a == b)
+# False                                                  ← alors qu'elles sont IDENTIQUES
+
+# 3) je veux dédoublonner une liste de configurations
+len({a, b})
+# 2                                                      ← deux fois la même, comptée deux fois</pre></div>
+
+    <p>Les trois comportements sont décevants, et pour la même raison. Python ne devine rien : quand on lui demande d'afficher un objet ou d'en comparer deux, il pose la question à l'objet lui-même. Si la classe ne répond pas, Python se rabat sur des réponses par défaut qui sont <em>correctes mais sans intérêt</em> : afficher l'adresse mémoire, et considérer que deux objets ne sont égaux que s'ils sont <strong>le même objet</strong> — pas s'ils contiennent la même chose.</p>
+
+    <h4 class="subsection">Comment Python « pose la question » : les méthodes spéciales</h4>
+
+    <p>Le mécanisme est systématique et vaut la peine d'être compris une fois, parce qu'il explique une grande partie du langage. Certaines méthodes ont un nom entouré de deux tirets bas — <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code> — et <strong>on ne les appelle jamais soi-même</strong> : c'est Python qui les appelle pour nous, dans des situations précises. On les appelle « méthodes spéciales », ou <em>dunder</em> dans le jargon, pour <em>double underscore</em>.</p>
+
+    <p>L'image la plus juste est celle d'un formulaire à remplir. Le langage pose des questions standard ; chaque classe choisit d'y répondre ou non, et Python utilise la réponse partout où elle s'applique :</p>
+
+    <div class="code-label">ce que vous écrivez, et ce que Python appelle en dessous</div>
+    <div class="code-block"><pre>  VOTRE CODE              PYTHON APPELLE            SI LA CLASSE NE RÉPOND PAS
+  ──────────────────────────────────────────────────────────────────────────
+  TrainConfig(...)        __init__(self, ...)       objet vide, sans attribut
+  print(cfg) / repr(cfg)  __repr__(self)            &lt;...object at 0x7f3a…&gt;
+  a == b                  __eq__(self, autre)       comparaison d'IDENTITÉ
+                                                    (est-ce le même objet ?)
+  {a, b} / dict[cfg]      __hash__(self)            fondé sur l'adresse mémoire
+  a &lt; b, sorted([...])    __lt__(self, autre)       TypeError : non ordonnable
+  len(jeu)                __len__(self)             TypeError : pas de longueur
+  for x in jeu            __iter__(self)            TypeError : non itérable
+  jeu[3]                  __getitem__(self, i)      TypeError : non indexable
+
+  Aucune n'est obligatoire. Une classe est simplement plus ou moins
+  « équipée » selon celles qu'elle définit.</pre></div>
+
+    <p>Deux d'entre elles nous intéressent tout de suite.</p>
+
+    <div class="step-block">
+      <h4><code>__repr__</code> — « à quoi ressembles-tu, écrit ? »</h4>
+      <p>Appelée par <code>print()</code>, par <code>repr()</code>, par l'affichage automatique d'une variable dans un notebook, et — c'est le point qui compte — par le débogueur et par les messages d'erreur. La convention est que le texte renvoyé soit <em>sans ambiguïté</em>, idéalement recopiable pour reconstruire l'objet. Sans <code>__repr__</code>, déboguer revient à lire des adresses mémoire ; avec, on voit la configuration.</p>
+      <div class="code-block"><pre>def __repr__(self):
+    return f"TrainConfig(data_path={self.data_path!r}, n_estimators={self.n_estimators})"
+    # !r applique repr() à la valeur : une chaîne apparaît avec ses guillemets,
+    #    ce qui évite de confondre le nombre 300 et la chaîne "300"
+
+print(cfg)   # TrainConfig(data_path='data/train.parquet', n_estimators=300)</pre></div>
+    </div>
+
+    <div class="step-block">
+      <h4><code>__eq__</code> — « es-tu égal à celui-ci ? »</h4>
+      <p>Appelée par <code>==</code>, et donc aussi par <code>in</code> sur une liste, par <code>assert a == b</code> dans les tests, par <code>list.count()</code>… Par défaut, Python répond « seulement si c'est physiquement le même objet en mémoire ». C'est presque toujours l'inverse de ce qu'on veut : deux configurations qui contiennent les mêmes valeurs <em>sont</em> la même configuration.</p>
+      <div class="code-block"><pre>def __eq__(self, autre):
+    if not isinstance(autre, TrainConfig):
+        return NotImplemented          # « je ne sais pas comparer » : Python
+                                       # essaiera l'autre sens, puis dira False
+    return (self.data_path, self.n_estimators) == (autre.data_path, autre.n_estimators)
+    # on compare deux TUPLES : Python compare élément par élément, dans l'ordre
+
+a == b       # True, maintenant</pre></div>
+      <p>Une subtilité qui surprend : définir <code>__eq__</code> désactive automatiquement <code>__hash__</code>, donc l'objet ne peut plus servir de clé de dictionnaire ni entrer dans un <code>set</code>. La raison est logique — deux objets égaux doivent avoir la même empreinte, et Python refuse d'en fabriquer une qui serait fausse. On la redéfinit explicitement, ou l'on rend l'objet immuable, auquel cas <code>@dataclass(frozen=True)</code> s'en charge.</p>
+    </div>
+
+    <h4 class="subsection">D'où vient <code>@dataclass</code></h4>
+
+    <p>Écrire ces méthodes n'est pas difficile ; c'est <em>mécanique</em>. Le constructeur recopie chaque argument dans un attribut du même nom, l'affichage énumère les mêmes champs, la comparaison compare les mêmes champs. Trois fois la même liste de noms, recopiée à la main — et donc trois occasions d'oublier de mettre à jour l'une des trois le jour où l'on ajoute un paramètre. C'est exactement ce qu'on veut confier à une machine.</p>
+
+    <p><code>@dataclass</code> est cette machine. C'est un décorateur ordinaire, au sens de la section 3 : il reçoit la classe, lit la liste de ses champs, <strong>écrit les méthodes spéciales à votre place</strong>, et renvoie la classe complétée. Rien de magique — ce qu'il produit est exactement le code qu'on aurait tapé, et l'on peut d'ailleurs le lire avec <code>inspect.getsource</code> ou en affichant <code>TrainConfig.__init__</code>.</p>
+
+    <p>Comparons donc les deux versions.</p>
+
+    <div class="code-label">Python — AVANT : classe écrite à la main</div>
+    <div class="code-block"><pre>class TrainConfig:
+    def __init__(self, data_path, n_estimators=300, learning_rate=0.05, random_state=42):
+        self.data_path = data_path
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
+        self.random_state = random_state
+
+    def __repr__(self):
+        return (f"TrainConfig(data_path={self.data_path!r}, "
+                f"n_estimators={self.n_estimators}, "
+                f"learning_rate={self.learning_rate}, "
+                f"random_state={self.random_state})")
+
+    def __eq__(self, autre):
+        if not isinstance(autre, TrainConfig):
+            return NotImplemented
+        return (self.data_path, self.n_estimators, self.learning_rate, self.random_state) == \
+               (autre.data_path, autre.n_estimators, autre.learning_rate, autre.random_state)</pre></div>
+
+    <div class="code-label">Python — APRÈS : le décorateur @dataclass écrit tout cela</div>
+    <div class="code-block"><pre>from dataclasses import dataclass, field
+from pathlib import Path
+
+@dataclass
+class TrainConfig:
+    data_path: Path                        # pas de valeur par défaut : argument obligatoire
+    n_estimators: int = 300
+    learning_rate: float = 0.05
+    random_state: int | None = 42
+
+cfg = TrainConfig(Path("data/train.parquet"), learning_rate=0.1)
+print(cfg)        # TrainConfig(data_path=PosixPath('data/train.parquet'),
+                  #             n_estimators=300, learning_rate=0.1, random_state=42)
+cfg == TrainConfig(Path("data/train.parquet"), learning_rate=0.1)   # True</pre></div>
+
+    <p>Quatre lignes déclaratives remplacent une vingtaine de lignes mécaniques, et l'on n'énumère plus les champs qu'<em>une seule fois</em>. Ajouter un paramètre demande désormais d'ajouter une ligne, contre trois endroits à modifier auparavant.</p>
+
+    <p>Une remarque importante au passage : ici, les annotations de type ne sont pas décoratives. C'est leur <em>présence</em> qui déclenche la génération du champ — une ligne <code>n_estimators = 300</code> sans annotation serait ignorée par le décorateur. C'est l'un des rares endroits où le typage a un effet réel à l'exécution (voir la section 5).</p>
+
+    <div class="step-block">
+      <h4>Ce que cela change concrètement</h4>
+      <ul>
+        <li><strong>Déboguer.</strong> Un <code>print(cfg)</code> ou un point d'arrêt montre les valeurs, pas une adresse mémoire. C'est le bénéfice quotidien, et de loin le plus sous-estimé.</li>
+        <li><strong>Tester.</strong> <code>assert cfg == attendu</code> devient possible, et pytest affiche un <em>diff</em> champ par champ quand l'assertion échoue — au lieu d'un simple « False ».</li>
+        <li><strong>Journaliser.</strong> <code>asdict(cfg)</code> donne un dictionnaire prêt pour <code>json.dumps</code> ou pour l'enregistrement des paramètres d'une expérience (module 26). Une configuration lisible dans les journaux est ce qui permet de reproduire un entraînement six mois plus tard.</li>
+        <li><strong>Dédoublonner et mettre en cache.</strong> Avec <code>frozen=True</code>, l'objet devient hachable : il peut servir de clé de dictionnaire, entrer dans un <code>set</code>, ou être l'argument d'une fonction décorée par <code>@cache</code> (section 3).</li>
+        <li><strong>Se tromper moins.</strong> Toutes les méthodes générées restent cohérentes entre elles par construction, ce qu'une recopie manuelle ne garantit jamais dans la durée.</li>
+      </ul>
+    </div>
+
+    <p>Reste à choisir ce que le décorateur doit générer exactement : c'est le rôle de ses options.</p>
+
+    <h3>Les options utiles</h3>
+
+    <div class="code-label">Python — @dataclass(frozen=True, slots=True)</div>
+    <div class="code-block"><pre>@dataclass(frozen=True, slots=True)
+class TrainConfig:
+    data_path: Path
+    n_estimators: int = 300
+    learning_rate: float = 0.05
+    features: tuple[str, ...] = ()         # tuple, pas list : voir plus bas</pre></div>
+
+    <p><strong><code>frozen=True</code> — l'objet devient immuable.</strong> Toute tentative de modification lève une erreur au lieu de passer inaperçue :</p>
+    <div class="code-block"><pre>cfg.learning_rate = 0.5
+# FrozenInstanceError: cannot assign to field 'learning_rate'</pre></div>
+    <p>Pourquoi vouloir cela ? Parce qu'une configuration qui change en cours d'exécution est une source de bugs irreproductibles : on lance un entraînement, une fonction modifie discrètement un paramètre au passage, et le résultat ne correspond plus à ce qu'on croit avoir demandé. Une configuration figée est une garantie que ce qu'on a lu au début est ce qui a servi jusqu'au bout. Bénéfice secondaire : un objet immuable est <em>hachable</em>, donc utilisable comme clé de dictionnaire ou argument d'une fonction mise en cache (section 3). Pour obtenir une variante, on ne modifie pas : on copie en changeant ce qu'il faut, avec <code>dataclasses.replace(cfg, learning_rate=0.1)</code>.</p>
+
+    <p><strong><code>slots=True</code> — attributs fixés d'avance.</strong> Par défaut, chaque objet Python porte un dictionnaire interne (<code>__dict__</code>) qui associe des noms d'attributs à des valeurs, ce qui permet d'en ajouter n'importe quand. C'est souple, mais cela coûte de la mémoire et laisse passer les fautes de frappe :</p>
+    <div class="code-block"><pre># sans slots : la faute de frappe crée un NOUVEL attribut, en silence
+cfg.learnig_rate = 0.1        # aucune erreur ; le vrai paramètre n'a pas bougé
+
+# avec slots=True : la liste des attributs est figée à la création de la classe
+cfg.learnig_rate = 0.1
+# AttributeError: 'TrainConfig' object has no attribute 'learnig_rate'</pre></div>
+    <p>L'économie de mémoire (souvent 30 à 40 % par instance) ne compte que si l'on crée des millions d'objets ; la détection des fautes de frappe, elle, sert tous les jours.</p>
+
+    <div class="warning-block">
+      <strong>Le piège des valeurs par défaut mutables.</strong> Écrire <code>features: list[str] = []</code> lève une erreur, et c'est une bonne nouvelle : la liste serait créée <em>une seule fois</em> et partagée par toutes les instances — un classique des bugs Python. Deux solutions : un type immuable (<code>tuple[str, ...] = ()</code>), ou <code>field(default_factory=list)</code>, qui construit une liste neuve à chaque instance.
+    </div>
+
+    <div class="code-label">Python — les autres options, avec leur usage</div>
+    <div class="code-block"><pre>from dataclasses import dataclass, field, asdict, replace
+
+@dataclass(frozen=True, slots=True, order=True, kw_only=True)
+class Resultat:
+    rmse: float
+    modele: str
+    # exclu de la comparaison et de l'affichage (par exemple un gros objet) :
+    predictions: list = field(default_factory=list, compare=False, repr=False)
+
+    def __post_init__(self):              # appelé après l'init généré : validation
+        if self.rmse &lt; 0:
+            raise ValueError("un RMSE ne peut pas être négatif")
+
+r = Resultat(rmse=0.42, modele="gbm")     # kw_only : arguments NOMMÉS obligatoires
+sorted([r1, r2, r3])                      # order=True : comparaison champ par champ
+asdict(r)                                 # → dict, prêt pour json.dumps ou MLflow
+replace(r, modele="xgb")                  # copie modifiée (l'original est figé)</pre></div>
+
+    <p>Deux cousines à connaître : <code>typing.NamedTuple</code>, plus légère mais limitée à un tuple immuable, et <strong>pydantic</strong>, qui ressemble beaucoup à une dataclass mais <em>vérifie et convertit les types à l'exécution</em>. La règle de choix : dataclass pour les objets internes au code, pydantic dès que les données viennent de l'extérieur — fichier de configuration, requête HTTP, réponse d'API. C'est le socle de FastAPI, détaillé au <a href="project7-m06.html">module 6</a>.</p>
+
+    <h2 id="typage">5. Les annotations de type</h2>
+
+    <h3>Ce que c'est, et ce que ce n'est pas</h3>
+    <p>Une annotation comme <code>def rmse(y: np.ndarray) -&gt; float</code> est une <strong>métadonnée</strong>. Python ne la vérifie pas à l'exécution : passer une chaîne de caractères à cette fonction ne déclenchera aucune erreur de typage (seulement, plus loin, une erreur incompréhensible). Les annotations servent à trois choses : un <em>vérificateur statique</em> (mypy, pyright) qui lit le code sans l'exécuter et signale les incohérences, l'<em>éditeur</em> qui propose l'autocomplétion et détecte les fautes, et le <em>lecteur</em>, pour qui la signature devient une documentation qui ne peut pas mentir trop longtemps.</p>
+
+    <div class="code-label">Python — la syntaxe utile en pratique</div>
+    <div class="code-block"><pre>from collections.abc import Iterable, Callable, Sequence
+from pathlib import Path
+import numpy as np
+from numpy.typing import NDArray
+
+def charger(chemin: Path) -&gt; pd.DataFrame: ...
+
+def normaliser(x: NDArray[np.float64]) -&gt; NDArray[np.float64]: ...
+
+def selectionner(noms: Sequence[str], seuil: float = 0.5) -&gt; list[str]: ...
+
+# "peut valoir None" : le | remplace l'ancien Optional[...]
+def charger_modele(chemin: Path | None = None) -&gt; Modele | None: ...
+
+# une fonction en argument
+def appliquer(f: Callable[[float], float], valeurs: Iterable[float]) -&gt; list[float]:
+    return [f(v) for v in valeurs]
+
+# un dictionnaire dont on connaît les clés
+scores: dict[str, float] = {"rmse": 0.42, "mae": 0.31}</pre></div>
+
+    <div class="step-block">
+      <h4>Où le typage rapporte, et où il coûte</h4>
+      <p>Le rendement est maximal aux <strong>frontières</strong> : signatures des fonctions publiques, objets de configuration, structures de données échangées entre modules. Il est faible à l'intérieur d'un calcul numérique, où annoter chaque variable intermédiaire alourdit sans rien apporter. Et il faut connaître sa limite principale : <code>NDArray[np.float64]</code> ne dit rien de la <em>forme</em> du tableau, qui est pourtant la première source d'erreurs en ML. D'où l'habitude de documenter la forme attendue en commentaire — <code>(n_samples, n_features)</code> — et de la vérifier par un <code>assert X.ndim == 2</code> en début de fonction.</p>
+    </div>
+
+    <h2 id="iterateurs">6. Itérateurs et générateurs</h2>
+
+    <h3>Le problème</h3>
+    <p>Un fichier de journaux de 40 Go, une machine avec 16 Go de RAM. La ligne <code>lignes = open("events.jsonl").readlines()</code> échoue par manque de mémoire, parce qu'elle construit la liste complète avant d'en traiter le premier élément. Il faut une façon de produire les données <em>au fur et à mesure</em> : un distributeur qui fabrique à la demande, plutôt qu'un entrepôt qu'on remplit d'abord.</p>
+
+    <h3>Itérable et itérateur : deux notions distinctes</h3>
+    <p>Un <strong>itérable</strong> est un objet sur lequel on peut faire une boucle <code>for</code> (une liste, un dictionnaire, un fichier). Un <strong>itérateur</strong> est l'objet qui garde la position courante et sait donner l'élément suivant. La boucle <code>for</code> cache ce mécanisme : elle demande d'abord un itérateur à l'itérable, puis lui réclame les éléments un par un jusqu'à épuisement.</p>
+
+    <div class="code-label">Python — ce que fait réellement une boucle for</div>
+    <div class="code-block"><pre>nombres = [10, 20, 30]
+
+it = iter(nombres)      # on demande un itérateur à l'itérable
+print(next(it))         # 10
+print(next(it))         # 20
+print(next(it))         # 30
+print(next(it))         # StopIteration : c'est le signal de fin, que for intercepte
+
+# la boucle ci-dessous est exactement équivalente à ce qui précède
+for n in nombres:
+    print(n)</pre></div>
+
+    <h3>Écrire son propre itérateur (la version longue)</h3>
+    <p>Pour comprendre ce que les générateurs automatisent, écrivons d'abord un itérateur « à la main ». Il suffit d'implémenter deux méthodes : <code>__iter__</code>, qui renvoie l'itérateur lui-même, et <code>__next__</code>, qui renvoie l'élément suivant ou lève <code>StopIteration</code>.</p>
+
+    <div class="code-label">Python — un itérateur de lots, écrit explicitement</div>
+    <div class="code-block"><pre>class Lots:
+    """Découpe une séquence en lots de taille fixe."""
+
+    def __init__(self, donnees, taille):
+        self.donnees = donnees
+        self.taille = taille
+        self.position = 0          # l'ÉTAT que l'itérateur doit mémoriser
+
+    def __iter__(self):
+        return self                # l'objet est son propre itérateur
+
+    def __next__(self):
+        if self.position &gt;= len(self.donnees):
+            raise StopIteration    # plus rien à donner : fin de la boucle
+        lot = self.donnees[self.position : self.position + self.taille]
+        self.position += self.taille
+        return lot
+
+for lot in Lots(list(range(10)), 3):
+    print(lot)                     # [0,1,2] puis [3,4,5] puis [6,7,8] puis [9]</pre></div>
+
+    <h3>Le générateur : le même résultat en quatre lignes</h3>
+    <p>Une fonction qui contient le mot-clé <strong><code>yield</code></strong> ne se comporte plus comme une fonction ordinaire. L'appeler n'exécute rien : cela renvoie un générateur. À chaque <code>next()</code>, le corps s'exécute jusqu'au prochain <code>yield</code>, renvoie la valeur, puis <strong>se met en pause en conservant tout son état local</strong> — variables et position dans le code. L'appel suivant reprend exactement là où on s'était arrêté.</p>
+
+    <div class="code-label">Python — le même itérateur, en générateur</div>
+    <div class="code-block"><pre>def lots(donnees, taille):
+    for debut in range(0, len(donnees), taille):
+        yield donnees[debut : debut + taille]      # pause ici, reprise au prochain appel
+
+for lot in lots(list(range(10)), 3):
+    print(lot)                                     # résultat identique</pre></div>
+
+    <p>Le générateur écrit pour nous <code>__iter__</code>, <code>__next__</code>, la gestion de l'état et le <code>StopIteration</code> final. Observons la mise en pause pas à pas :</p>
+
+    <div class="code-label">Python — la mécanique du yield, étape par étape</div>
+    <div class="code-block"><pre>def trace():
+    print("  → début du corps")
+    yield 1
+    print("  → reprise après le premier yield")
+    yield 2
+    print("  → reprise après le second yield")
+
+g = trace()            # RIEN ne s'affiche : le corps n'a pas encore démarré
+print(next(g))         #   → début du corps        puis affiche 1
+print(next(g))         #   → reprise après ...     puis affiche 2
+next(g)                #   → reprise après ...     puis StopIteration</pre></div>
+
+    <h3>Application : traiter un fichier plus gros que la mémoire</h3>
+
+    <div class="code-label">Python — un pipeline de générateurs</div>
+    <div class="code-block"><pre>import json, itertools
+from collections.abc import Iterator
+
+def lire_lignes(chemin: str) -&gt; Iterator[dict]:
+    """Une ligne en mémoire à la fois, quelle que soit la taille du fichier."""
+    with open(chemin, encoding="utf-8") as f:
+        for ligne in f:                 # un fichier ouvert EST déjà un itérateur
+            yield json.loads(ligne)
+
+def valides(evenements: Iterator[dict]) -&gt; Iterator[dict]:
+    """Filtre, sans rien matérialiser."""
+    for e in evenements:
+        if e.get("prix") and e["prix"] &gt; 0:
+            yield e
+
+def par_lots(iterable, taille: int):
+    """Regroupe en lots — indispensable pour l'inférence batchée (module 6)."""
+    it = iter(iterable)
+    while lot := list(itertools.islice(it, taille)):   # := affecte ET teste
+        yield lot
+
+# les trois générateurs se chaînent : la mémoire reste en O(taille du lot)
+flux = par_lots(valides(lire_lignes("events.jsonl")), 1024)
+for lot in flux:
+    scores = modele.predict(lot)</pre></div>
+
+    <p>Rien n'est exécuté tant qu'on ne consomme pas le flux : c'est l'<em>évaluation paresseuse</em>. Chaque lot traverse les trois étapes à la demande, et la mémoire ne dépend que de la taille du lot. En Python 3.12+, <code>itertools.batched</code> fait le travail de <code>par_lots</code> nativement.</p>
+
+    <div class="code-label">Python — les compléments utiles</div>
+    <div class="code-block"><pre># expression génératrice : comme une compréhension de liste, mais paresseuse
+carres = (x ** 2 for x in range(10_000_000))    # rien n'est calculé ni stocké
+total = sum(carres)                             # calcul au fil de la consommation
+
+# yield from : déléguer à un autre générateur (aplatissement, composition)
+def tous_les_fichiers(dossiers):
+    for d in dossiers:
+        yield from lire_lignes(d)
+
+# générateur infini : parfaitement légitime, tant qu'on le borne à la consommation
+def compteur(debut=0):
+    n = debut
+    while True:
+        yield n
+        n += 1
+
+premiers = list(itertools.islice(compteur(), 5))     # [0, 1, 2, 3, 4]
+
+# itertools : groupby, chain, product, accumulate, tee — tous paresseux
+for cle, groupe in itertools.groupby(sorted(lignes, key=cle_ville), key=cle_ville):
+    print(cle, sum(1 for _ in groupe))</pre></div>
+
+    <div class="warning-block">
+      <strong>Un générateur ne se parcourt qu'une fois.</strong> Après consommation, il est épuisé : une seconde boucle ne produira rien, silencieusement. De même, <code>len()</code> et l'indexation n'existent pas sur un générateur, puisqu'on ignore combien d'éléments restent. Si l'on a besoin de plusieurs passages, il faut soit matérialiser avec <code>list(...)</code> — en acceptant le coût mémoire —, soit relancer le générateur depuis sa source.
+    </div>
+
+    <h2 id="qualite">7. Qualité : ruff, pytest, pre-commit</h2>
+
+    <h3>ruff : formatage et analyse statique</h3>
+    <p><strong>ruff</strong> remplace flake8, isort, black et une bonne partie de pylint, en une fraction du temps. Deux usages complémentaires : <em>check</em> signale les erreurs probables (import inutilisé, variable jamais lue, comparaison suspecte) et <em>format</em> réécrit le code dans un style unique.</p>
+    <div class="code-block"><pre>uv run ruff check --fix .        # signale et corrige ce qui peut l'être
+uv run ruff format .             # formatage automatique
+uv run mypy src/                 # vérification des types</pre></div>
+    <p>Le formatage automatique n'est pas une coquetterie : il supprime les différences de style dans les diffs, qui polluent les revues et masquent les vrais changements.</p>
+
+    <h3>pytest : tester du code de data science</h3>
+    <p>La question n'est pas « comment écrire un test » mais « que faut-il tester ». On ne teste pas « le modèle atteint 92 % d'accuracy » — cela dépend des données et relève du suivi en production (module 26). On teste la <em>plomberie</em> : les formes, les cas dégénérés, le déterminisme, les invariants métier.</p>
+
+    <div class="code-label">tests/test_features.py</div>
+    <div class="code-block"><pre>import numpy as np
+import pytest
+from mon_projet.features import ajouter_features_temporelles, entrainer
+
+@pytest.fixture                              # une donnée de test réutilisable
+def df_exemple():
+    return pd.DataFrame({"date": pd.date_range("2025-01-01", periods=30),
+                         "valeur": np.arange(30, dtype=float)})
+
+def test_pas_de_fuite_temporelle(df_exemple):
+    """Une feature calculée à t ne doit jamais utiliser d'information de t+1."""
+    out = ajouter_features_temporelles(df_exemple)
+    assert out["moyenne_mobile_7j"].iloc[0] != out["valeur"].iloc[0]
+
+@pytest.mark.parametrize("n_lignes", [0, 1, 1000])     # le test est joué 3 fois
+def test_robustesse_aux_tailles(n_lignes):
+    """Les cas dégénérés — vide, une seule ligne — cassent souvent."""
+    df = generer_df(n_lignes)
+    assert len(ajouter_features_temporelles(df)) == n_lignes
+
+def test_deterministe():
+    """Même graine, même résultat : sinon rien n'est reproductible."""
+    np.testing.assert_allclose(entrainer(seed=0).predict(X), entrainer(seed=0).predict(X))
+
+def test_probabilites_valides():
+    p = modele.predict_proba(X)
+    assert np.all((p &gt;= 0) &amp; (p &lt;= 1)) and np.allclose(p.sum(axis=1), 1.0)</pre></div>
+
+    <h3>pre-commit : automatiser les vérifications</h3>
+    <p><strong>Le problème.</strong> Les outils précédents ne servent que si on pense à les lancer. En pratique, on oublie, et le code mal formaté ou cassé entre dans l'historique Git ; la chaîne d'intégration continue le signale dix minutes plus tard, et il faut un commit supplémentaire pour corriger.</p>
+    <p><strong>La solution.</strong> Git sait déclencher des scripts à certains moments de son cycle — ce sont les <em>hooks</em>. <a href="https://pre-commit.com" target="_blank">pre-commit</a> est un outil qui installe un hook déclenché avant chaque commit, lance les vérifications sur <em>les seuls fichiers modifiés</em>, et <strong>annule le commit</strong> si quelque chose ne va pas. Le code fautif n'entre jamais dans l'historique.</p>
+
+    <div class="code-label">installation, une fois par projet</div>
+    <div class="code-block"><pre>uv add --dev pre-commit
+uv run pre-commit install        # écrit le hook dans .git/hooks/pre-commit
+
+# vérifier tout le dépôt (utile la première fois, ou en CI)
+uv run pre-commit run --all-files
+
+# mettre à jour les versions des outils déclarés
+uv run pre-commit autoupdate</pre></div>
+
+    <div class="code-label">.pre-commit-config.yaml, commenté</div>
+    <div class="code-block"><pre>repos:
+  # ── hooks génériques, fournis par pre-commit lui-même ──
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace        # supprime les espaces en fin de ligne
+      - id: end-of-file-fixer          # garantit un saut de ligne final
+      - id: check-yaml                 # valide la syntaxe des fichiers YAML
+      - id: check-added-large-files    # REFUSE les fichiers volumineux
+        args: ["--maxkb=5000"]         #   → empêche de committer un CSV par erreur
+      - id: check-merge-conflict       # détecte les marqueurs de conflit oubliés
+      - id: detect-private-key         # refuse une clé privée committée
+
+  # ── lint et formatage ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # ── types ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies: [numpy, pandas-stubs]
+
+  # ── notebooks : retire les sorties avant commit ──
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout</pre></div>
+
+    <p>Deux hooks méritent qu'on s'y arrête. <code>check-added-large-files</code> est la meilleure protection contre l'erreur la plus coûteuse d'un projet data — committer un jeu de données (section 8). <code>nbstripout</code> retire les sorties des notebooks : sans lui, chaque exécution produit un diff de plusieurs milliers de lignes illisibles, et les images encodées font gonfler le dépôt indéfiniment.</p>
+    <p>Un dernier détail pratique : <code>git commit --no-verify</code> contourne les hooks. C'est utile dans une urgence, et c'est aussi la raison pour laquelle les mêmes vérifications doivent tourner dans la chaîne d'intégration continue, où personne ne peut les contourner (module 26).</p>
+
+    <h2 id="git">8. Git pour un projet data</h2>
+    <p>Le workflow que j'utilise, volontairement minimal : <code>main</code> toujours fonctionnelle, une branche par sujet, une <em>pull request</em> même en solo — elle force une relecture du diff complet, ce qui attrape beaucoup d'erreurs.</p>
+
+    <div class="code-label">bash</div>
+    <div class="code-block"><pre>git switch -c feat/gradient-boosting     # créer et basculer sur une branche
+git add -p                               # relire chaque morceau avant de l'indexer
+git commit -m "feat(model): baseline XGBoost, RMSE 0.42 en CV"
+
+git fetch origin
+git rebase origin/main                   # historique linéaire AVANT publication
+git push -u origin feat/gradient-boosting
+
+git log --oneline --graph -15            # visualiser l'historique
+git diff main...HEAD                     # tout ce que la branche apporte</pre></div>
+
+    <p><strong>Rebase ou merge ?</strong> Rebase tant que la branche est privée : l'historique reste linéaire et lisible. Merge dès qu'elle est partagée : réécrire des commits que quelqu'un a déjà récupérés casse son dépôt. La règle tient en une phrase — <em>ne jamais réécrire un historique déjà publié</em>.</p>
+    <p>Les messages suivent la convention <em>Conventional Commits</em> (<code>feat:</code>, <code>fix:</code>, <code>refactor:</code>, <code>docs:</code>) : cela permet de générer un changelog et, surtout, de retrouver <em>pourquoi</em> une transformation a été ajoutée six mois plus tard.</p>
+
+    <div class="warning-block">
+      <strong>Git n'est pas fait pour les données.</strong> Un CSV de 2 Go committé reste dans l'historique <em>pour toujours</em>, même supprimé ensuite : chaque clone le retéléchargera. Mettez <code>data/</code>, <code>*.csv</code>, <code>*.parquet</code>, <code>*.pkl</code>, <code>models/</code>, <code>.venv/</code> et <code>.ipynb_checkpoints/</code> dans <code>.gitignore</code> dès le premier commit. Pour versionner données et modèles, voir DVC au module 26.
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Le code réutilisable vit dans <code>src/</code>, jamais dans un notebook ; <code>pyproject.toml</code> centralise tout.</li>
+        <li>UV donne un environnement reproductible en une commande : contraintes dans <code>pyproject.toml</code>, solution exacte dans <code>uv.lock</code>, les deux versionnés.</li>
+        <li>Le <code>[build-system]</code> dit <em>comment</em> fabriquer le paquet : hatchling par défaut, setuptools pour l'existant et le C, maturin pour le Rust.</li>
+        <li><code>*args</code> ramasse les arguments positionnels en tuple, <code>**kwargs</code> les nommés en dictionnaire ; à l'appel, les mêmes étoiles déballent.</li>
+        <li>Un décorateur est une fonction qui en emballe une autre ; <code>@</code> est un raccourci pour <code>f = decorateur(f)</code>.</li>
+        <li>Les méthodes à doubles tirets bas sont appelées <em>par</em> Python : <code>__repr__</code> pour afficher, <code>__eq__</code> pour comparer. Sans elles, on lit des adresses mémoire et deux objets identiques sont différents.</li>
+        <li><code>@dataclass</code> écrit ces méthodes à partir des annotations ; <code>frozen=True</code> protège des mutations silencieuses, <code>slots=True</code> des fautes de frappe.</li>
+        <li>Les annotations ne sont pas vérifiées à l'exécution : elles servent aux outils et au lecteur, surtout aux frontières.</li>
+        <li><code>yield</code> met une fonction en pause en conservant son état : c'est ce qui permet de traiter des données plus grosses que la mémoire.</li>
+        <li>pre-commit empêche le code mal formé d'entrer dans l'historique, et un jeu de données d'y entrer du tout.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "Que déclare exactement la section <code>[build-system]<\/code> d'un <code>pyproject.toml<\/code> ?", "choix": ["Les dépendances nécessaires pour faire tourner le projet", "L'outil qui transforme le dossier de code en paquet installable", "La version de Python à utiliser pour exécuter le projet", "La liste des fichiers à inclure dans le dépôt Git"], "bonne": 1, "explication": "Elle nomme le <em>backend de construction<\/em> : hatchling, setuptools, poetry-core… lui seul sait assembler la wheel et la sdist. Les dépendances d'exécution, elles, vivent dans <code>[project] dependencies<\/code>, et la version de Python dans <code>requires-python<\/code> — deux champs distincts de celui-ci."},
+{"q": "Quelle est la différence entre une wheel (<code>.whl<\/code>) et une sdist (<code>.tar.gz<\/code>) ?", "choix": ["La wheel est compressée, la sdist ne l'est pas", "La wheel est prête à poser, la sdist contient les sources et doit être construite", "La wheel est réservée aux paquets publiés sur PyPI", "La sdist est une wheel signée cryptographiquement"], "bonne": 1, "explication": "Installer une wheel revient à décompresser une archive au bon endroit : rien ne s'exécute. Une sdist contient le code source et exige une construction sur la machine cible ; elle sert de repli quand aucune wheel ne correspond à la plateforme. Les deux sont compressées, ce n'est donc pas ce qui les distingue."},
+{"q": "Pourquoi versionner <code>uv.lock<\/code> en plus de <code>pyproject.toml<\/code> ?", "choix": ["Pour accélérer l'installation en évitant de télécharger les paquets", "Parce que pyproject.toml ne peut pas exprimer de versions minimales", "Parce que pyproject.toml donne des contraintes, le lock une solution exacte et reproductible", "Pour permettre à UV de fonctionner sans connexion réseau"], "bonne": 2, "explication": "<code>pyproject.toml<\/code> dit « numpy au moins en 2.0 » ; six mois plus tard, cette contrainte résout vers une autre version. Le lock fige la solution exacte, version par version, y compris les dépendances transitives — c'est lui qui rend l'environnement d'un collègue ou de la CI identique au vôtre."},
+{"q": "À l'appel d'une fonction, que fait <code>modele(**config)<\/code> quand <code>config<\/code> est un dictionnaire ?", "choix": ["Il passe le dictionnaire entier comme un seul argument", "Il transforme chaque paire clé-valeur en argument nommé", "Il fusionne config avec les valeurs par défaut de la fonction", "Il vérifie que les clés correspondent aux paramètres attendus"], "bonne": 1, "explication": "Les deux étoiles <em>déballent<\/em> : <code>modele(**{'a': 1, 'b': 2})<\/code> équivaut littéralement à <code>modele(a=1, b=2)<\/code>. C'est l'opération inverse de <code>**kwargs<\/code> dans une signature, qui elle <em>ramasse<\/em> les arguments nommés dans un dictionnaire. Aucune vérification n'est faite : une clé inconnue lèvera un <code>TypeError<\/code> à l'appel."},
+{"q": "Que change une étoile seule, sans nom, dans <code>def decouper(X, y, *, test_size=0.2)<\/code> ?", "choix": ["Elle accepte un nombre quelconque d'arguments supplémentaires", "Elle rend test_size optionnel", "Elle oblige à nommer tous les paramètres qui la suivent", "Elle interdit de passer test_size"], "bonne": 2, "explication": "L'étoile nue sert de séparateur : <code>decouper(X, y, 0.3)<\/code> lève un <code>TypeError<\/code>, il faut écrire <code>test_size=0.3<\/code>. L'intérêt est double — un appel reste lisible des mois plus tard, et on peut insérer un paramètre sans casser les appels existants. C'est la règle que scikit-learn impose sur presque toute son API."},
+{"q": "La notation <code>@chrono<\/code> posée au-dessus de <code>def entrainer(...)<\/code> est rigoureusement équivalente à :", "choix": ["<code>entrainer = chrono(entrainer)<\/code>", "<code>entrainer = chrono(entrainer())<\/code>", "<code>chrono(entrainer)<\/code> exécuté à chaque appel", "<code>entrainer.chrono()<\/code> ajouté à la fin de la fonction"], "bonne": 0, "explication": "Le <code>@<\/code> n'est que du sucre syntaxique : la fonction est passée au décorateur — sans être appelée, d'où l'absence de parenthèses après <code>entrainer<\/code> — et le nom est réaffecté au résultat. La substitution a lieu une seule fois, au moment de la définition, pas à chaque appel."},
+{"q": "Pourquoi poser <code>@functools.wraps(fonction)<\/code> sur l'emballage d'un décorateur ?", "choix": ["Pour que le décorateur accepte des fonctions de n'importe quelle signature", "Pour éviter que la fonction décorée soit appelée deux fois", "Pour recopier le nom, la docstring et les annotations de la fonction d'origine", "Pour rendre le décorateur compatible avec les méthodes de classe"], "bonne": 2, "explication": "Sans lui, la fonction est remplacée par l'emballage : <code>entrainer.__name__<\/code> vaut <code>emballage<\/code>, la docstring disparaît, et le débogueur comme les messages d'erreur affichent le mauvais nom. Ce qui accepte n'importe quelle signature, ce sont <code>*args<\/code> et <code>**kwargs<\/code>, pas <code>wraps<\/code>."},
+{"q": "Une <code>@property<\/code> définie sans setter : que se passe-t-il si on écrit <code>jeu.taille = 1000<\/code> ?", "choix": ["La valeur est stockée et masque la propriété", "Rien : l'affectation est silencieusement ignorée", "Une AttributeError est levée", "Le getter est appelé avec 1000 en argument"], "bonne": 2, "explication": "Python répond <code>AttributeError: property 'taille' has no setter<\/code>. C'est souvent le comportement souhaité pour une valeur calculée : on veut qu'une affectation échoue bruyamment plutôt que de créer un attribut fantôme. Autoriser l'écriture demande un second bloc décoré par <code>@taille.setter<\/code>, portant le même nom."},
+{"q": "Quelle est la différence entre <code>@property<\/code> et <code>@functools.cached_property<\/code> ?", "choix": ["cached_property recalcule à chaque accès, property mémorise", "property recalcule à chaque accès, cached_property calcule une fois puis mémorise", "cached_property partage son cache entre toutes les instances", "cached_property ne fonctionne que sur des objets immuables"], "bonne": 1, "explication": "<code>cached_property<\/code> range le résultat dans l'objet lui-même au premier accès. Le cache meurt donc avec l'objet — pas de fuite mémoire globale — mais il devient faux si on modifie les données après coup. D'où la règle : l'utiliser sur des objets qu'on ne modifie plus après construction."},
+{"q": "Dans un <code>@classmethod<\/code> servant de constructeur alternatif, pourquoi écrire <code>cls(...)<\/code> plutôt que le nom de la classe en dur ?", "choix": ["Parce que le nom de la classe n'est pas encore défini à cet endroit", "Pour qu'une sous-classe construise une instance de son propre type", "Parce que cls est plus rapide qu'une recherche de nom global", "Pour éviter une référence circulaire entre les modules"], "bonne": 1, "explication": "Avec <code>cls(...)<\/code>, <code>ConfigGPU.depuis_json(...)<\/code> renvoie une <code>ConfigGPU<\/code> ; avec <code>Config(...)<\/code> en dur, elle renverrait une <code>Config<\/code>, ce qui casse l'héritage. C'est exactement le mécanisme de <code>datetime.now()<\/code> ou <code>Path.cwd()<\/code>."},
+{"q": "Une classe qui ne définit pas <code>__eq__<\/code> : que compare <code>a == b<\/code> ?", "choix": ["Les valeurs de tous les attributs, un à un", "Rien : l'opérateur lève une TypeError", "Uniquement les attributs annotés", "L'identité : a et b sont-ils le même objet en mémoire"], "bonne": 3, "explication": "Par défaut, <code>==<\/code> se comporte comme <code>is<\/code> : deux configurations contenant exactement les mêmes valeurs sont considérées comme différentes. C'est techniquement correct et pratiquement inutile — d'où l'intérêt d'écrire <code>__eq__<\/code>, ou de laisser <code>@dataclass<\/code> le générer."},
+{"q": "Définir <code>__eq__<\/code> dans une classe a un effet de bord souvent surprenant. Lequel ?", "choix": ["L'objet n'est plus hachable : il ne peut plus servir de clé de dictionnaire", "L'affichage par print cesse de fonctionner", "La classe ne peut plus être héritée", "Les comparaisons < et > deviennent automatiquement disponibles"], "bonne": 0, "explication": "Python met <code>__hash__<\/code> à <code>None<\/code>, car deux objets égaux doivent avoir la même empreinte et il refuse d'en fabriquer une qui serait fausse. On redéfinit donc <code>__hash__<\/code> explicitement, ou on rend l'objet immuable — ce dont <code>@dataclass(frozen=True)<\/code> se charge tout seul."},
+{"q": "Quel est l'argument principal en faveur de <code>@dataclass(frozen=True)<\/code> pour une configuration d'entraînement ?", "choix": ["L'objet occupe moins de mémoire", "Les attributs sont vérifiés à l'exécution", "Ce qu'on a lu au début est garanti être ce qui a servi jusqu'au bout", "La sérialisation en JSON devient automatique"], "bonne": 2, "explication": "Une configuration modifiée discrètement en cours d'exécution produit des résultats irreproductibles, et le bug est très difficile à retrouver. Figer l'objet transforme cette modification en erreur immédiate. Bénéfice secondaire : l'objet devient hachable. L'économie de mémoire, elle, vient de <code>slots=True<\/code>."},
+{"q": "Qu'apporte <code>slots=True<\/code> sur une dataclass, au quotidien ?", "choix": ["Il empêche l'héritage de la classe", "Il détecte les fautes de frappe sur les noms d'attributs", "Il rend automatiquement l'objet immuable", "Il accélère la création des instances d'un facteur dix"], "bonne": 1, "explication": "Sans slots, <code>cfg.learnig_rate = 0.1<\/code> crée un nouvel attribut en silence et le vrai paramètre ne bouge pas. Avec, la liste des attributs est figée et Python lève une <code>AttributeError<\/code>. L'économie de mémoire (30 à 40 % par instance) ne compte que si l'on crée des millions d'objets ; la détection des fautes de frappe sert tous les jours."},
+{"q": "Pourquoi <code>features: list[str] = []<\/code> lève-t-il une erreur dans une dataclass ?", "choix": ["Parce que les listes ne sont pas un type accepté par les annotations", "Parce qu'une liste vide serait créée une seule fois et partagée par toutes les instances", "Parce qu'il faut toujours une valeur par défaut non vide", "Parce que list[str] exige Python 3.12 ou plus"], "bonne": 1, "explication": "C'est le classique piège de la valeur par défaut mutable : la liste serait évaluée à la définition de la classe, donc partagée. Les dataclasses refusent le cas au lieu de laisser le bug passer. Deux issues : un type immuable (<code>tuple[str, ...] = ()<\/code>), ou <code>field(default_factory=list)<\/code> qui construit une liste neuve par instance."},
+{"q": "Quelle est la différence entre un itérable et un itérateur ?", "choix": ["Un itérable se parcourt une seule fois, un itérateur autant de fois qu'on veut", "Les deux sont synonymes en Python", "Un itérable sait fournir un itérateur neuf ; un itérateur se consomme une fois", "Un itérateur est toujours paresseux, un itérable toujours en mémoire"], "bonne": 2, "explication": "Une liste est un itérable : chaque <code>for<\/code> demande un nouvel itérateur, donc on peut la reparcourir. Un générateur <em>est<\/em> un itérateur : une fois épuisé, un second <code>for<\/code> ne produit rien — sans lever d'erreur, ce qui en fait un bug silencieux classique."},
+{"q": "Quel est l'intérêt principal d'un générateur pour traiter un fichier de 40 Go ?", "choix": ["Il produit les valeurs une à une, sans jamais tout charger en mémoire", "Il lit le fichier en parallèle sur plusieurs cœurs", "Il compresse les données à la volée", "Il met le contenu en cache pour les parcours suivants"], "bonne": 0, "explication": "<code>yield<\/code> met la fonction en pause en conservant son état, et la reprend à l'élément suivant. La mémoire occupée reste celle d'un élément, quel que soit le volume traité. La contrepartie est justement l'absence de cache : le flux se consomme une fois."},
+{"q": "Que fait Python d'une annotation comme <code>def rmse(y: np.ndarray) -&gt; float<\/code> à l'exécution ?", "choix": ["Il convertit l'argument en np.ndarray si nécessaire", "Il lève une TypeError si on passe autre chose", "Rien : l'annotation est une métadonnée, ignorée à l'exécution", "Il journalise un avertissement en cas d'incompatibilité"], "bonne": 2, "explication": "Les annotations servent au vérificateur statique (mypy, pyright), à l'éditeur et au lecteur, pas à l'interpréteur : passer une chaîne ne déclenchera rien, seulement une erreur incompréhensible plus loin. La grande exception est <code>@dataclass<\/code>, dont c'est la présence de l'annotation qui déclenche la génération du champ — et Pydantic, qui vérifie réellement à l'exécution."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7.html" class="btn btn-secondary">← Sommaire du cours</a>
+    <a href="project7-m02.html" class="btn btn-primary">Module 2 : Concurrence →</a>
+  </div>
+  <div class="project-meta"><span class="tag">Python</span><span class="tag">Décorateurs</span><span class="tag">Dataclasses</span><span class="tag">Générateurs</span><span class="tag">UV</span><span class="tag">pre-commit</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m01-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 1</div>
+    <h1>Modern Python: typing, decorators, iterators and tooling</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Project layout: why the <code>src/</code> layout exists, what <code>pyproject.toml</code> holds, and why reusable logic never stays in a notebook.</li>
+      <li>Build systems explained from scratch: what building a package means, wheels versus sdists, why PEP 517/518 split the frontend from the backend, and a comparison of hatchling, setuptools, poetry-core, flit-core, pdm-backend, plus maturin, scikit-build-core and meson-python for compiled extensions — with the case for not packaging at all.</li>
+      <li>Virtual environments explained from the problem they solve, then UV in practice: installing interpreters, adding and removing dependencies, syncing, running without activating.</li>
+      <li>Constraints versus lockfiles, reproducibility, and the CUDA caveat.</li>
+      <li>A full treatment of <code>*args</code> and <code>**kwargs</code>: packing at definition, unpacking at call sites, the bare <code>*</code> keyword-only separator, unpacking in assignments and literals, and why <code>**kwargs</code> costs you autocompletion and type checking.</li>
+      <li>Decorators built from scratch: functions as objects, writing a timing decorator by hand, the <code>@</code> syntax as pure sugar, and <code>functools.wraps</code>.</li>
+      <li>Each standard-library decorator with its own problem statement and worked example: <code>@property</code> and <code>@taille.setter</code> with validation, <code>@staticmethod</code>, <code>@classmethod</code>, <code>@cached_property</code> versus <code>@property</code>, <code>@cache</code> and <code>@lru_cache</code>, <code>@contextmanager</code>, and <code>@singledispatch</code>.</li>
+      <li>Special (dunder) methods explained from the ground up: what Python calls under the hood for printing, comparing, hashing, ordering, iterating and indexing; what the useless defaults are; <code>__repr__</code> and <code>__eq__</code> written out, and why defining <code>__eq__</code> disables hashing.</li>
+      <li>Dataclasses as a code generator for exactly those methods, before and after, what it changes in practice, then each option explained: <code>frozen</code> for silent-mutation safety and hashability, <code>slots</code> for typo detection and memory, <code>field</code>, <code>__post_init__</code>, <code>kw_only</code>, <code>order</code>, and the mutable-default trap.</li>
+      <li>Type annotations: what they do and do not do at runtime, practical syntax, where they pay off, and the shape problem they cannot express.</li>
+      <li>Iterators and generators: the iterator protocol, a hand-written iterator, then the same thing with <code>yield</code>, a step-by-step trace of suspension, lazy pipelines over files larger than memory, generator expressions, <code>yield from</code>, itertools, and the single-pass caveat.</li>
+      <li>Tooling: ruff, what is actually worth testing in data code, and pre-commit with a fully commented configuration.</li>
+      <li>Git for data projects: branching, rebase versus merge, and why data never belongs in the repository.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><strong>Modern Python: typing, decorators, iterators and tooling</strong></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

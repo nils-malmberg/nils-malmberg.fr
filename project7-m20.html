@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 20 - Apprentissage par renforcement - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m20-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 20</div>
+    <h1>Apprentissage par renforcement</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>En apprentissage supervisé, on dispose de la bonne réponse pour chaque exemple. En apprentissage par renforcement, on ne dispose que d'un signal de récompense, souvent rare et différé, et les décisions influencent les situations futures. Ce module présente le cadre, les algorithmes qui comptent, et — point important — les raisons pour lesquelles il faut souvent y renoncer.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#cadre">Le cadre : agent, environnement, récompense</a></li>
+        <li><a href="#valeurs">Fonctions de valeur et équations de Bellman</a></li>
+        <li><a href="#exploration">Exploration et exploitation</a></li>
+        <li><a href="#tabulaire">Q-learning et SARSA</a></li>
+        <li><a href="#dqn">Deep RL : DQN</a></li>
+        <li><a href="#pg">Gradient de politique : REINFORCE, PPO</a></li>
+        <li><a href="#variantes">Model-based, offline RL, RLHF</a></li>
+        <li><a href="#pratique">En pratique, et pourquoi c'est difficile</a></li>
+      </ol>
+    </div>
+
+    <h2 id="cadre">1. Le cadre : agent, environnement, récompense</h2>
+    <p>Un agent observe un état, choisit une action, reçoit une récompense et se retrouve dans un nouvel état. La boucle recommence.</p>
+
+    <div class="code-label">la boucle d'interaction</div>
+    <div class="code-block"><pre>            action a_t
+        ┌──────────────────►┐
+   ┌────┴─────┐       ┌─────▼──────────┐
+   │  AGENT   │       │ ENVIRONNEMENT  │
+   └────▲─────┘       └─────┬──────────┘
+        │                   │
+        └───────────────────┘
+      état s_{t+1}, récompense r_{t+1}
+
+  Exemple (maintenance) : état = usure mesurée + heures de fonctionnement
+                          actions = {ne rien faire, inspecter, remplacer}
+                          récompense = -coût de l'action - coût d'une panne subie</pre></div>
+
+    <p>Le formalisme est le <strong>processus de décision markovien</strong> \((\mathcal{S}, \mathcal{A}, P, R, \gamma)\), dont l'hypothèse centrale est la propriété de Markov : l'état contient toute l'information utile pour prédire la suite, le passé n'apporte rien de plus. Quand ce n'est pas le cas — un capteur ne voit qu'une partie du système —, on parle de POMDP, et l'on empile généralement les dernières observations pour reconstituer un état approché.</p>
+
+    <p>L'agent maximise le <strong>retour</strong>, somme actualisée des récompenses futures :</p>
+    <div style="text-align:center;overflow-x:auto">\[ G_t = \sum_{k=0}^{\infty}\gamma^k r_{t+k+1}, \qquad \gamma \in [0,1) \]</div>
+    <p>Le facteur \(\gamma\) joue deux rôles : il garantit la convergence de la somme, et il encode l'horizon temporel. Avec \(\gamma = 0{,}99\), l'horizon effectif est d'environ \(1/(1-\gamma) = 100\) pas ; avec \(\gamma = 0{,}9\), il tombe à 10. C'est un paramètre bien plus structurant qu'il n'y paraît : trop bas, l'agent devient myope et sacrifie l'avenir ; trop haut, l'apprentissage devient instable car les valeurs à estimer deviennent énormes.</p>
+
+    <div class="step-block">
+      <h4>Ce qui distingue vraiment le RL du supervisé</h4>
+      <ul>
+        <li><strong>Pas d'étiquette</strong> — seulement un signal évaluatif : « cette action a rapporté 3 », sans indiquer quelle action aurait rapporté davantage. En supervisé, on connaît la bonne réponse ; ici, on ne connaît que la qualité de celle qu'on a choisie.</li>
+        <li><strong>Crédit différé</strong> — la récompense arrive parfois des centaines de pas après le choix qui l'a causée. Savoir à quelle décision l'attribuer est <em>le</em> problème central.</li>
+        <li><strong>Données non i.i.d. et non stationnaires</strong> — l'agent génère lui-même ses données, et cette distribution change à mesure qu'il apprend. Toute l'hypothèse de base de l'apprentissage supervisé tombe.</li>
+        <li><strong>Exploration</strong> — il faut essayer ce qu'on ne connaît pas pour découvrir mieux, au prix de mauvaises performances immédiates.</li>
+      </ul>
+    </div>
+
+    <h2 id="valeurs">2. Fonctions de valeur et équations de Bellman</h2>
+    <p>Une <strong>politique</strong> \(\pi(a\mid s)\) donne la probabilité de choisir l'action \(a\) dans l'état \(s\) — c'est ce qu'on cherche. On lui associe deux fonctions de valeur :</p>
+    <div style="text-align:center;overflow-x:auto">\[ V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q^\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t=s,\, a_t=a] \]</div>
+    <p>\(V\) évalue un état (« à quel point est-il bon d'être ici ? »), \(Q\) évalue un couple état-action (« à quel point est-il bon de faire ceci, ici ? »). La différence est décisive : \(Q\) permet de <em>choisir</em> directement, en prenant l'action de plus grande valeur, sans avoir besoin de connaître le modèle de transition.</p>
+
+    <p>La récursivité du retour donne l'équation de Bellman, et sa version optimale :</p>
+    <div style="text-align:center;overflow-x:auto">\[ Q^\star(s,a) = \mathbb{E}\Big[r + \gamma \max_{a'} Q^\star(s',a')\Big] \]</div>
+    <p>Elle se lit simplement : la valeur d'une action, c'est la récompense immédiate plus la valeur actualisée du meilleur coup suivant. C'est un point fixe d'un opérateur contractant de facteur \(\gamma\) : itérer l'opérateur rapproche donc nécessairement de \(Q^\star\), et la politique optimale s'en déduit par \(\pi^\star(s) = \arg\max_a Q^\star(s,a)\). Tout le RL par valeurs consiste à approcher ce point fixe à partir d'échantillons plutôt qu'avec la connaissance du modèle.</p>
+
+    <h2 id="exploration">3. Exploration et exploitation</h2>
+    <p>Le dilemme apparaît déjà dans le cas le plus simple, le <em>bandit manchot</em> : plusieurs leviers de récompense moyenne inconnue, et un budget de tirages. Exploiter le meilleur levier connu, c'est risquer de passer à côté d'un meilleur jamais essayé ; explorer, c'est payer des tirages sous-optimaux.</p>
+    <div class="code-label">stratégies</div>
+    <div class="code-block"><pre>ε-greedy          action aléatoire avec probabilité ε, sinon la meilleure connue.
+                  Simple ; on fait décroître ε au fil de l'apprentissage (de 1 à 0,05).
+Boltzmann         probabilité ∝ exp(Q/τ) : explore proportionnellement à la qualité,
+                  au lieu de tirer uniformément parmi les mauvaises actions.
+UCB               Q(a) + c·√(ln t / N(a)) : bonus d'optimisme pour les actions peu
+                  testées. Même intuition qu'en optimisation bayésienne (module 19).
+Thompson          tirage dans le postérieur sur les récompenses (module 10).
+                  Très efficace en bandits, et naturellement parallélisable.
+Bonus intrinsèque récompense de curiosité (erreur de prédiction, nouveauté de l'état)
+                  pour les environnements à récompense extrêmement rare.</pre></div>
+
+    <h2 id="tabulaire">4. Q-learning et SARSA</h2>
+    <p>Quand les états et actions sont peu nombreux, \(Q\) tient dans un tableau. Trois familles pour l'estimer : la <strong>programmation dynamique</strong> (exacte, mais exige de connaître \(P\) et \(R\) — rarement le cas) ; <strong>Monte-Carlo</strong> (attendre la fin de l'épisode et moyenner les retours observés — sans biais, mais de forte variance et inapplicable aux tâches continues) ; et les <strong>différences temporelles</strong> (TD), qui sont la grande idée du domaine.</p>
+    <p>TD met à jour <em>immédiatement</em>, à partir de l'estimation courante de l'état suivant, sans attendre la fin de l'épisode. C'est du <em>bootstrapping</em> : on apprend une estimation à partir d'une autre estimation — ce qui semble circulaire, mais converge bel et bien, puisque la récompense observée injecte à chaque pas une information réelle.</p>
+
+    <div style="text-align:center;overflow-x:auto">\[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\underbrace{r + \gamma \max_{a'}Q(s',a') - Q(s,a)}_{\text{erreur TD}}\Big] \]</div>
+
+    <div class="code-label">Python — Q-learning tabulaire complet</div>
+    <div class="code-block"><pre>import numpy as np
+
+Q = np.zeros((n_etats, n_actions))
+alpha, gamma, eps = 0.1, 0.99, 1.0
+
+for episode in range(5_000):
+    s, _ = env.reset()
+    termine = False
+    while not termine:
+        # ε-greedy : explorer ou exploiter
+        a = env.action_space.sample() if np.random.rand() &lt; eps else int(Q[s].argmax())
+
+        s2, r, termine, tronque, _ = env.step(a)
+
+        cible = r + gamma * Q[s2].max() * (not termine)   # 0 si l'épisode est fini
+        Q[s, a] += alpha * (cible - Q[s, a])              # l'erreur TD
+        s = s2
+        termine = termine or tronque
+
+    eps = max(0.05, eps * 0.999)     # on explore de moins en moins
+
+politique = Q.argmax(axis=1)         # la politique gloutonne finale</pre></div>
+
+    <p>Sa particularité : le \(\max\) fait apprendre la valeur de la politique <em>optimale</em>, alors même que l'agent se comporte selon une politique exploratrice. C'est un algorithme <em>off-policy</em>, ce qui permet de réutiliser des données anciennes ou produites par un autre agent. <strong>SARSA</strong> remplace \(\max_{a'}Q(s',a')\) par \(Q(s',a')\) où \(a'\) est l'action réellement choisie : il apprend la valeur de la politique <em>suivie</em>, exploration comprise (<em>on-policy</em>), ce qui le rend plus prudent près des états dangereux.</p>
+    <p>L'exemple canonique est celui de la falaise : un chemin court longe un précipice, un chemin long en reste éloigné. Q-learning apprend le chemin optimal — le bord — et tombe régulièrement pendant l'apprentissage à cause de l'exploration ; SARSA, qui intègre le risque de l'exploration dans ses valeurs, préfère le chemin sûr. Aucun des deux n'a tort : ils répondent à des questions différentes.</p>
+
+    <h2 id="dqn">5. Deep RL : DQN</h2>
+    <p>Dès que l'espace d'états devient grand ou continu (des pixels), le tableau est remplacé par un réseau \(Q_\theta(s,a)\). Cette substitution casse les garanties de convergence — on combine approximation de fonction, bootstrapping et apprentissage off-policy, ce que la littérature appelle la « triade mortelle » — et trois mécanismes ont été nécessaires pour stabiliser l'entraînement :</p>
+    <ul>
+      <li><strong>Replay buffer</strong> — stocker les transitions et en tirer des mini-lots au hasard. Cela casse la corrélation temporelle des échantillons successifs (qui violerait l'hypothèse i.i.d. du gradient stochastique) et réutilise chaque expérience plusieurs fois, ce qui améliore l'efficacité en données.</li>
+      <li><strong>Réseau cible</strong> — la cible \(r + \gamma\max_{a'}Q_{\theta^-}(s',a')\) est calculée avec une copie figée \(\theta^-\), mise à jour périodiquement. Sans cela, on poursuit une cible qui bouge à chaque pas — comme viser une cible fixée à son propre fusil — et l'entraînement diverge.</li>
+      <li><strong>Double DQN</strong> — l'opérateur \(\max\) surestime systématiquement les valeurs, parce que le maximum d'estimateurs bruités est biaisé vers le haut. On dissocie donc le <em>choix</em> de l'action (réseau courant) et son <em>évaluation</em> (réseau cible).</li>
+    </ul>
+    <p>Autres raffinements utiles : <em>dueling</em> (séparer valeur d'état et avantage de l'action), <em>prioritized replay</em> (rejouer davantage les transitions à forte erreur TD) et <em>n-step returns</em>. DQN et ses variantes ne traitent que les <strong>actions discrètes</strong> — pour un contrôle continu, il faut passer aux méthodes de politique.</p>
+
+    <h2 id="pg">6. Gradient de politique : REINFORCE, PPO</h2>
+    <p>Plutôt que d'estimer des valeurs pour en déduire une politique, on paramètre directement \(\pi_\theta(a\mid s)\) et on monte le gradient de la performance. Le théorème du gradient de politique donne une forme remarquablement simple :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a\mid s)\, A^{\pi}(s,a)\big] \]</div>
+    <p>La lecture est intuitive : on augmente la probabilité des actions dont l'<strong>avantage</strong> \(A = Q - V\) est positif — celles qui font mieux que la moyenne de l'état — et on diminue celle des autres. Le terme \(\nabla \log \pi\) indique dans quelle direction modifier les paramètres pour rendre l'action plus probable ; l'avantage donne le signe et l'ampleur.</p>
+    <p>La fonction \(V\) joue ici le rôle de <em>baseline</em> : la soustraire ne change pas l'espérance du gradient mais réduit fortement sa variance. Sans elle, toutes les actions d'un épisode réussi seraient renforcées, y compris les mauvaises ; avec elle, seules celles qui ont fait mieux que prévu le sont. C'est ce qui rend la méthode utilisable en pratique.</p>
+
+    <p><strong>REINFORCE</strong> est la version brute (avantage estimé par le retour Monte-Carlo) : correcte mais très bruitée. Les méthodes <strong>acteur-critique</strong> ajoutent un second réseau, le critique, qui estime \(V\) et fournit un avantage à faible variance (A2C, A3C, puis GAE pour un compromis biais-variance réglable).</p>
+
+    <p><strong>PPO</strong> est devenu le défaut pratique. Son idée : réutiliser plusieurs fois un même lot de trajectoires pour faire plusieurs pas de gradient — ce qui améliore beaucoup l'efficacité en données — tout en empêchant la politique de trop s'éloigner de celle qui a produit ces données, sans quoi les gradients calculés ne veulent plus rien dire. En notant \(\rho = \pi_\theta(a|s)/\pi_{\text{old}}(a|s)\) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ L^{\text{CLIP}} = \mathbb{E}\Big[\min\big(\rho A,\; \operatorname{clip}(\rho, 1-\epsilon, 1+\epsilon)\,A\big)\Big] \]</div>
+    <p>L'écrêtage annule le gain marginal dès que le rapport sort de la bande \([1-\epsilon, 1+\epsilon]\) (typiquement \(\epsilon = 0{,}2\)) : au-delà, pousser davantage n'apporte plus rien à l'objectif, donc le gradient s'annule et le pas reste borné. C'est simple, robuste, et c'est l'algorithme utilisé pour l'alignement des LLM par retour humain (module 22).</p>
+
+    <div class="code-label">panorama des algorithmes</div>
+    <div class="code-block"><pre>Algorithme   Actions      On/Off-policy   Points forts
+────────────────────────────────────────────────────────────────────────────────
+Q-learning   discrètes    off             tabulaire, fondation théorique
+DQN          discrètes    off             pixels, jeux Atari, efficace en données
+REINFORCE    les deux     on              simple, mais forte variance
+A2C / A3C    les deux     on              acteur-critique, bon compromis
+PPO          les deux     on              LE défaut : robuste, peu de réglage
+SAC          continues    off             entropie maximale, très efficace en données :
+                                          le choix pour la robotique et le contrôle
+TD3          continues    off             DDPG corrigé de la surestimation</pre></div>
+
+    <div class="code-label">Python — Gymnasium + Stable-Baselines3</div>
+    <div class="code-block"><pre>import gymnasium as gym
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.evaluation import evaluate_policy
+
+# 8 environnements en parallèle : le goulot est la SIMULATION, pas le réseau
+env = make_vec_env("LunarLander-v3", n_envs=8)
+
+modele = PPO("MlpPolicy", env, learning_rate=3e-4, n_steps=1024,
+             batch_size=256, gamma=0.999, verbose=0, seed=0)
+modele.learn(total_timesteps=1_000_000)
+
+# évaluer sur PLUSIEURS graines : la variance en RL est notoirement élevée
+for graine in range(5):
+    moy, ecart = evaluate_policy(modele, gym.make("LunarLander-v3"),
+                                 n_eval_episodes=30)
+    print(f"graine {graine}: {moy:.1f} ± {ecart:.1f}")</pre></div>
+
+    <h2 id="variantes">7. Model-based, offline RL, RLHF</h2>
+    <ul>
+      <li><strong>Model-based</strong> — apprendre un modèle de la dynamique \(P(s'\mid s,a)\) et planifier dedans (Dyna, MuZero, MPC). Gain considérable en nombre d'interactions réelles, au prix des erreurs du modèle, que la planification a tendance à exploiter : l'agent trouve les failles du simulateur appris plutôt que la bonne stratégie.</li>
+      <li><strong>Offline RL</strong> — apprendre uniquement à partir d'un jeu de données fixe, sans interagir. C'est le seul cadre réaliste en santé, en finance ou en industrie, où l'exploration est interdite. La difficulté est le décalage de distribution : l'agent surestime des actions jamais observées, puisque rien ne le contredit. Les algorithmes dédiés (CQL, IQL) contraignent la politique à rester près des données.</li>
+      <li><strong>RLHF</strong> — l'alignement des LLM : on entraîne un modèle de récompense sur des préférences humaines (« cette réponse est meilleure que celle-là »), puis on optimise le modèle de langage par PPO contre cette récompense, avec une pénalité KL pour ne pas trop s'éloigner du modèle initial. Les variantes récentes (DPO, GRPO) court-circuitent en partie cette boucle (module 22).</li>
+      <li><strong>Sim2real</strong> — entraîner en simulation puis transférer au réel. La <em>randomisation de domaine</em> (module 13) force une politique robuste au décalage entre simulateur et monde réel.</li>
+    </ul>
+
+    <h2 id="pratique">8. En pratique, et pourquoi c'est difficile</h2>
+    <div class="code-label">où le RL est réellement utilisé</div>
+    <div class="code-block"><pre>Jeux et simulation       Atari, Go, StarCraft — l'environnement est gratuit et parfait
+Robotique / contrôle     locomotion, manipulation, drones (avec sim2real)
+Systèmes opérés          refroidissement de datacenter, gestion d'énergie, trafic réseau
+Recommandation           optimisation d'engagement à long terme (via bandits, module 24)
+Alignement de LLM        RLHF, raisonnement par récompense vérifiable
+Gestion de portefeuille  allocation séquentielle sous contrainte de risque</pre></div>
+
+    <div class="warning-block">
+      <strong>Les difficultés, sans enrobage.</strong><br>
+      • <strong>Efficacité en données catastrophique</strong> — des millions d'interactions pour des tâches qu'un humain apprend en quelques essais. Acceptable en simulation, rédhibitoire sur un système réel.<br>
+      • <strong>Conception de la récompense</strong> — c'est le vrai travail, et le plus périlleux. Un agent optimise <em>exactement</em> ce qu'on mesure : le bateau de course qui tourne en rond pour ramasser des bonus plutôt que de finir la course en est l'illustration canonique. Toute récompense mal spécifiée sera exploitée, et c'est le même mécanisme que le détournement des critères du module 24.<br>
+      • <strong>Instabilité et variance</strong> — deux exécutions du même algorithme avec des graines différentes peuvent donner des résultats opposés. Toujours rapporter plusieurs graines.<br>
+      • <strong>Sensibilité aux hyperparamètres</strong> — bien plus marquée qu'en supervisé, et les réglages transfèrent mal d'un environnement à l'autre.<br>
+      • <strong>Sécurité</strong> — pendant l'exploration, l'agent fait par construction des choses absurdes. Inacceptable sur un procédé industriel ou un patient.
+    </div>
+
+    <div class="step-block">
+      <h4>La question préalable : ai-je vraiment besoin de RL ?</h4>
+      <p>Le RL se justifie quand la décision est <em>séquentielle</em> et que les actions <em>influencent les états futurs</em>. Trois alternatives couvrent une grande partie des cas où on l'envisage à tort. Si chaque décision est indépendante des suivantes, un <strong>bandit contextuel</strong> — bien plus simple, mieux compris, plus sûr — suffit (module 24). Si l'on dispose d'exemples de bon comportement, l'<strong>imitation</strong> (apprentissage supervisé sur des démonstrations) est presque toujours plus rapide et plus stable, quitte à raffiner ensuite par RL. Et si l'environnement est connu et modélisable, la <strong>commande optimale classique</strong> (MPC, LQR) offre des garanties de stabilité que le RL n'apporte pas. Une part non négligeable des projets « RL » gagneraient à être l'un de ces trois autres projets.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>MDP, retour actualisé, équations de Bellman : tout part de là, et \(\gamma\) fixe l'horizon.</li>
+        <li>TD apprend d'une estimation à partir d'une autre : c'est ce qui permet d'apprendre en ligne, sans attendre la fin de l'épisode.</li>
+        <li>Q-learning est off-policy (réutilisation des données), SARSA on-policy (plus prudent).</li>
+        <li>DQN tient grâce au replay buffer et au réseau cible ; PPO est le défaut robuste, SAC pour le contrôle continu.</li>
+        <li>La baseline d'avantage est ce qui rend les gradients de politique utilisables.</li>
+        <li>La conception de la récompense est le cœur du problème : l'agent exploitera toute faille.</li>
+        <li>Coût en données très élevé, forte variance : vérifier d'abord qu'un bandit, de l'imitation ou une commande classique ne suffisent pas.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "Qu'est-ce qui distingue l'apprentissage par renforcement de l'apprentissage supervisé ?", "choix": ["Il n'utilise pas de réseaux de neurones", "On n'observe que la conséquence de l'action choisie, et la récompense peut arriver bien plus tard", "Il ne nécessite pas de données", "Il ne fonctionne qu'en temps réel"], "bonne": 1, "explication": "En supervisé, la bonne réponse est donnée pour chaque exemple. En renforcement, on apprend par essai-erreur : le retour est partiel — on ignore ce qu'aurait donné une autre action — et différé, ce qui pose le problème d'attribution du crédit entre les actions d'une trajectoire."},
+{"q": "Que représente la fonction de valeur d'état V(s) ?", "choix": ["La récompense immédiate obtenue dans l'état s", "La somme des récompenses futures espérées depuis s, en suivant la politique", "La probabilité d'atteindre l'état s", "Le nombre d'actions possibles depuis s"], "bonne": 1, "explication": "C'est une espérance de récompense <em>cumulée<\/em>, généralement actualisée par un facteur gamma qui donne moins de poids au lointain. Distinguer V(s) de la récompense immédiate est essentiel : un état sans récompense immédiate peut avoir une grande valeur s'il mène à de bonnes situations."},
+{"q": "Qu'expriment les équations de Bellman ?", "choix": ["La valeur d'un état se décompose en récompense immédiate plus valeur actualisée du suivant", "La politique optimale est unique", "La somme des probabilités de transition vaut un", "L'apprentissage converge en temps fini"], "bonne": 0, "explication": "Cette relation récursive est le cœur du domaine : elle transforme un problème sur des trajectoires infinies en une relation locale entre états voisins. Tous les algorithmes de valeurs — itération sur les valeurs, Q-learning, DQN — en sont des mises en œuvre approchées."},
+{"q": "Qu'est-ce qui rend le Q-learning « hors politique » (off-policy) ?", "choix": ["Il apprend sans environnement", "Il apprend la valeur de la politique optimale tout en se comportant autrement, par exemple en explorant", "Il n'utilise pas de facteur d'actualisation", "Il ne met à jour qu'à la fin de l'épisode"], "bonne": 1, "explication": "La mise à jour utilise le maximum sur les actions suivantes, indépendamment de l'action réellement prise ensuite. C'est ce qui permet d'explorer au hasard tout en apprenant la politique optimale, et de réutiliser des transitions anciennes — d'où la mémoire de rejeu de DQN. SARSA, lui, apprend la valeur de la politique effectivement suivie."},
+{"q": "Quel est le dilemme exploration-exploitation ?", "choix": ["Choisir entre entraîner et évaluer", "Choisir entre la meilleure action connue et une action inconnue qui pourrait être meilleure", "Choisir entre un modèle simple et un modèle complexe", "Choisir entre récompense immédiate et récompense différée"], "bonne": 1, "explication": "Toujours exploiter fige l'agent sur un optimum local ; toujours explorer ne capitalise jamais. Les réponses usuelles sont epsilon-greedy, décroissant au fil de l'apprentissage, ou des méthodes fondées sur l'incertitude comme les bornes de confiance supérieures. Le compromis récompense immédiate contre différée est un autre arbitrage, réglé par gamma."},
+{"q": "Quelles sont les deux idées qui ont rendu DQN stable ?", "choix": ["La normalisation par lots et le dropout", "La mémoire de rejeu et le réseau cible", "L'augmentation de données et l'arrêt précoce", "Le momentum et la décroissance du taux d'apprentissage"], "bonne": 1, "explication": "La mémoire de rejeu casse la corrélation temporelle entre transitions consécutives, qui violait l'hypothèse d'indépendance. Le réseau cible fige la cible pendant quelques milliers de pas, évitant que le modèle ne poursuive une cible qu'il déplace lui-même à chaque mise à jour — une boucle notoirement instable."},
+{"q": "Qu'est-ce qu'une méthode de gradient de politique optimise directement ?", "choix": ["La fonction de valeur", "Les paramètres de la politique, par montée de gradient sur la récompense espérée", "Le modèle de transition de l'environnement", "La fonction de récompense"], "bonne": 1, "explication": "Plutôt que d'estimer des valeurs puis d'en déduire une politique, on paramètre la politique et on ajuste ses paramètres dans le sens qui augmente la récompense. L'avantage majeur est de gérer naturellement les actions continues et les politiques stochastiques, là où le Q-learning butte."},
+{"q": "Quel problème PPO résout-il par rapport à REINFORCE ?", "choix": ["Il élimine le besoin d'explorer", "Il empêche les mises à jour trop grandes, qui détruiraient une politique déjà correcte", "Il supprime la variance du gradient", "Il permet d'apprendre sans récompense"], "bonne": 1, "explication": "Un pas trop grand peut faire s'effondrer la politique, et il n'existe aucun jeu de validation pour le détecter à temps. PPO borne le rapport entre nouvelle et ancienne politique, ce qui garantit des pas modérés. C'est cette stabilité, plus qu'une supériorité théorique, qui en a fait le défaut pratique."},
+{"q": "Qu'est-ce que le RL hors ligne (offline RL) cherche à faire ?", "choix": ["Apprendre à partir de données déjà collectées, sans interagir avec l'environnement", "Entraîner l'agent pendant la nuit", "Apprendre sans fonction de récompense", "Simuler l'environnement avant d'agir"], "bonne": 0, "explication": "C'est le cadre réaliste pour la santé, la finance ou l'industrie, où expérimenter est coûteux ou dangereux. La difficulté centrale est le décalage de distribution : l'agent apprend une politique qui s'écarte de celle qui a produit les données, et surestime alors des actions jamais observées."},
+{"q": "Dans RLHF, sur quoi le modèle de récompense est-il entraîné ?", "choix": ["Sur des scores numériques attribués par des annotateurs", "Sur des comparaisons par paires : cette réponse est préférable à celle-là", "Sur la perplexité du modèle de langage", "Sur des règles écrites à la main"], "bonne": 1, "explication": "Les humains sont peu fiables pour noter sur dix, mais très cohérents pour comparer deux réponses. Le modèle de récompense apprend de ces préférences, puis sert de signal pour optimiser la politique. Le risque bien identifié est le détournement de récompense : optimiser le proxy jusqu'à ce qu'il cesse de mesurer ce qu'on voulait."},
+{"q": "Pourquoi la conception de la fonction de récompense est-elle la partie la plus délicate du RL ?", "choix": ["Parce qu'elle doit être différentiable", "Parce que l'agent optimise exactement ce qui est écrit, y compris par des voies imprévues", "Parce qu'elle doit être positive", "Parce qu'elle change à chaque épisode"], "bonne": 1, "explication": "Récompenser un bateau de course sur les points ramassés, et il tournera en rond sur une zone de bonus au lieu de finir la course : l'agent a parfaitement optimisé la récompense écrite, pas l'intention. C'est la même logique qui rend la loi de Goodhart redoutable en production."},
+{"q": "Quand le RL est-il rarement le bon outil, en entreprise ?", "choix": ["Quand l'environnement est simulable", "Quand une décision ponctuelle suffit et qu'un modèle prédictif avec un seuil réglé la résout", "Quand les actions sont continues", "Quand les récompenses sont différées"], "bonne": 1, "explication": "Le RL se justifie quand les décisions sont séquentielles et s'influencent mutuellement. Pour un choix ponctuel — envoyer ou non une offre —, un modèle d'uplift et un seuil de coût font le travail avec un centième de la complexité, et sont infiniment plus faciles à évaluer."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m19.html" class="btn btn-secondary">← Module 19 : Processus gaussiens</a>
+    <a href="project7-m21.html" class="btn btn-primary">Module 21 : Simulation et ingénierie →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">MDP</span><span class="tag">Bellman</span><span class="tag">Q-learning</span><span class="tag">DQN</span><span class="tag">PPO</span><span class="tag">Gymnasium</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m20-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 20</div>
+    <h1>Reinforcement learning</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>The MDP framework, discounted returns, and the four things that genuinely separate RL from supervised learning.</li>
+      <li>Value functions and Bellman equations as a contraction fixed point.</li>
+      <li>Exploration strategies: ε-greedy, Boltzmann, UCB, Thompson sampling, intrinsic curiosity.</li>
+      <li>Temporal-difference learning, Q-learning vs SARSA, and what off-policy vs on-policy changes in behaviour.</li>
+      <li>Deep Q-Networks: why function approximation breaks convergence, and the three fixes (replay buffer, target network, double estimation).</li>
+      <li>Policy gradients: the policy gradient theorem, advantage baselines, actor-critic methods, and PPO's clipped objective.</li>
+      <li>Model-based RL, offline RL and distribution shift, RLHF for language models, and sim2real transfer.</li>
+      <li>Where RL is actually used, an unvarnished list of its difficulties (sample efficiency, reward hacking, variance, safety), and the question to ask before starting: would a contextual bandit, imitation learning or classical optimal control do the job?</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><strong>Reinforcement learning</strong></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

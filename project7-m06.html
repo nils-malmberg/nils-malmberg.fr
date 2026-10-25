@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 6 - Exposer un modèle : FastAPI, Pydantic, Jinja - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m06-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 6</div>
+    <h1>Exposer un modèle : FastAPI, Pydantic, Jinja</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Un modèle entraîné dans un notebook ne sert à personne : il faut que d'autres programmes — ou d'autres humains — puissent lui poser des questions. Ce module construit ce pont : une API HTTP avec <strong>FastAPI</strong>, des données d'entrée validées avec <strong>Pydantic</strong>, et une petite page web générée avec <strong>Jinja</strong> pour donner une interface à ceux qui ne parlent pas JSON.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#pourquoi">Pourquoi une API</a></li>
+        <li><a href="#http">Le minimum vital sur HTTP</a></li>
+        <li><a href="#pydantic">Pydantic : valider ce qui entre</a></li>
+        <li><a href="#fastapi">FastAPI : premier serveur</a></li>
+        <li><a href="#modele">Servir un modèle de ML</a></li>
+        <li><a href="#jinja">Jinja : une interface web</a></li>
+        <li><a href="#tests">Tester une API</a></li>
+        <li><a href="#prod">Mise en production</a></li>
+      </ol>
+    </div>
+
+    <h2 id="pourquoi">1. Pourquoi une API</h2>
+    <p>Trois façons de rendre un modèle utilisable. Le <strong>script batch</strong> : on lit un fichier, on écrit les prédictions dans un autre. C'est simple, robuste, et suffisant dans une majorité de cas — personne n'a besoin d'un score de churn à la milliseconde. La <strong>bibliothèque</strong> : on publie un paquet Python que les autres importent ; élégant, mais cela impose à tous le même langage et le même environnement. L'<strong>API</strong> : le modèle tourne quelque part, et n'importe quel programme lui parle par le réseau, quel que soit son langage.</p>
+    <p>L'API s'impose quand la prédiction doit être <em>fraîche</em> (au moment de l'action, pas la veille au soir), quand plusieurs applications hétérogènes doivent y accéder, ou quand on veut découpler le cycle de vie du modèle de celui des applications qui l'utilisent — remplacer le modèle sans redéployer le site web qui l'appelle.</p>
+
+    <h2 id="http">2. Le minimum vital sur HTTP</h2>
+    <p>Une API web repose sur un échange requête-réponse. Le client envoie une <strong>requête</strong> : une méthode, un chemin, des en-têtes, parfois un corps. Le serveur renvoie une <strong>réponse</strong> : un code de statut, des en-têtes, un corps.</p>
+
+    <div class="code-label">l'essentiel, en un tableau</div>
+    <div class="code-block"><pre>MÉTHODES
+  GET     lire une ressource, sans effet de bord. Paramètres dans l'URL.
+  POST    envoyer des données, créer, déclencher un calcul. Données dans le CORPS.
+  PUT     remplacer une ressource     DELETE  supprimer     PATCH  modifier
+
+CODES DE STATUT
+  2xx succès        200 OK, 201 Créé, 204 Pas de contenu
+  4xx faute du CLIENT   400 requête malformée   401 non authentifié
+                        403 interdit            404 introuvable
+                        422 données invalides   429 trop de requêtes
+  5xx faute du SERVEUR  500 erreur interne      503 indisponible
+
+FORMAT       JSON dans la quasi-totalité des cas : {"surface": 72.5, "pieces": 3}
+             En-tête Content-Type: application/json</pre></div>
+
+    <p>Pour une prédiction, on utilise <code>POST</code> plutôt que <code>GET</code> : les paramètres sont nombreux et structurés, ce qui tient mal dans une URL, et le corps de requête permet des types imbriqués. On réserve <code>GET</code> aux lectures simples, comme un <code>/health</code>.</p>
+
+    <h2 id="pydantic">3. Pydantic : valider ce qui entre</h2>
+
+    <h3>Le problème</h3>
+    <p>Dès qu'une donnée vient de l'extérieur — une requête HTTP, un fichier de configuration, une réponse d'API tierce — on ne contrôle plus rien. Un client peut envoyer une surface sous forme de chaîne de caractères, oublier un champ, ajouter un champ inconnu, ou envoyer une valeur absurde comme une surface de -40 m². Sans validation, ces valeurs traversent le code et finissent dans le modèle, qui produit alors une prédiction absurde — ou une exception incompréhensible dix fonctions plus loin.</p>
+    <p>Écrire cette validation à la main donne une cinquantaine de lignes de <code>if</code> imbriqués par point d'entrée, qu'il faut maintenir en double avec la documentation. C'est exactement ce que <strong>Pydantic</strong> supprime.</p>
+
+    <h3>Le principe</h3>
+    <p>On décrit la forme attendue des données comme une classe annotée — très proche d'une dataclass (module 1) — et Pydantic s'occupe du reste : il <em>vérifie</em> les types à l'exécution, <em>convertit</em> ce qui peut l'être (la chaîne <code>"72.5"</code> devient le flottant <code>72.5</code>), <em>refuse</em> le reste avec un message précis, et fournit une description exploitable par les outils.</p>
+
+    <div class="code-label">Python — AVANT : validation manuelle</div>
+    <div class="code-block"><pre>def predire(donnees: dict):
+    if "surface" not in donnees:
+        raise ValueError("champ 'surface' manquant")
+    try:
+        surface = float(donnees["surface"])
+    except (TypeError, ValueError):
+        raise ValueError("'surface' doit être un nombre")
+    if surface &lt;= 0 or surface &gt; 10_000:
+        raise ValueError("'surface' hors bornes")
+    # … et la même chose pour chacun des douze autres champs</pre></div>
+
+    <div class="code-label">Python — APRÈS : un modèle Pydantic</div>
+    <div class="code-block"><pre>from typing import Literal
+from pydantic import BaseModel, Field, field_validator
+
+class Annonce(BaseModel):
+    surface: float = Field(gt=0, le=10_000, description="surface habitable en m²")
+    n_pieces: int = Field(ge=1, le=20)
+    code_postal: str = Field(pattern=r"^\d{5}$")
+    type_bien: Literal["appartement", "maison"]        # valeurs autorisées
+    etage: int | None = None                           # champ facultatif
+    ascenseur: bool = False                            # avec valeur par défaut
+
+    @field_validator("code_postal")
+    @classmethod
+    def departement_couvert(cls, v: str) -&gt; str:       # règle MÉTIER, pas de type
+        if not v.startswith(("38", "69", "73", "74")):
+            raise ValueError("département non couvert par le modèle")
+        return v
+
+a = Annonce(surface="72.5", n_pieces=3, code_postal="38000", type_bien="appartement")
+print(a.surface, type(a.surface))     # 72.5 &lt;class 'float'&gt;  → converti automatiquement</pre></div>
+
+    <p>Ce qui se passe à l'instanciation : chaque champ est vérifié, converti si possible, et une erreur groupée est levée si quelque chose ne va pas. Le message est directement exploitable :</p>
+
+    <div class="code-block"><pre>Annonce(surface=-5, n_pieces=0, code_postal="7500", type_bien="chalet")
+
+# ValidationError: 4 validation errors for Annonce
+#   surface       Input should be greater than 0 [input_value=-5]
+#   n_pieces      Input should be greater than or equal to 1 [input_value=0]
+#   code_postal   String should match pattern '^\d{5}$' [input_value='7500']
+#   type_bien     Input should be 'appartement' or 'maison' [input_value='chalet']</pre></div>
+
+    <p>Les quatre erreurs sont signalées d'un coup, avec le champ fautif et la valeur reçue — au lieu d'un <code>KeyError</code> anonyme au milieu du traitement.</p>
+
+    <div class="code-label">Python — ce qu'on utilise le plus souvent</div>
+    <div class="code-block"><pre>from pydantic import BaseModel, Field, ConfigDict, model_validator
+from datetime import date
+
+class AnnonceStricte(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",        # REFUSE les champs inconnus (défaut : les ignorer)
+        frozen=True,           # immuable, comme une dataclass frozen (module 1)
+        str_strip_whitespace=True,
+    )
+
+    ville: str
+    prix: float = Field(gt=0)
+    date_publication: date                  # "2026-03-14" → objet date automatiquement
+    photos: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")          # validation qui porte sur PLUSIEURS champs
+    def coherence(self):
+        if self.prix &gt; 5_000_000 and not self.photos:
+            raise ValueError("un bien à ce prix sans photo est suspect")
+        return self
+
+# sérialisation dans les deux sens
+a = AnnonceStricte.model_validate(dictionnaire)      # depuis un dict
+a = AnnonceStricte.model_validate_json(chaine_json)  # depuis du JSON brut
+a.model_dump()                                       # → dict
+a.model_dump_json()                                  # → chaîne JSON</pre></div>
+
+    <div class="step-block">
+      <h4>Pydantic ou dataclass ?</h4>
+      <p>La règle est nette. <strong>Dataclass</strong> pour les objets internes, dont on maîtrise la construction : aucune vérification n'est nécessaire, et le coût d'exécution est nul. <strong>Pydantic</strong> à chaque frontière avec l'extérieur : requête HTTP, fichier de configuration, réponse d'API, ligne scrapée. La validation a un coût — quelques microsecondes par objet, le cœur de Pydantic v2 étant écrit en Rust — parfaitement acceptable pour une requête, mais qu'on ne veut pas payer un million de fois dans une boucle interne.</p>
+      <p>Cas particulier utile : <code>pydantic-settings</code> lit la configuration depuis les variables d'environnement en la validant, ce qui remplace avantageusement les <code>os.environ.get</code> éparpillés — et fait échouer le démarrage immédiatement si une variable manque, plutôt qu'au premier appel.</p>
+    </div>
+
+    <h2 id="fastapi">4. FastAPI : premier serveur</h2>
+    <p>FastAPI relie tout cela : les routes sont des fonctions Python décorées (module 1), les entrées et sorties sont des modèles Pydantic, et la documentation interactive est générée automatiquement à partir des types.</p>
+
+    <div class="code-label">Python — src/mon_projet/api.py, version minimale</div>
+    <div class="code-block"><pre>from fastapi import FastAPI
+
+app = FastAPI(title="API de scoring immobilier", version="1.0.0")
+
+@app.get("/health")              # décorateur : "cette fonction répond au GET /health"
+def health() -&gt; dict:
+    return {"status": "ok"}      # le dict est converti en JSON automatiquement</pre></div>
+
+    <div class="code-block"><pre>uv run uvicorn mon_projet.api:app --reload    # --reload : redémarre à chaque sauvegarde
+#                └─ module:objet
+# → http://127.0.0.1:8000/health
+# → http://127.0.0.1:8000/docs   : documentation interactive, générée toute seule</pre></div>
+
+    <p>La page <code>/docs</code> mérite qu'on s'y arrête : elle liste les routes, les schémas d'entrée et de sortie, et permet d'envoyer une requête de test depuis le navigateur. Elle est produite à partir des annotations de type, donc elle ne peut pas se désynchroniser du code — contrairement à une documentation écrite à la main.</p>
+
+    <div class="code-label">Python — les trois façons de recevoir des paramètres</div>
+    <div class="code-block"><pre>from fastapi import FastAPI, Query, Path, HTTPException
+
+@app.get("/annonces/{annonce_id}")                   # 1. dans le CHEMIN
+def lire(annonce_id: int = Path(ge=1)) -&gt; dict:
+    annonce = base.get(annonce_id)
+    if annonce is None:
+        raise HTTPException(status_code=404, detail="annonce introuvable")
+    return annonce
+
+@app.get("/annonces")                                 # 2. en QUERY : /annonces?ville=Lyon
+def chercher(ville: str, prix_max: float = Query(default=1e9, gt=0),
+             limite: int = Query(default=20, le=100)) -&gt; list[dict]:
+    ...
+
+@app.post("/predict")                                 # 3. dans le CORPS de la requête
+def predire(annonce: Annonce) -&gt; Reponse:             # ← modèle Pydantic
+    ...</pre></div>
+
+    <p>Le troisième cas est le plus intéressant : FastAPI voit que le paramètre est un modèle Pydantic, en déduit qu'il faut le lire dans le corps de la requête, le valide, et renvoie automatiquement un code <strong>422</strong> avec le détail des erreurs si les données ne conviennent pas. Aucune ligne de validation à écrire.</p>
+
+    <h2 id="modele">5. Servir un modèle de ML</h2>
+
+    <div class="code-label">Python — src/mon_projet/api.py, version complète</div>
+    <div class="code-block"><pre>from contextlib import asynccontextmanager
+import anyio, joblib, numpy as np, pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+MODELE_VERSION = "1.4.2"
+etat: dict = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── exécuté UNE FOIS au démarrage ──
+    etat["modele"] = joblib.load(f"models/gbm-{MODELE_VERSION}.joblib")
+    yield
+    # ── exécuté à l'arrêt ──
+    etat.clear()
+
+app = FastAPI(title="API de scoring immobilier", version=MODELE_VERSION, lifespan=lifespan)
+
+class Annonce(BaseModel):
+    surface: float = Field(gt=0, le=10_000)
+    n_pieces: int = Field(ge=1, le=20)
+    code_postal: str = Field(pattern=r"^\d{5}$")
+    type_bien: str
+
+class Prediction(BaseModel):
+    prix_estime: float
+    intervalle_bas: float
+    intervalle_haut: float
+    version_modele: str
+
+@app.get("/health")
+def health() -&gt; dict:
+    return {"status": "ok", "modele_charge": "modele" in etat, "version": MODELE_VERSION}
+
+@app.post("/predict", response_model=Prediction)
+async def predire(annonce: Annonce) -&gt; Prediction:
+    X = pd.DataFrame([annonce.model_dump()])          # le pipeline attend un DataFrame
+    try:
+        # predict est BLOQUANT : on le sort de la boucle d'événements (module 2)
+        y = await anyio.to_thread.run_sync(etat["modele"].predict, X)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="échec de l'inférence") from exc
+
+    prix = float(y[0])
+    return Prediction(prix_estime=prix,
+                      intervalle_bas=prix * 0.9, intervalle_haut=prix * 1.1,
+                      version_modele=MODELE_VERSION)
+
+@app.post("/predict/batch", response_model=list[Prediction])
+async def predire_lot(annonces: list[Annonce]) -&gt; list[Prediction]:
+    """Un seul appel pour N annonces : bien plus efficace que N appels."""
+    X = pd.DataFrame([a.model_dump() for a in annonces])
+    y = await anyio.to_thread.run_sync(etat["modele"].predict, X)
+    return [Prediction(prix_estime=float(p), intervalle_bas=float(p) * 0.9,
+                       intervalle_haut=float(p) * 1.1, version_modele=MODELE_VERSION)
+            for p in y]</pre></div>
+
+    <div class="step-block">
+      <h4>Les cinq points qui reviennent systématiquement en production</h4>
+      <ol>
+        <li><strong>Charger le modèle au démarrage</strong>, via <code>lifespan</code>. Le charger dans la fonction de prédiction ajouterait des centaines de millisecondes à chaque appel, et multiplierait la mémoire utilisée.</li>
+        <li><strong>Sortir le calcul de la boucle d'événements.</strong> Un <code>predict</code> scikit-learn est bloquant ; appelé directement dans une coroutine, il gèle tout le serveur pendant son exécution (module 2). <code>anyio.to_thread.run_sync</code> le délègue à un thread.</li>
+        <li><strong>Valider strictement les entrées.</strong> Les contraintes Pydantic rejettent les valeurs aberrantes avant qu'elles n'atteignent le modèle : c'est la première ligne de défense contre les prédictions absurdes sur des données hors domaine.</li>
+        <li><strong>Renvoyer la version du modèle.</strong> Sans cela, impossible de relier a posteriori une prédiction contestée à l'artefact qui l'a produite (module 26).</li>
+        <li><strong>Prévoir une route par lot.</strong> Cent appels unitaires paient cent fois le coût du réseau et de la conversion ; un appel pour cent annonces est souvent dix fois plus rapide.</li>
+      </ol>
+    </div>
+
+    <h2 id="jinja">6. Jinja : une interface web</h2>
+
+    <h3>À quoi sert un moteur de templates</h3>
+    <p>Une API renvoie du JSON, parfait pour un programme, illisible pour un humain. Pour donner un petit formulaire à un collègue non technicien, il faut produire du HTML — et le produire par concaténation de chaînes en Python devient vite ingérable et dangereux (une valeur contenant du code HTML casserait la page, voire injecterait un script).</p>
+    <p>Un <strong>moteur de templates</strong> sépare la structure de la page et les données. On écrit un fichier HTML normal, dans lequel on place des marqueurs ; le moteur remplit ces marqueurs avec les valeurs fournies. <strong>Jinja</strong> est le moteur de référence en Python — celui de Flask, et il s'utilise aussi bien avec FastAPI.</p>
+
+    <div class="code-label">la syntaxe Jinja, en trois formes</div>
+    <div class="code-block"><pre>{{ expression }}          affiche une valeur      → {{ annonce.prix }}
+{% instruction %}         logique                 → {% if %} {% for %} {% block %}
+{# commentaire #}         n'apparaît pas dans la page finale
+
+filtres : une valeur passée dans une transformation
+{{ prix | round(2) }}            {{ nom | upper }}
+{{ liste | length }}             {{ texte | default("inconnu") }}</pre></div>
+
+    <div class="code-label">templates/formulaire.html</div>
+    <div class="code-block"><pre>&lt;!DOCTYPE html&gt;
+&lt;html lang="fr"&gt;
+&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;title&gt;Estimation de prix&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;Estimer le prix d'un bien&lt;/h1&gt;
+
+  &lt;form method="post" action="/estimer"&gt;
+    &lt;label&gt;Surface (m²) &lt;input type="number" name="surface" step="0.1" required&gt;&lt;/label&gt;
+    &lt;label&gt;Pièces &lt;input type="number" name="n_pieces" min="1" required&gt;&lt;/label&gt;
+    &lt;label&gt;Code postal &lt;input type="text" name="code_postal" pattern="\d{5}" required&gt;&lt;/label&gt;
+    &lt;button type="submit"&gt;Estimer&lt;/button&gt;
+  &lt;/form&gt;
+
+  {# ce bloc ne s'affiche que si une estimation a été calculée #}
+  {% if prix %}
+    &lt;p&gt;Prix estimé : &lt;strong&gt;{{ prix | round(0) }} €&lt;/strong&gt;
+       ({{ (prix / surface) | round(0) }} €/m²)&lt;/p&gt;
+  {% endif %}
+
+  {% if annonces_comparables %}
+    &lt;h2&gt;Biens comparables&lt;/h2&gt;
+    &lt;ul&gt;
+    {% for a in annonces_comparables %}
+      &lt;li&gt;{{ a.ville }} — {{ a.surface }} m² — {{ a.prix | round(0) }} €&lt;/li&gt;
+    {% else %}
+      &lt;li&gt;aucun bien comparable trouvé&lt;/li&gt;
+    {% endfor %}
+    &lt;/ul&gt;
+  {% endif %}
+&lt;/body&gt;&lt;/html&gt;</pre></div>
+
+    <div class="code-label">Python — brancher Jinja sur FastAPI</div>
+    <div class="code-block"><pre>from fastapi import Form, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/", response_class=HTMLResponse)
+def formulaire(request: Request):
+    return templates.TemplateResponse("formulaire.html", {"request": request})
+
+@app.post("/estimer", response_class=HTMLResponse)
+async def estimer(request: Request,
+                  surface: float = Form(...), n_pieces: int = Form(...),
+                  code_postal: str = Form(...)):
+    annonce = Annonce(surface=surface, n_pieces=n_pieces,
+                      code_postal=code_postal, type_bien="appartement")
+    X = pd.DataFrame([annonce.model_dump()])
+    prix = float((await anyio.to_thread.run_sync(etat["modele"].predict, X))[0])
+
+    # les clés du dictionnaire deviennent les variables disponibles dans le template
+    return templates.TemplateResponse("formulaire.html", {
+        "request": request, "prix": prix, "surface": surface,
+        "annonces_comparables": chercher_comparables(annonce),
+    })</pre></div>
+
+    <p>Deux mécanismes de Jinja méritent d'être connus. L'<strong>échappement automatique</strong> : une valeur contenant <code>&lt;script&gt;</code> est affichée comme du texte et non exécutée, ce qui bloque par défaut les injections de code. Et l'<strong>héritage de templates</strong> : un fichier <code>base.html</code> définit la structure commune avec des <code>{% block contenu %}</code>, et chaque page fait <code>{% extends "base.html" %}</code> puis remplit les blocs — exactement le principe qui évite de dupliquer l'en-tête et le pied de page sur toutes les pages.</p>
+
+    <h2 id="tests">7. Tester une API</h2>
+    <p>FastAPI fournit un client de test qui appelle l'application <em>en mémoire</em>, sans démarrer de serveur ni ouvrir de port : les tests sont donc rapides et utilisables en intégration continue.</p>
+
+    <div class="code-label">tests/test_api.py</div>
+    <div class="code-block"><pre>from fastapi.testclient import TestClient
+from mon_projet.api import app
+
+client = TestClient(app)            # déclenche aussi le lifespan (chargement du modèle)
+
+def test_health():
+    r = client.get("/health")
+    assert r.status_code == 200 and r.json()["modele_charge"] is True
+
+def test_prediction_valide():
+    r = client.post("/predict", json={"surface": 72.5, "n_pieces": 3,
+                                      "code_postal": "38000", "type_bien": "appartement"})
+    assert r.status_code == 200
+    corps = r.json()
+    assert corps["prix_estime"] &gt; 0
+    assert corps["version_modele"] == "1.4.2"
+
+def test_entree_invalide_renvoie_422():
+    r = client.post("/predict", json={"surface": -5, "n_pieces": 3,
+                                      "code_postal": "38000", "type_bien": "appartement"})
+    assert r.status_code == 422
+    assert "surface" in r.text          # le champ fautif est nommé dans la réponse
+
+def test_champ_manquant():
+    r = client.post("/predict", json={"surface": 72.5})
+    assert r.status_code == 422</pre></div>
+
+    <h2 id="prod">8. Mise en production</h2>
+
+    <div class="code-label">bash — servir pour de bon</div>
+    <div class="code-block"><pre># en développement
+uv run uvicorn mon_projet.api:app --reload
+
+# en production : plusieurs processus workers, chacun avec son propre GIL (module 2)
+uv run uvicorn mon_projet.api:app --host 0.0.0.0 --port 8000 --workers 4
+
+# dans un conteneur, la commande du Dockerfile (module 5)
+CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]</pre></div>
+
+    <p>Chaque worker charge <em>sa propre copie</em> du modèle : quatre workers avec un modèle de 2 Go consomment 8 Go de RAM. C'est l'arbitrage principal à faire, entre débit et mémoire. Au-delà, on regroupe les requêtes par lots côté serveur (<em>dynamic batching</em>), ce que font Triton ou vLLM (modules 22 et 25).</p>
+
+    <div class="code-label">Python — les garde-fous minimaux</div>
+    <div class="code-block"><pre>from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, Header, HTTPException
+import logging, time, uuid
+
+# 1. CORS : quels sites web ont le droit d'appeler cette API depuis un navigateur
+app.add_middleware(CORSMiddleware, allow_origins=["https://mon-site.fr"],
+                   allow_methods=["POST", "GET"], allow_headers=["*"])
+
+# 2. authentification simple par clé d'API
+def verifier_cle(x_api_key: str = Header(...)):
+    if x_api_key != os.environ["API_KEY"]:
+        raise HTTPException(status_code=401, detail="clé invalide")
+
+@app.post("/predict", dependencies=[Depends(verifier_cle)])
+async def predire(...): ...
+
+# 3. journalisation : identifiant de requête, durée, version du modèle
+@app.middleware("http")
+async def journaliser(request, call_next):
+    rid, debut = str(uuid.uuid4())[:8], time.perf_counter()
+    reponse = await call_next(request)
+    logging.info("%s %s %s %.1fms", rid, request.url.path,
+                 reponse.status_code, (time.perf_counter() - debut) * 1000)
+    reponse.headers["X-Request-ID"] = rid
+    return reponse</pre></div>
+
+    <p>S'y ajoutent, selon le contexte : une limitation de débit (<em>rate limiting</em>) pour éviter qu'un client ne sature le service, et l'exposition de métriques au format Prometheus pour le suivi (module 26). Le <code>Depends</code> utilisé ci-dessus est le système d'<em>injection de dépendances</em> de FastAPI : une fonction déclarée comme dépendance est exécutée avant la route, et son résultat est fourni à celle-ci — c'est le mécanisme standard pour l'authentification, l'ouverture d'une session de base de données ou la lecture de la configuration.</p>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Une API se justifie quand la prédiction doit être fraîche ou partagée entre applications ; sinon, un batch suffit souvent.</li>
+        <li>Pydantic valide et convertit les données <em>à l'exécution</em> : c'est la frontière entre le monde extérieur et le code.</li>
+        <li>Dataclass à l'intérieur, Pydantic aux frontières.</li>
+        <li>FastAPI déduit la documentation et la validation des annotations de type ; <code>/docs</code> ne peut pas se désynchroniser.</li>
+        <li>Modèle chargé une fois au démarrage, inférence déportée dans un thread, version renvoyée dans la réponse, route par lot prévue.</li>
+        <li>Jinja sépare structure et données, échappe automatiquement le HTML et permet l'héritage de gabarits.</li>
+        <li>Tester avec <code>TestClient</code>, y compris les entrées invalides qui doivent renvoyer 422.</li>
+        <li>En production : plusieurs workers (attention à la mémoire), CORS, authentification, journalisation avec identifiant de requête.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "À quoi sert Pydantic dans une API ?", "choix": ["À accélérer la sérialisation JSON des réponses", "À valider et convertir les données entrantes à partir des annotations de type", "À générer la documentation de l'API", "À gérer l'authentification des requêtes"], "bonne": 1, "explication": "Un client peut envoyer n'importe quoi. Pydantic déclare la forme attendue sous forme de classe annotée, refuse ce qui ne correspond pas avec un message précis, et convertit ce qui peut l'être — une chaîne « 42 » vers un entier. On échoue ainsi à la frontière, avec un message utile, plutôt que trois fonctions plus loin."},
+{"q": "Quelle est la différence entre une annotation de type ordinaire et un modèle Pydantic ?", "choix": ["L'annotation est vérifiée à l'exécution, le modèle Pydantic ne l'est pas", "L'annotation est ignorée à l'exécution, le modèle Pydantic vérifie réellement", "Les deux vérifient à l'exécution, mais Pydantic est plus rapide", "Le modèle Pydantic ne fonctionne que sur des dictionnaires"], "bonne": 1, "explication": "Python ne vérifie jamais une annotation : elle sert aux outils et au lecteur. Pydantic s'en sert comme d'une spécification exécutable et effectue la vérification pour de bon. C'est la même syntaxe, mais un statut radicalement différent — d'où la règle : dataclass à l'intérieur du code, Pydantic aux frontières."},
+{"q": "Pourquoi FastAPI génère-t-il automatiquement une documentation interactive ?", "choix": ["Parce qu'il analyse les commentaires du code", "Parce que les signatures typées et les modèles Pydantic décrivent déjà le contrat", "Parce qu'il enregistre les requêtes reçues pour en déduire le schéma", "Parce qu'il faut écrire un fichier OpenAPI à la main"], "bonne": 1, "explication": "Les types des paramètres et les modèles d'entrée et de sortie contiennent toute l'information nécessaire : FastAPI en dérive un document OpenAPI, et l'interface Swagger vient avec. La documentation ne peut donc pas diverger du code, puisqu'elle en est extraite."},
+{"q": "Que fait un moteur de gabarits comme Jinja ?", "choix": ["Il compile le HTML en JavaScript", "Il insère des valeurs Python dans un texte à trous, avec boucles et conditions", "Il valide que le HTML produit est bien formé", "Il met les pages en cache côté serveur"], "bonne": 1, "explication": "On écrit une page HTML normale, parsemée de marqueurs : <code>{{ prix }}<\/code> pour insérer une valeur, <code>{% for %}<\/code> pour répéter un bloc. Le moteur remplit le gabarit avec un dictionnaire. C'est le même principe que les f-strings, mais organisé pour des documents entiers — et on le retrouve dans dbt, pour générer du SQL."},
+{"q": "Pourquoi charger un modèle de ML au démarrage de l'API plutôt que dans la fonction qui répond ?", "choix": ["Parce que le chargement échouerait sinon", "Pour éviter de relire les poids du disque à chaque requête", "Parce que FastAPI l'exige", "Pour que le modèle soit partagé entre plusieurs machines"], "bonne": 1, "explication": "Lire des poids prend souvent plusieurs centaines de millisecondes, parfois des secondes : le faire à chaque requête multiplie la latence par dix ou cent. On le charge une fois au démarrage, dans un événement de cycle de vie, et la sonde de disponibilité attend que ce soit fini avant d'envoyer du trafic."},
+{"q": "Que se passe-t-il si une fonction déclarée <code>async def<\/code> dans FastAPI exécute un appel bloquant ?", "choix": ["FastAPI la déplace automatiquement dans un thread", "Elle bloque la boucle d'événements et gèle toutes les autres requêtes", "Elle lève une exception au démarrage", "Elle s'exécute normalement, sans conséquence"], "bonne": 1, "explication": "La boucle est mono-thread : tant que la coroutine ne rend pas la main, rien d'autre n'avance. Pour un traitement bloquant — un modèle qui calcule, une requête synchrone —, il vaut mieux déclarer la fonction avec un simple <code>def<\/code> : FastAPI l'exécute alors dans un pool de threads, sans figer le serveur."},
+{"q": "Quel code de statut HTTP renvoie-t-on quand le client envoie des données invalides ?", "choix": ["Un code de la famille 4xx, typiquement 422 ou 400", "Un code 500", "Un code 200 avec un champ erreur dans le corps", "Un code 300"], "bonne": 0, "explication": "Les 4xx disent « le problème vient de la requête », les 5xx « le problème vient du serveur » : cette distinction pilote la supervision, les alertes et les tentatives de renvoi. Répondre 200 avec une erreur dans le corps rend le taux d'erreur invisible dans tous les tableaux de bord."},
+{"q": "Pourquoi tester une API avec le client de test plutôt qu'en lançant le serveur ?", "choix": ["Parce que c'est la seule façon de tester les codes de statut", "Parce que les tests deviennent rapides, déterministes et sans port réseau à gérer", "Parce que le serveur ne peut pas démarrer en environnement de test", "Parce que les modèles Pydantic ne sont pas chargés autrement"], "bonne": 1, "explication": "Le client de test appelle l'application en mémoire : pas de port à réserver, pas d'attente de démarrage, pas de conflit quand plusieurs tests tournent en parallèle. On teste tout de même la vraie chaîne — routage, validation, sérialisation — dans le même processus."},
+{"q": "Quel est le rôle d'un serveur comme uvicorn ou gunicorn devant une application FastAPI ?", "choix": ["Il valide les requêtes entrantes", "Il exécute l'application et gère les connexions, les processus et les redémarrages", "Il met en cache les réponses", "Il remplace le reverse proxy"], "bonne": 1, "explication": "FastAPI décrit ce qu'il faut répondre ; le serveur ASGI encaisse le trafic, gère la boucle d'événements et, en production, plusieurs processus fils pour exploiter tous les cœurs. Le serveur de développement intégré n'est pas conçu pour cette charge."},
+{"q": "Quel est l'intérêt d'un modèle Pydantic distinct pour l'entrée et pour la sortie d'un endpoint ?", "choix": ["Cela double les performances de sérialisation", "Cela évite d'exposer des champs internes et documente précisément le contrat", "Pydantic l'exige pour les réponses", "Cela permet de gérer plusieurs versions de l'API"], "bonne": 1, "explication": "Un même objet n'a pas la même forme dans les deux sens : l'entrée peut contenir un mot de passe, la sortie un identifiant généré et jamais le mot de passe. Déclarer les deux évite la fuite de champs par inadvertance et rend la documentation exacte."},
+{"q": "Que signifie le caractère idempotent d'une requête HTTP ?", "choix": ["Elle ne modifie jamais de données", "La rejouer plusieurs fois produit le même état final qu'une seule fois", "Elle renvoie toujours exactement la même réponse", "Elle est exécutée dans une transaction"], "bonne": 1, "explication": "<code>GET<\/code>, <code>PUT<\/code> et <code>DELETE<\/code> sont idempotents, <code>POST<\/code> ne l'est pas : c'est pourquoi un client peut réessayer les premiers sans risque après une coupure réseau, alors qu'un <code>POST<\/code> rejoué peut créer deux commandes. C'est la même propriété qu'on recherche dans les pipelines de données."},
+{"q": "Pourquoi valider les données à la frontière plutôt qu'au cœur du traitement ?", "choix": ["Parce que la validation y est plus rapide", "Pour que l'erreur soit détectée avant d'avoir été propagée partout", "Parce que Pydantic ne fonctionne pas ailleurs", "Pour réduire le nombre de tests à écrire"], "bonne": 1, "explication": "Une donnée invalide qui entre profondément dans le code produit une erreur loin de sa cause, difficile à relier à son origine — ou, pire, un résultat silencieusement faux. Valider à l'entrée garantit que tout ce qui circule ensuite respecte le contrat. C'est le même principe que les contrats de données sur les tables."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m05.html" class="btn btn-secondary">← Module 5 : Docker et Kubernetes</a>
+    <a href="project7-m07.html" class="btn btn-primary">Module 7 : Ingénierie des données →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">FastAPI</span><span class="tag">Pydantic</span><span class="tag">Jinja</span><span class="tag">HTTP</span><span class="tag">uvicorn</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m06-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 6</div>
+    <h1>Serving a model: FastAPI, Pydantic, Jinja</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>When an API is the right answer, compared with batch scoring or shipping a library.</li>
+      <li>The HTTP essentials: methods, status codes, JSON bodies, and why prediction endpoints use POST.</li>
+      <li>Pydantic from the problem it solves: hand-written validation versus a declared model, automatic type coercion, grouped error messages, field and model validators, strict configuration, serialisation — and when to use a dataclass instead.</li>
+      <li>FastAPI basics: routes as decorated functions, the three ways of receiving parameters, and auto-generated interactive documentation that cannot drift from the code.</li>
+      <li>Serving a model properly: loading it once with <code>lifespan</code>, keeping blocking inference off the event loop, strict input validation, returning the model version, and providing a batch endpoint.</li>
+      <li>Jinja: what a template engine is for, its three syntactic forms, a commented HTML form, wiring it to FastAPI, automatic escaping and template inheritance.</li>
+      <li>Testing with <code>TestClient</code>, including invalid payloads that must return 422.</li>
+      <li>Production concerns: uvicorn workers and their memory cost, CORS, API-key authentication with dependency injection, request-level logging, rate limiting and metrics.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><strong>Serving a model: FastAPI, Pydantic, Jinja</strong></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

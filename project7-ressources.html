@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Ressources pour aller plus loin - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-ressources-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Annexe</div>
+    <h1>Ressources pour aller plus loin</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Ce cours condense et réorganise ; il ne remplace pas les sources. Cette annexe indique, pour chaque partie, où aller quand un module a donné envie d'approfondir — avec une recommandation unique par sujet plutôt qu'une bibliographie exhaustive, parce qu'une liste de trente livres ne se lit jamais.</p>
+
+    <div class="step-block">
+      <h4>Comment lire cette liste</h4>
+      <ul>
+        <li>Les titres marqués <strong>(libre)</strong> sont légalement disponibles en ligne, gratuitement, par leurs auteurs ou leurs éditeurs.</li>
+        <li>« <strong>Si un seul</strong> » signale le point d'entrée à privilégier quand on n'a le temps que d'une chose.</li>
+        <li>Les articles cités sont ceux qui ont réellement changé la pratique, pas les plus récents. Un article de 2001 encore utilisé aujourd'hui vaut mieux qu'un article de l'an dernier dont on ignore s'il survivra.</li>
+      </ul>
+    </div>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#generaux">Les quatre livres qui couvrent le plus de terrain</a></li>
+        <li><a href="#parties">Par partie du cours</a></li>
+        <li><a href="#cours">Cours en ligne et vidéos</a></li>
+        <li><a href="#articles">Articles qui ont changé la pratique</a></li>
+        <li><a href="#donnees">Jeux de données et terrains d'entraînement</a></li>
+        <li><a href="#veille">Lire un article, se tenir à jour</a></li>
+      </ol>
+    </div>
+
+    <h2 id="generaux">1. Les quatre livres qui couvrent le plus de terrain</h2>
+    <ul>
+      <li><strong>Hastie, Tibshirani, Friedman — <em>The Elements of Statistical Learning</em></strong> (libre). La référence du ML statistique, exigeante mais précise. C'est le livre vers lequel on revient dix ans plus tard. Sa version d'introduction, <em>An Introduction to Statistical Learning</em> (libre, avec une édition Python), couvre les mêmes idées sans la charge mathématique.</li>
+      <li><strong>Murphy — <em>Probabilistic Machine Learning</em></strong>, deux volumes (brouillons libres). Le traitement le plus complet et le plus à jour, du point de vue probabiliste. Sert autant de manuel que d'encyclopédie.</li>
+      <li><strong>Géron — <em>Hands-On Machine Learning with Scikit-Learn, Keras and TensorFlow</em></strong>. L'exact complément des deux précédents : tout y est code, et les chapitres sur le pipeline de données et le déploiement sont excellents.</li>
+      <li><strong>Huyen — <em>Designing Machine Learning Systems</em></strong>. Le livre qui manque à la plupart des cursus : comment un système de ML vit en production. À lire avant, pas après, un premier projet en entreprise.</li>
+    </ul>
+
+    <h2 id="parties">2. Par partie du cours</h2>
+
+    <h3>Partie I — Outillage (modules 1 à 7)</h3>
+    <ul>
+      <li><strong>Si un seul :</strong> Ramalho — <em>Fluent Python</em>. Le livre qui fait passer de « je sais écrire du Python » à « je comprends pourquoi Python se comporte ainsi ». Les chapitres sur les itérateurs, les décorateurs et la concurrence recouvrent exactement les modules 1 et 2.</li>
+      <li>Beazley — <em>Python Concurrency</em> (conférences en ligne) : les exposés les plus clairs sur le GIL et asyncio.</li>
+      <li>Kleppmann — <em>Designing Data-Intensive Applications</em>. Le meilleur livre sur les systèmes de données : réplication, partitionnement, transactions, flux. Dense et remarquablement pédagogique.</li>
+      <li>Reis &amp; Housley — <em>Fundamentals of Data Engineering</em>, pour le panorama des architectures, et Kimball — <em>The Data Warehouse Toolkit</em>, qui reste la référence sur la modélisation dimensionnelle (module 7).</li>
+      <li>Documentations officielles : <em>Docker</em> (le guide « get started » est bien fait), <em>Kubernetes concepts</em>, <em>FastAPI</em> (l'un des meilleurs tutoriels toutes technologies confondues), <em>polars user guide</em>, <em>dbt developer hub</em>.</li>
+    </ul>
+
+    <h3>Partie II — Socle mathématique et statistique (modules 8 à 11)</h3>
+    <ul>
+      <li><strong>Si un seul :</strong> Strang — <em>Linear Algebra and Learning from Data</em>. Écrit pour ce cas d'usage précis : l'algèbre linéaire dont le ML a besoin, SVD en tête. Le cours vidéo MIT 18.06 du même auteur est libre.</li>
+      <li>Boyd &amp; Vandenberghe — <em>Convex Optimization</em> (libre), pour l'optimisation ; Nocedal &amp; Wright — <em>Numerical Optimization</em> pour les méthodes de second ordre.</li>
+      <li>Wasserman — <em>All of Statistics</em>, pour la statistique inférentielle en un volume compact ; Efron &amp; Hastie — <em>Computer Age Statistical Inference</em> (libre) pour la perspective historique, bootstrap compris.</li>
+      <li>McElreath — <em>Statistical Rethinking</em> (cours vidéo libre). Le meilleur livre pour comprendre l'inférence bayésienne <em>et</em> la pensée causale, sans prérequis excessifs. Gelman et al. — <em>Bayesian Data Analysis</em> (libre) pour la référence complète.</li>
+      <li>Causalité : Cunningham — <em>Causal Inference: The Mixtape</em> (libre) est l'entrée la plus accessible ; Hernán &amp; Robins — <em>Causal Inference: What If</em> (libre) est la référence rigoureuse ; Pearl — <em>The Book of Why</em> pour l'intuition des graphes causaux.</li>
+      <li>Angelopoulos &amp; Bates — <em>A Gentle Introduction to Conformal Prediction</em> (libre), quarante pages qui suffisent au module 10.</li>
+    </ul>
+
+    <h3>Partie III — Méthode et données (modules 12 et 13)</h3>
+    <ul>
+      <li><strong>Si un seul :</strong> Kaggle Learn et les <em>notebooks</em> des compétitions terminées. Rien ne remplace la lecture d'une solution gagnante commentée pour comprendre ce que « travailler ses variables » veut dire.</li>
+      <li>Wickham — <em>R for Data Science</em> (libre) : même si le langage diffère, les chapitres sur la structure d'une analyse et sur les données rangées sont transposables tels quels.</li>
+      <li>Tufte — <em>The Visual Display of Quantitative Information</em>, pour la visualisation ; la documentation de <em>seaborn</em> pour la pratique immédiate.</li>
+      <li>Documentation de <em>scikit-learn</em>, section « User Guide » : l'un des meilleurs cours de ML gratuits, à lire comme un livre plutôt que comme une référence.</li>
+    </ul>
+
+    <h3>Partie IV — Familles de modèles (modules 14 à 19)</h3>
+    <ul>
+      <li><strong>Si un seul :</strong> Prince — <em>Understanding Deep Learning</em> (libre). Récent, très bien illustré, avec les exercices et les diapositives. Il a remplacé Goodfellow comme premier livre de deep learning, même si <em>Deep Learning</em> (libre) reste la référence théorique.</li>
+      <li>Karpathy — <em>Neural Networks: Zero to Hero</em> (vidéos libres) : construire la rétropropagation puis un Transformer à partir de zéro. Sans doute la meilleure heure investie du module 16.</li>
+      <li>Shalev-Shwartz &amp; Ben-David — <em>Understanding Machine Learning</em> (libre), pour la théorie du module 15.</li>
+      <li>Rasmussen &amp; Williams — <em>Gaussian Processes for Machine Learning</em> (libre), pour le module 19 ; la documentation de <em>BoTorch</em> pour l'optimisation bayésienne appliquée.</li>
+      <li>Sutton &amp; Barto — <em>Reinforcement Learning: An Introduction</em> (libre) pour le module 20, complété par le cours <em>Deep RL</em> de Hugging Face, plus pratique.</li>
+    </ul>
+
+    <h3>Partie V — Domaines et applications (modules 20 à 23)</h3>
+    <ul>
+      <li>Hyndman &amp; Athanasopoulos — <em>Forecasting: Principles and Practice</em> (libre). La référence sur les séries temporelles, claire et directement applicable (module 17).</li>
+      <li>Jurafsky &amp; Martin — <em>Speech and Language Processing</em> (brouillon libre) pour le NLP ; Manning, Raghavan &amp; Schütze — <em>Introduction to Information Retrieval</em> (libre) pour la recherche, dont les chapitres sur l'indexation et l'évaluation n'ont pas vieilli (modules 18 et 23).</li>
+      <li>Hugging Face — cours <em>NLP</em> et documentation <em>transformers</em>, pour la pratique du module 22.</li>
+      <li>Hamilton — <em>Graph Representation Learning</em> (libre), pour les GNN du module 18.</li>
+      <li>Smith — <em>Uncertainty Quantification</em> et la documentation de <em>SALib</em> et <em>OpenTURNS</em>, pour le module 21.</li>
+    </ul>
+
+    <h3>Partie VI — Décision, production, responsabilité (modules 24 à 27)</h3>
+    <ul>
+      <li><strong>Si un seul :</strong> Huyen — <em>Designing Machine Learning Systems</em>, déjà cité, qui couvre à lui seul une bonne part des modules 24 à 26.</li>
+      <li>Kohavi, Tang &amp; Xu — <em>Trustworthy Online Controlled Experiments</em>. Tout ce qu'on apprend en cassant des A/B tests, écrit par ceux qui les ont cassés à grande échelle.</li>
+      <li>Molnar — <em>Interpretable Machine Learning</em> (libre), pour l'interprétabilité ; Barocas, Hardt &amp; Narayanan — <em>Fairness and Machine Learning</em> (libre), pour le module 27.</li>
+      <li>Documentation de <em>MLflow</em>, <em>DVC</em>, <em>Evidently</em> et <em>fairlearn</em> ; le <em>NIST AI Risk Management Framework</em> et le texte du règlement européen sur l'IA pour le cadre réglementaire.</li>
+      <li>Pour le GPU et la performance (module 25) : la documentation <em>PyTorch Performance Tuning</em> et les guides <em>NVIDIA Deep Learning Performance</em>, plus utiles que n'importe quel livre sur ce sujet qui bouge vite.</li>
+    </ul>
+
+    <h2 id="cours">3. Cours en ligne et vidéos</h2>
+    <ul>
+      <li><strong>3Blue1Brown</strong> — <em>Essence of Linear Algebra</em>, <em>Essence of Calculus</em>, <em>Neural Networks</em>. L'intuition géométrique derrière ce que la prépa a enseigné algébriquement. À regarder avant le module 8.</li>
+      <li><strong>Karpathy — Neural Networks: Zero to Hero.</strong> Construire, ligne par ligne, un moteur de différentiation automatique puis un modèle de langage.</li>
+      <li><strong>fast.ai — Practical Deep Learning for Coders.</strong> Approche descendante : on entraîne un modèle utile dès la première leçon, la théorie vient après.</li>
+      <li><strong>Stanford CS231n</strong> (vision), <strong>CS224n</strong> (NLP), <strong>CS229</strong> (ML) — notes et vidéos libres, d'un niveau supérieur aux cours grand public.</li>
+      <li><strong>StatQuest</strong> (Josh Starmer) — quand une notion statistique résiste, il en existe presque toujours une explication de dix minutes ici.</li>
+      <li><strong>DataTalks.Club</strong> — <em>Data Engineering Zoomcamp</em> et <em>MLOps Zoomcamp</em>, gratuits, entièrement pratiques : ils recouvrent les modules 7 et 26.</li>
+      <li><strong>MIT 18.06</strong> (Strang) pour l'algèbre linéaire, <strong>MIT 6.006</strong> pour les algorithmes.</li>
+    </ul>
+
+    <h2 id="articles">4. Articles qui ont changé la pratique</h2>
+    <p>Une trentaine de textes suffit à couvrir l'essentiel de ce qui est utilisé aujourd'hui. Ils sont tous librement accessibles.</p>
+
+    <div class="code-label">par thème, avec l'année</div>
+    <div class="code-block"><pre>MÉTHODE ET ÉPISTÉMOLOGIE
+  Breiman 2001      Statistical Modeling: The Two Cultures
+  Wolpert 1996      No Free Lunch Theorems
+  Halevy+ 2009      The Unreasonable Effectiveness of Data
+  Sculley+ 2015     Hidden Technical Debt in ML Systems   ← module 26
+
+ML CLASSIQUE
+  Tibshirani 1996   Regression Shrinkage and Selection (Lasso)
+  Cortes-Vapnik 95  Support-Vector Networks
+  Breiman 2001      Random Forests
+  Chen-Guestrin 16  XGBoost: A Scalable Tree Boosting System
+  Bergstra-Bengio   Random Search for Hyper-Parameter Optimization (2012)
+
+THÉORIE ET GÉNÉRALISATION
+  Zhang+ 2017       Understanding Deep Learning Requires Rethinking
+                    Generalization
+  Belkin+ 2019      Reconciling Modern ML Practice (double descente)
+
+DEEP LEARNING
+  Kingma-Ba 2014    Adam
+  Ioffe-Szegedy 15  Batch Normalization
+  He+ 2016          Deep Residual Learning (ResNet)
+  Vaswani+ 2017     Attention Is All You Need
+  Devlin+ 2018      BERT
+  Brown+ 2020       Language Models are Few-Shot Learners (GPT-3)
+  Hu+ 2021          LoRA
+  Lewis+ 2020       Retrieval-Augmented Generation
+  Hoffmann+ 2022    Training Compute-Optimal LLMs (Chinchilla)
+
+CAUSALITÉ ET INCERTITUDE
+  Rosenbaum-Rubin   The Central Role of the Propensity Score (1983)
+  Chernozhukov+ 18  Double/Debiased Machine Learning
+  Athey-Wager 2019  Generalized Random Forests
+  Gneiting-Raftery  Strictly Proper Scoring Rules (2007)
+  Guo+ 2017         On Calibration of Modern Neural Networks
+
+APPLICATIONS
+  Koren+ 2009       Matrix Factorization for Recommender Systems
+  Covington+ 2016   Deep Neural Networks for YouTube Recommendations
+  Kipf-Welling 17   Semi-Supervised Classification with GCN
+  Raissi+ 2019      Physics-Informed Neural Networks
+  Mnih+ 2015        Human-Level Control through Deep RL (DQN)
+  Schulman+ 2017    Proximal Policy Optimization
+
+RESPONSABILITÉ
+  Dwork+ 2006       Calibrating Noise to Sensitivity (confid. différentielle)
+  Goodfellow+ 2015  Explaining and Harnessing Adversarial Examples
+  Buolamwini-Gebru  Gender Shades (2018)
+  Mitchell+ 2019    Model Cards for Model Reporting
+  Gebru+ 2018       Datasheets for Datasets</pre></div>
+
+    <h2 id="donnees">5. Jeux de données et terrains d'entraînement</h2>
+    <ul>
+      <li><strong>data.gouv.fr</strong> — données publiques françaises. En particulier les <em>demandes de valeurs foncières</em> (DVF), qui recensent toutes les transactions immobilières réelles : c'est la source à privilégier pour refaire le projet du module 28 sans scraper quoi que ce soit.</li>
+      <li><strong>INSEE</strong> et <strong>Eurostat</strong> — données démographiques et économiques, propres, documentées, avec des identifiants géographiques stables.</li>
+      <li><strong>Kaggle</strong> — concours et jeux de données. L'intérêt principal n'est pas la compétition mais les <em>notebooks</em> publics et les discussions post-mortem.</li>
+      <li><strong>OpenML</strong> et <strong>UCI Machine Learning Repository</strong> — jeux de données standardisés, utiles pour comparer des méthodes sur un terrain connu.</li>
+      <li><strong>Hugging Face Datasets</strong> — texte, image, audio, avec un chargement uniforme.</li>
+      <li><strong>Papers with Code</strong> — le lien entre un article, son code et ses résultats de référence.</li>
+    </ul>
+
+    <div class="warning-block">
+      <strong>Un conseil qui vaut plus que la liste.</strong> Un projet mené sur des données qu'on a soi-même collectées et nettoyées enseigne davantage que dix jeux de données propres. C'est précisément le pari du module 28 : la moitié de la difficulté réelle disparaît quand on télécharge un CSV déjà prêt.
+    </div>
+
+    <h2 id="veille">6. Lire un article, se tenir à jour</h2>
+
+    <div class="step-block">
+      <h4>Lire un article en trois passes</h4>
+      <p>La méthode de Keshav, qui économise énormément de temps :</p>
+      <ol>
+        <li><strong>Cinq minutes</strong> — titre, résumé, introduction, titres de sections, conclusion. Objectif : décider si l'article mérite la suite. Quatre-vingts pour cent s'arrêtent ici, et c'est normal.</li>
+        <li><strong>Une heure</strong> — lecture complète en ignorant les démonstrations, mais en regardant attentivement figures et tableaux. Objectif : pouvoir résumer l'idée et les preuves apportées à quelqu'un d'autre.</li>
+        <li><strong>Plusieurs heures</strong> — reconstituer l'article : refaire les calculs, réimplémenter la méthode. Réservé aux articles dont on a réellement besoin.</li>
+      </ol>
+      <p>Une quatrième étape, souvent la plus instructive : chercher qui a cité l'article depuis, et ce qui n'a <em>pas</em> tenu.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Une veille qui tient dans une heure par semaine</h4>
+      <ul>
+        <li><strong>arXiv</strong>, catégories <code>cs.LG</code> et <code>stat.ML</code> — lire les titres, pas les articles.</li>
+        <li><strong>Papers with Code</strong> et les classements par tâche, pour savoir ce qui est réellement l'état de l'art.</li>
+        <li>Une ou deux infolettres — <em>The Batch</em> (Andrew Ng), <em>Ahead of AI</em> (Sebastian Raschka), <em>Import AI</em>.</li>
+        <li>Les <em>proceedings</em> de NeurIPS, ICML, ICLR et KDD : parcourir les titres des articles primés donne une carte du domaine en une heure par an.</li>
+        <li>Les notes de version des bibliothèques que vous utilisez. Moins glamour, bien plus rentable : c'est là qu'on apprend qu'une fonction qu'on écrivait à la main existe désormais.</li>
+      </ul>
+    </div>
+
+    <div class="warning-block">
+      <strong>Le piège de la veille.</strong> Le domaine produit plus d'articles qu'aucun humain ne peut en lire, et la nouveauté n'est presque jamais ce dont un projet a besoin. Un gradient boosting bien réglé sur des variables bien construites bat, dans la grande majorité des cas tabulaires, l'architecture publiée la semaine dernière. Consacrez l'essentiel du temps disponible à approfondir les fondations — elles ne se périment pas.
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7.html" class="btn btn-secondary">← Sommaire du cours</a>
+    <a href="project7-m01.html" class="btn btn-ghost">Module 1</a>
+  </div>
+  <div class="project-meta"><span class="tag">Bibliographie</span><span class="tag">Cours</span><span class="tag">Articles</span><span class="tag">Jeux de données</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-ressources-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Appendix</div>
+    <h1>Further reading</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This appendix is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it contains.
+    </div>
+
+    <h2>What this appendix contains</h2>
+    <ul>
+      <li>The four books that cover the most ground, and why each one earns its place.</li>
+      <li>Targeted recommendations per course part, with a single "if you read one" entry for each — tooling and data engineering, mathematical and statistical foundations including causal inference, method, model families, application domains, and production and accountability.</li>
+      <li>Free online courses and video series, from 3Blue1Brown and Karpathy to the Stanford classes and the Zoomcamps.</li>
+      <li>About thirty papers that changed practice, grouped by theme with their year, all freely available.</li>
+      <li>Datasets and practice grounds, including French open data (DVF property transactions) for redoing the final project without scraping.</li>
+      <li>How to read a paper in three passes, and a weekly-watch routine that fits in an hour — with a note on why chasing novelty is usually the wrong investment.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>

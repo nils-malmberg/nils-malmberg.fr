@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 8 - Mathématiques du ML : optimisation, algèbre linéaire, SVD et PCA - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m08-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 8</div>
+    <h1>Mathématiques du ML : optimisation, algèbre linéaire, SVD et PCA</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Presque tout l'apprentissage automatique se ramène à deux objets : un problème d'optimisation que l'on résout par descente de gradient, et des décompositions matricielles qui révèlent la structure des données. Ce module traite les deux depuis le problème qu'ils posent, avec une insistance particulière sur la SVD et la PCA — les deux outils qui reviennent partout, de la compression à la détection d'anomalies.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#cadre">Apprendre, c'est minimiser un risque</a></li>
+        <li><a href="#gradient">Descente de gradient : le mécanisme</a></li>
+        <li><a href="#conditionnement">Pourquoi ça converge lentement</a></li>
+        <li><a href="#variantes">SGD, momentum, Adam</a></li>
+        <li><a href="#algebre">Algèbre linéaire : résoudre sans inverser</a></li>
+        <li><a href="#svd">La SVD, en détail</a></li>
+        <li><a href="#pca">La PCA, en détail</a></li>
+        <li><a href="#metriques">Métriques d'évaluation</a></li>
+      </ol>
+    </div>
+
+    <h2 id="cadre">1. Apprendre, c'est minimiser un risque</h2>
+    <p>On cherche une fonction \(f_\theta\), paramétrée par \(\theta\), qui prédit \(y\) à partir de \(x\). L'idéal serait de minimiser le <em>risque</em>, c'est-à-dire l'erreur moyenne sur la distribution réelle des données :</p>
+    <div style="text-align:center;overflow-x:auto">\[ R(\theta) = \mathbb{E}_{(x,y)\sim \mathcal{D}}\big[\ell(f_\theta(x), y)\big] \]</div>
+    <p>Mais cette distribution \(\mathcal{D}\) est inconnue : on n'observe qu'un échantillon. On minimise donc le <strong>risque empirique</strong>, la moyenne de l'erreur sur les données dont on dispose, complété d'un terme de régularisation qui pénalise la complexité :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat{R}(\theta) = \frac{1}{n}\sum_{i=1}^{n} \ell\big(f_\theta(x_i), y_i\big) \;+\; \lambda\,\Omega(\theta) \]</div>
+
+    <p>Tout le vocabulaire du ML se lit dans cette formule, et il vaut la peine de s'y arrêter. La <strong>fonction de perte</strong> \(\ell\) encode ce que l'on considère comme une erreur — c'est un choix, pas une donnée. Le <strong>surapprentissage</strong> est exactement l'écart entre \(\hat R\), que l'on minimise, et \(R\), qui nous intéresse : un modèle peut atteindre un risque empirique nul en mémorisant les données sans rien avoir appris. La <strong>régularisation</strong> \(\Omega\) — typiquement \(\|\theta\|_2^2\) ou \(\|\theta\|_1\) — restreint l'espace des fonctions accessibles pour réduire cet écart ; le module 10 montre qu'elle équivaut à une croyance a priori sur l'ordre de grandeur des paramètres.</p>
+
+    <div class="code-label">les pertes usuelles et ce qu'elles supposent</div>
+    <div class="code-block"><pre>Quadratique   (ŷ - y)²            régression. Pénalise les grandes erreurs au CARRÉ :
+                                  un point aberrant tire tout le modèle vers lui.
+Absolue (MAE) |ŷ - y|             robuste aux aberrants, non dérivable en 0.
+Huber         quadratique près    le compromis : quadratique au centre, linéaire
+              de 0, linéaire loin  au-delà d'un seuil δ.
+Entropie      -Σ y_k log(ŷ_k)     classification. Pénalise la CONFIANCE dans une
+croisée                           erreur, pas seulement l'erreur.
+Hinge         max(0, 1 - y·ŷ)     marge (SVM, module 14).
+Pinball       asymétrique         régression sur un quantile (module 17).</pre></div>
+
+    <div class="step-block">
+      <h4>Pourquoi ne pas optimiser directement le taux d'erreur ?</h4>
+      <p>En classification, ce qui nous intéresse est souvent le taux de bonnes réponses. On ne peut pourtant pas l'optimiser directement : c'est une fonction <em>en escalier</em>, de gradient nul presque partout et indéfini aux sauts — la descente de gradient n'a rien à suivre. L'entropie croisée est une approximation continue et dérivable de cet objectif : c'est ce qu'on appelle une perte de substitution. Il faut garder cette distinction en tête, car elle explique qu'un modèle puisse améliorer sa perte sans améliorer sa métrique métier.</p>
+    </div>
+
+    <h2 id="gradient">2. Descente de gradient : le mécanisme</h2>
+    <p>Le gradient \(\nabla \hat R(\theta)\) est le vecteur des dérivées partielles : il pointe dans la direction de plus forte croissance de la fonction. Pour minimiser, on avance donc à l'opposé, d'un pas \(\eta\) appelé <em>taux d'apprentissage</em> :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \theta_{t+1} = \theta_t - \eta\, \nabla \hat{R}(\theta_t) \]</div>
+
+    <p>L'image usuelle est celle d'un randonneur dans le brouillard : il ne voit pas la vallée, mais il sent la pente sous ses pieds et descend dans la direction la plus raide. Deux questions se posent immédiatement, et ce sont les seules qui comptent : <em>quelle taille de pas ?</em> et <em>quand s'arrêter ?</em></p>
+
+    <div class="code-label">Python — la descente de gradient, écrite à la main</div>
+    <div class="code-block"><pre>import numpy as np
+
+def descente(X, y, eta=0.01, n_iter=1000):
+    """Régression linéaire par descente de gradient, sans bibliothèque."""
+    n, p = X.shape
+    theta = np.zeros(p)
+    historique = []
+
+    for t in range(n_iter):
+        residus = X @ theta - y                 # erreur de prédiction
+        perte = (residus ** 2).mean()           # risque empirique (MSE)
+        gradient = 2 / n * X.T @ residus        # dérivée analytique du MSE
+        theta -= eta * gradient                 # LE pas de descente
+        historique.append(perte)
+
+        if t &gt; 0 and abs(historique[-2] - perte) &lt; 1e-10:   # critère d'arrêt
+            break
+    return theta, historique</pre></div>
+
+    <div class="code-label">l'effet du taux d'apprentissage</div>
+    <div class="code-block"><pre>η trop petit (1e-5)    la perte descend, mais il faudrait 100 000 itérations.
+                       Symptôme : courbe presque plate, qui descend encore à la fin.
+
+η bien réglé (1e-2)    décroissance rapide puis plateau. C'est ce qu'on veut.
+
+η trop grand (1.0)     la perte OSCILLE, puis explose vers l'infini ou NaN.
+                       Symptôme : perte qui remonte, ou nan au bout de 3 itérations.
+
+  perte │╲                      perte │╲    ╱╲                perte │╲
+        │ ╲___                        │ ╲__╱  ╲                     │ ╲
+        │     ╲____                   │        ╲_                   │  ╲___________
+        └──────────── trop petit      └──────────── trop grand      └──────── correct
+</pre></div>
+
+    <p>Deux garde-fous théoriques valent d'être connus. Si \(\hat R\) est convexe — une seule vallée, pas de minimum local — et si son gradient est \(L\)-lipschitzien, la méthode converge vers le minimum global pour tout \(0 \lt \eta \lt 2/L\), où \(L\) est la plus grande courbure de la fonction. En pratique on ne connaît pas \(L\), d'où la recherche empirique du taux (module 16). Et en deep learning, la fonction n'est pas convexe : on ne cherche plus le minimum global, on se contente d'un bon minimum local — ce qui, empiriquement, suffit largement.</p>
+
+    <h2 id="conditionnement">3. Pourquoi ça converge lentement</h2>
+    <p>Pour une fonction quadratique de matrice hessienne \(H\) (la matrice des dérivées secondes, qui décrit la courbure), la vitesse de convergence dépend du <strong>conditionnement</strong> \(\kappa = \lambda_{\max}/\lambda_{\min}\), rapport de la plus grande à la plus petite valeur propre. L'erreur décroît comme :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \left(\frac{\kappa - 1}{\kappa + 1}\right)^t \]</div>
+    <p>Pour \(\kappa = 10\), le facteur vaut 0,82 par itération : la convergence est rapide. Pour \(\kappa = 10^4\), il vaut 0,9998 : il faut des dizaines de milliers d'itérations pour progresser.</p>
+
+    <div class="code-label">la géométrie du problème</div>
+    <div class="code-block"><pre>  κ ≈ 1 : lignes de niveau CIRCULAIRES     κ ≫ 1 : vallée ALLONGÉE
+  le gradient pointe vers le minimum        le gradient pointe vers les PAROIS
+
+        ╭───────╮                          ╭─────────────────────────╮
+      ╭─┤   ·───┼─► minimum              ╭─┤ ·╲                      │
+      │ ╰───────╯                        │ │   ╲╱╲╱╲╱╲──► minimum    │
+      ╰─────────╯                        │ ╰──────────────────────── ╯
+                                         ╰───────────────────────────╯
+      trajet direct                       zigzag : on rebondit d'une paroi à l'autre
+                                          et on avance très peu dans le bon sens</pre></div>
+
+    <div class="warning-block">
+      <strong>La conséquence pratique la plus importante de tout le module.</strong> Des variables d'échelles très différentes — une surface en m² (valeurs autour de 70), un nombre de pièces (autour de 3), un prix en euros (autour de 250 000) — produisent un conditionnement catastrophique : la fonction de coût est une vallée extrêmement allongée, et la descente de gradient y rampe. <strong>Standardiser les variables</strong> (soustraire la moyenne, diviser par l'écart type) rend les lignes de niveau presque circulaires et peut accélérer la convergence d'un facteur mille. Ce n'est pas une coquetterie statistique : c'est ce qui rend l'optimisation possible. C'est aussi pourquoi la <em>batch normalization</em> aide tant en deep learning (module 16) — elle re-conditionne le problème à chaque couche.
+    </div>
+
+    <h2 id="variantes">4. SGD, momentum, Adam</h2>
+
+    <h3>Le problème du coût</h3>
+    <p>Calculer \(\nabla \hat R\) demande de parcourir les \(n\) exemples. Avec un million d'images, un seul pas devient hors de prix — et il en faut des milliers. La <strong>descente stochastique</strong> (SGD) estime le gradient sur un petit lot tiré au hasard :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla \hat{R}(\theta) \;\approx\; \frac{1}{|B|}\sum_{i \in B} \nabla \ell\big(f_\theta(x_i), y_i\big) \]</div>
+    <p>L'estimation est bruitée mais <em>non biaisée</em> — elle vise juste en moyenne — et surtout mille fois moins coûteuse. On fait donc mille pas approximatifs au lieu d'un pas exact, un échange presque toujours gagnant. Le bruit a même une vertu : il aide à s'échapper des points selles, ces zones plates qui ne sont ni des minima ni des maxima et qui sont omniprésentes en grande dimension — bien plus que les minima locaux, contrairement à une idée reçue.</p>
+
+    <h3>Momentum : lisser la trajectoire</h3>
+    <p>Pour traverser la vallée allongée de la section précédente sans zigzaguer, on accumule une vitesse, comme une bille lourde qui ne change pas de direction à chaque bosse :</p>
+    <div style="text-align:center;overflow-x:auto">\[ v_{t+1} = \beta v_t + \nabla \hat R(\theta_t), \qquad \theta_{t+1} = \theta_t - \eta\, v_{t+1} \]</div>
+    <p>Avec \(\beta = 0{,}9\), le pas effectif est amplifié d'un facteur \(1/(1-\beta) = 10\) dans les directions où le gradient reste constant, tandis que les composantes qui oscillent s'annulent d'un pas sur l'autre. La variante de Nesterov évalue le gradient au point extrapolé plutôt qu'au point courant, ce qui la rend un peu plus stable.</p>
+
+    <h3>Adam : un taux par paramètre</h3>
+    <p>L'idée des méthodes adaptatives : les paramètres n'ont pas tous la même échelle de gradient, donc pas la même taille de pas idéale. <strong>Adam</strong> combine le momentum (moment d'ordre 1) et une normalisation par l'amplitude typique du gradient (moment d'ordre 2) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ m_t = \beta_1 m_{t-1} + (1-\beta_1)g_t, \qquad v_t = \beta_2 v_{t-1} + (1-\beta_2)g_t^2 \]</div>
+    <div style="text-align:center;overflow-x:auto">\[ \hat m_t = \frac{m_t}{1-\beta_1^t}, \quad \hat v_t = \frac{v_t}{1-\beta_2^t}, \qquad \theta_{t+1} = \theta_t - \eta\,\frac{\hat m_t}{\sqrt{\hat v_t} + \varepsilon} \]</div>
+    <p>Le rapport \(\hat m_t / \sqrt{\hat v_t}\) est une sorte de « rapport signal sur bruit » du gradient : un paramètre dont le gradient est constamment dans le même sens avance vite, un paramètre dont le gradient oscille avance lentement. Les corrections de biais \(\hat m, \hat v\) compensent l'initialisation à zéro des moments, qui sous-estimerait fortement les premiers pas. Valeurs usuelles : \(\beta_1 = 0{,}9\), \(\beta_2 = 0{,}999\), \(\varepsilon = 10^{-8}\).</p>
+
+    <div class="code-label">Python — Adam en douze lignes, pour voir ce qu'il fait</div>
+    <div class="code-block"><pre>def adam(gradient_fn, theta, eta=1e-3, b1=0.9, b2=0.999, eps=1e-8, n_iter=1000):
+    m = np.zeros_like(theta)          # moyenne mobile du gradient
+    v = np.zeros_like(theta)          # moyenne mobile du gradient AU CARRÉ
+
+    for t in range(1, n_iter + 1):
+        g = gradient_fn(theta)
+        m = b1 * m + (1 - b1) * g
+        v = b2 * v + (1 - b2) * g ** 2
+        m_corr = m / (1 - b1 ** t)    # correction de biais : sans elle, les premiers
+        v_corr = v / (1 - b2 ** t)    # pas seraient beaucoup trop petits
+        theta -= eta * m_corr / (np.sqrt(v_corr) + eps)
+    return theta</pre></div>
+
+    <p><strong>AdamW</strong> corrige un défaut subtil mais réel : dans Adam, la pénalité \(L^2\) ajoutée à la perte est elle aussi divisée par \(\sqrt{\hat v_t}\), si bien que la régularisation n'est plus uniforme entre paramètres. AdamW <em>découple</em> la décroissance des poids du gradient adaptatif ; c'est aujourd'hui le choix par défaut pour les transformers.</p>
+
+    <div class="code-label">quel optimiseur choisir</div>
+    <div class="code-block"><pre>SGD + momentum   converge souvent vers de MEILLEURS minima (meilleure généralisation),
+                 mais demande un réglage soigneux du taux et d'un planificateur.
+                 Référence en vision, pour des CNN entraînés de zéro.
+Adam / AdamW     robuste, marche presque tout de suite. Défaut en NLP, transformers,
+                 et sur tout problème aux gradients hétérogènes ou creux.
+L-BFGS           second ordre approché : excellent sur les petits problèmes lisses et
+                 déterministes (peu de paramètres, pas de mini-lots). Inutilisable en
+                 deep learning : mémoire et incompatibilité avec le bruit stochastique.</pre></div>
+
+    <h3>Planification et écrêtage</h3>
+    <p>Un taux constant finit par empêcher la convergence fine : on tourne autour du minimum sans jamais s'en approcher. On le fait donc décroître. Le schéma <em>cosine annealing</em> avec <em>warmup</em> est devenu standard : quelques centaines de pas de montée linéaire — le temps que les statistiques des moments adaptatifs se stabilisent —, puis une décroissance en cosinus jusqu'à presque zéro.</p>
+    <p>S'y ajoute le <strong>gradient clipping</strong>, qui borne la norme du gradient : \(g \leftarrow \min(1, c/\|g\|)\,g\). Un seul lot atypique peut produire un gradient énorme qui projette les paramètres dans une zone absurde et détruit des heures d'entraînement ; l'écrêtage garde la <em>direction</em> mais limite la <em>longueur</em> du pas. Indispensable sur les RNN et les transformers.</p>
+
+    <div class="code-label">Python — en pratique, avec PyTorch</div>
+    <div class="code-block"><pre>opt = torch.optim.AdamW(modele.parameters(), lr=3e-4, weight_decay=0.01)
+sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=3e-4,
+                                            total_steps=n_epoques * len(chargeur))
+for xb, yb in chargeur:
+    opt.zero_grad(set_to_none=True)
+    perte_fn(modele(xb), yb).backward()
+    torch.nn.utils.clip_grad_norm_(modele.parameters(), max_norm=1.0)   # écrêtage
+    opt.step()
+    sched.step()                                    # le taux évolue à CHAQUE pas</pre></div>
+
+    <h2 id="algebre">5. Algèbre linéaire : résoudre sans inverser</h2>
+    <p>La règle la plus utile de tout ce module : <strong>on n'inverse jamais une matrice</strong>. Pour résoudre \(Ax = b\), calculer \(A^{-1}\) puis multiplier coûte environ deux fois plus cher et est numériquement bien moins stable que de résoudre directement le système. L'inverse est un objet mathématique commode, pas un objet numérique.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy.linalg import cho_factor, cho_solve
+
+# À NE PAS FAIRE
+x = np.linalg.inv(A) @ b
+
+# À FAIRE : factorisation LU avec pivot
+x = np.linalg.solve(A, b)
+
+# Si A est symétrique définie positive (matrice de covariance, noyau de GP) :
+# Cholesky, deux fois plus rapide encore
+c, low = cho_factor(A)
+x = cho_solve((c, low), b)
+
+# Si le système est surdéterminé (moindres carrés) : QR, sans jamais former AᵀA
+beta, residus, rang, valeurs_sing = np.linalg.lstsq(A, b, rcond=None)</pre></div>
+
+    <div class="code-label">les décompositions à connaître</div>
+    <div class="code-block"><pre>LU        A = PLU     systèmes carrés généraux               O(n³/3)
+Cholesky  A = LLᵀ     A symétrique définie positive          O(n³/6) — la plus rapide
+QR        A = QR      moindres carrés, orthogonalisation     O(2mn²)
+Spectrale A = QΛQᵀ    A symétrique : axes et valeurs propres réels
+SVD       A = UΣVᵀ    TOUTE matrice, même rectangulaire      la plus informative</pre></div>
+
+    <h3>Le cas des moindres carrés</h3>
+    <p>La solution analytique \(\hat\beta = (X^\top X)^{-1} X^\top y\) est correcte en mathématiques et dangereuse en calcul : former \(X^\top X\) <strong>élève le conditionnement au carré</strong>, puisque \(\kappa(X^\top X) = \kappa(X)^2\). Avec des variables corrélées — donc un \(\kappa(X)\) déjà élevé —, la précision s'effondre, et l'on peut obtenir des coefficients aberrants sur des données parfaitement propres. C'est pourquoi <code>lstsq</code> passe par une QR ou une SVD, et pourquoi <code>sklearn.linear_model.LinearRegression</code> appelle <code>scipy.linalg.lstsq</code> plutôt que la formule fermée.</p>
+
+    <h2 id="svd">6. La SVD, en détail</h2>
+    <p>La décomposition en valeurs singulières s'applique à <em>n'importe quelle</em> matrice réelle \(A\) de taille \(m \times n\) — carrée ou non, inversible ou non :</p>
+    <div style="text-align:center;overflow-x:auto">\[ A = U \Sigma V^\top, \qquad U \in \mathbb{R}^{m\times m},\; \Sigma \in \mathbb{R}^{m\times n},\; V \in \mathbb{R}^{n\times n} \]</div>
+    <p>avec \(U\) et \(V\) orthogonales (\(U^\top U = I\) : leurs colonnes forment une base orthonormée) et \(\Sigma\) diagonale à coefficients positifs décroissants \(\sigma_1 \geq \sigma_2 \geq \dots \geq 0\), les <strong>valeurs singulières</strong>.</p>
+
+    <h3>Intuition géométrique</h3>
+    <p>Toute application linéaire, aussi compliquée soit-elle, se décompose en trois opérations élémentaires : <strong>une rotation</strong> (\(V^\top\)), <strong>une dilatation selon les axes</strong> (\(\Sigma\)), <strong>une seconde rotation</strong> (\(U\)). Autrement dit, l'image de la sphère unité par \(A\) est toujours un ellipsoïde : les \(\sigma_i\) sont les longueurs de ses demi-axes, et les colonnes de \(U\) leurs directions. Une valeur singulière quasi nulle signifie que \(A\) écrase complètement une direction de l'espace — c'est la signature d'une redondance dans les données.</p>
+
+    <h3>Liens utiles</h3>
+    <ul>
+      <li>\(A^\top A = V \Sigma^\top\Sigma V^\top\) : les \(\sigma_i^2\) sont les valeurs propres de \(A^\top A\), et \(V\) en donne les vecteurs propres. <em>Calculer la SVD directement reste plus stable que diagonaliser \(A^\top A\)</em>, pour la raison de conditionnement vue plus haut.</li>
+      <li>Le <strong>rang</strong> de \(A\) est le nombre de \(\sigma_i\) non nuls ; numériquement, le nombre de \(\sigma_i\) au-dessus d'un seuil.</li>
+      <li>Le <strong>conditionnement</strong> vaut \(\kappa = \sigma_1/\sigma_r\) : la SVD le donne donc directement.</li>
+      <li>La <strong>pseudo-inverse</strong> \(A^{+} = V\Sigma^{+}U^\top\) (où \(\Sigma^+\) inverse les \(\sigma_i\) non nuls et laisse les autres à zéro) fournit la solution de norme minimale des moindres carrés, y compris pour un système sous-déterminé.</li>
+    </ul>
+
+    <h3>Approximation de rang faible : Eckart–Young</h3>
+    <p>En ne gardant que les \(k\) premiers termes de la somme :</p>
+    <div style="text-align:center;overflow-x:auto">\[ A_k = \sum_{i=1}^{k}\sigma_i u_i v_i^\top \]</div>
+    <p>on obtient <strong>la meilleure approximation de rang \(k\) qui existe</strong>, au sens des normes de Frobenius et spectrale. Aucune autre matrice de rang \(k\), obtenue par quelque méthode que ce soit, ne fait mieux — et l'erreur commise est connue exactement :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \|A - A_k\|_F^2 = \sum_{i \gt k} \sigma_i^2 \]</div>
+    <p>Ce théorème fonde la compression par SVD, la PCA, le débruitage et les systèmes de recommandation par factorisation matricielle (module 23).</p>
+
+    <div class="code-label">Python — compression d'image, pour voir le théorème à l'œuvre</div>
+    <div class="code-block"><pre>import numpy as np, matplotlib.pyplot as plt
+
+img = plt.imread("photo.png").mean(axis=2)          # niveaux de gris, (m, n)
+U, s, Vt = np.linalg.svd(img, full_matrices=False)
+
+# combien de composantes pour conserver 95 % de "l'énergie" ?
+energie = np.cumsum(s ** 2) / np.sum(s ** 2)
+k = int(np.searchsorted(energie, 0.95) + 1)
+
+approx = (U[:, :k] * s[:k]) @ Vt[:k]                # reconstruction de rang k
+taux = k * (img.shape[0] + img.shape[1] + 1) / img.size
+print(f"k={k} : {taux:.1%} des coefficients d'origine, 95 % de l'énergie conservée")
+# une photo 1024×1024 se reconstruit souvent avec k ≈ 60, soit 12 % des données</pre></div>
+
+    <div class="step-block">
+      <h4>Coût et passage à l'échelle</h4>
+      <p>La SVD complète coûte \(O(\min(mn^2, m^2n))\) — impraticable sur une grande matrice. Deux issues : la SVD tronquée par méthode de Lanczos (<code>scipy.sparse.linalg.svds</code>), efficace sur les matrices creuses, et surtout la <strong>SVD randomisée</strong> (la fonction <code>randomized_svd</code> de <code>sklearn.utils.extmath</code>), qui projette d'abord les données sur un sous-espace aléatoire de dimension \(k+p\) et coûte \(O(mnk)\). Sur une matrice 100 000 × 10 000 dont on veut 50 composantes, c'est la différence entre quelques secondes et plusieurs heures. L'idée sous-jacente est remarquable : une projection aléatoire préserve approximativement les distances (lemme de Johnson-Lindenstrauss), donc capture l'essentiel du sous-espace dominant.</p>
+    </div>
+
+    <h3>Où la SVD apparaît</h3>
+    <ul>
+      <li><strong>PCA</strong> — section suivante : c'est littéralement une SVD des données centrées ;</li>
+      <li><strong>Ridge</strong> — la régularisation s'y lit comme un filtrage spectral (voir plus bas) ;</li>
+      <li><strong>LSA</strong> — réduction d'une matrice terme-document, ancêtre des embeddings (module 22) ;</li>
+      <li><strong>Recommandation</strong> — factorisation d'une matrice utilisateurs × items très creuse (module 23) ;</li>
+      <li><strong>Débruitage et détection d'anomalies</strong> — le signal se concentre dans les grandes valeurs singulières, le bruit se répartit sur les petites ;</li>
+      <li><strong>Réduction de modèle</strong> — la POD des simulations physiques est une SVD de champs (module 21) ;</li>
+      <li><strong>LoRA</strong> — l'adaptation de LLM par matrices de rang faible repose sur la même intuition (module 22).</li>
+    </ul>
+
+    <h3>Ridge vu par la SVD</h3>
+    <p>En écrivant \(X = U\Sigma V^\top\), la prédiction de la régression ridge devient :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \hat{y}_{\text{ridge}} = \sum_{i=1}^{p} u_i \frac{\sigma_i^2}{\sigma_i^2 + \lambda}\, u_i^\top y \]</div>
+    <p>La lecture est limpide : ridge projette \(y\) sur les directions principales et <em>rétrécit</em> chacune d'un facteur \(\sigma_i^2/(\sigma_i^2+\lambda)\), compris entre 0 et 1. Les directions de forte variance (\(\sigma_i^2 \gg \lambda\)) sont conservées presque intactes ; celles de faible variance — précisément celles où l'estimation est instable — sont écrasées. La régularisation n'est donc pas un bricolage numérique : c'est un filtrage spectral qui atténue ce qui est mal déterminé.</p>
+
+    <h2 id="pca">7. La PCA, en détail</h2>
+    <p>L'analyse en composantes principales cherche un système d'axes orthogonaux, ordonnés, sur lesquels projeter les données en perdant le moins d'information possible.</p>
+
+    <h3>Deux formulations équivalentes</h3>
+    <p><strong>Variance maximale.</strong> On cherche la direction unitaire \(w\) qui maximise la variance des projections. Avec \(X\) centré et \(C = \frac{1}{n-1}X^\top X\) la matrice de covariance :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \max_{\|w\|=1}\; \operatorname{Var}(Xw) = \max_{\|w\|=1}\; w^\top C\, w \]</div>
+    <p>Le lagrangien \(w^\top C w - \lambda(w^\top w - 1)\), dérivé et annulé, donne \(Cw = \lambda w\) : <strong>les directions principales sont les vecteurs propres de la covariance</strong>, et la variance capturée par chacune est sa valeur propre. On itère en imposant l'orthogonalité aux directions déjà retenues.</p>
+
+    <p><strong>Erreur de reconstruction minimale.</strong> On cherche le sous-espace de dimension \(k\) minimisant \(\sum_i \|x_i - \Pi_k x_i\|^2\), où \(\Pi_k\) est la projection sur ce sous-espace. C'est exactement le problème d'Eckart–Young : la solution est donnée par les \(k\) premiers vecteurs singuliers. Les deux formulations coïncident — maximiser la variance conservée, c'est minimiser ce qu'on jette.</p>
+
+    <h3>Le lien avec la SVD</h3>
+    <p>Si \(X\) (centré) se décompose en \(U\Sigma V^\top\), alors \(C = \frac{1}{n-1}V\Sigma^2V^\top\). Donc :</p>
+    <ul>
+      <li>les <strong>axes principaux</strong> sont les colonnes de \(V\) (les <em>loadings</em>) ;</li>
+      <li>les <strong>composantes principales</strong> (coordonnées projetées, ou <em>scores</em>) valent \(XV = U\Sigma\) ;</li>
+      <li>la <strong>variance expliquée</strong> par l'axe \(i\) vaut \(\sigma_i^2/(n-1)\).</li>
+    </ul>
+    <p>C'est pourquoi toutes les implémentations sérieuses passent par la SVD de \(X\) plutôt que par la diagonalisation de \(X^\top X\) : même résultat, bien meilleure stabilité numérique.</p>
+
+    <div class="code-label">Python — PCA à la main, puis avec scikit-learn</div>
+    <div class="code-block"><pre>import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+X = np.random.randn(500, 20) @ np.random.randn(20, 20)   # données corrélées
+
+# ── version manuelle ──
+Xs = StandardScaler().fit_transform(X)          # centrer ET réduire (voir encadré)
+U, s, Vt = np.linalg.svd(Xs, full_matrices=False)
+
+scores = U * s                                   # = Xs @ Vt.T : les composantes
+var_expliquee = s ** 2 / np.sum(s ** 2)
+print(np.cumsum(var_expliquee)[:5])              # part de variance cumulée
+
+# reconstruction avec k composantes, et erreur associée
+k = 5
+X_reconstruit = scores[:, :k] @ Vt[:k]
+erreur = np.linalg.norm(Xs - X_reconstruit) ** 2 / np.linalg.norm(Xs) ** 2
+print(f"erreur relative avec {k} composantes : {erreur:.1%}")
+
+# ── version scikit-learn (identique, au signe des axes près) ──
+pca = PCA(n_components=0.95)                     # garder 95 % de la variance
+Z = pca.fit_transform(Xs)
+print(Z.shape, pca.explained_variance_ratio_.sum())
+print(pca.components_[0])                        # le premier axe, en fonction des variables</pre></div>
+
+    <div class="warning-block">
+      <strong>Centrer et réduire, ou rien ne va.</strong> La PCA maximise une variance : une variable exprimée en mètres et une autre en millimètres n'ont pas le même poids, et l'axe principal suivra simplement l'unité la plus grande. Sur des variables d'unités hétérogènes, la standardisation est <em>obligatoire</em> — cela revient à faire la PCA sur la matrice de <em>corrélation</em> plutôt que de covariance. Sur des variables déjà homogènes — des pixels, les longueurs d'onde d'un spectre —, centrer seulement peut être préférable, car réduire amplifierait le bruit des canaux peu variables.
+    </div>
+
+    <h3>Combien de composantes garder ?</h3>
+    <ul>
+      <li><strong>Variance cumulée</strong> — le plus courant : garder 90 ou 95 % de la variance ;</li>
+      <li><strong>Coude du <em>scree plot</em></strong> — la rupture de pente du spectre des \(\sigma_i^2\), là où les composantes suivantes n'apportent presque plus rien ;</li>
+      <li><strong>Critère de Kaiser</strong> — sur données standardisées, garder les valeurs propres supérieures à 1 : une composante doit expliquer plus qu'une variable d'origine ; grossier mais commode ;</li>
+      <li><strong>Validation croisée</strong> — si la PCA sert d'étape de prétraitement, le nombre de composantes est un hyperparamètre comme un autre, à optimiser sur la performance finale.</li>
+    </ul>
+
+    <h3>Interpréter, et ne pas sur-interpréter</h3>
+    <p>Les <em>loadings</em> (colonnes de \(V\)) disent comment chaque variable d'origine contribue à chaque axe : ils permettent parfois de nommer un axe — « taille globale », « contraste chaud/froid ». Mais une composante principale reste une combinaison linéaire de <em>toutes</em> les variables : elle n'a aucune raison d'avoir un sens physique, et le signe des axes est arbitraire (rien ne distingue \(w\) de \(-w\)). Pour une décomposition interprétable à coefficients positifs, la <strong>NMF</strong> est souvent plus parlante ; pour séparer des sources indépendantes, c'est l'<strong>ICA</strong>.</p>
+
+    <h3>Usages, limites et variantes</h3>
+    <div class="code-label">PCA : à quoi ça sert vraiment</div>
+    <div class="code-block"><pre>Décorréler des variables     les composantes sont orthogonales par construction
+Compresser / débruiter       le bruit se disperse dans les petites valeurs propres
+Visualiser en 2D             projection sur les 2 axes de plus forte variance
+Accélérer un modèle          moins de dimensions = moins de calcul
+Détecter des anomalies       erreur de reconstruction élevée = point atypique
+Traiter la colinéarité       évite l'explosion de variance des coefficients</pre></div>
+
+    <p><strong>Limites.</strong> La PCA est <em>linéaire</em> : elle ne capture pas une variété courbe (un rouleau enroulé sur lui-même). Elle est <em>non supervisée</em> : rien ne garantit que les axes de forte variance soient ceux qui prédisent \(y\) — on peut parfaitement jeter la direction la plus informative, ce que corrigent la PLS ou une LDA en classification. Elle est <em>sensible aux valeurs aberrantes</em>, puisqu'une variance se calcule au carré. Et elle détruit l'interprétabilité des variables d'origine.</p>
+    <p><strong>Variantes utiles</strong> : <code>IncrementalPCA</code> (par lots, pour des données hors mémoire), la version <em>randomisée</em> (par défaut dans scikit-learn dès que la matrice est grande), la <em>kernel PCA</em> (version non linéaire par astuce du noyau, module 14), la <em>sparse PCA</em> (axes à peu de variables non nulles, donc lisibles), et pour la visualisation pure, <strong>UMAP</strong> ou <strong>t-SNE</strong> — non linéaires, excellents visuellement, mais non paramétriques, non reproductibles d'une exécution à l'autre, et dont les distances entre groupes ne veulent rien dire.</p>
+
+    <div class="warning-block">
+      <strong>PCA et fuite de données.</strong> La PCA doit être ajustée <em>sur le pli d'entraînement seulement</em>. L'ajuster sur l'ensemble des données avant la validation croisée fait entrer l'information du jeu de test dans la définition des axes : le score obtenu est optimiste, et l'écart n'apparaît qu'en production. La seule protection fiable est de la placer dans un <code>Pipeline</code> (module 3).
+    </div>
+
+    <h2 id="metriques">8. Métriques d'évaluation</h2>
+    <p>Une métrique traduit un objectif métier en un nombre à optimiser. Se tromper de métrique, c'est optimiser efficacement la mauvaise chose — et c'est irrattrapable par la suite.</p>
+
+    <h3>Régression</h3>
+    <div class="code-label">métriques de régression</div>
+    <div class="code-block"><pre>MSE    moyenne des carrés d'erreur    pénalise fortement les grandes erreurs
+RMSE   racine du MSE                  même unité que la cible : interprétable
+MAE    moyenne des écarts absolus     robuste aux aberrants ; erreur "typique"
+MAPE   erreur relative en %           parlante, mais explose si y proche de 0
+                                      et pénalise plus les surestimations
+R²     1 - SSE/SST                    part de variance expliquée ; peut être NÉGATIF
+                                      si le modèle fait pire que la moyenne</pre></div>
+    <p>RMSE et MAE ne répondent pas à la même question, et ce n'est pas un détail : minimiser le RMSE conduit à prédire la <em>moyenne</em> conditionnelle, minimiser le MAE la <em>médiane</em> conditionnelle. Sur des données à queue lourde — des prix, des durées — les deux modèles optimaux diffèrent réellement, et le choix doit venir de l'usage.</p>
+
+    <h3>Classification</h3>
+    <p>Tout part de la matrice de confusion, qui croise vérité et prédiction :</p>
+    <div class="code-label">matrice de confusion</div>
+    <div class="code-block"><pre>                    prédit positif      prédit négatif
+  réel positif      VP (vrai positif)   FN (faux négatif) ← on l'a raté
+  réel négatif      FP (faux positif)   VN (vrai négatif)
+                    ↑ fausse alerte</pre></div>
+    <div style="text-align:center;overflow-x:auto">\[ \text{Précision} = \frac{VP}{VP+FP}, \qquad \text{Rappel} = \frac{VP}{VP+FN}, \qquad F_1 = 2\,\frac{P \cdot R}{P + R} \]</div>
+    <p>La précision répond à « parmi mes alertes, combien sont justes ? », le rappel à « parmi les cas réels, combien ai-je attrapés ? ». Les deux s'opposent par le seuil de décision : le baisser augmente le rappel et dégrade la précision. Le \(F_1\) est leur moyenne harmonique, qui pénalise le déséquilibre entre les deux.</p>
+
+    <div class="code-label">Python — les métriques en pratique</div>
+    <div class="code-block"><pre>from sklearn.metrics import (classification_report, confusion_matrix,
+                             roc_auc_score, average_precision_score,
+                             log_loss, brier_score_loss)
+
+p = modele.predict_proba(X_test)[:, 1]
+y_pred = (p &gt;= 0.5).astype(int)
+
+print(confusion_matrix(y_test, y_pred))
+print(classification_report(y_test, y_pred, digits=3))   # précision, rappel, F1 par classe
+print("ROC-AUC :", roc_auc_score(y_test, p))
+print("PR-AUC  :", average_precision_score(y_test, p))   # à préférer en déséquilibre
+print("log-loss:", log_loss(y_test, p))                  # évalue les PROBABILITÉS
+print("Brier   :", brier_score_loss(y_test, p))          # calibration</pre></div>
+
+    <div class="step-block">
+      <h4>ROC-AUC ou PR-AUC ?</h4>
+      <p>L'AUC-ROC mesure la probabilité qu'un positif tiré au hasard soit mieux classé qu'un négatif. Son défaut : le taux de faux positifs \(FP/(FP+VN)\) a un dénominateur énorme quand les négatifs dominent, si bien qu'une AUC de 0,95 peut masquer une précision de 3 % sur un problème à 0,1 % de positifs. <strong>En classe très déséquilibrée — fraude, défaut, maladie rare — la courbe précision-rappel est la bonne lecture</strong>, car ses deux axes ne dépendent que des positifs et des alertes.</p>
+    </div>
+
+    <p>Deux métriques souvent oubliées et pourtant essentielles : la <strong>log-loss</strong> \(-\frac{1}{n}\sum_i [y_i\log p_i + (1-y_i)\log(1-p_i)]\), qui évalue les <em>probabilités</em> et non les décisions, et le <strong>score de Brier</strong> (erreur quadratique sur les probabilités), qui mesure la <em>calibration</em>. Un modèle peut parfaitement ordonner les cas — bonne AUC — tout en annonçant des probabilités fausses, ce qui rend inexploitable toute décision fondée sur un coût attendu (module 24). On corrige par calibration isotonique ou de Platt (module 14).</p>
+
+    <p>Enfin, l'accuracy est une métrique piégeuse : sur un problème à 99 % de négatifs, prédire toujours « négatif » donne 99 % d'accuracy et un modèle sans aucune valeur. La bonne démarche part du <strong>coût métier</strong> : si un faux négatif coûte cent fois un faux positif, ce rapport doit apparaître dans le choix du seuil — c'est l'objet du module 24.</p>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Apprendre = minimiser un risque empirique régularisé ; la perte encode ce qu'on appelle une erreur, et c'est un choix.</li>
+        <li>Le taux d'apprentissage est l'hyperparamètre critique : trop grand, ça diverge ; trop petit, ça rampe.</li>
+        <li>Le conditionnement gouverne la vitesse de convergence — d'où l'obligation de standardiser les variables.</li>
+        <li>SGD échange l'exactitude du gradient contre le nombre de pas ; momentum lisse, Adam adapte le pas par paramètre.</li>
+        <li>AdamW par défaut ; SGD + momentum quand on peut se permettre de régler finement.</li>
+        <li>Ne jamais inverser une matrice : <code>solve</code>, Cholesky, QR, SVD.</li>
+        <li>SVD = rotation · dilatation · rotation, et meilleure approximation de rang \(k\) (Eckart–Young) ; elle éclaire aussi ridge comme un filtrage spectral.</li>
+        <li>PCA = SVD des données centrées-réduites ; à ajuster dans un pipeline, linéaire, non supervisée, sensible aux aberrants.</li>
+        <li>Choisir la métrique à partir du coût métier ; PR-AUC en classes déséquilibrées ; surveiller la calibration.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "Que dit le théorème d'Eckart–Young ?", "choix": ["Toute matrice symétrique est diagonalisable", "Tronquer la SVD donne la meilleure approximation de rang donné", "La SVD d'une matrice est unique", "Le conditionnement d'une matrice est le rapport de ses valeurs propres"], "bonne": 1, "explication": "Garder les k plus grandes valeurs singulières produit la matrice de rang k la plus proche de l'originale — au sens de la norme de Frobenius comme de la norme spectrale. C'est le fondement mathématique de la PCA, de la compression d'image et des méthodes de réduction de dimension en général."},
+{"q": "Quelle est l'interprétation géométrique de la SVD d'une matrice ?", "choix": ["Une projection suivie d'une translation", "Une rotation, une dilatation selon les axes, puis une seconde rotation", "Une décomposition en somme de matrices diagonales", "Un changement de base orthonormée unique"], "bonne": 1, "explication": "Toute application linéaire, aussi compliquée soit-elle, se ramène à ces trois opérations. L'image de la sphère unité est donc toujours un ellipsoïde, dont les valeurs singulières sont les demi-axes. Une valeur singulière quasi nulle signifie que l'application écrase une direction — signature d'une redondance dans les données."},
+{"q": "Quel est le lien entre PCA et SVD ?", "choix": ["La PCA est la SVD de la matrice des données centrées", "La SVD est un cas particulier de la PCA", "Les deux sont équivalentes seulement en dimension 2", "La PCA exige de diagonaliser la matrice de covariance, la SVD ne le permet pas"], "bonne": 0, "explication": "Les composantes principales sont les vecteurs singuliers droits de la matrice centrée, et les variances expliquées valent les carrés des valeurs singulières divisés par n−1. Calculer la SVD directement est numériquement plus stable que former puis diagonaliser la matrice de covariance, dont le conditionnement est le carré de celui des données."},
+{"q": "Faut-il centrer les données avant une PCA ?", "choix": ["Non, cela ne change rien au résultat", "Oui, sinon la première composante pointe surtout vers la moyenne", "Seulement si les variables ont des unités différentes", "Seulement pour des données de grande dimension"], "bonne": 1, "explication": "Sans centrage, la première direction de « variance maximale » capture essentiellement la position du nuage par rapport à l'origine, pas sa forme. La réduction — diviser par l'écart-type — est un choix distinct : elle s'impose quand les variables ont des unités incomparables, faute de quoi celle qui a la plus grande amplitude domine."},
+{"q": "Pourquoi préfère-t-on résoudre un système linéaire plutôt que d'inverser la matrice ?", "choix": ["Parce que l'inverse n'existe pas toujours", "Parce que la résolution directe est plus rapide et numériquement plus stable", "Parce que l'inverse occupe trop de mémoire", "Parce que NumPy ne fournit pas de fonction d'inversion"], "bonne": 1, "explication": "Former l'inverse puis multiplier coûte plus cher et amplifie les erreurs d'arrondi. Une factorisation — LU, Cholesky, QR — résout directement, en deux fois moins d'opérations et avec une bien meilleure stabilité. C'est la raison de préférer <code>solve<\/code> à <code>inv<\/code> dans tous les cas."},
+{"q": "Qu'apporte le momentum à une descente de gradient ?", "choix": ["Il réduit le nombre de paramètres à estimer", "Il lisse la trajectoire en accumulant les gradients passés", "Il adapte le taux d'apprentissage à chaque paramètre", "Il garantit la convergence vers le minimum global"], "bonne": 1, "explication": "Dans une vallée étroite, le gradient oscille d'un flanc à l'autre et progresse peu vers le fond. Le momentum moyenne les directions successives : les oscillations s'annulent, la composante utile s'accumule. L'adaptation d'un taux par paramètre, elle, est l'apport d'Adam."},
+{"q": "Quelle est l'idée centrale d'Adam par rapport au SGD simple ?", "choix": ["Il utilise le gradient exact plutôt qu'une estimation sur un lot", "Il adapte un taux d'apprentissage par paramètre à partir des moments du gradient", "Il calcule la dérivée seconde de la fonction de perte", "Il modifie l'architecture du modèle pendant l'entraînement"], "bonne": 1, "explication": "Adam maintient une moyenne mobile du gradient et de son carré, et divise le pas par la racine du second moment : les paramètres au gradient fort et régulier avancent moins, ceux au gradient faible avancent plus. Ce n'est pas une méthode de second ordre — aucune dérivée seconde n'est calculée."},
+{"q": "Pourquoi la descente de gradient converge-t-elle lentement sur certains problèmes ?", "choix": ["Parce que la fonction de perte est non convexe", "Parce que le conditionnement est mauvais : les courbures sont très différentes selon les directions", "Parce que le taux d'apprentissage est toujours trop petit", "Parce que les données ne sont pas assez nombreuses"], "bonne": 1, "explication": "Quand une direction est cent fois plus courbée qu'une autre, le pas maximal stable est dicté par la plus raide, et la progression dans la plus plate devient interminable. C'est le rapport des valeurs propres du hessien. D'où l'efficacité du centrage-réduction des variables, qui améliore directement ce conditionnement."},
+{"q": "Quelle métrique de régression est exprimée dans la même unité que la cible et pénalise fortement les grosses erreurs ?", "choix": ["Le MAE", "Le RMSE", "Le R²", "Le MAPE"], "bonne": 1, "explication": "Le RMSE est la racine d'une moyenne de carrés : il partage l'unité de la cible et une erreur deux fois plus grande pèse quatre fois plus. Le MAE partage aussi l'unité mais traite toutes les erreurs linéairement ; le R² est sans dimension, et le MAPE explose quand la cible s'approche de zéro."},
+{"q": "Que mesure l'aire sous la courbe ROC ?", "choix": ["La proportion de prédictions correctes", "La probabilité qu'un positif tiré au hasard reçoive un score supérieur à un négatif", "L'écart entre les probabilités prédites et les fréquences observées", "Le taux de faux positifs au seuil optimal"], "bonne": 1, "explication": "C'est une mesure de <em>classement<\/em>, indépendante du seuil et insensible au déséquilibre des classes — ce qui est à la fois sa force et son piège : une AUC de 0,95 peut accompagner une précision désastreuse si les positifs sont très rares. L'écart aux fréquences observées, lui, est la calibration."},
+{"q": "Sur un problème très déséquilibré (1 % de positifs), quelle courbe est la plus informative ?", "choix": ["La courbe ROC", "La courbe précision-rappel", "La courbe de calibration", "La courbe d'apprentissage"], "bonne": 1, "explication": "Le taux de faux positifs de la ROC a pour dénominateur l'immense classe négative : il bouge peu, et la courbe reste flatteuse. La précision, elle, a pour dénominateur les prédictions positives, et s'effondre dès que le modèle se trompe — c'est exactement ce que l'on veut voir."},
+{"q": "Pourquoi le SGD utilise-t-il un petit lot plutôt que toutes les données à chaque pas ?", "choix": ["Pour réduire la mémoire nécessaire seulement", "Parce qu'un gradient approché mais cent fois moins cher fait progresser bien plus vite", "Parce que le gradient exact n'est pas calculable", "Pour éviter le surapprentissage"], "bonne": 1, "explication": "Un pas exact sur un million d'exemples coûte autant que mille pas approchés sur mille exemples — et mille pas approchés avancent beaucoup plus. Le bruit d'échantillonnage a même un effet régularisant bienvenu, mais ce n'est pas la motivation première."},
+{"q": "Comment choisir le nombre de composantes à garder dans une PCA ?", "choix": ["Toujours deux, pour pouvoir visualiser", "Selon la variance expliquée cumulée, ou selon la performance en aval", "Autant que de variables d'origine", "Le nombre qui rend la matrice inversible"], "bonne": 1, "explication": "Le graphe de variance cumulée donne un ordre de grandeur, et le coude un repère visuel — mais la réponse dépend de l'usage : pour visualiser, deux ou trois ; pour alimenter un modèle, on traite le nombre de composantes comme un hyperparamètre et on le choisit par validation croisée."},
+{"q": "Quel est le coût d'une SVD complète, et comment l'éviter sur une grande matrice ?", "choix": ["Un coût linéaire ; il n'y a rien à éviter", "Un coût cubique ; on utilise une SVD tronquée ou randomisée", "Un coût exponentiel ; on échantillonne les lignes", "Un coût quadratique ; on convertit en matrice creuse"], "bonne": 1, "explication": "La SVD complète coûte de l'ordre de min(mn², m²n), impraticable sur une grande matrice. La SVD randomisée projette d'abord sur un sous-espace aléatoire et ramène le coût à O(mnk) pour k composantes — sur une matrice 100 000 × 10 000, c'est la différence entre quelques secondes et plusieurs heures."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m07.html" class="btn btn-secondary">← Module 7 : Ingénierie des données</a>
+    <a href="project7-m09.html" class="btn btn-primary">Module 9 : Statistique inférentielle →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Optimisation</span><span class="tag">Adam</span><span class="tag">Algèbre linéaire</span><span class="tag">SVD</span><span class="tag">PCA</span><span class="tag">Métriques</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m08-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 8</div>
+    <h1>Math for ML: optimisation, linear algebra, SVD and PCA</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Learning as regularised empirical risk minimisation, and what the choice of loss actually encodes.</li>
+      <li>Gradient descent: step size and convergence bounds, why the condition number governs speed, and why that makes standardisation mandatory.</li>
+      <li>SGD, momentum and Nesterov, adaptive methods (AdaGrad, RMSProp, Adam, AdamW with decoupled weight decay), schedulers, warmup and gradient clipping.</li>
+      <li>Numerical linear algebra: never invert a matrix — LU, Cholesky, QR, and why the normal equations square the condition number.</li>
+      <li>SVD in depth: geometric reading, rank and pseudo-inverse, the Eckart–Young low-rank theorem, randomized SVD, image compression, and ridge regression as spectral filtering.</li>
+      <li>PCA in depth: the two equivalent formulations (maximum variance, minimum reconstruction error), its equivalence with the SVD of centred data, scaling, how many components to keep, interpretation of loadings, limitations and variants, and the leakage trap.</li>
+      <li>Evaluation metrics: regression (RMSE vs MAE and what they each target), classification (precision/recall, ROC-AUC vs PR-AUC under imbalance), log-loss and calibration.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><strong>Math for ML: optimisation, linear algebra, SVD and PCA</strong></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

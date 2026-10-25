@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Glossaire et notations - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-glossaire-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Annexe</div>
+    <h1>Glossaire et notations</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Le cours introduit environ deux cents termes, chacun à l'endroit où il devient utile. Cette annexe les rassemble : une définition courte, et le module où la notion est développée. Elle sert à deux choses — retrouver une définition croisée trois modules plus loin, et vérifier avant d'attaquer un module qu'on possède bien le vocabulaire qu'il suppose.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Navigation</h4>
+      <ol>
+        <li><a href="#notations">Conventions de notation</a></li>
+        <li><a href="#ac">A – C</a></li>
+        <li><a href="#di">D – I</a></li>
+        <li><a href="#jp">J – P</a></li>
+        <li><a href="#qz">Q – Z</a></li>
+      </ol>
+    </div>
+
+    <h2 id="notations">Conventions de notation</h2>
+    <p>Le cours suit les conventions usuelles de la littérature statistique et du machine learning. Elles ne sont pas universelles — un article peut noter les vecteurs en gras, un autre non — mais elles sont cohérentes d'un bout à l'autre de ces pages.</p>
+
+    <div class="code-label">symboles utilisés dans tout le cours</div>
+    <div class="code-block"><pre>DONNÉES
+  n            nombre d'observations (lignes)
+  p, d         nombre de variables (colonnes), dimension
+  X            matrice des variables explicatives, n lignes × p colonnes
+  x_i          l'observation i (un vecteur de taille p)
+  y            vecteur des valeurs à prédire ;  y_i  une valeur
+  ŷ            valeur prédite (le « chapeau » = estimé, pas observé)
+  T            indicateur de traitement 0/1 (module 11)
+
+MODÈLE ET APPRENTISSAGE
+  θ, w, β      paramètres du modèle (θ en général, w ou β en linéaire)
+  θ̂            estimateur de θ à partir de l'échantillon
+  f(x; θ)      prédiction du modèle de paramètres θ
+  L, ℓ         fonction de perte (L totale, ℓ sur un exemple)
+  R(θ)         risque = perte espérée sur la vraie distribution
+  R̂(θ)         risque empirique = perte moyenne sur l'échantillon
+  η, α         taux d'apprentissage
+  λ            force de régularisation
+  ∇            gradient ;  ∇_θ L  = gradient de L par rapport à θ
+
+PROBABILITÉS
+  P(A)         probabilité de A
+  p(x)         densité de probabilité
+  E[X]         espérance ;  Var(X)  variance ;  Cov(X,Y)  covariance
+  X ~ N(μ, σ²) X suit une loi normale de moyenne μ et variance σ²
+  X ⊥⊥ Y | Z   X et Y sont indépendants conditionnellement à Z
+  do(X = x)    intervention : on FORCE X à x (module 11)
+  ∝            proportionnel à (la constante de normalisation est omise)
+
+ALGÈBRE ET ANALYSE
+  ‖v‖₂         norme euclidienne ;  ‖v‖₁  somme des valeurs absolues
+  Aᵀ           transposée ;  A⁻¹  inverse ;  tr(A)  trace
+  ⟨u, v⟩       produit scalaire
+  argmin f     la valeur qui MINIMISE f (pas le minimum lui-même)
+  O(n²)        ordre de grandeur du coût quand n grandit</pre></div>
+
+    <div class="step-block">
+      <h4>Trois conventions à ne pas confondre</h4>
+      <ul>
+        <li><strong>Chapeau contre pas de chapeau.</strong> \(\theta\) est la vraie valeur, inconnue ; \(\hat\theta\) est ce qu'on en estime à partir d'un échantillon. Toute la statistique inférentielle (module 9) porte sur l'écart entre les deux.</li>
+        <li><strong>Majuscule contre minuscule.</strong> \(X\) désigne une variable aléatoire, \(x\) une valeur qu'elle prend. \(P(X = x)\) se lit « probabilité que la variable \(X\) vaille \(x\) ».</li>
+        <li><strong>Conditionner contre intervenir.</strong> \(P(Y \mid X = x)\) observe, \(P(Y \mid do(X = x))\) agit. Elles ne coïncident que sous randomisation (module 11).</li>
+      </ul>
+    </div>
+
+    <h2 id="ac">A – C</h2>
+    <ul>
+      <li><strong>A/B test</strong> — expérience où les unités sont affectées au hasard à deux variantes, ce qui rend les groupes comparables et autorise une conclusion causale (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>ACF, PACF</strong> — autocorrélogramme et sa version partielle : les deux graphiques qui révèlent la structure temporelle d'une série et guident le choix d'un modèle ARIMA (<a href="project7-m17.html">module 17</a>).</li>
+      <li><strong>Adam</strong> — algorithme d'optimisation qui adapte un taux d'apprentissage par paramètre à partir des moments du gradient. Le défaut raisonnable en deep learning (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>Aléatoire (incertitude)</strong> — incertitude irréductible, due au bruit intrinsèque du phénomène. S'oppose à l'incertitude épistémique, qui se réduit avec plus de données (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Apprentissage actif</strong> — stratégie qui choisit les exemples à faire annoter, plutôt que d'annoter au hasard, pour maximiser le gain par étiquette (<a href="project7-m13.html">module 13</a>).</li>
+      <li><strong>Apprentissage auto-supervisé</strong> — fabriquer la supervision à partir des données elles-mêmes (masquer un mot, prédire la suite), pour apprendre des représentations sans étiquettes (<a href="project7-m13.html">module 13</a>).</li>
+      <li><strong>Arrow</strong> — format de représentation d'un tableau colonne <em>en mémoire</em>, partagé entre outils, qui permet de s'échanger des données sans copie. À distinguer de Parquet, qui est un format de disque (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>ARIMA</strong> — modèle classique de série temporelle combinant auto-régression, différenciation et moyenne mobile (<a href="project7-m17.html">module 17</a>).</li>
+      <li><strong>ATE, ATT, CATE, LATE</strong> — effets moyens d'un traitement : sur toute la population, sur les traités seulement, conditionnellement à un profil, ou sur le sous-groupe qu'un instrument a fait changer de comportement (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Attention</strong> — mécanisme par lequel chaque élément d'une séquence pondère tous les autres selon leur pertinence. Le cœur du Transformer (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>AUC / ROC</strong> — aire sous la courbe taux de vrais positifs contre taux de faux positifs : la probabilité qu'un positif tiré au hasard reçoive un score supérieur à un négatif (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>Autoencodeur</strong> — réseau qui apprend à reconstruire son entrée à travers un goulot d'étranglement, et dont la couche centrale fournit une représentation compressée (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>Backfill</strong> — rejouer un traitement sur une période passée, par exemple après correction d'un bug. Possible seulement si les tâches sont paramétrées par la date et idempotentes (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Bagging</strong> — entraîner plusieurs modèles sur des rééchantillonnages des données et moyenner leurs prédictions, pour réduire la variance (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>Bandit (contextuel)</strong> — cadre où l'on choisit une action et n'observe que sa conséquence, ce qui impose d'arbitrer entre explorer et exploiter en continu (<a href="project7-m24.html">module 24</a>).</li>
+      <li><strong>Biais (statistique)</strong> — écart systématique entre l'espérance d'un estimateur et la vraie valeur. Différent du biais au sens de l'équité (<a href="project7-m27.html">module 27</a>).</li>
+      <li><strong>Biais-variance</strong> — décomposition de l'erreur d'un modèle en erreur systématique et instabilité. Le cadre qui explique sur- et sous-apprentissage (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>BF16</strong> — format flottant sur 16 bits conservant la plage d'exposant de FP32 au prix de la précision. Le défaut actuel pour l'entraînement en précision mixte (<a href="project7-m25.html">module 25</a>).</li>
+      <li><strong>Boosting</strong> — construire des modèles successifs, chacun corrigeant les erreurs des précédents. XGBoost, LightGBM, CatBoost (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>Bootstrap</strong> — rééchantillonner avec remise pour estimer la variabilité d'une statistique sans hypothèse de loi (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>Broadcasting</strong> — règle NumPy qui aligne automatiquement des tableaux de formes différentes lors d'une opération, sans copie explicite (<a href="project7-m03.html">module 3</a>).</li>
+      <li><strong>Calibration</strong> — propriété d'un modèle dont les probabilités prédites correspondent aux fréquences observées : parmi les cas annoncés à 70 %, environ 70 % se réalisent (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Censure</strong> — situation où l'on sait qu'un événement n'est pas encore survenu au moment de l'observation, sans connaître sa date future. Le problème central de l'analyse de survie (<a href="project7-m17.html">module 17</a>).</li>
+      <li><strong>Clustering</strong> — regrouper des observations semblables sans étiquettes : k-moyennes, DBSCAN, mélanges gaussiens (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>CNN</strong> — réseau convolutif, qui exploite la localité et la translation-invariance des images en partageant les mêmes filtres partout (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>Collisionneur</strong> — variable influencée par deux autres. Conditionner dessus crée une corrélation artificielle entre ses causes : la source de biais la plus contre-intuitive (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>Confondant</strong> — variable qui influence à la fois le traitement et le résultat, et qui fabrique une association sans lien causal (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>Conteneur</strong> — unité d'exécution isolée qui partage le noyau de l'hôte, contrairement à une machine virtuelle qui embarque son propre système (<a href="project7-m05.html">module 5</a>).</li>
+      <li><strong>Contrat de données</strong> — spécification vérifiée automatiquement de ce qu'une table doit contenir : colonnes, types, plages, unicité. Placé à la frontière du système (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Cross-fitting</strong> — prédire chaque observation avec un modèle entraîné sans elle, pour éliminer le biais de surapprentissage dans une estimation causale (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>CTE</strong> — clause <code>WITH</code> de SQL, qui nomme un résultat intermédiaire et rend une requête complexe lisible (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>CUPED</strong> — technique qui retranche d'une métrique d'expérience la part prédictible par une mesure antérieure, réduisant la variance sans introduire de biais (<a href="project7-m11.html">module 11</a>).</li>
+    </ul>
+
+    <h2 id="di">D – I</h2>
+    <ul>
+      <li><strong>DAG</strong> — graphe orienté sans cycle. Désigne soit un graphe causal (<a href="project7-m11.html">module 11</a>), soit un graphe de tâches d'orchestration (<a href="project7-m07.html">module 7</a>), soit le graphe de calcul d'un moteur paresseux (<a href="project7-m03.html">module 3</a>).</li>
+      <li><strong>Dask</strong> — bibliothèque qui découpe un calcul pandas ou NumPy en morceaux traités hors mémoire ou en parallèle (<a href="project7-m03.html">module 3</a>).</li>
+      <li><strong>dbt</strong> — outil qui traite les transformations SQL comme du code : dépendances déduites, tests, documentation, versionnement (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Décorateur</strong> — fonction qui prend une fonction et en renvoie une version modifiée. La syntaxe <code>@nom</code> n'est qu'un raccourci de réaffectation (<a href="project7-m01.html">module 1</a>).</li>
+      <li><strong>Dérive</strong> — évolution dans le temps de la distribution des données (dérive de covariables) ou de la relation apprise (dérive de concept). La première cause de dégradation silencieuse d'un modèle (<a href="project7-m26.html">module 26</a>).</li>
+      <li><strong>Descente de gradient</strong> — se déplacer pas à pas dans la direction opposée au gradient de la fonction de perte. Le mécanisme d'apprentissage de presque tous les modèles paramétriques (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>Différences de différences</strong> — comparer l'évolution avant/après d'un groupe traité à celle d'un groupe témoin, pour éliminer à la fois les différences de niveau et la tendance commune (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Dimension VC</strong> — mesure de la capacité d'une famille de modèles : le plus grand nombre de points qu'elle peut séparer de toutes les façons possibles (<a href="project7-m15.html">module 15</a>).</li>
+      <li><strong>Double descente</strong> — phénomène où l'erreur de test remonte puis redescend quand la capacité du modèle dépasse le nombre d'observations, contredisant la courbe en U classique (<a href="project7-m15.html">module 15</a>).</li>
+      <li><strong>Double machine learning</strong> — estimer un effet causal en résidualisant résultat et traitement par des modèles de ML, avec découpage croisé (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>DuckDB</strong> — moteur SQL analytique en processus, sans serveur, capable d'interroger directement des fichiers Parquet (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Eckart–Young</strong> — théorème établissant que tronquer la SVD donne la meilleure approximation de rang donné. Le fondement de la PCA et de la compression (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>ELT / ETL</strong> — charger puis transformer, ou transformer puis charger. Le basculement vers ELT découle de l'effondrement du coût du stockage (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Embedding</strong> — représentation d'un objet (mot, image, utilisateur) par un vecteur dense où la proximité géométrique traduit une proximité sémantique (<a href="project7-m22.html">module 22</a>).</li>
+      <li><strong>Épistémique (incertitude)</strong> — incertitude due au manque de données ou de connaissance du modèle. Réductible, contrairement à l'incertitude aléatoire (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Erreur type</strong> — écart-type d'un estimateur, qui décroît en \(1/\sqrt{n}\). À ne pas confondre avec l'écart-type des individus, qui ne décroît pas (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>Feature store</strong> — service imposant une définition unique des variables, servie à la fois pour l'entraînement et pour la prédiction, afin d'éviter le décalage entre les deux (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Filtre de Kalman</strong> — estimation récursive de l'état caché d'un système à partir d'observations bruitées (<a href="project7-m17.html">module 17</a>).</li>
+      <li><strong>Fonction de fenêtre</strong> — en SQL, calcul d'une agrégation sur un sous-ensemble de lignes sans réduire le nombre de lignes renvoyées (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Forêt aléatoire</strong> — bagging d'arbres de décision, avec tirage aléatoire de variables à chaque nœud pour décorréler les arbres (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>Fuite de données</strong> — présence dans les variables d'une information indisponible au moment de la prédiction réelle. Produit des performances excellentes en validation et nulles en production (<a href="project7-m12.html">module 12</a>).</li>
+      <li><strong>Générateur</strong> — fonction contenant <code>yield</code>, qui produit ses valeurs une à une sans les stocker. Permet de traiter un flux plus gros que la mémoire (<a href="project7-m01.html">module 1</a>).</li>
+      <li><strong>GIL</strong> — verrou global de CPython qui empêche deux threads d'exécuter du bytecode Python simultanément. Sans effet sur les attentes d'entrée-sortie et sur le code natif qui le relâche (<a href="project7-m02.html">module 2</a>).</li>
+      <li><strong>GNN</strong> — réseau de neurones sur graphe, qui construit la représentation d'un nœud en agrégant celles de ses voisins (<a href="project7-m18.html">module 18</a>).</li>
+      <li><strong>Gradient boosting</strong> — boosting où chaque modèle ajouté approche le gradient de la perte. Le meilleur choix par défaut sur données tabulaires (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>HNSW</strong> — index de recherche approchée de plus proches voisins fondé sur un graphe hiérarchique. La structure derrière la plupart des bases vectorielles (<a href="project7-m22.html">module 22</a>).</li>
+      <li><strong>Idempotence</strong> — propriété d'un traitement qui, relancé sur la même période, produit le même résultat au lieu de le dupliquer. Ce qui rend un pipeline rejouable (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Ignorabilité</strong> — hypothèse selon laquelle, à covariables données, l'affectation au traitement est indépendante des résultats potentiels. Invérifiable, et centrale (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Index (base de données)</strong> — structure auxiliaire accélérant la recherche au prix d'un coût en écriture et en espace (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Inférence variationnelle</strong> — approcher une loi a posteriori en cherchant, dans une famille simple, la distribution qui s'en rapproche le plus. Plus rapide que MCMC, au prix d'une approximation (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Instrument</strong> — variable qui influence le traitement sans agir autrement sur le résultat, utilisée pour estimer un effet en présence de confondants non mesurés (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>IPW</strong> — pondération par l'inverse de la probabilité de traitement, qui reconstruit une pseudo-population équilibrée (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Itérateur</strong> — objet muni de <code>__next__</code>, qui se consomme une fois. À distinguer de l'itérable, qui sait en fournir un nouveau à chaque parcours (<a href="project7-m01.html">module 1</a>).</li>
+    </ul>
+
+    <h2 id="jp">J – P</h2>
+    <ul>
+      <li><strong>Jinja</strong> — moteur de gabarits qui insère des valeurs Python dans un texte à trous. Utilisé pour produire du HTML (<a href="project7-m06.html">module 6</a>) et pour générer du SQL dans dbt (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Jointure</strong> — opération SQL qui combine deux tables sur une condition. Le piège usuel est la duplication de lignes quand la clé n'est pas unique des deux côtés (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Jumeau numérique</strong> — modèle d'un système physique, maintenu à jour par ses données de fonctionnement, servant à simuler et à décider (<a href="project7-m21.html">module 21</a>).</li>
+      <li><strong>Kafka</strong> — journal distribué en écriture seule, partitionné, où les consommateurs avancent à leur rythme et peuvent rejouer l'historique (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Kubernetes</strong> — orchestrateur déclaratif de conteneurs : on décrit l'état souhaité, le système s'efforce en permanence de l'atteindre (<a href="project7-m05.html">module 5</a>).</li>
+      <li><strong>Lac de données</strong> — stockage de fichiers bon marché où l'on dépose les données brutes sans schéma imposé. S'oppose à l'entrepôt, structuré et modélisé (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Lakehouse</strong> — lac de données doté de transactions, d'évolution de schéma et de voyage dans le temps, grâce à un format de table ouvert (Delta, Iceberg) (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>Learning to rank</strong> — apprendre à ordonner une liste plutôt qu'à prédire un score isolé, en optimisant une métrique de position (<a href="project7-m23.html">module 23</a>).</li>
+      <li><strong>LoRA, QLoRA</strong> — adaptation d'un grand modèle par ajout de matrices de faible rang, en gelant les poids d'origine. QLoRA y ajoute la quantification (<a href="project7-m22.html">module 22</a>).</li>
+      <li><strong>LSTM</strong> — réseau récurrent muni de portes, conçu pour atténuer la disparition du gradient sur les longues séquences (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>MAP</strong> — estimation du paramètre le plus probable a posteriori. Équivaut au maximum de vraisemblance pénalisé : régulariser, c'est mettre un a priori (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>MCMC</strong> — famille d'algorithmes qui échantillonnent une loi a posteriori par une chaîne de Markov. NUTS en est la variante moderne (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Médiateur</strong> — variable par laquelle transite l'effet d'un traitement. Conditionner dessus supprime précisément l'effet qu'on cherche à mesurer (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>Métamodèle</strong> — modèle statistique rapide qui remplace une simulation coûteuse, entraîné sur un petit nombre d'exécutions (<a href="project7-m21.html">module 21</a>).</li>
+      <li><strong>MLE</strong> — maximum de vraisemblance : choisir les paramètres qui rendent les données observées les plus probables (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>MLflow</strong> — outil de suivi d'expériences : paramètres, métriques, artefacts et versions de modèles (<a href="project7-m26.html">module 26</a>).</li>
+      <li><strong>Momentum</strong> — accumulation d'une moyenne des gradients passés, qui lisse la trajectoire et accélère la descente dans les vallées étroites (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>Monte-Carlo</strong> — estimer une quantité par tirage aléatoire répété. Sa précision décroît en \(1/\sqrt{N}\), indépendamment de la dimension (<a href="project7-m21.html">module 21</a>).</li>
+      <li><strong>Normalisation (bases)</strong> — organiser un schéma relationnel pour qu'une information ne soit stockée qu'à un seul endroit. S'oppose au schéma en étoile, pensé pour la lecture (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Noyau</strong> — fonction mesurant une similarité entre deux points, qui permet de travailler implicitement dans un espace de grande dimension. Au cœur des SVM (<a href="project7-m14.html">module 14</a>) et des processus gaussiens (<a href="project7-m19.html">module 19</a>).</li>
+      <li><strong>OLTP / OLAP</strong> — bases orientées transactions (beaucoup d'écritures courtes) contre bases orientées analyse (peu d'écritures, grosses lectures). Deux architectures opposées (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Optimisation bayésienne</strong> — optimiser une fonction coûteuse en construisant un modèle probabiliste de ses valeurs et en choisissant le point suivant par une fonction d'acquisition (<a href="project7-m19.html">module 19</a>).</li>
+      <li><strong>Orchestrateur</strong> — outil qui exécute des tâches selon leurs dépendances, réessaie les échecs et conserve l'historique. Airflow, Dagster, Prefect (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>PAC</strong> — cadre théorique « probablement approximativement correct », qui borne l'écart entre erreur empirique et erreur réelle (<a href="project7-m15.html">module 15</a>).</li>
+      <li><strong>Parquet</strong> — format de fichier colonne, compressé, typé, doté de statistiques par bloc. Le défaut raisonnable dès qu'un fichier est relu par un programme (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>PCA</strong> — projection sur les directions de variance maximale, obtenue par la SVD des données centrées. Sert à visualiser, compresser et décorréler (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>PINN</strong> — réseau dont la fonction de perte inclut le résidu d'une équation aux dérivées partielles, ce qui contraint la solution par la physique (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>polars</strong> — bibliothèque de manipulation de tableaux fondée sur Arrow, à évaluation paresseuse et parallèle par défaut (<a href="project7-m03.html">module 3</a>).</li>
+      <li><strong>Positivité</strong> — hypothèse causale exigeant que chaque profil ait une chance non nulle d'être traité et de ne pas l'être. Vérifiable, contrairement à l'ignorabilité (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>pre-commit</strong> — mécanisme exécutant des vérifications automatiques avant chaque commit Git, pour ne jamais versionner du code non formaté (<a href="project7-m01.html">module 1</a>).</li>
+      <li><strong>Prédiction conforme</strong> — méthode produisant des intervalles de prédiction avec une garantie de couverture valable sans hypothèse sur le modèle ni sur la loi des données (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Processus gaussien</strong> — loi de probabilité sur des fonctions, qui fournit une prédiction et son incertitude, croissante loin des points observés (<a href="project7-m19.html">module 19</a>).</li>
+      <li><strong>Score de propension</strong> — probabilité d'être traité compte tenu du profil. Conditionner sur ce seul nombre suffit à rendre les groupes comparables, sous ignorabilité (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Pydantic</strong> — bibliothèque qui valide et convertit des données d'entrée à partir d'annotations de type, en échouant tôt et avec un message précis (<a href="project7-m06.html">module 6</a>).</li>
+      <li><strong>p-value</strong> — probabilité d'observer un écart au moins aussi extrême si l'hypothèse nulle était vraie. Ce n'est <em>pas</em> la probabilité que l'hypothèse soit vraie (<a href="project7-m09.html">module 9</a>).</li>
+    </ul>
+
+    <h2 id="qz">Q – Z</h2>
+    <ul>
+      <li><strong>Q-learning</strong> — apprentissage de la valeur de chaque couple état-action par mise à jour itérative, sans modèle de l'environnement (<a href="project7-m20.html">module 20</a>).</li>
+      <li><strong>Quantification</strong> — représenter les poids d'un modèle sur moins de bits (8 ou 4) pour réduire mémoire et latence, au prix d'une légère perte de qualité (<a href="project7-m22.html">module 22</a>).</li>
+      <li><strong>Quasi-Monte-Carlo</strong> — remplacer les tirages aléatoires par une suite à faible discrépance, qui couvre l'espace plus régulièrement et converge plus vite (<a href="project7-m21.html">module 21</a>).</li>
+      <li><strong>RAG</strong> — répondre en récupérant d'abord des documents pertinents, puis en les fournissant au modèle de langage comme contexte (<a href="project7-m22.html">module 22</a>).</li>
+      <li><strong>Randomisation</strong> — affecter le traitement au hasard, ce qui élimine d'un coup tous les confondants, y compris ceux qu'on n'a pas mesurés (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Régression sur discontinuité</strong> — exploiter un seuil administratif comme quasi-expérience : les individus juste en dessous et juste au-dessus sont comparables (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Régularisation</strong> — pénaliser la complexité d'un modèle pour réduire sa variance. Ridge pénalise la norme au carré, Lasso la norme absolue et annule des coefficients (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>Rétropropagation</strong> — application de la règle de dérivation en chaîne qui calcule tous les gradients d'un réseau en un seul parcours arrière (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>Roofline</strong> — diagramme opposant intensité arithmétique et performance atteignable, qui indique si un calcul est limité par le calcul ou par la mémoire (<a href="project7-m25.html">module 25</a>).</li>
+      <li><strong>ruff</strong> — formateur et analyseur statique Python, très rapide, qui remplace plusieurs outils historiques (<a href="project7-m01.html">module 1</a>).</li>
+      <li><strong>Schéma en étoile</strong> — table de faits centrale entourée de tables de dimensions, organisation dénormalisée pensée pour minimiser les jointures à la lecture (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>SCD</strong> — dimension à évolution lente : trois stratégies (écraser, historiser par ligne, garder la valeur précédente) pour gérer un attribut qui change dans le temps (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>SGD</strong> — descente de gradient stochastique : estimer le gradient sur un petit lot plutôt que sur toutes les données. Son bruit joue un rôle régularisant (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>SHAP</strong> — attribution de la prédiction d'un modèle à ses variables, fondée sur les valeurs de Shapley. Explique la prédiction, pas la causalité (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>Simpson (paradoxe de)</strong> — inversion d'une conclusion entre les sous-groupes et l'agrégat, due à un confondant (<a href="project7-m09.html">module 9</a>).</li>
+      <li><strong>slots</strong> — option de classe qui remplace le dictionnaire d'attributs par des emplacements fixes : moins de mémoire, accès plus rapide, pas d'attribut ajouté à la volée (<a href="project7-m01.html">module 1</a>).</li>
+      <li><strong>Stationnarité</strong> — propriété d'une série dont les caractéristiques statistiques ne dépendent pas du temps. Condition d'application des modèles ARIMA (<a href="project7-m17.html">module 17</a>).</li>
+      <li><strong>Streaming</strong> — traiter chaque événement à mesure qu'il arrive, plutôt que par lots périodiques. Justifié seulement quand la fraîcheur a une valeur mesurable (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>SUTVA</strong> — hypothèse causale d'absence d'interférence entre unités et d'unicité de la version du traitement. Violée par les effets de réseau (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>SVD</strong> — décomposition d'une matrice en rotation, dilatation, rotation. Le résultat d'algèbre linéaire le plus utile en data science (<a href="project7-m08.html">module 8</a>).</li>
+      <li><strong>SVM</strong> — classifieur cherchant l'hyperplan de marge maximale, étendu aux frontières non linéaires par l'astuce du noyau (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>TF-IDF</strong> — pondération d'un terme par sa fréquence dans un document et sa rareté dans le corpus. Toujours une baseline solide en recherche textuelle (<a href="project7-m18.html">module 18</a>).</li>
+      <li><strong>Transaction ACID</strong> — garanties d'atomicité, cohérence, isolation et durabilité d'une base de données (<a href="project7-m04.html">module 4</a>).</li>
+      <li><strong>Transfert (apprentissage par)</strong> — réutiliser un modèle pré-entraîné sur une grande base et l'adapter à une tâche voisine avec peu d'exemples (<a href="project7-m13.html">module 13</a>).</li>
+      <li><strong>Transformer</strong> — architecture fondée sur l'attention, qui traite une séquence entière en parallèle plutôt que pas à pas (<a href="project7-m16.html">module 16</a>).</li>
+      <li><strong>Uplift</strong> — effet individuel d'une action, qui permet de cibler ceux qu'elle fait basculer plutôt que ceux qui auraient agi de toute façon (<a href="project7-m24.html">module 24</a>).</li>
+      <li><strong>UTC</strong> — référence temporelle sans fuseau ni heure d'été. La seule forme non ambiguë de stockage d'un instant (<a href="project7-m07.html">module 7</a>).</li>
+      <li><strong>UV</strong> — gestionnaire d'environnements et de dépendances Python, rapide, avec fichier de verrouillage reproductible (<a href="project7-m01.html">module 1</a>).</li>
+      <li><strong>Valeur E</strong> — force minimale qu'un confondant non mesuré devrait avoir pour annuler un effet observé. Mesure la fragilité d'une conclusion causale (<a href="project7-m11.html">module 11</a>).</li>
+      <li><strong>Validation croisée</strong> — découper les données en plis, entraîner sur les uns, évaluer sur l'autre, et faire tourner. Le schéma doit respecter la structure des données : temporelle, groupée, stratifiée (<a href="project7-m12.html">module 12</a>).</li>
+      <li><strong>Vraisemblance</strong> — probabilité des données observées vue comme fonction des paramètres. Le pont entre modélisation probabiliste et optimisation (<a href="project7-m10.html">module 10</a>).</li>
+      <li><strong>Vue et copie</strong> — en NumPy, une tranche partage la mémoire d'origine (vue) tandis qu'une indexation par masque la duplique (copie). Source classique de modifications inattendues (<a href="project7-m03.html">module 3</a>).</li>
+      <li><strong>XGBoost</strong> — implémentation historique du gradient boosting, avec régularisation explicite et gestion native des valeurs manquantes (<a href="project7-m14.html">module 14</a>).</li>
+      <li><strong>Zero-shot</strong> — résoudre une tâche sans aucun exemple étiqueté, en s'appuyant sur les connaissances déjà présentes dans un grand modèle pré-entraîné (<a href="project7-m13.html">module 13</a>).</li>
+    </ul>
+
+    <div class="step-block">
+      <h4>Un mot sur les termes anglais</h4>
+      <p>Le cours traduit quand une traduction française est répandue et sans ambiguïté — surapprentissage, rétropropagation, vraisemblance —, et conserve l'anglais quand il est le seul terme réellement utilisé, y compris en France : <em>bagging</em>, <em>boosting</em>, <em>embedding</em>, <em>pipeline</em>. Le critère n'est pas puriste, il est pratique : c'est le mot qu'il faut taper dans un moteur de recherche pour trouver la documentation.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7.html" class="btn btn-secondary">← Sommaire du cours</a>
+    <a href="project7-m01.html" class="btn btn-ghost">Module 1</a>
+  </div>
+  <div class="project-meta"><span class="tag">Glossaire</span><span class="tag">Notations</span><span class="tag">Référence</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-glossaire-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Appendix</div>
+    <h1>Glossary and notation</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This appendix is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it contains.
+    </div>
+
+    <h2>What this appendix contains</h2>
+    <ul>
+      <li>A notation reference: the symbols used throughout the course for data, models, probability and linear algebra, plus the three conventions that are easiest to confuse (hat versus no hat, upper versus lower case, conditioning versus intervening).</li>
+      <li>About 140 alphabetical entries, each a one-line definition with a link to the module where the notion is developed — from A/B testing and Arrow to zero-shot learning.</li>
+      <li>A note on which English terms the course keeps untranslated, and why.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
