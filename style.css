@@ -547,6 +547,23 @@ footer {
 .tuto-card-chevron { color: var(--color-text-muted); transition: transform var(--transition); }
 .tuto-card-header.open .tuto-card-chevron { transform: rotate(180deg); }
 
+/* ── mini-agent – schémas SVG ── */
+.agent-diagram { margin: var(--space-6) 0; overflow-x: auto; }
+.agent-diagram svg { width: 100%; min-width: 560px; height: auto; font-family: var(--font-body); }
+.agent-diagram .box { fill: var(--color-surface); stroke: var(--color-border); stroke-width: 1.5; }
+.agent-diagram .box-harness { fill: var(--color-surface-2); stroke: var(--color-primary); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.agent-diagram .box-loop { fill: var(--color-primary-highlight); stroke: var(--color-primary); stroke-width: 2; }
+.agent-diagram .box-llm { fill: color-mix(in oklab, var(--color-accent) 12%, var(--color-surface)); stroke: var(--color-accent); stroke-width: 2; }
+.agent-diagram .label { fill: var(--color-text); font-size: 14px; }
+.agent-diagram .label-strong { fill: var(--color-text); font-size: 14px; font-weight: 700; }
+.agent-diagram .label-muted { fill: var(--color-text-muted); font-size: 12px; }
+.agent-diagram .label-title { fill: var(--color-primary); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+.agent-diagram .mono { font-family: var(--font-mono); font-size: 13px; }
+.agent-diagram .edge { stroke: var(--color-text-muted); stroke-width: 1.5; fill: none; }
+.agent-diagram .edge.dashed { stroke-dasharray: 5 4; }
+.agent-diagram .arrow-head { fill: var(--color-text-muted); }
+.agent-diagram figcaption { font-size: var(--text-xs); color: var(--color-text-faint); text-align: center; margin-top: var(--space-2); }
+
 /* tikz / images inside project */
 .project-img { text-align: center; margin: var(--space-6) 0; }
 .project-img img { max-width: 70%; margin-inline: auto; border-radius: var(--radius-md); box-shadow: var(--shadow-md); }

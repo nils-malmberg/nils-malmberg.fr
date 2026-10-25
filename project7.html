@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>mini-agent - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-content-fr">
+<div class="container project-page">
+  <a href="projects.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour aux projets</a>
+  <div class="project-page-header">
+    <h1>mini-agent — un agent de code minimal autour d'Ollama</h1>
+  </div>
+
+  <div class="project-content">
+    <h2>Objectif</h2>
+    <p>Pour préparer un hackathon interne sur l'<strong>IA agentique</strong>, je construis de A à Z un agent de code minimal en Python : un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
+    <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main.</p>
+    <p>Le LLM tourne en local sur mon NAS (voir le <a href="project6.html">projet NAS Lab</a>) : <strong>qwen3.5:4b</strong> servi par Ollama sur une RTX 3050 de 6 Go. Un modèle aussi petit impose des choix : peu d'outils (5 au maximum), des descriptions très claires et des résultats d'outils tronqués.</p>
+
+    <h2>Architecture</h2>
+    <p>Le modèle ne sait que produire du texte. Tout le reste — lire un fichier, exécuter une commande, demander une confirmation, s'arrêter — est fait par le code qui l'entoure : le <strong>harness</strong>. Au cœur du harness se trouve la <strong>boucle agentique</strong>, la seule partie qui parle au LLM.</p>
+    <figure class="agent-diagram">
+      <svg viewBox="0 0 680 420" role="img" aria-label="Couches de mini-agent : utilisateur, harness, boucle agentique, LLM">
+        <defs><marker id="arrow-fr-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <rect class="box" x="230" y="10" width="220" height="40" rx="8"/>
+        <text class="label-strong" x="340" y="35" text-anchor="middle">Utilisateur (terminal)</text>
+        <line class="edge" x1="340" y1="50" x2="340" y2="78" marker-start="url(#arrow-fr-1)" marker-end="url(#arrow-fr-1)"/>
+        <rect class="box-harness" x="20" y="80" width="640" height="232" rx="12"/>
+        <text class="label-title" x="36" y="102">HARNESS — tout le code autour du modèle</text>
+        <rect class="box" x="35" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="107" y="138" text-anchor="middle">cli.py</text>
+        <text class="label-muted" x="107" y="158" text-anchor="middle">entrée / sortie</text>
+        <rect class="box" x="192" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="264" y="138" text-anchor="middle">prompts/ skills/</text>
+        <text class="label-muted" x="264" y="158" text-anchor="middle">consignes au modèle</text>
+        <rect class="box" x="349" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="421" y="138" text-anchor="middle">tools.py</text>
+        <text class="label-muted" x="421" y="158" text-anchor="middle">registre d'outils</text>
+        <rect class="box" x="506" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="578" y="138" text-anchor="middle">guards.py</text>
+        <text class="label-muted" x="578" y="158" text-anchor="middle">garde-fous</text>
+        <rect class="box-loop" x="35" y="190" width="616" height="106" rx="10"/>
+        <text class="label-strong" x="343" y="220" text-anchor="middle">agent.py — boucle agentique</text>
+        <text class="label-muted" x="343" y="244" text-anchor="middle">tant que le modèle demande des outils :</text>
+        <text class="label-muted" x="343" y="262" text-anchor="middle">exécuter l'outil → renvoyer le résultat → rappeler le modèle</text>
+        <text class="label-muted" x="343" y="282" text-anchor="middle">sinon : afficher la réponse finale</text>
+        <line class="edge" x1="300" y1="312" x2="300" y2="350" marker-end="url(#arrow-fr-1)"/>
+        <line class="edge" x1="380" y1="350" x2="380" y2="312" marker-end="url(#arrow-fr-1)"/>
+        <text class="label-muted" x="292" y="336" text-anchor="end">messages + tools</text>
+        <text class="label-muted" x="388" y="336">réponse ou tool_calls</text>
+        <rect class="box-llm" x="130" y="352" width="420" height="58" rx="10"/>
+        <text class="label-strong" x="340" y="376" text-anchor="middle">LLM — Ollama <tspan class="mono">/api/chat</tspan></text>
+        <text class="label-muted" x="340" y="397" text-anchor="middle">llm.py → qwen3.5:4b sur le NAS (RTX 3050, 6 Go)</text>
+      </svg>
+      <figcaption>Les couches de mini-agent : le harness entoure la boucle, seule la boucle parle au LLM.</figcaption>
+    </figure>
+    <figure class="agent-diagram">
+      <svg viewBox="0 0 680 388" role="img" aria-label="Déroulement de la boucle agentique">
+        <defs><marker id="arrow-fr-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <rect class="box" x="150" y="10" width="260" height="46" rx="8"/>
+        <text class="label" x="280" y="38" text-anchor="middle">Message utilisateur → <tspan class="mono">messages[]</tspan></text>
+        <line class="edge" x1="280" y1="56" x2="280" y2="82" marker-end="url(#arrow-fr-2)"/>
+        <rect class="box-llm" x="150" y="84" width="260" height="46" rx="8"/>
+        <text class="label" x="280" y="112" text-anchor="middle">Appel LLM (messages + tools)</text>
+        <line class="edge" x1="280" y1="130" x2="280" y2="158" marker-end="url(#arrow-fr-2)"/>
+        <polygon class="box-loop" points="280,160 370,200 280,240 190,200"/>
+        <text class="label-strong mono" x="280" y="205" text-anchor="middle">tool_calls ?</text>
+        <line class="edge" x1="370" y1="200" x2="438" y2="200" marker-end="url(#arrow-fr-2)"/>
+        <text class="label-muted" x="404" y="192" text-anchor="middle">oui</text>
+        <rect class="box" x="440" y="172" width="210" height="56" rx="8"/>
+        <text class="label" x="545" y="196" text-anchor="middle">Exécuter chaque outil</text>
+        <text class="label-muted" x="545" y="216" text-anchor="middle">(après les garde-fous)</text>
+        <line class="edge" x1="545" y1="172" x2="545" y2="132" marker-end="url(#arrow-fr-2)"/>
+        <rect class="box" x="440" y="76" width="210" height="56" rx="8"/>
+        <text class="label" x="545" y="100" text-anchor="middle">Ajouter le résultat</text>
+        <text class="label-muted mono" x="545" y="120" text-anchor="middle">{"role": "tool", ...}</text>
+        <line class="edge" x1="440" y1="107" x2="412" y2="107" marker-end="url(#arrow-fr-2)"/>
+        <line class="edge" x1="280" y1="240" x2="280" y2="282" marker-end="url(#arrow-fr-2)"/>
+        <text class="label-muted" x="290" y="266">non</text>
+        <rect class="box-loop" x="150" y="284" width="260" height="46" rx="8"/>
+        <text class="label-strong" x="280" y="312" text-anchor="middle">Réponse finale affichée</text>
+        <polyline class="edge dashed" points="150,307 100,307 100,33 148,33" marker-end="url(#arrow-fr-2)"/>
+        <text class="label-muted" x="92" y="175" text-anchor="middle" transform="rotate(-90 92 175)">message suivant</text>
+        <text class="label-muted" x="340" y="372" text-anchor="middle">Garde-fou : MAX_TOURS limite le nombre d'allers-retours avec le LLM.</text>
+      </svg>
+      <figcaption>La boucle agentique : le modèle demande, le harness exécute, jusqu'à une réponse sans outil.</figcaption>
+    </figure>
+    <p>Le code est organisé en deux parties : <code>steps/</code> contient un script autonome par étape du tutoriel (pédagogique, tout dans un fichier), <code>src/mini_agent/</code> contient la version finale découpée en modules (<code>config</code>, <code>llm</code>, <code>tools</code>, <code>guards</code>, <code>agent</code>, <code>cli</code>).</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Étapes du tutoriel</h4>
+      <ol start="0">
+        <li><a href="#mini-agent-step0-fr">Créer le projet (uv, hatchling, configuration)</a></li>
+        <li>Premier appel à <code>/api/chat</code> (à venir)</li>
+        <li>Chat avec mémoire (à venir)</li>
+        <li>Premier outil (à venir)</li>
+        <li>Boucle agentique (à venir)</li>
+        <li>Registre d'outils (à venir)</li>
+        <li>Garde-fous (à venir)</li>
+        <li>Prompt système et skills (à venir)</li>
+        <li>Robustesse et démo (à venir)</li>
+      </ol>
+      <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-glossary-fr">Glossaire</a></p>
+    </div>
+
+    <h2 id="mini-agent-tuto-fr">Tutoriel — construire l'agent étape par étape</h2>
+    <p>Chaque étape ajoute une seule brique, est lancée réellement contre Ollama, puis fait l'objet d'un commit <code>step N: ...</code>. Les sorties affichées ci-dessous sont de vraies sorties, et les comportements bizarres du modèle sont notés plutôt que masqués.</p>
+
+    <div class="tuto-card" id="mini-agent-step0-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">0</span>
+        <span class="tuto-card-title">Créer le projet (uv, hatchling, configuration)</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Objectif</h3>
+        <p>Poser un squelette de projet Python installable, avec une seule dépendance (<code>requests</code>) et une configuration lue dans les variables d'environnement. Aucun appel au LLM à cette étape.</p>
+        <h3>Concept</h3>
+        <p><strong>uv</strong> gère à la fois la version de Python, l'environnement virtuel et les dépendances : il remplace <code>pip</code> + <code>venv</code> + <code>pyenv</code>, et se comporte de la même façon sous Windows et macOS. <strong>hatchling</strong> est le <em>build backend</em> : l'outil qui transforme le dossier <code>src/</code> en paquet installable.</p>
+        <p>Avec le layout <code>src/</code>, on ne peut pas importer le paquet sans l'installer : on teste donc toujours ce qui sera réellement distribué. Et comme l'URL d'Ollama et le modèle viennent de l'environnement, le même code tourne contre le NAS, contre un Ollama local ou avec un autre modèle, sans modification.</p>
+        <div class="code-label">Création du projet</div>
+        <div class="code-block"><pre>uv init --package --build-backend hatch --name mini-agent mini-agent
+cd mini-agent
+uv add requests
+uv run mini-agent</pre></div>
+        <div class="code-label">pyproject.toml</div>
+        <div class="code-block"><pre>[project]
+name = "mini-agent"
+version = "0.1.0"
+requires-python = "&gt;=3.11"
+dependencies = [
+    "requests&gt;=2.34.2",
+]
+
+[project.scripts]
+mini-agent = "mini_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"</pre></div>
+        <div class="code-label">src/mini_agent/config.py (extrait)</div>
+        <div class="code-block"><pre>DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
+
+TEMPERATURE = 0.2   # agent prévisible, pas créatif
+NUM_CTX = 8192      # fenêtre de contexte demandée à Ollama
+
+@dataclass(frozen=True)
+class Config:
+    ollama_url: str
+    model: str
+    temperature: float = TEMPERATURE
+    num_ctx: int = NUM_CTX
+
+    @property
+    def chat_url(self) -&gt; str:
+        return f"{self.ollama_url}/api/chat"
+
+    def options(self) -&gt; dict:
+        return {"temperature": self.temperature, "num_ctx": self.num_ctx}
+
+def load_config() -&gt; Config:
+    url = os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL)
+    model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    return Config(ollama_url=url.rstrip("/"), model=model)</pre></div>
+        <h3>Ce qu'on observe</h3>
+        <p>Avec les valeurs par défaut :</p>
+        <div class="code-block"><pre>$ uv run mini-agent
+mini-agent — configuration chargée :
+  OLLAMA_URL   = http://192.168.1.76:11434
+  OLLAMA_MODEL = qwen3.5:4b
+  options      = {'temperature': 0.2, 'num_ctx': 8192}
+  endpoint     = http://192.168.1.76:11434/api/chat</pre></div>
+        <p>En surchargeant l'environnement (le « / » final de l'URL est bien retiré) :</p>
+        <div class="code-block"><pre>$ OLLAMA_URL=http://localhost:11434/ OLLAMA_MODEL=qwen3.5:0.8b uv run mini-agent
+mini-agent — configuration chargée :
+  OLLAMA_URL   = http://localhost:11434
+  OLLAMA_MODEL = qwen3.5:0.8b
+  options      = {'temperature': 0.2, 'num_ctx': 8192}
+  endpoint     = http://localhost:11434/api/chat</pre></div>
+        <p>Sous Windows, la même surcharge s'écrit en PowerShell :</p>
+        <div class="code-block"><pre>$env:OLLAMA_URL = "http://localhost:11434"
+$env:OLLAMA_MODEL = "qwen3.5:0.8b"
+uv run mini-agent</pre></div>
+        <h3>Pièges rencontrés</h3>
+        <ul>
+          <li><code>uv init</code> fixe <code>requires-python</code> sur la version de Python présente sur la machine (ici <code>&gt;=3.13</code>). Je l'ai ramené à <code>&gt;=3.11</code> et j'ai épinglé <code>.python-version</code> sur 3.11 : on développe sur la version minimale supportée, et uv la télécharge tout seul si besoin.</li>
+          <li>Déclarer <code>readme = "README.md"</code> dans le pyproject sans créer le fichier fait échouer <code>uv add requests</code> : uv construit le paquet à chaque synchronisation, et hatchling refuse de le construire s'il manque un fichier déclaré.</li>
+          <li>Une URL saisie avec un « / » final donnerait <code>http://…:11434//api/chat</code> : d'où le <code>rstrip("/")</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 id="mini-agent-glossary-fr">Glossaire</h2>
+    <ul>
+      <li><strong>LLM</strong> (<em>Large Language Model</em>) : modèle qui, à partir d'un texte, prédit la suite token par token. Il ne fait que produire du texte : il ne lit aucun fichier et n'exécute rien lui-même. Ici : qwen3.5:4b servi par Ollama.</li>
+      <li><strong>Contexte</strong> : tout ce que le modèle « voit » lors d'un appel (prompt système, historique, définitions des outils, résultats des outils). Sa taille est limitée (<code>num_ctx</code> = 8192 tokens ici) et c'est la seule mémoire du modèle : entre deux appels, il ne se souvient de rien.</li>
+      <li><strong>Prompt système</strong> : premier message de la conversation (rôle <code>system</code>) qui fixe le rôle, les règles et le style de l'agent. Il est renvoyé au modèle à chaque appel.</li>
+      <li><strong>Tool (outil)</strong> : fonction Python que le harness met à disposition du modèle (lire un fichier, lancer une commande…). Le modèle n'en connaît que le nom, la description et le schéma JSON des paramètres.</li>
+      <li><strong>Tool call</strong> : demande structurée émise par le modèle, du type « appelle <code>read_file</code> avec <code>path = "main.py"</code> ». Le modèle n'exécute rien : c'est le harness qui lit la demande, exécute la fonction et renvoie le résultat.</li>
+      <li><strong>Boucle agentique</strong> : appeler le modèle, exécuter les tool calls qu'il demande, lui renvoyer les résultats, et recommencer jusqu'à ce qu'il réponde sans demander d'outil.</li>
+      <li><strong>Harness</strong> : tout le code autour du modèle (boucle, registre d'outils, garde-fous, chargement du prompt et des skills, interface). Un même modèle peut faire un bon ou un mauvais agent selon son harness.</li>
+      <li><strong>Skill</strong> : fichier Markdown d'instructions spécialisées (par exemple « écrire des tests pytest ») que l'agent charge à la demande via un outil, au lieu de tout mettre dans le prompt système. On économise ainsi du contexte.</li>
+      <li><strong>MCP</strong> (<em>Model Context Protocol</em>) : protocole ouvert qui standardise la façon d'exposer des outils et des données à un agent via un serveur. mini-agent n'en utilise pas (ses outils sont de simples fonctions Python locales), mais le principe est le même : un nom, une description, un schéma, un résultat.</li>
+      <li><strong>Garde-fous</strong> : limites imposées par le harness, et non par le modèle : confirmation avant d'écrire ou d'exécuter, dossier de travail restreint, nombre maximal de tours, timeout, troncature des sorties trop longues.</li>
+    </ul>
+  </div>
+
+  <a href="projects.html" class="btn btn-secondary">Retour</a>
+  <br><br>
+  <div class="project-meta">
+    <span class="tag">Python</span><span class="tag">LLM</span><span class="tag">Ollama</span>
+    <span class="tag">IA agentique</span><span class="tag">2026</span><span class="tag">en cours</span>
+  </div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-content-en" style="display:none">
+<div class="container project-page">
+  <a href="projects.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to projects</a>
+  <div class="project-page-header">
+    <h1>mini-agent — a minimal coding agent built around Ollama</h1>
+  </div>
+
+  <div class="project-content">
+    <h2>Goal</h2>
+    <p>To prepare an internal hackathon on <strong>agentic AI</strong>, I am building a minimal coding agent in Python from scratch: a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
+    <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand.</p>
+    <p>The LLM runs locally on my NAS (see the <a href="project6.html">NAS Lab project</a>): <strong>qwen3.5:4b</strong> served by Ollama on a 6 GB RTX 3050. Such a small model forces some choices: few tools (5 at most), very clear descriptions and truncated tool results.</p>
+
+    <h2>Architecture</h2>
+    <p>The model can only produce text. Everything else — reading a file, running a command, asking for confirmation, stopping — is done by the code around it: the <strong>harness</strong>. At the heart of the harness is the <strong>agentic loop</strong>, the only part that talks to the LLM.</p>
+    <figure class="agent-diagram">
+      <svg viewBox="0 0 680 420" role="img" aria-label="mini-agent layers: user, harness, agentic loop, LLM">
+        <defs><marker id="arrow-en-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <rect class="box" x="230" y="10" width="220" height="40" rx="8"/>
+        <text class="label-strong" x="340" y="35" text-anchor="middle">User (terminal)</text>
+        <line class="edge" x1="340" y1="50" x2="340" y2="78" marker-start="url(#arrow-en-1)" marker-end="url(#arrow-en-1)"/>
+        <rect class="box-harness" x="20" y="80" width="640" height="232" rx="12"/>
+        <text class="label-title" x="36" y="102">HARNESS — all the code around the model</text>
+        <rect class="box" x="35" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="107" y="138" text-anchor="middle">cli.py</text>
+        <text class="label-muted" x="107" y="158" text-anchor="middle">input / output</text>
+        <rect class="box" x="192" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="264" y="138" text-anchor="middle">prompts/ skills/</text>
+        <text class="label-muted" x="264" y="158" text-anchor="middle">model instructions</text>
+        <rect class="box" x="349" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="421" y="138" text-anchor="middle">tools.py</text>
+        <text class="label-muted" x="421" y="158" text-anchor="middle">tool registry</text>
+        <rect class="box" x="506" y="114" width="145" height="58" rx="8"/>
+        <text class="label mono" x="578" y="138" text-anchor="middle">guards.py</text>
+        <text class="label-muted" x="578" y="158" text-anchor="middle">guardrails</text>
+        <rect class="box-loop" x="35" y="190" width="616" height="106" rx="10"/>
+        <text class="label-strong" x="343" y="220" text-anchor="middle">agent.py — agentic loop</text>
+        <text class="label-muted" x="343" y="244" text-anchor="middle">while the model asks for tools:</text>
+        <text class="label-muted" x="343" y="262" text-anchor="middle">run the tool → send the result back → call the model again</text>
+        <text class="label-muted" x="343" y="282" text-anchor="middle">otherwise: show the final answer</text>
+        <line class="edge" x1="300" y1="312" x2="300" y2="350" marker-end="url(#arrow-en-1)"/>
+        <line class="edge" x1="380" y1="350" x2="380" y2="312" marker-end="url(#arrow-en-1)"/>
+        <text class="label-muted" x="292" y="336" text-anchor="end">messages + tools</text>
+        <text class="label-muted" x="388" y="336">answer or tool_calls</text>
+        <rect class="box-llm" x="130" y="352" width="420" height="58" rx="10"/>
+        <text class="label-strong" x="340" y="376" text-anchor="middle">LLM — Ollama <tspan class="mono">/api/chat</tspan></text>
+        <text class="label-muted" x="340" y="397" text-anchor="middle">llm.py → qwen3.5:4b on the NAS (RTX 3050, 6 GB)</text>
+      </svg>
+      <figcaption>mini-agent layers: the harness wraps the loop, and only the loop talks to the LLM.</figcaption>
+    </figure>
+    <figure class="agent-diagram">
+      <svg viewBox="0 0 680 388" role="img" aria-label="How the agentic loop runs">
+        <defs><marker id="arrow-en-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <rect class="box" x="150" y="10" width="260" height="46" rx="8"/>
+        <text class="label" x="280" y="38" text-anchor="middle">User message → <tspan class="mono">messages[]</tspan></text>
+        <line class="edge" x1="280" y1="56" x2="280" y2="82" marker-end="url(#arrow-en-2)"/>
+        <rect class="box-llm" x="150" y="84" width="260" height="46" rx="8"/>
+        <text class="label" x="280" y="112" text-anchor="middle">LLM call (messages + tools)</text>
+        <line class="edge" x1="280" y1="130" x2="280" y2="158" marker-end="url(#arrow-en-2)"/>
+        <polygon class="box-loop" points="280,160 370,200 280,240 190,200"/>
+        <text class="label-strong mono" x="280" y="205" text-anchor="middle">tool_calls?</text>
+        <line class="edge" x1="370" y1="200" x2="438" y2="200" marker-end="url(#arrow-en-2)"/>
+        <text class="label-muted" x="404" y="192" text-anchor="middle">yes</text>
+        <rect class="box" x="440" y="172" width="210" height="56" rx="8"/>
+        <text class="label" x="545" y="196" text-anchor="middle">Run each tool</text>
+        <text class="label-muted" x="545" y="216" text-anchor="middle">(after the guardrails)</text>
+        <line class="edge" x1="545" y1="172" x2="545" y2="132" marker-end="url(#arrow-en-2)"/>
+        <rect class="box" x="440" y="76" width="210" height="56" rx="8"/>
+        <text class="label" x="545" y="100" text-anchor="middle">Append the result</text>
+        <text class="label-muted mono" x="545" y="120" text-anchor="middle">{"role": "tool", ...}</text>
+        <line class="edge" x1="440" y1="107" x2="412" y2="107" marker-end="url(#arrow-en-2)"/>
+        <line class="edge" x1="280" y1="240" x2="280" y2="282" marker-end="url(#arrow-en-2)"/>
+        <text class="label-muted" x="290" y="266">no</text>
+        <rect class="box-loop" x="150" y="284" width="260" height="46" rx="8"/>
+        <text class="label-strong" x="280" y="312" text-anchor="middle">Final answer shown</text>
+        <polyline class="edge dashed" points="150,307 100,307 100,33 148,33" marker-end="url(#arrow-en-2)"/>
+        <text class="label-muted" x="92" y="175" text-anchor="middle" transform="rotate(-90 92 175)">next message</text>
+        <text class="label-muted" x="340" y="372" text-anchor="middle">Guardrail: MAX_TOURS caps the number of round trips with the LLM.</text>
+      </svg>
+      <figcaption>The agentic loop: the model asks, the harness executes, until an answer with no tool call.</figcaption>
+    </figure>
+    <p>The code is split in two: <code>steps/</code> holds one standalone script per tutorial step (for teaching, everything in one file), and <code>src/mini_agent/</code> holds the final version split into modules (<code>config</code>, <code>llm</code>, <code>tools</code>, <code>guards</code>, <code>agent</code>, <code>cli</code>).</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Tutorial steps</h4>
+      <ol start="0">
+        <li><a href="#mini-agent-step0-en">Create the project (uv, hatchling, configuration)</a></li>
+        <li>First call to <code>/api/chat</code> (coming soon)</li>
+        <li>Chat with memory (coming soon)</li>
+        <li>First tool (coming soon)</li>
+        <li>Agentic loop (coming soon)</li>
+        <li>Tool registry (coming soon)</li>
+        <li>Guardrails (coming soon)</li>
+        <li>System prompt and skills (coming soon)</li>
+        <li>Robustness and demo (coming soon)</li>
+      </ol>
+      <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-glossary-en">Glossary</a></p>
+    </div>
+
+    <h2 id="mini-agent-tuto-en">Tutorial — building the agent step by step</h2>
+    <p>Each step adds a single building block, is run for real against Ollama, then committed as <code>step N: ...</code>. The outputs shown below are real outputs, and the model's odd behaviours are written down rather than hidden.</p>
+
+    <div class="tuto-card" id="mini-agent-step0-en">
+      <div class="tuto-card-header">
+        <span class="step-num">0</span>
+        <span class="tuto-card-title">Create the project (uv, hatchling, configuration)</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Goal</h3>
+        <p>Set up an installable Python project skeleton with a single dependency (<code>requests</code>) and a configuration read from environment variables. No LLM call at this step.</p>
+        <h3>Concept</h3>
+        <p><strong>uv</strong> manages the Python version, the virtual environment and the dependencies at once: it replaces <code>pip</code> + <code>venv</code> + <code>pyenv</code>, and behaves the same on Windows and macOS. <strong>hatchling</strong> is the <em>build backend</em>: the tool that turns the <code>src/</code> folder into an installable package.</p>
+        <p>With the <code>src/</code> layout, the package cannot be imported without being installed, so we always test what will actually be shipped. And since the Ollama URL and the model come from the environment, the same code runs against the NAS, against a local Ollama or with another model, unchanged.</p>
+        <div class="code-label">Creating the project</div>
+        <div class="code-block"><pre>uv init --package --build-backend hatch --name mini-agent mini-agent
+cd mini-agent
+uv add requests
+uv run mini-agent</pre></div>
+        <div class="code-label">pyproject.toml</div>
+        <div class="code-block"><pre>[project]
+name = "mini-agent"
+version = "0.1.0"
+requires-python = "&gt;=3.11"
+dependencies = [
+    "requests&gt;=2.34.2",
+]
+
+[project.scripts]
+mini-agent = "mini_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"</pre></div>
+        <div class="code-label">src/mini_agent/config.py (excerpt, comments are in French in the repo)</div>
+        <div class="code-block"><pre>DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
+
+TEMPERATURE = 0.2   # predictable agent, not a creative one
+NUM_CTX = 8192      # context window requested from Ollama
+
+@dataclass(frozen=True)
+class Config:
+    ollama_url: str
+    model: str
+    temperature: float = TEMPERATURE
+    num_ctx: int = NUM_CTX
+
+    @property
+    def chat_url(self) -&gt; str:
+        return f"{self.ollama_url}/api/chat"
+
+    def options(self) -&gt; dict:
+        return {"temperature": self.temperature, "num_ctx": self.num_ctx}
+
+def load_config() -&gt; Config:
+    url = os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL)
+    model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    return Config(ollama_url=url.rstrip("/"), model=model)</pre></div>
+        <h3>What we observe</h3>
+        <p>With the default values:</p>
+        <div class="code-block"><pre>$ uv run mini-agent
+mini-agent — configuration chargée :
+  OLLAMA_URL   = http://192.168.1.76:11434
+  OLLAMA_MODEL = qwen3.5:4b
+  options      = {'temperature': 0.2, 'num_ctx': 8192}
+  endpoint     = http://192.168.1.76:11434/api/chat</pre></div>
+        <p>Overriding the environment (the trailing "/" in the URL is removed):</p>
+        <div class="code-block"><pre>$ OLLAMA_URL=http://localhost:11434/ OLLAMA_MODEL=qwen3.5:0.8b uv run mini-agent
+mini-agent — configuration chargée :
+  OLLAMA_URL   = http://localhost:11434
+  OLLAMA_MODEL = qwen3.5:0.8b
+  options      = {'temperature': 0.2, 'num_ctx': 8192}
+  endpoint     = http://localhost:11434/api/chat</pre></div>
+        <p>On Windows, the same override in PowerShell:</p>
+        <div class="code-block"><pre>$env:OLLAMA_URL = "http://localhost:11434"
+$env:OLLAMA_MODEL = "qwen3.5:0.8b"
+uv run mini-agent</pre></div>
+        <h3>Pitfalls</h3>
+        <ul>
+          <li><code>uv init</code> sets <code>requires-python</code> to the Python version installed on the machine (here <code>&gt;=3.13</code>). I lowered it to <code>&gt;=3.11</code> and pinned <code>.python-version</code> to 3.11: we develop on the lowest supported version, and uv downloads it by itself if needed.</li>
+          <li>Declaring <code>readme = "README.md"</code> in the pyproject without creating the file makes <code>uv add requests</code> fail: uv builds the package on every sync, and hatchling refuses to build it when a declared file is missing.</li>
+          <li>A URL typed with a trailing "/" would give <code>http://…:11434//api/chat</code>: hence the <code>rstrip("/")</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 id="mini-agent-glossary-en">Glossary</h2>
+    <ul>
+      <li><strong>LLM</strong> (Large Language Model): a model that, given some text, predicts what comes next, token by token. It only produces text: it reads no files and executes nothing by itself. Here: qwen3.5:4b served by Ollama.</li>
+      <li><strong>Context</strong>: everything the model "sees" during one call (system prompt, history, tool definitions, tool results). Its size is limited (<code>num_ctx</code> = 8192 tokens here) and it is the model's only memory: between two calls, it remembers nothing.</li>
+      <li><strong>System prompt</strong>: the first message of the conversation (role <code>system</code>) that sets the agent's role, rules and style. It is sent to the model again on every call.</li>
+      <li><strong>Tool</strong>: a Python function the harness makes available to the model (read a file, run a command…). The model only knows its name, its description and the JSON schema of its parameters.</li>
+      <li><strong>Tool call</strong>: a structured request emitted by the model, such as "call <code>read_file</code> with <code>path = "main.py"</code>". The model executes nothing: the harness reads the request, runs the function and sends back the result.</li>
+      <li><strong>Agentic loop</strong>: call the model, run the tool calls it asks for, send it the results, and repeat until it answers without asking for a tool.</li>
+      <li><strong>Harness</strong>: all the code around the model (loop, tool registry, guardrails, loading the prompt and skills, interface). The same model can make a good or a bad agent depending on its harness.</li>
+      <li><strong>Skill</strong>: a Markdown file of specialised instructions (for example "write pytest tests") that the agent loads on demand through a tool, instead of putting everything in the system prompt. This saves context.</li>
+      <li><strong>MCP</strong> (Model Context Protocol): an open protocol that standardises how tools and data are exposed to an agent through a server. mini-agent does not use it (its tools are plain local Python functions), but the principle is the same: a name, a description, a schema, a result.</li>
+      <li><strong>Guardrails</strong>: limits enforced by the harness, not by the model: confirmation before writing or executing, restricted working folder, maximum number of turns, timeout, truncation of overly long outputs.</li>
+    </ul>
+  </div>
+
+  <a href="projects.html" class="btn btn-secondary">Return</a>
+  <br><br>
+  <div class="project-meta">
+    <span class="tag">Python</span><span class="tag">LLM</span><span class="tag">Ollama</span>
+    <span class="tag">Agentic AI</span><span class="tag">2026</span><span class="tag">in progress</span>
+  </div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+</body></html>
