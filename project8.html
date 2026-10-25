@@ -1826,6 +1826,14 @@ mini-agent</pre></div>
     ├── config.toml        # réglages du projet (étape 12)
     └── skills/            # skills du projet
         └── deployer.md</pre></div>
+        <div class="warning-block"><strong>Ces fichiers n'existent pas d'avance.</strong> <code>AGENTS.md</code> et le dossier <code>.mini-agent/</code> se créent dans chaque projet où l'on lance mini-agent, et non dans le dépôt de mini-agent (qui garde, lui, les skills globales de <code>skills/</code>). Le plus simple : la commande <code>/init</code> (<a href="#mini-agent-step10-fr">étape 10</a>). Ou à la main :</div>
+        <div class="code-block"><pre># Windows (PowerShell), dans le dossier du projet
+New-Item -ItemType Directory -Force .mini-agent\skills
+New-Item AGENTS.md
+
+# macOS
+mkdir -p .mini-agent/skills
+touch AGENTS.md</pre></div>
         <div class="code-label">AGENTS.md (exemple)</div>
         <div class="code-block"><pre># Projet calc
 
@@ -1923,6 +1931,7 @@ Tape ta demande, ou /help pour les commandes.</pre></div>
           <li>Après une modification de <code>pyproject.toml</code> (nouvelle dépendance, nouvelle commande), il faut réinstaller : <code>uv tool install -e . --force</code>.</li>
           <li>Le confinement porte sur l'endroit, pas sur le contenu : un fichier <code>.env</code> du projet reste lisible par <code>read_file</code>. Et <code>run_command</code> peut toujours écrire ailleurs : voir l'étape 14.</li>
           <li>Un <code>AGENTS.md</code> long occupe le contexte à chaque appel : il est tronqué à 4000 caractères.</li>
+          <li>Une skill ajoutée en cours de session apparaît tout de suite dans <code>/skills</code>, mais le modèle ne la voit qu'après un <code>/clear</code> ou un redémarrage : le prompt système est construit au début de la conversation.</li>
         </ul>
       </div>
     </div>
@@ -1943,6 +1952,7 @@ Tape ta demande, ou /help pour les commandes.</pre></div>
           <li><code>Session.chat</code> lit <code>self.config</code> à chaque appel : un <code>/temp</code> s'applique dès la demande suivante.</li>
           <li><strong>Registre de commandes</strong> : le même principe que le registre d'outils, un dictionnaire nom → (fonction, aide). Ajouter une commande ne touche ni à la boucle ni à <code>cli.py</code>.</li>
           <li><code>/models</code> interroge <code>GET /api/tags</code> : la liste des modèles installés sur le serveur Ollama.</li>
+          <li><code>/init</code> prépare le projet courant : il crée <code>AGENTS.md</code>, <code>.mini-agent/config.toml</code> (réglages en commentaire, donc sans effet tant qu'on ne les active pas) et <code>.mini-agent/skills/LISEZMOI.txt</code>, qui explique le format des skills. Il demande confirmation, ne remplace jamais un fichier existant et reconstruit le prompt système pour y inclure <code>AGENTS.md</code>. Le fichier d'explication est un <code>.txt</code> : une skill d'exemple en <code>.md</code> serait listée dans le prompt système, et le modèle pourrait la charger pour rien.</li>
         </ul>
         <div class="code-label">src/mini_agent/llm.py</div>
         <div class="code-block"><pre>"""Appel au LLM via l'API native d'Ollama.
@@ -2061,6 +2071,7 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
@@ -2069,6 +2080,62 @@ from mini_agent.tools import available_skills, load_skill
 def cmd_help(session: Session, arg: str) -&gt; str:
     lines = [f"{name:&lt;9} {description}" for name, (_, description) in COMMANDS.items()]
     return "\n".join(lines + [f"{'/quit':&lt;9} quitter", "", "@chemin dans une demande : joint le contenu du fichier."])
+
+
+# Fichiers créés par /init dans le projet : chemin relatif -&gt; contenu.
+INIT_FILES = {
+    PROJECT_INSTRUCTIONS: """# Instructions du projet
+
+- But du projet : ...
+- Lancer le projet : ...
+- Lancer les tests : python -m pytest -q
+- Conventions de code : ...
+- Fichiers ou dossiers à ne jamais modifier : ...
+""",
+    f"{PROJECT_DIR_NAME}/config.toml": """# Réglages de mini-agent pour ce projet (ils remplacent ~/.mini-agent/config.toml).
+# Retire le # devant une ligne pour l'activer.
+# model = "qwen3.5:4b"
+# temperature = 0.2
+# num_ctx = 8192
+# allowed_commands = ["python -m pytest", "git status", "git diff"]
+""",
+    f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
+
+Format :
+
+---
+description: Une ligne qui dit quand utiliser cette skill.
+---
+# Titre
+
+1. Première étape de la méthode.
+2. ...
+
+Le prompt système ne contient que le nom et la description de chaque skill.
+Le modèle charge le contenu avec load_skill quand la demande correspond.
+Une skill de ce dossier remplace une skill globale du même nom.
+Ce fichier .txt n'est pas une skill : il est ignoré.
+""",
+}
+
+
+def cmd_init(session: Session, arg: str) -&gt; str:
+    workdir = session.config.workdir
+    # On ne remplace jamais un fichier existant : seuls les manquants sont créés.
+    missing = [rel for rel in INIT_FILES if not (workdir / rel).exists()]
+    if not missing:
+        return "Ce projet est déjà initialisé : rien à créer."
+    listing = "\n".join(f"  {rel}" for rel in missing)
+    if not session.ctx.confirm(f"Fichiers à créer :\n{listing}\nLes créer dans {workdir} ?"):
+        return "Rien n'a été créé."
+    for rel in missing:
+        path = workdir / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(INIT_FILES[rel], encoding="utf-8")
+    # Le prompt système est reconstruit pour tenir compte d'AGENTS.md,
+    # sans effacer la conversation en cours.
+    session.messages[0] = {"role": "system", "content": session.system_prompt()}
+    return f"Créé :\n{listing}\nComplète AGENTS.md, puis ajoute tes skills dans {PROJECT_DIR_NAME}/skills/."
 
 
 def cmd_config(session: Session, arg: str) -&gt; str:
@@ -2161,6 +2228,7 @@ def cmd_allow(session: Session, arg: str) -&gt; str:
 # nom de la commande -&gt; (fonction, aide affichée par /help)
 COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/help": (cmd_help, "liste des commandes"),
+    "/init": (cmd_init, "préparer le projet : AGENTS.md et dossier .mini-agent/"),
     "/config": (cmd_config, "réglages actuels"),
     "/models": (cmd_models, "modèles installés sur le serveur Ollama"),
     "/model": (cmd_model, "changer de modèle : /model qwen3.5:4b"),
@@ -2215,7 +2283,8 @@ def execute_command(session: Session, line: str) -&gt; str:
     except (KeyboardInterrupt, EOFError):
         print("\nAu revoir.")</pre></div>
         <h3>Essayer</h3>
-        <div class="code-block"><pre>/models
+        <div class="code-block"><pre>/init
+/models
 /model qwen3.5:9b
 /temp 0.5
 /ctx 16384
@@ -2224,9 +2293,24 @@ def execute_command(session: Session, line: str) -&gt; str:
 /config
 /clear</pre></div>
         <h3>Ce qu'on doit observer</h3>
-        <p>Sorties réelles du harness :</p>
+        <p>Sorties réelles du harness, d'abord <code>/init</code> dans un projet vide :</p>
+        <div class="code-block"><pre>vous &gt; /init
+Fichiers à créer :
+  AGENTS.md
+  .mini-agent/config.toml
+  .mini-agent/skills/LISEZMOI.txt
+Les créer dans …/rfact ? [o/N] o
+Créé :
+  AGENTS.md
+  .mini-agent/config.toml
+  .mini-agent/skills/LISEZMOI.txt
+Complète AGENTS.md, puis ajoute tes skills dans .mini-agent/skills/.
+
+vous &gt; /init
+Ce projet est déjà initialisé : rien à créer.</pre></div>
         <div class="code-block"><pre>vous &gt; /help
 /help     liste des commandes
+/init     préparer le projet : AGENTS.md et dossier .mini-agent/
 /config   réglages actuels
 /models   modèles installés sur le serveur Ollama
 /model    changer de modèle : /model qwen3.5:4b
@@ -2325,7 +2409,35 @@ def test_allow(session):
     execute_command(session, "/allow python -m pytest")
     assert session.ctx.allowed_commands == ["python -m pytest"]
     assert execute_command(session, "/allow git status &amp;&amp; del x").startswith("Refusé")
-    assert session.ctx.allowed_commands == ["python -m pytest"]</pre></div>
+    assert session.ctx.allowed_commands == ["python -m pytest"]
+
+
+def test_init_cree_les_fichiers_du_projet(session, tmp_path):
+    from mini_agent.config import read_toml
+    from mini_agent.tools import available_skills
+
+    resultat = execute_command(session, "/init")
+    assert resultat.startswith("Créé :")
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8").startswith("# Instructions du projet")
+    assert read_toml(tmp_path / ".mini-agent" / "config.toml") == {}  # tout est en commentaire
+    assert (tmp_path / ".mini-agent" / "skills" / "LISEZMOI.txt").exists()
+    # Le LISEZMOI n'est pas une skill, et AGENTS.md est déjà dans le prompt système.
+    assert "LISEZMOI" not in available_skills(session.ctx.skills_dirs)
+    assert "## Instructions du projet (AGENTS.md)" in session.messages[0]["content"]
+    assert execute_command(session, "/init") == "Ce projet est déjà initialisé : rien à créer."
+
+
+def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
+    (tmp_path / "AGENTS.md").write_text("Mes consignes.", encoding="utf-8")
+    resultat = execute_command(session, "/init")
+    assert "  AGENTS.md" not in resultat  # pas dans la liste des fichiers créés
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "Mes consignes."
+
+
+def test_init_refuse_par_l_utilisateur(session, tmp_path):
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/init") == "Rien n'a été créé."
+    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
         <h3>Pièges à surveiller</h3>
         <ul>
           <li>Un modèle qui ne gère pas les outils (certains modèles anciens) : Ollama répond une erreur HTTP 400 (« does not support tools »). Le message s'affiche, la session continue : revenir en arrière avec <code>/model</code>.</li>
@@ -3950,6 +4062,7 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
@@ -3958,6 +4071,62 @@ from mini_agent.tools import available_skills, load_skill
 def cmd_help(session: Session, arg: str) -&gt; str:
     lines = [f"{name:&lt;9} {description}" for name, (_, description) in COMMANDS.items()]
     return "\n".join(lines + [f"{'/quit':&lt;9} quitter", "", "@chemin dans une demande : joint le contenu du fichier."])
+
+
+# Fichiers créés par /init dans le projet : chemin relatif -&gt; contenu.
+INIT_FILES = {
+    PROJECT_INSTRUCTIONS: """# Instructions du projet
+
+- But du projet : ...
+- Lancer le projet : ...
+- Lancer les tests : python -m pytest -q
+- Conventions de code : ...
+- Fichiers ou dossiers à ne jamais modifier : ...
+""",
+    f"{PROJECT_DIR_NAME}/config.toml": """# Réglages de mini-agent pour ce projet (ils remplacent ~/.mini-agent/config.toml).
+# Retire le # devant une ligne pour l'activer.
+# model = "qwen3.5:4b"
+# temperature = 0.2
+# num_ctx = 8192
+# allowed_commands = ["python -m pytest", "git status", "git diff"]
+""",
+    f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
+
+Format :
+
+---
+description: Une ligne qui dit quand utiliser cette skill.
+---
+# Titre
+
+1. Première étape de la méthode.
+2. ...
+
+Le prompt système ne contient que le nom et la description de chaque skill.
+Le modèle charge le contenu avec load_skill quand la demande correspond.
+Une skill de ce dossier remplace une skill globale du même nom.
+Ce fichier .txt n'est pas une skill : il est ignoré.
+""",
+}
+
+
+def cmd_init(session: Session, arg: str) -&gt; str:
+    workdir = session.config.workdir
+    # On ne remplace jamais un fichier existant : seuls les manquants sont créés.
+    missing = [rel for rel in INIT_FILES if not (workdir / rel).exists()]
+    if not missing:
+        return "Ce projet est déjà initialisé : rien à créer."
+    listing = "\n".join(f"  {rel}" for rel in missing)
+    if not session.ctx.confirm(f"Fichiers à créer :\n{listing}\nLes créer dans {workdir} ?"):
+        return "Rien n'a été créé."
+    for rel in missing:
+        path = workdir / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(INIT_FILES[rel], encoding="utf-8")
+    # Le prompt système est reconstruit pour tenir compte d'AGENTS.md,
+    # sans effacer la conversation en cours.
+    session.messages[0] = {"role": "system", "content": session.system_prompt()}
+    return f"Créé :\n{listing}\nComplète AGENTS.md, puis ajoute tes skills dans {PROJECT_DIR_NAME}/skills/."
 
 
 def cmd_config(session: Session, arg: str) -&gt; str:
@@ -4050,6 +4219,7 @@ def cmd_allow(session: Session, arg: str) -&gt; str:
 # nom de la commande -&gt; (fonction, aide affichée par /help)
 COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/help": (cmd_help, "liste des commandes"),
+    "/init": (cmd_init, "préparer le projet : AGENTS.md et dossier .mini-agent/"),
     "/config": (cmd_config, "réglages actuels"),
     "/models": (cmd_models, "modèles installés sur le serveur Ollama"),
     "/model": (cmd_model, "changer de modèle : /model qwen3.5:4b"),
@@ -4875,7 +5045,35 @@ def test_allow(session):
     execute_command(session, "/allow python -m pytest")
     assert session.ctx.allowed_commands == ["python -m pytest"]
     assert execute_command(session, "/allow git status &amp;&amp; del x").startswith("Refusé")
-    assert session.ctx.allowed_commands == ["python -m pytest"]</pre></div>
+    assert session.ctx.allowed_commands == ["python -m pytest"]
+
+
+def test_init_cree_les_fichiers_du_projet(session, tmp_path):
+    from mini_agent.config import read_toml
+    from mini_agent.tools import available_skills
+
+    resultat = execute_command(session, "/init")
+    assert resultat.startswith("Créé :")
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8").startswith("# Instructions du projet")
+    assert read_toml(tmp_path / ".mini-agent" / "config.toml") == {}  # tout est en commentaire
+    assert (tmp_path / ".mini-agent" / "skills" / "LISEZMOI.txt").exists()
+    # Le LISEZMOI n'est pas une skill, et AGENTS.md est déjà dans le prompt système.
+    assert "LISEZMOI" not in available_skills(session.ctx.skills_dirs)
+    assert "## Instructions du projet (AGENTS.md)" in session.messages[0]["content"]
+    assert execute_command(session, "/init") == "Ce projet est déjà initialisé : rien à créer."
+
+
+def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
+    (tmp_path / "AGENTS.md").write_text("Mes consignes.", encoding="utf-8")
+    resultat = execute_command(session, "/init")
+    assert "  AGENTS.md" not in resultat  # pas dans la liste des fichiers créés
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "Mes consignes."
+
+
+def test_init_refuse_par_l_utilisateur(session, tmp_path):
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/init") == "Rien n'a été créé."
+    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
       </div>
     </div>
 
@@ -6707,6 +6905,14 @@ mini-agent</pre></div>
     ├── config.toml        # project settings (step 12)
     └── skills/            # project skills
         └── deploy.md</pre></div>
+        <div class="warning-block"><strong>These files do not exist beforehand.</strong> <code>AGENTS.md</code> and the <code>.mini-agent/</code> folder are created in each project where mini-agent is started, not in the mini-agent repository (which keeps the global skills in <code>skills/</code>). The simplest way: the <code>/init</code> command (<a href="#mini-agent-step10-en">step 10</a>). Or by hand:</div>
+        <div class="code-block"><pre># Windows (PowerShell), in the project folder
+New-Item -ItemType Directory -Force .mini-agent\skills
+New-Item AGENTS.md
+
+# macOS
+mkdir -p .mini-agent/skills
+touch AGENTS.md</pre></div>
         <div class="code-label">AGENTS.md (example)</div>
         <div class="code-block"><pre># Projet calc
 
@@ -6804,6 +7010,7 @@ Tape ta demande, ou /help pour les commandes.</pre></div>
           <li>After changing <code>pyproject.toml</code> (new dependency, new command), reinstall: <code>uv tool install -e . --force</code>.</li>
           <li>Confinement is about location, not content: a project <code>.env</code> file is still readable by <code>read_file</code>. And <code>run_command</code> can still write elsewhere: see step 14.</li>
           <li>A long <code>AGENTS.md</code> takes up context on every call: it is truncated to 4000 characters.</li>
+          <li>A skill added during a session shows up in <code>/skills</code> right away, but the model only sees it after a <code>/clear</code> or a restart: the system prompt is built at the start of the conversation.</li>
         </ul>
       </div>
     </div>
@@ -6824,6 +7031,7 @@ Tape ta demande, ou /help pour les commandes.</pre></div>
           <li><code>Session.chat</code> reads <code>self.config</code> on every call: a <code>/temp</code> applies from the next request.</li>
           <li><strong>Command registry</strong>: the same idea as the tool registry, a name → (function, help) dictionary. Adding a command touches neither the loop nor <code>cli.py</code>.</li>
           <li><code>/models</code> queries <code>GET /api/tags</code>: the list of models installed on the Ollama server.</li>
+          <li><code>/init</code> prepares the current project: it creates <code>AGENTS.md</code>, <code>.mini-agent/config.toml</code> (settings commented out, so without effect until enabled) and <code>.mini-agent/skills/LISEZMOI.txt</code>, which explains the skill format. It asks for confirmation, never replaces an existing file and rebuilds the system prompt to include <code>AGENTS.md</code>. The explanation file is a <code>.txt</code>: an example skill in <code>.md</code> would be listed in the system prompt, and the model might load it for nothing.</li>
         </ul>
         <div class="code-label">src/mini_agent/llm.py</div>
         <div class="code-block"><pre>"""Appel au LLM via l'API native d'Ollama.
@@ -6942,6 +7150,7 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
@@ -6950,6 +7159,62 @@ from mini_agent.tools import available_skills, load_skill
 def cmd_help(session: Session, arg: str) -&gt; str:
     lines = [f"{name:&lt;9} {description}" for name, (_, description) in COMMANDS.items()]
     return "\n".join(lines + [f"{'/quit':&lt;9} quitter", "", "@chemin dans une demande : joint le contenu du fichier."])
+
+
+# Fichiers créés par /init dans le projet : chemin relatif -&gt; contenu.
+INIT_FILES = {
+    PROJECT_INSTRUCTIONS: """# Instructions du projet
+
+- But du projet : ...
+- Lancer le projet : ...
+- Lancer les tests : python -m pytest -q
+- Conventions de code : ...
+- Fichiers ou dossiers à ne jamais modifier : ...
+""",
+    f"{PROJECT_DIR_NAME}/config.toml": """# Réglages de mini-agent pour ce projet (ils remplacent ~/.mini-agent/config.toml).
+# Retire le # devant une ligne pour l'activer.
+# model = "qwen3.5:4b"
+# temperature = 0.2
+# num_ctx = 8192
+# allowed_commands = ["python -m pytest", "git status", "git diff"]
+""",
+    f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
+
+Format :
+
+---
+description: Une ligne qui dit quand utiliser cette skill.
+---
+# Titre
+
+1. Première étape de la méthode.
+2. ...
+
+Le prompt système ne contient que le nom et la description de chaque skill.
+Le modèle charge le contenu avec load_skill quand la demande correspond.
+Une skill de ce dossier remplace une skill globale du même nom.
+Ce fichier .txt n'est pas une skill : il est ignoré.
+""",
+}
+
+
+def cmd_init(session: Session, arg: str) -&gt; str:
+    workdir = session.config.workdir
+    # On ne remplace jamais un fichier existant : seuls les manquants sont créés.
+    missing = [rel for rel in INIT_FILES if not (workdir / rel).exists()]
+    if not missing:
+        return "Ce projet est déjà initialisé : rien à créer."
+    listing = "\n".join(f"  {rel}" for rel in missing)
+    if not session.ctx.confirm(f"Fichiers à créer :\n{listing}\nLes créer dans {workdir} ?"):
+        return "Rien n'a été créé."
+    for rel in missing:
+        path = workdir / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(INIT_FILES[rel], encoding="utf-8")
+    # Le prompt système est reconstruit pour tenir compte d'AGENTS.md,
+    # sans effacer la conversation en cours.
+    session.messages[0] = {"role": "system", "content": session.system_prompt()}
+    return f"Créé :\n{listing}\nComplète AGENTS.md, puis ajoute tes skills dans {PROJECT_DIR_NAME}/skills/."
 
 
 def cmd_config(session: Session, arg: str) -&gt; str:
@@ -7042,6 +7307,7 @@ def cmd_allow(session: Session, arg: str) -&gt; str:
 # nom de la commande -&gt; (fonction, aide affichée par /help)
 COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/help": (cmd_help, "liste des commandes"),
+    "/init": (cmd_init, "préparer le projet : AGENTS.md et dossier .mini-agent/"),
     "/config": (cmd_config, "réglages actuels"),
     "/models": (cmd_models, "modèles installés sur le serveur Ollama"),
     "/model": (cmd_model, "changer de modèle : /model qwen3.5:4b"),
@@ -7096,7 +7362,8 @@ def execute_command(session: Session, line: str) -&gt; str:
     except (KeyboardInterrupt, EOFError):
         print("\nAu revoir.")</pre></div>
         <h3>Try it</h3>
-        <div class="code-block"><pre>/models
+        <div class="code-block"><pre>/init
+/models
 /model qwen3.5:9b
 /temp 0.5
 /ctx 16384
@@ -7105,9 +7372,24 @@ def execute_command(session: Session, line: str) -&gt; str:
 /config
 /clear</pre></div>
         <h3>What we should observe</h3>
-        <p>Real harness outputs:</p>
+        <p>Real harness outputs, first <code>/init</code> in an empty project:</p>
+        <div class="code-block"><pre>vous &gt; /init
+Fichiers à créer :
+  AGENTS.md
+  .mini-agent/config.toml
+  .mini-agent/skills/LISEZMOI.txt
+Les créer dans …/rfact ? [o/N] o
+Créé :
+  AGENTS.md
+  .mini-agent/config.toml
+  .mini-agent/skills/LISEZMOI.txt
+Complète AGENTS.md, puis ajoute tes skills dans .mini-agent/skills/.
+
+vous &gt; /init
+Ce projet est déjà initialisé : rien à créer.</pre></div>
         <div class="code-block"><pre>vous &gt; /help
 /help     liste des commandes
+/init     préparer le projet : AGENTS.md et dossier .mini-agent/
 /config   réglages actuels
 /models   modèles installés sur le serveur Ollama
 /model    changer de modèle : /model qwen3.5:4b
@@ -7206,7 +7488,35 @@ def test_allow(session):
     execute_command(session, "/allow python -m pytest")
     assert session.ctx.allowed_commands == ["python -m pytest"]
     assert execute_command(session, "/allow git status &amp;&amp; del x").startswith("Refusé")
-    assert session.ctx.allowed_commands == ["python -m pytest"]</pre></div>
+    assert session.ctx.allowed_commands == ["python -m pytest"]
+
+
+def test_init_cree_les_fichiers_du_projet(session, tmp_path):
+    from mini_agent.config import read_toml
+    from mini_agent.tools import available_skills
+
+    resultat = execute_command(session, "/init")
+    assert resultat.startswith("Créé :")
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8").startswith("# Instructions du projet")
+    assert read_toml(tmp_path / ".mini-agent" / "config.toml") == {}  # tout est en commentaire
+    assert (tmp_path / ".mini-agent" / "skills" / "LISEZMOI.txt").exists()
+    # Le LISEZMOI n'est pas une skill, et AGENTS.md est déjà dans le prompt système.
+    assert "LISEZMOI" not in available_skills(session.ctx.skills_dirs)
+    assert "## Instructions du projet (AGENTS.md)" in session.messages[0]["content"]
+    assert execute_command(session, "/init") == "Ce projet est déjà initialisé : rien à créer."
+
+
+def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
+    (tmp_path / "AGENTS.md").write_text("Mes consignes.", encoding="utf-8")
+    resultat = execute_command(session, "/init")
+    assert "  AGENTS.md" not in resultat  # pas dans la liste des fichiers créés
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "Mes consignes."
+
+
+def test_init_refuse_par_l_utilisateur(session, tmp_path):
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/init") == "Rien n'a été créé."
+    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
         <h3>Pitfalls to watch</h3>
         <ul>
           <li>A model without tool support (some older models): Ollama answers with an HTTP 400 error ("does not support tools"). The message is printed and the session continues: switch back with <code>/model</code>.</li>
@@ -8831,6 +9141,7 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
@@ -8839,6 +9150,62 @@ from mini_agent.tools import available_skills, load_skill
 def cmd_help(session: Session, arg: str) -&gt; str:
     lines = [f"{name:&lt;9} {description}" for name, (_, description) in COMMANDS.items()]
     return "\n".join(lines + [f"{'/quit':&lt;9} quitter", "", "@chemin dans une demande : joint le contenu du fichier."])
+
+
+# Fichiers créés par /init dans le projet : chemin relatif -&gt; contenu.
+INIT_FILES = {
+    PROJECT_INSTRUCTIONS: """# Instructions du projet
+
+- But du projet : ...
+- Lancer le projet : ...
+- Lancer les tests : python -m pytest -q
+- Conventions de code : ...
+- Fichiers ou dossiers à ne jamais modifier : ...
+""",
+    f"{PROJECT_DIR_NAME}/config.toml": """# Réglages de mini-agent pour ce projet (ils remplacent ~/.mini-agent/config.toml).
+# Retire le # devant une ligne pour l'activer.
+# model = "qwen3.5:4b"
+# temperature = 0.2
+# num_ctx = 8192
+# allowed_commands = ["python -m pytest", "git status", "git diff"]
+""",
+    f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
+
+Format :
+
+---
+description: Une ligne qui dit quand utiliser cette skill.
+---
+# Titre
+
+1. Première étape de la méthode.
+2. ...
+
+Le prompt système ne contient que le nom et la description de chaque skill.
+Le modèle charge le contenu avec load_skill quand la demande correspond.
+Une skill de ce dossier remplace une skill globale du même nom.
+Ce fichier .txt n'est pas une skill : il est ignoré.
+""",
+}
+
+
+def cmd_init(session: Session, arg: str) -&gt; str:
+    workdir = session.config.workdir
+    # On ne remplace jamais un fichier existant : seuls les manquants sont créés.
+    missing = [rel for rel in INIT_FILES if not (workdir / rel).exists()]
+    if not missing:
+        return "Ce projet est déjà initialisé : rien à créer."
+    listing = "\n".join(f"  {rel}" for rel in missing)
+    if not session.ctx.confirm(f"Fichiers à créer :\n{listing}\nLes créer dans {workdir} ?"):
+        return "Rien n'a été créé."
+    for rel in missing:
+        path = workdir / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(INIT_FILES[rel], encoding="utf-8")
+    # Le prompt système est reconstruit pour tenir compte d'AGENTS.md,
+    # sans effacer la conversation en cours.
+    session.messages[0] = {"role": "system", "content": session.system_prompt()}
+    return f"Créé :\n{listing}\nComplète AGENTS.md, puis ajoute tes skills dans {PROJECT_DIR_NAME}/skills/."
 
 
 def cmd_config(session: Session, arg: str) -&gt; str:
@@ -8931,6 +9298,7 @@ def cmd_allow(session: Session, arg: str) -&gt; str:
 # nom de la commande -&gt; (fonction, aide affichée par /help)
 COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/help": (cmd_help, "liste des commandes"),
+    "/init": (cmd_init, "préparer le projet : AGENTS.md et dossier .mini-agent/"),
     "/config": (cmd_config, "réglages actuels"),
     "/models": (cmd_models, "modèles installés sur le serveur Ollama"),
     "/model": (cmd_model, "changer de modèle : /model qwen3.5:4b"),
@@ -9756,7 +10124,35 @@ def test_allow(session):
     execute_command(session, "/allow python -m pytest")
     assert session.ctx.allowed_commands == ["python -m pytest"]
     assert execute_command(session, "/allow git status &amp;&amp; del x").startswith("Refusé")
-    assert session.ctx.allowed_commands == ["python -m pytest"]</pre></div>
+    assert session.ctx.allowed_commands == ["python -m pytest"]
+
+
+def test_init_cree_les_fichiers_du_projet(session, tmp_path):
+    from mini_agent.config import read_toml
+    from mini_agent.tools import available_skills
+
+    resultat = execute_command(session, "/init")
+    assert resultat.startswith("Créé :")
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8").startswith("# Instructions du projet")
+    assert read_toml(tmp_path / ".mini-agent" / "config.toml") == {}  # tout est en commentaire
+    assert (tmp_path / ".mini-agent" / "skills" / "LISEZMOI.txt").exists()
+    # Le LISEZMOI n'est pas une skill, et AGENTS.md est déjà dans le prompt système.
+    assert "LISEZMOI" not in available_skills(session.ctx.skills_dirs)
+    assert "## Instructions du projet (AGENTS.md)" in session.messages[0]["content"]
+    assert execute_command(session, "/init") == "Ce projet est déjà initialisé : rien à créer."
+
+
+def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
+    (tmp_path / "AGENTS.md").write_text("Mes consignes.", encoding="utf-8")
+    resultat = execute_command(session, "/init")
+    assert "  AGENTS.md" not in resultat  # pas dans la liste des fichiers créés
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "Mes consignes."
+
+
+def test_init_refuse_par_l_utilisateur(session, tmp_path):
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/init") == "Rien n'a été créé."
+    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
       </div>
     </div>
 
