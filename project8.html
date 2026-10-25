@@ -47,7 +47,7 @@
     <p>Ce projet a un but simple : <strong>comprendre comment fonctionne un agent de code</strong> en le construisant de A à Z en Python. Un agent de code est un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
     <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main. Le code est sur GitHub : <a href="https://github.com/nils-malmberg/mini-agent">nils-malmberg/mini-agent</a>.</p>
     <p>Le LLM tourne en local sur mon NAS (voir le <a href="project6.html">projet NAS Lab</a>) : <strong>qwen3.5:4b</strong> servi par Ollama sur une RTX 3050 de 6 Go. Un modèle aussi petit impose des choix : peu d'outils (5 au maximum), des descriptions très claires et des résultats d'outils tronqués.</p>
-    <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 17 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, capable de recevoir des fichiers tagués, de reprendre une conversation et de compacter son contexte, avec une interface soignée.</p>
+    <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 18 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, capable de recevoir des fichiers tagués, de reprendre une conversation et de compacter son contexte, avec une interface soignée, jusqu'à sa publication sur PyPI.</p>
     <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="Interface de mini-agent dans un terminal : la mascotte, puis chaque tour de la boucle avec le modèle, le harness et l'outil" width="639"></div>
 
     <h2>Architecture</h2>
@@ -122,13 +122,18 @@
         <div class="code-block"><pre>mini-agent/
 ├── pyproject.toml          # uv + hatchling, une seule dépendance : requests
 ├── .python-version         # 3.11
-├── README.md
+├── README.md               # aussi la page du projet sur PyPI
+├── LICENSE
+├── .github/workflows/      # CI et publication sur PyPI (étape 18)
+│   ├── ci.yml
+│   └── release.yml
+├── scripts/check_package.py
 ├── steps/                  # étapes 1 à 4 : un script autonome par étape
 │   ├── step1_hello.py
 │   ├── step2_chat.py
 │   ├── step3_tool.py
 │   └── step4_loop.py
-├── src/mini_agent/         # étapes 5 à 8 : la version modulaire
+├── src/mini_agent/         # à partir de l'étape 5 : la version modulaire
 │   ├── __init__.py
 │   ├── config.py           # configuration et limites
 │   ├── llm.py              # appel à Ollama
@@ -139,30 +144,21 @@
 │   ├── history.py          # sauvegarde des conversations (partie 2)
 │   ├── context.py          # mesure et compactage du contexte (partie 2)
 │   ├── commands.py         # commandes /... (partie 2)
-│   ├── ui.py               # interface : couleurs, logo, animation (partie 2)
-│   └── cli.py              # point d'entrée `mini-agent`
-├── prompts/
-│   ├── AGENT.md            # prompt système
-│   └── COMPACT.md          # consignes de résumé (partie 2)
-├── skills/                 # skills en Markdown
-│   ├── corriger-un-bug.md
-│   └── ecrire-tests-pytest.md
+│   ├── ui.py               # interface : mascotte, boucle visible (partie 2)
+│   ├── cli.py              # point d'entrée `mini-agent`
+│   ├── prompts/            # dans le paquet depuis l'étape 18
+│   │   ├── AGENT.md        # prompt système
+│   │   └── COMPACT.md      # consignes de résumé
+│   └── skills/             # skills globales, en Markdown
+│       ├── corriger-un-bug.md
+│       └── ecrire-tests-pytest.md
 ├── demo/stats.py           # script buggé pour la démo
-└── tests/                  # pytest, Ollama remplacé par un faux modèle
-    ├── test_config.py
-    ├── test_guards.py
-    ├── test_tools.py
-    ├── test_agent.py
-    ├── test_session.py
-    ├── test_commands.py
-    ├── test_history.py
-    ├── test_context.py
-    └── test_ui.py</pre></div>
+└── tests/                  # pytest, Ollama remplacé par un faux modèle</pre></div>
 
     <h2 id="mini-agent-config-fr">Configuration</h2>
     <p>Tout ce qui dépend de la machine se règle par variables d'environnement :</p>
     <ul>
-      <li><code>OLLAMA_URL</code> : adresse du serveur Ollama (défaut <code>http://192.168.1.76:11434</code>).</li>
+      <li><code>OLLAMA_URL</code> : adresse du serveur Ollama (défaut <code>http://localhost:11434</code>, l'adresse standard d'Ollama sur la machine ; jusqu'à l'étape 17, c'était celle de mon NAS).</li>
       <li><code>OLLAMA_MODEL</code> : modèle utilisé (défaut <code>qwen3.5:4b</code>).</li>
       <li><code>MINI_AGENT_WORKDIR</code> (facultatif) : le seul dossier où l'agent peut lire, écrire et lancer des commandes. Par défaut, c'est le dossier depuis lequel on lance l'agent. S'il est défini, il doit exister : sinon l'agent s'arrête au démarrage.</li>
       <li><code>NO_COLOR</code> : si elle existe, les logs ne sont pas colorés.</li>
@@ -211,6 +207,7 @@ $env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
         <li><a href="#mini-agent-step15-fr">Sauvegarder et reprendre les conversations</a></li>
         <li><a href="#mini-agent-step16-fr">Mesurer et compacter le contexte</a></li>
         <li><a href="#mini-agent-step17-fr">Une interface plus jolie</a></li>
+        <li><a href="#mini-agent-step18-fr">Publier sur PyPI : CI/CD</a></li>
       </ol>
       <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-code-fr">Code complet de la version finale</a> · <a href="#mini-agent-glossary-fr">Glossaire</a></p>
     </div>
@@ -1805,8 +1802,8 @@ AssertionError: moyenne attendue : 13.5, obtenue : 10.5</pre></div>
     </div>
 
     <h3 id="mini-agent-part2-fr">Partie 2 — vers un agent du quotidien, comme opencode</h3>
-    <p>Les étapes 9 à 17 transforment mini-agent en outil qu'on lance dans n'importe quel projet : consignes et skills du projet, commandes <code>/…</code>, fichiers tagués, réglages persistants, édition ciblée, commandes autorisées, sauvegarde des conversations, compactage du contexte et interface soignée.</p>
-    <div class="warning-block"><strong>Comment suivre cette partie.</strong> Ces fonctionnalités touchent les mêmes fichiers (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), et certains extraits utilisent une fonction d'une étape suivante. Le plus sûr : remplacer d'abord <code>src/</code>, <code>prompts/</code>, <code>skills/</code> et <code>tests/</code> par le <a href="#mini-agent-code-fr">code complet</a> (version finale), lancer <code>uv run pytest -q</code>, puis suivre chaque étape pour comprendre et essayer la fonctionnalité. Les extraits des étapes 9 à 16 montrent le code tel qu'il était à la fin de l'étape 16 ; l'étape 17 ne change que l'affichage.</div>
+    <p>Les étapes 9 à 18 transforment mini-agent en outil qu'on lance dans n'importe quel projet : consignes et skills du projet, commandes <code>/…</code>, fichiers tagués, réglages persistants, édition ciblée, commandes autorisées, sauvegarde des conversations, compactage du contexte, interface soignée et publication sur PyPI.</p>
+    <div class="warning-block"><strong>Comment suivre cette partie.</strong> Ces fonctionnalités touchent les mêmes fichiers (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), et certains extraits utilisent une fonction d'une étape suivante. Le plus sûr : remplacer d'abord <code>src/</code>, <code>prompts/</code>, <code>skills/</code> et <code>tests/</code> par le <a href="#mini-agent-code-fr">code complet</a> (version finale), lancer <code>uv run pytest -q</code>, puis suivre chaque étape pour comprendre et essayer la fonctionnalité. Les extraits des étapes 9 à 16 montrent le code tel qu'il était à la fin de l'étape 16 ; l'étape 17 change l'affichage, et l'étape 18 prépare la publication (les dossiers <code>prompts/</code> et <code>skills/</code> passent dans <code>src/mini_agent/</code>).</div>
 
     <div class="tuto-card" id="mini-agent-step9-fr">
       <div class="tuto-card-header">
@@ -4595,8 +4592,410 @@ def test_animation_sans_terminal(texte_simple):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-step18-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">18</span>
+        <span class="tuto-card-title">Publier sur PyPI : CI/CD</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Objectif</h3>
+        <p>Tester automatiquement mini-agent sous Windows, macOS et Linux à chaque modification, et le publier sur PyPI pour que n'importe qui l'installe avec <code>uv tool install mini-agent</code>.</p>
+        <h3>Concept</h3>
+        <p>La <strong>CI</strong> (intégration continue) relance les tests à chaque push, sur des machines neuves fournies par GitHub Actions. La <strong>CD</strong> (déploiement continu) publie une nouvelle version quand on pousse une étiquette comme <code>v0.1.0</code>. Les deux sont décrites dans des fichiers YAML, dans <code>.github/workflows/</code>.</p>
+        <ul>
+          <li><strong>ci.yml</strong> : 9 jobs de tests (3 systèmes × Python 3.11, 3.12 et 3.13). <code>uv sync --locked</code> installe exactement les versions de <code>uv.lock</code>. Un job « Paquet » construit le paquet, vérifie son contenu, l'installe dans un dossier vierge et le lance (<code>echo /quit | mini-agent</code>) : c'est là qu'on voit si les prompts et les skills sont bien dedans.</li>
+          <li><strong>release.yml</strong> : tests, construction, vérification que l'étiquette correspond à la version de <code>pyproject.toml</code>, publication sur <strong>TestPyPI</strong> (une copie de PyPI pour s'entraîner), puis sur <strong>PyPI</strong> après ta validation manuelle.</li>
+          <li><strong>Trusted Publishing</strong> : aucun mot de passe ni jeton dans le dépôt. PyPI fait confiance à <em>ce</em> workflow, de <em>ce</em> dépôt, dans <em>cet</em> environnement GitHub ; GitHub lui prouve son identité avec un jeton de courte durée (OIDC), d'où <code>permissions: id-token: write</code>.</li>
+          <li><strong>Préparer le paquet</strong> : <code>prompts/</code> et <code>skills/</code> passent dans <code>src/mini_agent/</code> pour être installés avec le code. L'adresse par défaut devient celle d'Ollama sur la machine (<code>http://localhost:11434</code>) : un Ollama distant se règle dans <code>~/.mini-agent/config.toml</code>. La fiche du paquet (licence, liens, classifiers) est complétée, et <code>mini-agent --version</code> affiche la version installée.</li>
+        </ul>
+        <div class="code-label">pyproject.toml (version finale)</div>
+        <div class="code-block"><pre>[project]
+name = "mini-agent"
+version = "0.1.0"
+description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Nils Malmberg" }]
+requires-python = "&gt;=3.11"
+dependencies = [
+    "requests&gt;=2.34.2",
+]
+keywords = ["agent", "coding-agent", "llm", "ollama", "tutoriel"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Natural Language :: French",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Documentation = "https://nils-malmberg.fr/project8.html"
+Repository = "https://github.com/nils-malmberg/mini-agent"
+Issues = "https://github.com/nils-malmberg/mini-agent/issues"
+
+[project.scripts]
+mini-agent = "mini_agent.cli:main"
+
+[build-system]
+# 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
+requires = ["hatchling&gt;=1.27"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest&gt;=9.1.1",
+]</pre></div>
+        <div class="code-label">src/mini_agent/config.py — adresse par défaut et dossiers du paquet</div>
+        <div class="code-block"><pre># Valeurs par défaut : Ollama sur la machine elle-même (son adresse standard),
+# et un modèle 4B qui tient dans 6 Go de VRAM. Un Ollama installé ailleurs
+# (sur un NAS par exemple) se règle dans ~/.mini-agent/config.toml.
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
+
+# prompts/ et skills/ font partie du paquet (étape 18) : ils sont à côté de
+# ce fichier, dans src/mini_agent/, et donc installés avec le code, que
+# mini-agent vienne du dépôt ou de PyPI.
+PACKAGE_DIR = Path(__file__).resolve().parent
+PROMPTS_DIR = PACKAGE_DIR / "prompts"
+SKILLS_DIR = PACKAGE_DIR / "skills"</pre></div>
+        <div class="code-label">.github/workflows/ci.yml</div>
+        <div class="code-block"><pre># Intégration continue (étape 18) : à chaque push sur main et à chaque pull
+# request, les tests tournent sous Linux, Windows et macOS, avec Python 3.11
+# à 3.13. Puis le paquet est construit, vérifié et installé comme le ferait
+# un utilisateur.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # voir tous les systèmes en échec, pas seulement le premier
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Installer les dépendances (versions exactes de uv.lock)
+        run: uv sync --locked
+      - name: Tests
+        run: uv run pytest -q
+
+  package:
+    name: Paquet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Construire
+        run: uv build
+      - name: Vérifier le contenu
+        run: python3 scripts/check_package.py
+      - name: Installer le paquet construit et le lancer
+        run: |
+          uv tool install dist/*.whl
+          MINI_AGENT="$(uv tool dir --bin)/mini-agent"
+          "$MINI_AGENT" --version
+          mkdir "$RUNNER_TEMP/projet" &amp;&amp; cd "$RUNNER_TEMP/projet"
+          echo /quit | "$MINI_AGENT"</pre></div>
+        <div class="code-label">.github/workflows/release.yml</div>
+        <div class="code-block"><pre># Publication (étape 18) : quand une étiquette de version (v0.1.0...) est
+# poussée, le paquet est testé, construit et vérifié, publié sur TestPyPI,
+# puis sur PyPI après validation manuelle (environnement « pypi » protégé).
+# Aucun mot de passe ni jeton : PyPI fait confiance à ce workflow précis
+# (Trusted Publishing), qui prouve son identité avec un jeton OIDC de GitHub.
+name: Publication
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Tester et construire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tests
+        run: |
+          uv sync --locked
+          uv run pytest -q
+      - name: Construire
+        run: uv build
+      - name: Vérifier le paquet et la version
+        run: python3 scripts/check_package.py "$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Publier sur TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mini-agent
+    permissions:
+      id-token: write # nécessaire au Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Publier sur PyPI
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mini-agent
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1</pre></div>
+        <div class="code-label">scripts/check_package.py</div>
+        <div class="code-block"><pre>"""Vérifie le paquet construit avant de le publier (étape 18).
+
+    python scripts/check_package.py            # le contenu du paquet (dist/)
+    python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
+"""
+
+import sys
+import tomllib
+import zipfile
+from pathlib import Path
+
+# Fichiers sans lesquels mini-agent ne démarre pas : s'ils manquent dans le
+# paquet, il s'installe sans erreur mais plante au premier lancement.
+REQUIRED = [
+    "mini_agent/cli.py",
+    "mini_agent/prompts/AGENT.md",
+    "mini_agent/prompts/COMPACT.md",
+    "mini_agent/skills/corriger-un-bug.md",
+    "mini_agent/skills/ecrire-tests-pytest.md",
+]
+
+
+def main() -&gt; None:
+    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
+        sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
+    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    if len(wheels) != 1:
+        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+    names = zipfile.ZipFile(wheels[0]).namelist()
+    missing = [name for name in REQUIRED if name not in names]
+    if missing:
+        sys.exit(f"Fichiers absents du paquet : {', '.join(missing)}")
+    print(f"{wheels[0].name} : {len(names)} fichiers, prompts et skills présents.")
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+        <h3>Un bug trouvé en préparant la CI</h3>
+        <p>Avec <code>shell=True</code>, le timeout de <code>run_command</code> n'arrêtait que le shell, pas les programmes lancés par la commande. Sous Linux et macOS, ils continuaient de tourner en arrière-plan ; sous Windows, <code>subprocess.run</code> attendait même leur fin, et le timeout ne protégeait de rien. Un test le reproduit (un programme qui en lance un autre), puis la correction arrête toute l'arborescence de processus :</p>
+        <div class="code-label">src/mini_agent/tools.py — arrêter la commande et ses sous-processus</div>
+        <div class="code-block"><pre>def kill_process_tree(process: subprocess.Popen) -&gt; None:
+    """Arrête une commande et tous les programmes qu'elle a lancés (étape 18).
+
+    process.kill() n'arrêterait que le shell : les programmes lancés par la
+    commande continueraient de tourner, et sous Windows on attendrait leur fin.
+    """
+    if os.name == "nt":
+        # /T : toute l'arborescence de processus, /F : sans attendre.
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True)
+    else:
+        # La commande a son propre groupe de processus (start_new_session) :
+        # on envoie le signal à tout le groupe.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # tout s'est terminé entre-temps
+
+
+def run_command(ctx: ToolContext, command: str) -&gt; str:
+    """Lance une commande shell dans le dossier de travail, après confirmation."""
+    # Les commandes de la liste autorisée passent sans question (étape 14).
+    if not is_allowed_command(command, ctx.allowed_commands) and not ctx.confirm(f"Exécuter : {command}"):
+        return "Refusé par l'utilisateur : la commande n'a pas été exécutée."
+    # Force Python (s'il est lancé par la commande) à écrire en UTF-8,
+    # sinon Windows utilise cp1252 et les accents deviennent illisibles.
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    process = subprocess.Popen(
+        command,
+        shell=True,  # cmd.exe sous Windows, /bin/sh sous macOS
+        cwd=ctx.workdir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,  # une commande ne peut pas attendre une saisie au clavier
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        start_new_session=os.name != "nt",  # son propre groupe de processus (Linux, macOS)
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=ctx.command_timeout)
+    except subprocess.TimeoutExpired:
+        kill_process_tree(process)
+        process.communicate()  # récupère ce qui reste, maintenant que tout est arrêté
+        return f"Erreur : la commande a dépassé {ctx.command_timeout} s et a été arrêtée."
+    return (
+        f"code de sortie : {process.returncode}\n"
+        f"--- stdout ---\n{stdout}\n"
+        f"--- stderr ---\n{stderr}"
+    )</pre></div>
+        <div class="code-label">tests/test_tools.py (extrait)</div>
+        <div class="code-block"><pre>def test_run_command_timeout_arrete_aussi_les_sous_processus(ctx):
+    # parent.py lance enfant.py, qui écrit fini.txt au bout de 3 s. Tuer
+    # seulement le shell ne suffit pas : l'enfant survivrait (et, sous
+    # Windows, on attendrait sa fin car il garde la sortie ouverte).
+    (ctx.workdir / "enfant.py").write_text(
+        "import time, pathlib\ntime.sleep(3)\npathlib.Path('fini.txt').write_text('x')\n", encoding="utf-8"
+    )
+    (ctx.workdir / "parent.py").write_text(
+        "import subprocess, sys\nsubprocess.run([sys.executable, 'enfant.py'])\n", encoding="utf-8"
+    )
+    ctx.command_timeout = 1
+    debut = time.monotonic()
+    resultat = execute_tool("run_command", {"command": "python parent.py"}, ctx)
+    assert "dépassé 1 s" in resultat
+    assert time.monotonic() - debut &lt; 3  # pas d'attente de l'enfant
+    time.sleep(4)
+    assert not (ctx.workdir / "fini.txt").exists()  # l'enfant a bien été arrêté</pre></div>
+        <h3>Mettre en place (une seule fois)</h3>
+        <ol>
+          <li>Sur <a href="https://pypi.org/manage/account/publishing/">pypi.org</a> : <em>Your account → Publishing → Add a new pending publisher</em> (GitHub), avec :</li>
+        </ol>
+        <div class="code-block"><pre>PyPI Project Name : mini-agent
+Owner             : nils-malmberg
+Repository name   : mini-agent
+Workflow name     : release.yml
+Environment name  : pypi        (testpypi sur test.pypi.org)</pre></div>
+        <ol start="2">
+          <li>La même chose sur <a href="https://test.pypi.org/manage/account/publishing/">test.pypi.org</a>, avec l'environnement <code>testpypi</code>.</li>
+          <li>Dans le dépôt GitHub : <em>Settings → Environments</em>, créer <code>testpypi</code>, puis <code>pypi</code> avec <em>Required reviewers</em> (toi) et, dans <em>Deployment branches and tags</em>, seulement les étiquettes <code>v*</code>.</li>
+          <li>Pousser <code>.github/workflows/</code>, <code>scripts/check_package.py</code> et les autres changements sur <code>main</code> : la CI démarre (onglet <em>Actions</em>).</li>
+        </ol>
+        <h3>Publier une version</h3>
+        <div class="code-block"><pre># 1. Choisir la version dans pyproject.toml (ex. version = "0.1.0"), puis :
+uv lock
+git commit -am "Version 0.1.0"
+git push
+
+# 2. Quand la CI est verte sur main :
+git tag v0.1.0
+git push origin v0.1.0
+
+# 3. GitHub → Actions → Publication : TestPyPI se fait seul,
+#    puis valider le déploiement « pypi » (Review deployments → Approve)
+
+# 4. Installer depuis PyPI, comme n'importe qui :
+uv tool install mini-agent</pre></div>
+        <h3>Ce qu'on doit observer</h3>
+        <p>Les workflows ne tournent que sur GitHub. Ici, leurs commandes ont été rejouées à l'identique : construction, vérification du paquet (et refus d'une étiquette qui ne correspond pas), installation du paquet construit dans un dossier vierge, puis lancement. Sortie réelle :</p>
+        <div class="code-block"><pre>$ uv build
+Successfully built dist/mini_agent-0.1.0.tar.gz
+Successfully built dist/mini_agent-0.1.0-py3-none-any.whl
+$ python3 scripts/check_package.py v0.1.0
+mini_agent-0.1.0-py3-none-any.whl : 21 fichiers, prompts et skills présents.
+$ python3 scripts/check_package.py v0.2.0
+L'étiquette v0.2.0 ne correspond pas à la version v0.1.0 de pyproject.toml.
+$ uv tool install dist/mini_agent-0.1.0-py3-none-any.whl
+Installed 6 packages in 6ms
+ + certifi==2026.10.23
+ + charset-normalizer==3.5.2
+ + idna==3.20
+ + mini-agent==0.1.0 (from file:///home/user/mini-agent/dist/mini_agent-0.1.0-py3-none-any.whl)
+ + requests==2.34.2
+ + urllib3==2.8.0
+Installed 1 executable: mini-agent
+$ mini-agent --version
+mini-agent 0.1.0
+$ cd projet-vierge &amp;&amp; echo /quit | mini-agent
+
+    ●
+  ┌─┴─┐   mini-agent
+  │o o│   un agent de code minimal autour d’Ollama
+  │ ▬ │
+  └┬─┬┘   /help commandes · @fichier joindre un fichier · /quit quitter
+
+  modèle   qwen3.5:4b
+  serveur  http://localhost:11434
+  dossier  /home/user/projets/vierge
+  projet   2 skills · /init pour préparer le projet
+
+  vous</pre></div>
+        <p>Sur GitHub, l'onglet <em>Actions</em> montre les 9 jobs de tests et le job « Paquet » ; lors d'une publication, le job « Publier sur PyPI » attend ta validation. La page du projet apparaît ensuite sur <a href="https://pypi.org/project/mini-agent/">pypi.org/project/mini-agent</a>, avec le README comme description.</p>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_cli.py</div>
+        <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
+
+from importlib.metadata import version
+
+import pytest
+
+from mini_agent.cli import parse_args
+
+
+def test_version(capsys):
+    with pytest.raises(SystemExit):
+        parse_args(["--version"])
+    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+
+
+def test_options():
+    args = parse_args(["-m", "qwen3.5:9b", "-t", "0.5", "-c", "Corrige", "le", "bug"])
+    assert (args.model, args.temperature, args.resume) == ("qwen3.5:9b", 0.5, True)
+    assert args.demande == ["Corrige", "le", "bug"]
+
+
+def test_prompts_et_skills_dans_le_paquet():
+    from mini_agent.config import PACKAGE_DIR, PROMPTS_DIR, SKILLS_DIR
+
+    assert PROMPTS_DIR.parent == SKILLS_DIR.parent == PACKAGE_DIR  # installés avec le code
+    assert (PROMPTS_DIR / "AGENT.md").is_file() and (PROMPTS_DIR / "COMPACT.md").is_file()</pre></div>
+        <h3>Pièges à surveiller</h3>
+        <ul>
+          <li><strong>Rencontré :</strong> l'installation éditable (<code>uv tool install -e</code>) cachait un vrai problème : <code>prompts/</code> et <code>skills/</code> n'étaient pas dans le paquet. Seul un test sur le paquet construit, installé ailleurs, le révèle : d'où le job « Paquet » et <code>check_package.py</code>.</li>
+          <li><strong>Rencontré :</strong> le timeout de <code>run_command</code> et les sous-processus, ci-dessus. La branche Windows de <code>kill_process_tree</code> (<code>taskkill</code>) n'a encore tourné que dans la CI : c'est le rôle de la matrice Windows.</li>
+          <li>Une version publiée sur PyPI ne peut jamais être republiée, même après suppression : changer le numéro à chaque publication. C'est pour ça qu'on passe d'abord par TestPyPI.</li>
+          <li>Une publication « en attente » ne réserve pas le nom : si quelqu'un publie <code>mini-agent</code> avant toi, elle devient invalide. Publier la première version sans trop tarder.</li>
+          <li><code>uv sync --locked</code> échoue si <code>uv.lock</code> n'est plus à jour : relancer <code>uv lock</code> après chaque modification de <code>pyproject.toml</code>.</li>
+          <li>Le premier passage sous Windows et macOS peut révéler d'autres différences (chemins, encodage, commandes) : c'est exactement à ça que sert la CI. Corriger, repousser, jusqu'au vert.</li>
+          <li>Ton Ollama est sur le NAS : depuis cette étape, l'adresse par défaut est <code>localhost</code>. Mettre <code>url = "http://192.168.1.76:11434"</code> dans <code>~/.mini-agent/config.toml</code>.</li>
+        </ul>
+      </div>
+    </div>
+
     <h2 id="mini-agent-code-fr">Code complet de la version finale</h2>
-    <p>Chaque fichier de la version finale (après l'étape 17), en entier. Les scripts des étapes 1 à 4 sont donnés en entier dans leur étape.</p>
+    <p>Chaque fichier de la version finale (après l'étape 18), en entier. Les scripts des étapes 1 à 4 sont donnés en entier dans leur étape.</p>
 
     <div class="tuto-card" id="mini-agent-code-a-fr">
       <div class="tuto-card-header">
@@ -4611,17 +5010,39 @@ name = "mini-agent"
 version = "0.1.0"
 description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Nils Malmberg" }]
 requires-python = "&gt;=3.11"
 dependencies = [
     "requests&gt;=2.34.2",
 ]
+keywords = ["agent", "coding-agent", "llm", "ollama", "tutoriel"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Natural Language :: French",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Documentation = "https://nils-malmberg.fr/project8.html"
+Repository = "https://github.com/nils-malmberg/mini-agent"
+Issues = "https://github.com/nils-malmberg/mini-agent/issues"
 
 [project.scripts]
 mini-agent = "mini_agent.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+# 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
+requires = ["hatchling&gt;=1.27"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
@@ -4630,6 +5051,28 @@ dev = [
 ]</pre></div>
         <div class="code-label">.python-version</div>
         <div class="code-block"><pre>3.11</pre></div>
+        <div class="code-label">LICENSE</div>
+        <div class="code-block"><pre>MIT License
+
+Copyright (c) 2026 Nils Malmberg
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre></div>
       </div>
     </div>
 
@@ -4644,7 +5087,7 @@ dev = [
         <div class="code-block"><pre>"""Configuration de mini-agent.
 
 Les réglages viennent de plusieurs sources. Chacune remplace la précédente :
-    1. les valeurs par défaut ci-dessous (adaptées à mon NAS) ;
+    1. les valeurs par défaut ci-dessous ;
     2. le fichier global   ~/.mini-agent/config.toml ;
     3. le fichier du projet .mini-agent/config.toml (dans le dossier de travail) ;
     4. les variables d'environnement OLLAMA_URL et OLLAMA_MODEL ;
@@ -4657,8 +5100,10 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-# Valeurs par défaut : Ollama sur le NAS, modèle 4B qui tient dans 6 Go de VRAM.
-DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+# Valeurs par défaut : Ollama sur la machine elle-même (son adresse standard),
+# et un modèle 4B qui tient dans 6 Go de VRAM. Un Ollama installé ailleurs
+# (sur un NAS par exemple) se règle dans ~/.mini-agent/config.toml.
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
 
 # Température basse : on veut un agent prévisible, pas créatif.
@@ -4677,11 +5122,12 @@ MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
 # Compactage automatique quand le contexte est rempli à 80 % (étape 16).
 COMPACT_THRESHOLD = 0.8
 
-# Dossiers du projet mini-agent : prompts/ et skills/ sont à la racine du
-# dépôt, deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROMPTS_DIR = PROJECT_ROOT / "prompts"
-SKILLS_DIR = PROJECT_ROOT / "skills"
+# prompts/ et skills/ font partie du paquet (étape 18) : ils sont à côté de
+# ce fichier, dans src/mini_agent/, et donc installés avec le code, que
+# mini-agent vienne du dépôt ou de PyPI.
+PACKAGE_DIR = Path(__file__).resolve().parent
+PROMPTS_DIR = PACKAGE_DIR / "prompts"
+SKILLS_DIR = PACKAGE_DIR / "skills"
 
 # Réglages propres à chaque projet (étape 9) : un dossier .mini-agent/ dans
 # le dossier de travail, et un fichier AGENTS.md à sa racine.
@@ -4922,6 +5368,7 @@ ligne dans TOOLS. La boucle agentique (agent.py) n'a pas à être modifiée.
 import difflib
 import json
 import os
+import signal
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -5019,6 +5466,24 @@ def edit_file(ctx: ToolContext, path: str, old_text: str, new_text: str) -&gt; s
     return f"Fichier {path} {'créé' if old_text == '' else 'modifié'}."
 
 
+def kill_process_tree(process: subprocess.Popen) -&gt; None:
+    """Arrête une commande et tous les programmes qu'elle a lancés (étape 18).
+
+    process.kill() n'arrêterait que le shell : les programmes lancés par la
+    commande continueraient de tourner, et sous Windows on attendrait leur fin.
+    """
+    if os.name == "nt":
+        # /T : toute l'arborescence de processus, /F : sans attendre.
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True)
+    else:
+        # La commande a son propre groupe de processus (start_new_session) :
+        # on envoie le signal à tout le groupe.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # tout s'est terminé entre-temps
+
+
 def run_command(ctx: ToolContext, command: str) -&gt; str:
     """Lance une commande shell dans le dossier de travail, après confirmation."""
     # Les commandes de la liste autorisée passent sans question (étape 14).
@@ -5027,24 +5492,28 @@ def run_command(ctx: ToolContext, command: str) -&gt; str:
     # Force Python (s'il est lancé par la commande) à écrire en UTF-8,
     # sinon Windows utilise cp1252 et les accents deviennent illisibles.
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    process = subprocess.Popen(
+        command,
+        shell=True,  # cmd.exe sous Windows, /bin/sh sous macOS
+        cwd=ctx.workdir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,  # une commande ne peut pas attendre une saisie au clavier
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        start_new_session=os.name != "nt",  # son propre groupe de processus (Linux, macOS)
+    )
     try:
-        result = subprocess.run(
-            command,
-            shell=True,  # cmd.exe sous Windows, /bin/sh sous macOS
-            cwd=ctx.workdir,
-            capture_output=True,
-            stdin=subprocess.DEVNULL,  # une commande ne peut pas attendre une saisie au clavier
-            encoding="utf-8",
-            errors="replace",
-            timeout=ctx.command_timeout,
-            env=env,
-        )
+        stdout, stderr = process.communicate(timeout=ctx.command_timeout)
     except subprocess.TimeoutExpired:
+        kill_process_tree(process)
+        process.communicate()  # récupère ce qui reste, maintenant que tout est arrêté
         return f"Erreur : la commande a dépassé {ctx.command_timeout} s et a été arrêtée."
     return (
-        f"code de sortie : {result.returncode}\n"
-        f"--- stdout ---\n{result.stdout}\n"
-        f"--- stderr ---\n{result.stderr}"
+        f"code de sortie : {process.returncode}\n"
+        f"--- stdout ---\n{stdout}\n"
+        f"--- stderr ---\n{stderr}"
     )
 
 
@@ -6322,6 +6791,7 @@ Tout l'affichage passe par ui.py (étape 17).
 
 import argparse
 import os
+from importlib.metadata import version
 
 import requests
 
@@ -6342,6 +6812,7 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
     parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
+    parser.add_argument("--version", action="version", version=f"mini-agent {version('mini-agent')}")
     return parser.parse_args(argv)
 
 
@@ -6438,7 +6909,7 @@ if __name__ == "__main__":
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
       <div class="tuto-card-body">
-        <div class="code-label">prompts/AGENT.md</div>
+        <div class="code-label">src/mini_agent/prompts/AGENT.md</div>
         <div class="code-block"><pre>Tu es mini-agent, un assistant de programmation qui travaille dans un dossier de projet.
 
 ## Règles
@@ -6461,7 +6932,7 @@ if __name__ == "__main__":
 ## Skills
 Une skill est une fiche d'instructions pour un type de tâche. Si la demande correspond à une skill, charge-la d'abord avec load_skill, puis suis ses instructions.
 {skills}</pre></div>
-        <div class="code-label">prompts/COMPACT.md</div>
+        <div class="code-label">src/mini_agent/prompts/COMPACT.md</div>
         <div class="code-block"><pre>Tu résumes une conversation entre un utilisateur et un agent de code, pour que l'agent puisse continuer le travail sans la relire.
 
 Garde :
@@ -6474,7 +6945,7 @@ Règles :
 - 15 lignes au maximum, en français.
 - Pas de code complet : seulement les noms de fichiers, de fonctions et les points importants.
 - Écris uniquement le résumé, sans introduction.</pre></div>
-        <div class="code-label">skills/corriger-un-bug.md</div>
+        <div class="code-label">src/mini_agent/skills/corriger-un-bug.md</div>
         <div class="code-block"><pre>---
 description: Méthode pour trouver et corriger un bug dans un script Python.
 ---
@@ -6487,7 +6958,7 @@ description: Méthode pour trouver et corriger un bug dans un script Python.
    old_text = les lignes fautives copiées exactement, new_text = les lignes corrigées.
 5. Relance le script avec run_command pour vérifier que le bug a disparu.
 6. Réponds en expliquant : la cause du bug, la correction, la vérification.</pre></div>
-        <div class="code-label">skills/ecrire-tests-pytest.md</div>
+        <div class="code-label">src/mini_agent/skills/ecrire-tests-pytest.md</div>
         <div class="code-block"><pre>---
 description: Écrire des tests pytest pour un module Python.
 ---
@@ -6703,6 +7174,8 @@ def test_commandes_autorisees(commande, attendu):
         <div class="code-label">tests/test_tools.py</div>
         <div class="code-block"><pre>"""Tests des outils et du registre (tools.py)."""
 
+import time
+
 import pytest
 
 from mini_agent.tools import TOOLS, ToolContext, available_skills, execute_tool, tool_schemas
@@ -6812,6 +7285,25 @@ def test_run_command_timeout(ctx):
     ctx.command_timeout = 1
     resultat = execute_tool("run_command", {"command": 'python -c "import time; time.sleep(5)"'}, ctx)
     assert "dépassé 1 s" in resultat
+
+
+def test_run_command_timeout_arrete_aussi_les_sous_processus(ctx):
+    # parent.py lance enfant.py, qui écrit fini.txt au bout de 3 s. Tuer
+    # seulement le shell ne suffit pas : l'enfant survivrait (et, sous
+    # Windows, on attendrait sa fin car il garde la sortie ouverte).
+    (ctx.workdir / "enfant.py").write_text(
+        "import time, pathlib\ntime.sleep(3)\npathlib.Path('fini.txt').write_text('x')\n", encoding="utf-8"
+    )
+    (ctx.workdir / "parent.py").write_text(
+        "import subprocess, sys\nsubprocess.run([sys.executable, 'enfant.py'])\n", encoding="utf-8"
+    )
+    ctx.command_timeout = 1
+    debut = time.monotonic()
+    resultat = execute_tool("run_command", {"command": "python parent.py"}, ctx)
+    assert "dépassé 1 s" in resultat
+    assert time.monotonic() - debut &lt; 3  # pas d'attente de l'enfant
+    time.sleep(4)
+    assert not (ctx.workdir / "fini.txt").exists()  # l'enfant a bien été arrêté
 
 
 def test_run_command_sans_clavier(ctx):
@@ -7536,6 +8028,337 @@ def test_animation_sans_terminal(texte_simple):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-code-x-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">X</span>
+        <span class="tuto-card-title">tests/test_cli.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_cli.py</div>
+        <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
+
+from importlib.metadata import version
+
+import pytest
+
+from mini_agent.cli import parse_args
+
+
+def test_version(capsys):
+    with pytest.raises(SystemExit):
+        parse_args(["--version"])
+    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+
+
+def test_options():
+    args = parse_args(["-m", "qwen3.5:9b", "-t", "0.5", "-c", "Corrige", "le", "bug"])
+    assert (args.model, args.temperature, args.resume) == ("qwen3.5:9b", 0.5, True)
+    assert args.demande == ["Corrige", "le", "bug"]
+
+
+def test_prompts_et_skills_dans_le_paquet():
+    from mini_agent.config import PACKAGE_DIR, PROMPTS_DIR, SKILLS_DIR
+
+    assert PROMPTS_DIR.parent == SKILLS_DIR.parent == PACKAGE_DIR  # installés avec le code
+    assert (PROMPTS_DIR / "AGENT.md").is_file() and (PROMPTS_DIR / "COMPACT.md").is_file()</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-y-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">Y</span>
+        <span class="tuto-card-title">.github/workflows/</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">.github/workflows/ci.yml</div>
+        <div class="code-block"><pre># Intégration continue (étape 18) : à chaque push sur main et à chaque pull
+# request, les tests tournent sous Linux, Windows et macOS, avec Python 3.11
+# à 3.13. Puis le paquet est construit, vérifié et installé comme le ferait
+# un utilisateur.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # voir tous les systèmes en échec, pas seulement le premier
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Installer les dépendances (versions exactes de uv.lock)
+        run: uv sync --locked
+      - name: Tests
+        run: uv run pytest -q
+
+  package:
+    name: Paquet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Construire
+        run: uv build
+      - name: Vérifier le contenu
+        run: python3 scripts/check_package.py
+      - name: Installer le paquet construit et le lancer
+        run: |
+          uv tool install dist/*.whl
+          MINI_AGENT="$(uv tool dir --bin)/mini-agent"
+          "$MINI_AGENT" --version
+          mkdir "$RUNNER_TEMP/projet" &amp;&amp; cd "$RUNNER_TEMP/projet"
+          echo /quit | "$MINI_AGENT"</pre></div>
+        <div class="code-label">.github/workflows/release.yml</div>
+        <div class="code-block"><pre># Publication (étape 18) : quand une étiquette de version (v0.1.0...) est
+# poussée, le paquet est testé, construit et vérifié, publié sur TestPyPI,
+# puis sur PyPI après validation manuelle (environnement « pypi » protégé).
+# Aucun mot de passe ni jeton : PyPI fait confiance à ce workflow précis
+# (Trusted Publishing), qui prouve son identité avec un jeton OIDC de GitHub.
+name: Publication
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Tester et construire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tests
+        run: |
+          uv sync --locked
+          uv run pytest -q
+      - name: Construire
+        run: uv build
+      - name: Vérifier le paquet et la version
+        run: python3 scripts/check_package.py "$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Publier sur TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mini-agent
+    permissions:
+      id-token: write # nécessaire au Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Publier sur PyPI
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mini-agent
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1</pre></div>
+        <div class="code-label">scripts/check_package.py</div>
+        <div class="code-block"><pre>"""Vérifie le paquet construit avant de le publier (étape 18).
+
+    python scripts/check_package.py            # le contenu du paquet (dist/)
+    python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
+"""
+
+import sys
+import tomllib
+import zipfile
+from pathlib import Path
+
+# Fichiers sans lesquels mini-agent ne démarre pas : s'ils manquent dans le
+# paquet, il s'installe sans erreur mais plante au premier lancement.
+REQUIRED = [
+    "mini_agent/cli.py",
+    "mini_agent/prompts/AGENT.md",
+    "mini_agent/prompts/COMPACT.md",
+    "mini_agent/skills/corriger-un-bug.md",
+    "mini_agent/skills/ecrire-tests-pytest.md",
+]
+
+
+def main() -&gt; None:
+    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
+        sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
+    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    if len(wheels) != 1:
+        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+    names = zipfile.ZipFile(wheels[0]).namelist()
+    missing = [name for name in REQUIRED if name not in names]
+    if missing:
+        sys.exit(f"Fichiers absents du paquet : {', '.join(missing)}")
+    print(f"{wheels[0].name} : {len(names)} fichiers, prompts et skills présents.")
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-z-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">Z</span>
+        <span class="tuto-card-title">README.md</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">README.md</div>
+        <div class="code-block"><pre># mini-agent
+
+Un agent de code minimal en Python, écrit à la main pour comprendre comment fonctionne un agent de code : boucle agentique, harness, outils, prompt système, skills et garde-fous.
+
+Il pilote un LLM local servi par [Ollama](https://ollama.com) (par défaut `qwen3.5:4b`) via l'API native `/api/chat`. Aucun framework d'agent : une seule dépendance, `requests`.
+
+![Interface de mini-agent : la mascotte, puis chaque tour de la boucle avec le modèle, le harness et l'outil](https://nils-malmberg.fr/media/projets/project8/interface.png)
+
+📖 Tutoriel complet, étape par étape : [nils-malmberg.fr/project8.html](https://nils-malmberg.fr/project8.html)
+
+## Installation
+
+Prérequis : un serveur [Ollama](https://ollama.com) avec un modèle qui gère les outils (`ollama pull qwen3.5:4b`).
+
+```bash
+uv tool install mini-agent      # ou : pipx install mini-agent
+```
+
+Si Ollama ne tourne pas sur la même machine, indiquez son adresse dans `~/.mini-agent/config.toml` (sous Windows : `C:\Users\&lt;vous&gt;\.mini-agent\config.toml`) :
+
+```toml
+url = "http://192.168.1.76:11434"
+```
+
+## Utilisation
+
+```bash
+cd chemin/vers/mon-projet
+mini-agent                                   # mode conversation
+mini-agent "Trouve le bug dans @calc.py"     # une seule demande, puis on quitte
+mini-agent -c                                # reprendre la dernière conversation
+mini-agent -m qwen3.5:9b -t 0.5              # choisir le modèle et la température
+mini-agent --help
+```
+
+Le dossier depuis lequel on lance `mini-agent` devient le dossier de travail : les outils de fichiers ne peuvent ni lire ni écrire ailleurs.
+
+Chaque tour de la boucle est affiché avec ses trois acteurs : le **modèle** (ce qu'il demande), le **harness** (ce que les garde-fous en font) et l'**outil** (ce qu'il renvoie).
+
+### Commandes
+
+| Commande | Rôle |
+|---|---|
+| `/help` | liste des commandes |
+| `/init` | préparer le projet : crée `AGENTS.md` et le dossier `.mini-agent/` |
+| `/config` | réglages actuels |
+| `/models`, `/model qwen3.5:9b` | modèles installés, changer de modèle |
+| `/temp 0.5`, `/ctx 16384` | changer la température, la taille du contexte |
+| `/skills`, `/skill corriger-un-bug` | skills disponibles, charger une skill |
+| `/context`, `/compact` | ce qui occupe le contexte, le compacter (automatique à 80 %) |
+| `/sessions`, `/resume 2`, `/delete 2` | conversations sauvegardées |
+| `/allow python -m pytest` | lancer une commande sans confirmation pour la session |
+| `/clear`, `/quit` | effacer la conversation, quitter |
+
+`@chemin` dans une demande joint le contenu du fichier.
+
+## Configuration
+
+Les réglages viennent de cinq sources ; chacune remplace la précédente :
+
+1. les valeurs par défaut ;
+2. le fichier global `~/.mini-agent/config.toml` ;
+3. le fichier du projet `.mini-agent/config.toml` ;
+4. les variables d'environnement `OLLAMA_URL` et `OLLAMA_MODEL` ;
+5. les options de la ligne de commande.
+
+```toml
+url = "http://localhost:11434"
+model = "qwen3.5:4b"
+temperature = 0.2
+num_ctx = 8192
+allowed_commands = ["python -m pytest", "git status", "git diff"]
+```
+
+Autres variables : `MINI_AGENT_WORKDIR` (dossier de travail) et `NO_COLOR` (affichage sans couleurs).
+
+## Personnaliser un projet
+
+```
+mon-projet/
+├── AGENTS.md              # consignes du projet, ajoutées au prompt système
+└── .mini-agent/
+    ├── .gitignore         # exclut sessions/ de git
+    ├── config.toml        # réglages du projet
+    ├── sessions/          # conversations sauvegardées
+    └── skills/            # skills du projet (remplacent les globales de même nom)
+```
+
+`/init` crée ces fichiers. Une skill est un fichier Markdown avec un en-tête `description:` ; le modèle la charge avec l'outil `load_skill` quand la demande correspond.
+
+```markdown
+---
+description: Écrire des tests pytest pour un module Python.
+---
+# Écrire des tests pytest
+
+1. Lis le module à tester avec read_file.
+2. ...
+```
+
+## Limites
+
+- Seuls les outils de fichiers sont confinés au dossier de travail. Une commande lancée par `run_command` peut écrire ailleurs : la protection est la confirmation `[o/N]`. Les commandes autorisées sont un confort, pas une barrière de sécurité.
+- Avec un modèle 4B et 8192 tokens, le contexte se remplit vite : `/compact` le résume.
+- Un petit modèle peut inventer un outil, se tromper de chemin ou répéter un appel. Les erreurs lui sont renvoyées pour qu'il se corrige, mais il n'y arrive pas toujours.
+
+## Développement
+
+```bash
+git clone https://github.com/nils-malmberg/mini-agent.git
+cd mini-agent
+uv sync
+uv run pytest -q
+uv tool install -e .     # la commande mini-agent utilise ce dossier
+```
+
+Chaque push lance les tests sous Windows, macOS et Linux (Python 3.11 à 3.13). Pour publier une version : mettre à jour `version` dans `pyproject.toml`, puis créer et pousser l'étiquette correspondante (`git tag v0.1.0 &amp;&amp; git push origin v0.1.0`) ; le paquet est publié sur TestPyPI, puis sur PyPI après validation.
+
+## Licence
+
+MIT, voir [LICENSE](https://github.com/nils-malmberg/mini-agent/blob/main/LICENSE).</pre></div>
+      </div>
+    </div>
+
 <h2 id="mini-agent-glossary-fr">Glossaire</h2>
     <ul>
       <li><strong>LLM</strong> (<em>Large Language Model</em>) : modèle qui, à partir d'un texte, prédit la suite token par token. Il ne fait que produire du texte : il ne lit aucun fichier et n'exécute rien lui-même. Ici : qwen3.5:4b servi par Ollama.</li>
@@ -7585,7 +8408,7 @@ def test_animation_sans_terminal(texte_simple):
     <p>This project has a simple goal: <strong>understanding how a coding agent works</strong> by building one from scratch in Python. A coding agent is a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
     <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand. The code is on GitHub: <a href="https://github.com/nils-malmberg/mini-agent">nils-malmberg/mini-agent</a>.</p>
     <p>The LLM runs locally on my NAS (see the <a href="project6.html">NAS Lab project</a>): <strong>qwen3.5:4b</strong> served by Ollama on a 6 GB RTX 3050. Such a small model forces some choices: few tools (5 at most), very clear descriptions and truncated tool results.</p>
-    <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 17 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, able to receive tagged files, resume a conversation and compact its context, with a polished interface.</p>
+    <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 18 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, able to receive tagged files, resume a conversation and compact its context, with a polished interface, up to its publication on PyPI.</p>
     <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="mini-agent interface in a terminal: the mascot, then each turn of the loop with the model, the harness and the tool" width="639"></div>
 
     <h2>Architecture</h2>
@@ -7660,13 +8483,18 @@ def test_animation_sans_terminal(texte_simple):
         <div class="code-block"><pre>mini-agent/
 ├── pyproject.toml          # uv + hatchling, a single dependency: requests
 ├── .python-version         # 3.11
-├── README.md
+├── README.md               # also the project page on PyPI
+├── LICENSE
+├── .github/workflows/      # CI and PyPI publication (step 18)
+│   ├── ci.yml
+│   └── release.yml
+├── scripts/check_package.py
 ├── steps/                  # steps 1 to 4: one standalone script per step
 │   ├── step1_hello.py
 │   ├── step2_chat.py
 │   ├── step3_tool.py
 │   └── step4_loop.py
-├── src/mini_agent/         # steps 5 to 8: the modular version
+├── src/mini_agent/         # from step 5 on: the modular version
 │   ├── __init__.py
 │   ├── config.py           # configuration and limits
 │   ├── llm.py              # call to Ollama
@@ -7677,30 +8505,21 @@ def test_animation_sans_terminal(texte_simple):
 │   ├── history.py          # saved conversations (part 2)
 │   ├── context.py          # context measuring and compaction (part 2)
 │   ├── commands.py         # /... commands (part 2)
-│   ├── ui.py               # interface: colours, logo, animation (part 2)
-│   └── cli.py              # entry point `mini-agent`
-├── prompts/
-│   ├── AGENT.md            # system prompt
-│   └── COMPACT.md          # summary instructions (part 2)
-├── skills/                 # Markdown skills
-│   ├── corriger-un-bug.md
-│   └── ecrire-tests-pytest.md
+│   ├── ui.py               # interface: mascot, visible loop (part 2)
+│   ├── cli.py              # entry point `mini-agent`
+│   ├── prompts/            # inside the package since step 18
+│   │   ├── AGENT.md        # system prompt
+│   │   └── COMPACT.md      # summary instructions
+│   └── skills/             # global skills, in Markdown
+│       ├── corriger-un-bug.md
+│       └── ecrire-tests-pytest.md
 ├── demo/stats.py           # buggy script for the demo
-└── tests/                  # pytest, Ollama replaced by a fake model
-    ├── test_config.py
-    ├── test_guards.py
-    ├── test_tools.py
-    ├── test_agent.py
-    ├── test_session.py
-    ├── test_commands.py
-    ├── test_history.py
-    ├── test_context.py
-    └── test_ui.py</pre></div>
+└── tests/                  # pytest, Ollama replaced by a fake model</pre></div>
 
     <h2 id="mini-agent-config-en">Configuration</h2>
     <p>Everything that depends on the machine is set through environment variables:</p>
     <ul>
-      <li><code>OLLAMA_URL</code>: address of the Ollama server (default <code>http://192.168.1.76:11434</code>).</li>
+      <li><code>OLLAMA_URL</code>: address of the Ollama server (default <code>http://localhost:11434</code>, Ollama's standard address on the machine; up to step 17, it was my NAS's).</li>
       <li><code>OLLAMA_MODEL</code>: model used (default <code>qwen3.5:4b</code>).</li>
       <li><code>MINI_AGENT_WORKDIR</code> (optional): the only folder where the agent may read, write and run commands. By default, it is the folder the agent is started from. If set, it must exist: otherwise the agent stops at startup.</li>
       <li><code>NO_COLOR</code>: if set, logs are not coloured.</li>
@@ -7749,6 +8568,7 @@ $env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
         <li><a href="#mini-agent-step15-en">Saving and resuming conversations</a></li>
         <li><a href="#mini-agent-step16-en">Measuring and compacting the context</a></li>
         <li><a href="#mini-agent-step17-en">A nicer interface</a></li>
+        <li><a href="#mini-agent-step18-en">Publishing on PyPI: CI/CD</a></li>
       </ol>
       <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-code-en">Full code of the final version</a> · <a href="#mini-agent-glossary-en">Glossary</a></p>
     </div>
@@ -9343,8 +10163,8 @@ AssertionError: moyenne attendue : 13.5, obtenue : 10.5</pre></div>
     </div>
 
     <h3 id="mini-agent-part2-en">Part 2 — towards an everyday agent, like opencode</h3>
-    <p>Steps 9 to 17 turn mini-agent into a tool you start in any project: project instructions and skills, <code>/…</code> commands, tagged files, persistent settings, targeted editing, allowed commands, saved conversations, context compaction and a polished interface.</p>
-    <div class="warning-block"><strong>How to follow this part.</strong> These features touch the same files (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), and some excerpts use a function from a later step. The safest way: first replace <code>src/</code>, <code>prompts/</code>, <code>skills/</code> and <code>tests/</code> with the <a href="#mini-agent-code-en">full code</a> (final version), run <code>uv run pytest -q</code>, then follow each step to understand and try the feature. The excerpts of steps 9 to 16 show the code as it was at the end of step 16; step 17 only changes the display.</div>
+    <p>Steps 9 to 18 turn mini-agent into a tool you start in any project: project instructions and skills, <code>/…</code> commands, tagged files, persistent settings, targeted editing, allowed commands, saved conversations, context compaction, a polished interface and publication on PyPI.</p>
+    <div class="warning-block"><strong>How to follow this part.</strong> These features touch the same files (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), and some excerpts use a function from a later step. The safest way: first replace <code>src/</code>, <code>prompts/</code>, <code>skills/</code> and <code>tests/</code> with the <a href="#mini-agent-code-en">full code</a> (final version), run <code>uv run pytest -q</code>, then follow each step to understand and try the feature. The excerpts of steps 9 to 16 show the code as it was at the end of step 16; step 17 changes the display, and step 18 prepares the publication (the <code>prompts/</code> and <code>skills/</code> folders move into <code>src/mini_agent/</code>).</div>
 
     <div class="tuto-card" id="mini-agent-step9-en">
       <div class="tuto-card-header">
@@ -12133,8 +12953,410 @@ def test_animation_sans_terminal(texte_simple):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-step18-en">
+      <div class="tuto-card-header">
+        <span class="step-num">18</span>
+        <span class="tuto-card-title">Publishing on PyPI: CI/CD</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Goal</h3>
+        <p>Automatically test mini-agent on Windows, macOS and Linux on every change, and publish it on PyPI so anyone can install it with <code>uv tool install mini-agent</code>.</p>
+        <h3>Concept</h3>
+        <p><strong>CI</strong> (continuous integration) reruns the tests on every push, on fresh machines provided by GitHub Actions. <strong>CD</strong> (continuous deployment) publishes a new version when a tag such as <code>v0.1.0</code> is pushed. Both are described in YAML files, in <code>.github/workflows/</code>.</p>
+        <ul>
+          <li><strong>ci.yml</strong>: 9 test jobs (3 systems × Python 3.11, 3.12 and 3.13). <code>uv sync --locked</code> installs exactly the versions in <code>uv.lock</code>. A "Paquet" job builds the package, checks its content, installs it in an empty folder and runs it (<code>echo /quit | mini-agent</code>): this is where we see whether the prompts and skills are really inside.</li>
+          <li><strong>release.yml</strong>: tests, build, check that the tag matches the version in <code>pyproject.toml</code>, publication on <strong>TestPyPI</strong> (a copy of PyPI for practice), then on <strong>PyPI</strong> after your manual approval.</li>
+          <li><strong>Trusted Publishing</strong>: no password or token in the repository. PyPI trusts <em>this</em> workflow, from <em>this</em> repository, in <em>this</em> GitHub environment; GitHub proves its identity with a short-lived token (OIDC), hence <code>permissions: id-token: write</code>.</li>
+          <li><strong>Preparing the package</strong>: <code>prompts/</code> and <code>skills/</code> move into <code>src/mini_agent/</code> to be installed with the code. The default address becomes Ollama's on the machine (<code>http://localhost:11434</code>): a remote Ollama is set in <code>~/.mini-agent/config.toml</code>. The package metadata (licence, links, classifiers) is completed, and <code>mini-agent --version</code> prints the installed version.</li>
+        </ul>
+        <div class="code-label">pyproject.toml (final version)</div>
+        <div class="code-block"><pre>[project]
+name = "mini-agent"
+version = "0.1.0"
+description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Nils Malmberg" }]
+requires-python = "&gt;=3.11"
+dependencies = [
+    "requests&gt;=2.34.2",
+]
+keywords = ["agent", "coding-agent", "llm", "ollama", "tutoriel"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Natural Language :: French",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Documentation = "https://nils-malmberg.fr/project8.html"
+Repository = "https://github.com/nils-malmberg/mini-agent"
+Issues = "https://github.com/nils-malmberg/mini-agent/issues"
+
+[project.scripts]
+mini-agent = "mini_agent.cli:main"
+
+[build-system]
+# 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
+requires = ["hatchling&gt;=1.27"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest&gt;=9.1.1",
+]</pre></div>
+        <div class="code-label">src/mini_agent/config.py — default address and package folders</div>
+        <div class="code-block"><pre># Valeurs par défaut : Ollama sur la machine elle-même (son adresse standard),
+# et un modèle 4B qui tient dans 6 Go de VRAM. Un Ollama installé ailleurs
+# (sur un NAS par exemple) se règle dans ~/.mini-agent/config.toml.
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
+
+# prompts/ et skills/ font partie du paquet (étape 18) : ils sont à côté de
+# ce fichier, dans src/mini_agent/, et donc installés avec le code, que
+# mini-agent vienne du dépôt ou de PyPI.
+PACKAGE_DIR = Path(__file__).resolve().parent
+PROMPTS_DIR = PACKAGE_DIR / "prompts"
+SKILLS_DIR = PACKAGE_DIR / "skills"</pre></div>
+        <div class="code-label">.github/workflows/ci.yml</div>
+        <div class="code-block"><pre># Intégration continue (étape 18) : à chaque push sur main et à chaque pull
+# request, les tests tournent sous Linux, Windows et macOS, avec Python 3.11
+# à 3.13. Puis le paquet est construit, vérifié et installé comme le ferait
+# un utilisateur.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # voir tous les systèmes en échec, pas seulement le premier
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Installer les dépendances (versions exactes de uv.lock)
+        run: uv sync --locked
+      - name: Tests
+        run: uv run pytest -q
+
+  package:
+    name: Paquet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Construire
+        run: uv build
+      - name: Vérifier le contenu
+        run: python3 scripts/check_package.py
+      - name: Installer le paquet construit et le lancer
+        run: |
+          uv tool install dist/*.whl
+          MINI_AGENT="$(uv tool dir --bin)/mini-agent"
+          "$MINI_AGENT" --version
+          mkdir "$RUNNER_TEMP/projet" &amp;&amp; cd "$RUNNER_TEMP/projet"
+          echo /quit | "$MINI_AGENT"</pre></div>
+        <div class="code-label">.github/workflows/release.yml</div>
+        <div class="code-block"><pre># Publication (étape 18) : quand une étiquette de version (v0.1.0...) est
+# poussée, le paquet est testé, construit et vérifié, publié sur TestPyPI,
+# puis sur PyPI après validation manuelle (environnement « pypi » protégé).
+# Aucun mot de passe ni jeton : PyPI fait confiance à ce workflow précis
+# (Trusted Publishing), qui prouve son identité avec un jeton OIDC de GitHub.
+name: Publication
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Tester et construire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tests
+        run: |
+          uv sync --locked
+          uv run pytest -q
+      - name: Construire
+        run: uv build
+      - name: Vérifier le paquet et la version
+        run: python3 scripts/check_package.py "$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Publier sur TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mini-agent
+    permissions:
+      id-token: write # nécessaire au Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Publier sur PyPI
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mini-agent
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1</pre></div>
+        <div class="code-label">scripts/check_package.py</div>
+        <div class="code-block"><pre>"""Vérifie le paquet construit avant de le publier (étape 18).
+
+    python scripts/check_package.py            # le contenu du paquet (dist/)
+    python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
+"""
+
+import sys
+import tomllib
+import zipfile
+from pathlib import Path
+
+# Fichiers sans lesquels mini-agent ne démarre pas : s'ils manquent dans le
+# paquet, il s'installe sans erreur mais plante au premier lancement.
+REQUIRED = [
+    "mini_agent/cli.py",
+    "mini_agent/prompts/AGENT.md",
+    "mini_agent/prompts/COMPACT.md",
+    "mini_agent/skills/corriger-un-bug.md",
+    "mini_agent/skills/ecrire-tests-pytest.md",
+]
+
+
+def main() -&gt; None:
+    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
+        sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
+    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    if len(wheels) != 1:
+        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+    names = zipfile.ZipFile(wheels[0]).namelist()
+    missing = [name for name in REQUIRED if name not in names]
+    if missing:
+        sys.exit(f"Fichiers absents du paquet : {', '.join(missing)}")
+    print(f"{wheels[0].name} : {len(names)} fichiers, prompts et skills présents.")
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+        <h3>A bug found while preparing CI</h3>
+        <p>With <code>shell=True</code>, the <code>run_command</code> timeout only stopped the shell, not the programs started by the command. On Linux and macOS, they kept running in the background; on Windows, <code>subprocess.run</code> even waited for them to finish, so the timeout protected nothing. A test reproduces it (a program that starts another one), then the fix stops the whole process tree:</p>
+        <div class="code-label">src/mini_agent/tools.py — stopping the command and its subprocesses</div>
+        <div class="code-block"><pre>def kill_process_tree(process: subprocess.Popen) -&gt; None:
+    """Arrête une commande et tous les programmes qu'elle a lancés (étape 18).
+
+    process.kill() n'arrêterait que le shell : les programmes lancés par la
+    commande continueraient de tourner, et sous Windows on attendrait leur fin.
+    """
+    if os.name == "nt":
+        # /T : toute l'arborescence de processus, /F : sans attendre.
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True)
+    else:
+        # La commande a son propre groupe de processus (start_new_session) :
+        # on envoie le signal à tout le groupe.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # tout s'est terminé entre-temps
+
+
+def run_command(ctx: ToolContext, command: str) -&gt; str:
+    """Lance une commande shell dans le dossier de travail, après confirmation."""
+    # Les commandes de la liste autorisée passent sans question (étape 14).
+    if not is_allowed_command(command, ctx.allowed_commands) and not ctx.confirm(f"Exécuter : {command}"):
+        return "Refusé par l'utilisateur : la commande n'a pas été exécutée."
+    # Force Python (s'il est lancé par la commande) à écrire en UTF-8,
+    # sinon Windows utilise cp1252 et les accents deviennent illisibles.
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    process = subprocess.Popen(
+        command,
+        shell=True,  # cmd.exe sous Windows, /bin/sh sous macOS
+        cwd=ctx.workdir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,  # une commande ne peut pas attendre une saisie au clavier
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        start_new_session=os.name != "nt",  # son propre groupe de processus (Linux, macOS)
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=ctx.command_timeout)
+    except subprocess.TimeoutExpired:
+        kill_process_tree(process)
+        process.communicate()  # récupère ce qui reste, maintenant que tout est arrêté
+        return f"Erreur : la commande a dépassé {ctx.command_timeout} s et a été arrêtée."
+    return (
+        f"code de sortie : {process.returncode}\n"
+        f"--- stdout ---\n{stdout}\n"
+        f"--- stderr ---\n{stderr}"
+    )</pre></div>
+        <div class="code-label">tests/test_tools.py (excerpt)</div>
+        <div class="code-block"><pre>def test_run_command_timeout_arrete_aussi_les_sous_processus(ctx):
+    # parent.py lance enfant.py, qui écrit fini.txt au bout de 3 s. Tuer
+    # seulement le shell ne suffit pas : l'enfant survivrait (et, sous
+    # Windows, on attendrait sa fin car il garde la sortie ouverte).
+    (ctx.workdir / "enfant.py").write_text(
+        "import time, pathlib\ntime.sleep(3)\npathlib.Path('fini.txt').write_text('x')\n", encoding="utf-8"
+    )
+    (ctx.workdir / "parent.py").write_text(
+        "import subprocess, sys\nsubprocess.run([sys.executable, 'enfant.py'])\n", encoding="utf-8"
+    )
+    ctx.command_timeout = 1
+    debut = time.monotonic()
+    resultat = execute_tool("run_command", {"command": "python parent.py"}, ctx)
+    assert "dépassé 1 s" in resultat
+    assert time.monotonic() - debut &lt; 3  # pas d'attente de l'enfant
+    time.sleep(4)
+    assert not (ctx.workdir / "fini.txt").exists()  # l'enfant a bien été arrêté</pre></div>
+        <h3>Setting up (once)</h3>
+        <ol>
+          <li>On <a href="https://pypi.org/manage/account/publishing/">pypi.org</a>: <em>Your account → Publishing → Add a new pending publisher</em> (GitHub), with:</li>
+        </ol>
+        <div class="code-block"><pre>PyPI Project Name : mini-agent
+Owner             : nils-malmberg
+Repository name   : mini-agent
+Workflow name     : release.yml
+Environment name  : pypi        (testpypi on test.pypi.org)</pre></div>
+        <ol start="2">
+          <li>The same on <a href="https://test.pypi.org/manage/account/publishing/">test.pypi.org</a>, with the <code>testpypi</code> environment.</li>
+          <li>In the GitHub repository: <em>Settings → Environments</em>, create <code>testpypi</code>, then <code>pypi</code> with <em>Required reviewers</em> (you) and, in <em>Deployment branches and tags</em>, only the <code>v*</code> tags.</li>
+          <li>Push <code>.github/workflows/</code>, <code>scripts/check_package.py</code> and the other changes to <code>main</code>: CI starts (<em>Actions</em> tab).</li>
+        </ol>
+        <h3>Publishing a version</h3>
+        <div class="code-block"><pre># 1. Choose the version in pyproject.toml (e.g. version = "0.1.0"), then:
+uv lock
+git commit -am "Version 0.1.0"
+git push
+
+# 2. Once CI is green on main:
+git tag v0.1.0
+git push origin v0.1.0
+
+# 3. GitHub → Actions → Publication: TestPyPI goes by itself,
+#    then approve the "pypi" deployment (Review deployments → Approve)
+
+# 4. Install from PyPI, like anyone else:
+uv tool install mini-agent</pre></div>
+        <h3>What we should observe</h3>
+        <p>The workflows only run on GitHub. Here, their commands were replayed identically: build, package check (and rejection of a tag that does not match), installation of the built package in an empty folder, then launch. Real output:</p>
+        <div class="code-block"><pre>$ uv build
+Successfully built dist/mini_agent-0.1.0.tar.gz
+Successfully built dist/mini_agent-0.1.0-py3-none-any.whl
+$ python3 scripts/check_package.py v0.1.0
+mini_agent-0.1.0-py3-none-any.whl : 21 fichiers, prompts et skills présents.
+$ python3 scripts/check_package.py v0.2.0
+L'étiquette v0.2.0 ne correspond pas à la version v0.1.0 de pyproject.toml.
+$ uv tool install dist/mini_agent-0.1.0-py3-none-any.whl
+Installed 6 packages in 6ms
+ + certifi==2026.10.23
+ + charset-normalizer==3.5.2
+ + idna==3.20
+ + mini-agent==0.1.0 (from file:///home/user/mini-agent/dist/mini_agent-0.1.0-py3-none-any.whl)
+ + requests==2.34.2
+ + urllib3==2.8.0
+Installed 1 executable: mini-agent
+$ mini-agent --version
+mini-agent 0.1.0
+$ cd projet-vierge &amp;&amp; echo /quit | mini-agent
+
+    ●
+  ┌─┴─┐   mini-agent
+  │o o│   un agent de code minimal autour d’Ollama
+  │ ▬ │
+  └┬─┬┘   /help commandes · @fichier joindre un fichier · /quit quitter
+
+  modèle   qwen3.5:4b
+  serveur  http://localhost:11434
+  dossier  /home/user/projets/vierge
+  projet   2 skills · /init pour préparer le projet
+
+  vous</pre></div>
+        <p>On GitHub, the <em>Actions</em> tab shows the 9 test jobs and the "Paquet" job; during a release, the "Publier sur PyPI" job waits for your approval. The project page then appears on <a href="https://pypi.org/project/mini-agent/">pypi.org/project/mini-agent</a>, with the README as description.</p>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_cli.py</div>
+        <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
+
+from importlib.metadata import version
+
+import pytest
+
+from mini_agent.cli import parse_args
+
+
+def test_version(capsys):
+    with pytest.raises(SystemExit):
+        parse_args(["--version"])
+    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+
+
+def test_options():
+    args = parse_args(["-m", "qwen3.5:9b", "-t", "0.5", "-c", "Corrige", "le", "bug"])
+    assert (args.model, args.temperature, args.resume) == ("qwen3.5:9b", 0.5, True)
+    assert args.demande == ["Corrige", "le", "bug"]
+
+
+def test_prompts_et_skills_dans_le_paquet():
+    from mini_agent.config import PACKAGE_DIR, PROMPTS_DIR, SKILLS_DIR
+
+    assert PROMPTS_DIR.parent == SKILLS_DIR.parent == PACKAGE_DIR  # installés avec le code
+    assert (PROMPTS_DIR / "AGENT.md").is_file() and (PROMPTS_DIR / "COMPACT.md").is_file()</pre></div>
+        <h3>Pitfalls to watch</h3>
+        <ul>
+          <li><strong>Hit:</strong> the editable install (<code>uv tool install -e</code>) hid a real problem: <code>prompts/</code> and <code>skills/</code> were not in the package. Only a test on the built package, installed elsewhere, reveals it: hence the "Paquet" job and <code>check_package.py</code>.</li>
+          <li><strong>Hit:</strong> the <code>run_command</code> timeout and subprocesses, above. The Windows branch of <code>kill_process_tree</code> (<code>taskkill</code>) has only run in CI so far: that is what the Windows matrix is for.</li>
+          <li>A version published on PyPI can never be published again, even after deletion: change the number for every release. That is why we go through TestPyPI first.</li>
+          <li>A "pending" publisher does not reserve the name: if someone publishes <code>mini-agent</code> before you, it becomes invalid. Publish the first version without delay.</li>
+          <li><code>uv sync --locked</code> fails if <code>uv.lock</code> is out of date: rerun <code>uv lock</code> after every change to <code>pyproject.toml</code>.</li>
+          <li>The first run on Windows and macOS may reveal other differences (paths, encoding, commands): that is exactly what CI is for. Fix, push again, until green.</li>
+          <li>Your Ollama is on the NAS: from this step on, the default address is <code>localhost</code>. Put <code>url = "http://192.168.1.76:11434"</code> in <code>~/.mini-agent/config.toml</code>.</li>
+        </ul>
+      </div>
+    </div>
+
     <h2 id="mini-agent-code-en">Full code of the final version</h2>
-    <p>Every file of the final version (after step 17), in full. The scripts of steps 1 to 4 are given in full in their step.</p>
+    <p>Every file of the final version (after step 18), in full. The scripts of steps 1 to 4 are given in full in their step.</p>
 
     <div class="tuto-card" id="mini-agent-code-a-en">
       <div class="tuto-card-header">
@@ -12149,17 +13371,39 @@ name = "mini-agent"
 version = "0.1.0"
 description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Nils Malmberg" }]
 requires-python = "&gt;=3.11"
 dependencies = [
     "requests&gt;=2.34.2",
 ]
+keywords = ["agent", "coding-agent", "llm", "ollama", "tutoriel"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Natural Language :: French",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Documentation = "https://nils-malmberg.fr/project8.html"
+Repository = "https://github.com/nils-malmberg/mini-agent"
+Issues = "https://github.com/nils-malmberg/mini-agent/issues"
 
 [project.scripts]
 mini-agent = "mini_agent.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+# 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
+requires = ["hatchling&gt;=1.27"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
@@ -12168,6 +13412,28 @@ dev = [
 ]</pre></div>
         <div class="code-label">.python-version</div>
         <div class="code-block"><pre>3.11</pre></div>
+        <div class="code-label">LICENSE</div>
+        <div class="code-block"><pre>MIT License
+
+Copyright (c) 2026 Nils Malmberg
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre></div>
       </div>
     </div>
 
@@ -12182,7 +13448,7 @@ dev = [
         <div class="code-block"><pre>"""Configuration de mini-agent.
 
 Les réglages viennent de plusieurs sources. Chacune remplace la précédente :
-    1. les valeurs par défaut ci-dessous (adaptées à mon NAS) ;
+    1. les valeurs par défaut ci-dessous ;
     2. le fichier global   ~/.mini-agent/config.toml ;
     3. le fichier du projet .mini-agent/config.toml (dans le dossier de travail) ;
     4. les variables d'environnement OLLAMA_URL et OLLAMA_MODEL ;
@@ -12195,8 +13461,10 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-# Valeurs par défaut : Ollama sur le NAS, modèle 4B qui tient dans 6 Go de VRAM.
-DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+# Valeurs par défaut : Ollama sur la machine elle-même (son adresse standard),
+# et un modèle 4B qui tient dans 6 Go de VRAM. Un Ollama installé ailleurs
+# (sur un NAS par exemple) se règle dans ~/.mini-agent/config.toml.
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
 
 # Température basse : on veut un agent prévisible, pas créatif.
@@ -12215,11 +13483,12 @@ MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
 # Compactage automatique quand le contexte est rempli à 80 % (étape 16).
 COMPACT_THRESHOLD = 0.8
 
-# Dossiers du projet mini-agent : prompts/ et skills/ sont à la racine du
-# dépôt, deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROMPTS_DIR = PROJECT_ROOT / "prompts"
-SKILLS_DIR = PROJECT_ROOT / "skills"
+# prompts/ et skills/ font partie du paquet (étape 18) : ils sont à côté de
+# ce fichier, dans src/mini_agent/, et donc installés avec le code, que
+# mini-agent vienne du dépôt ou de PyPI.
+PACKAGE_DIR = Path(__file__).resolve().parent
+PROMPTS_DIR = PACKAGE_DIR / "prompts"
+SKILLS_DIR = PACKAGE_DIR / "skills"
 
 # Réglages propres à chaque projet (étape 9) : un dossier .mini-agent/ dans
 # le dossier de travail, et un fichier AGENTS.md à sa racine.
@@ -12460,6 +13729,7 @@ ligne dans TOOLS. La boucle agentique (agent.py) n'a pas à être modifiée.
 import difflib
 import json
 import os
+import signal
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12557,6 +13827,24 @@ def edit_file(ctx: ToolContext, path: str, old_text: str, new_text: str) -&gt; s
     return f"Fichier {path} {'créé' if old_text == '' else 'modifié'}."
 
 
+def kill_process_tree(process: subprocess.Popen) -&gt; None:
+    """Arrête une commande et tous les programmes qu'elle a lancés (étape 18).
+
+    process.kill() n'arrêterait que le shell : les programmes lancés par la
+    commande continueraient de tourner, et sous Windows on attendrait leur fin.
+    """
+    if os.name == "nt":
+        # /T : toute l'arborescence de processus, /F : sans attendre.
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True)
+    else:
+        # La commande a son propre groupe de processus (start_new_session) :
+        # on envoie le signal à tout le groupe.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # tout s'est terminé entre-temps
+
+
 def run_command(ctx: ToolContext, command: str) -&gt; str:
     """Lance une commande shell dans le dossier de travail, après confirmation."""
     # Les commandes de la liste autorisée passent sans question (étape 14).
@@ -12565,24 +13853,28 @@ def run_command(ctx: ToolContext, command: str) -&gt; str:
     # Force Python (s'il est lancé par la commande) à écrire en UTF-8,
     # sinon Windows utilise cp1252 et les accents deviennent illisibles.
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    process = subprocess.Popen(
+        command,
+        shell=True,  # cmd.exe sous Windows, /bin/sh sous macOS
+        cwd=ctx.workdir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,  # une commande ne peut pas attendre une saisie au clavier
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        start_new_session=os.name != "nt",  # son propre groupe de processus (Linux, macOS)
+    )
     try:
-        result = subprocess.run(
-            command,
-            shell=True,  # cmd.exe sous Windows, /bin/sh sous macOS
-            cwd=ctx.workdir,
-            capture_output=True,
-            stdin=subprocess.DEVNULL,  # une commande ne peut pas attendre une saisie au clavier
-            encoding="utf-8",
-            errors="replace",
-            timeout=ctx.command_timeout,
-            env=env,
-        )
+        stdout, stderr = process.communicate(timeout=ctx.command_timeout)
     except subprocess.TimeoutExpired:
+        kill_process_tree(process)
+        process.communicate()  # récupère ce qui reste, maintenant que tout est arrêté
         return f"Erreur : la commande a dépassé {ctx.command_timeout} s et a été arrêtée."
     return (
-        f"code de sortie : {result.returncode}\n"
-        f"--- stdout ---\n{result.stdout}\n"
-        f"--- stderr ---\n{result.stderr}"
+        f"code de sortie : {process.returncode}\n"
+        f"--- stdout ---\n{stdout}\n"
+        f"--- stderr ---\n{stderr}"
     )
 
 
@@ -13860,6 +15152,7 @@ Tout l'affichage passe par ui.py (étape 17).
 
 import argparse
 import os
+from importlib.metadata import version
 
 import requests
 
@@ -13880,6 +15173,7 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
     parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
+    parser.add_argument("--version", action="version", version=f"mini-agent {version('mini-agent')}")
     return parser.parse_args(argv)
 
 
@@ -13976,7 +15270,7 @@ if __name__ == "__main__":
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
       <div class="tuto-card-body">
-        <div class="code-label">prompts/AGENT.md</div>
+        <div class="code-label">src/mini_agent/prompts/AGENT.md</div>
         <div class="code-block"><pre>Tu es mini-agent, un assistant de programmation qui travaille dans un dossier de projet.
 
 ## Règles
@@ -13999,7 +15293,7 @@ if __name__ == "__main__":
 ## Skills
 Une skill est une fiche d'instructions pour un type de tâche. Si la demande correspond à une skill, charge-la d'abord avec load_skill, puis suis ses instructions.
 {skills}</pre></div>
-        <div class="code-label">prompts/COMPACT.md</div>
+        <div class="code-label">src/mini_agent/prompts/COMPACT.md</div>
         <div class="code-block"><pre>Tu résumes une conversation entre un utilisateur et un agent de code, pour que l'agent puisse continuer le travail sans la relire.
 
 Garde :
@@ -14012,7 +15306,7 @@ Règles :
 - 15 lignes au maximum, en français.
 - Pas de code complet : seulement les noms de fichiers, de fonctions et les points importants.
 - Écris uniquement le résumé, sans introduction.</pre></div>
-        <div class="code-label">skills/corriger-un-bug.md</div>
+        <div class="code-label">src/mini_agent/skills/corriger-un-bug.md</div>
         <div class="code-block"><pre>---
 description: Méthode pour trouver et corriger un bug dans un script Python.
 ---
@@ -14025,7 +15319,7 @@ description: Méthode pour trouver et corriger un bug dans un script Python.
    old_text = les lignes fautives copiées exactement, new_text = les lignes corrigées.
 5. Relance le script avec run_command pour vérifier que le bug a disparu.
 6. Réponds en expliquant : la cause du bug, la correction, la vérification.</pre></div>
-        <div class="code-label">skills/ecrire-tests-pytest.md</div>
+        <div class="code-label">src/mini_agent/skills/ecrire-tests-pytest.md</div>
         <div class="code-block"><pre>---
 description: Écrire des tests pytest pour un module Python.
 ---
@@ -14241,6 +15535,8 @@ def test_commandes_autorisees(commande, attendu):
         <div class="code-label">tests/test_tools.py</div>
         <div class="code-block"><pre>"""Tests des outils et du registre (tools.py)."""
 
+import time
+
 import pytest
 
 from mini_agent.tools import TOOLS, ToolContext, available_skills, execute_tool, tool_schemas
@@ -14350,6 +15646,25 @@ def test_run_command_timeout(ctx):
     ctx.command_timeout = 1
     resultat = execute_tool("run_command", {"command": 'python -c "import time; time.sleep(5)"'}, ctx)
     assert "dépassé 1 s" in resultat
+
+
+def test_run_command_timeout_arrete_aussi_les_sous_processus(ctx):
+    # parent.py lance enfant.py, qui écrit fini.txt au bout de 3 s. Tuer
+    # seulement le shell ne suffit pas : l'enfant survivrait (et, sous
+    # Windows, on attendrait sa fin car il garde la sortie ouverte).
+    (ctx.workdir / "enfant.py").write_text(
+        "import time, pathlib\ntime.sleep(3)\npathlib.Path('fini.txt').write_text('x')\n", encoding="utf-8"
+    )
+    (ctx.workdir / "parent.py").write_text(
+        "import subprocess, sys\nsubprocess.run([sys.executable, 'enfant.py'])\n", encoding="utf-8"
+    )
+    ctx.command_timeout = 1
+    debut = time.monotonic()
+    resultat = execute_tool("run_command", {"command": "python parent.py"}, ctx)
+    assert "dépassé 1 s" in resultat
+    assert time.monotonic() - debut &lt; 3  # pas d'attente de l'enfant
+    time.sleep(4)
+    assert not (ctx.workdir / "fini.txt").exists()  # l'enfant a bien été arrêté
 
 
 def test_run_command_sans_clavier(ctx):
@@ -15071,6 +16386,337 @@ def test_confirmation_avec_diff_en_couleurs(couleurs, monkeypatch, capsys):
 def test_animation_sans_terminal(texte_simple):
     with ui.thinking():
         pass  # ne fait rien, et surtout ne bloque pas</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-x-en">
+      <div class="tuto-card-header">
+        <span class="step-num">X</span>
+        <span class="tuto-card-title">tests/test_cli.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_cli.py</div>
+        <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
+
+from importlib.metadata import version
+
+import pytest
+
+from mini_agent.cli import parse_args
+
+
+def test_version(capsys):
+    with pytest.raises(SystemExit):
+        parse_args(["--version"])
+    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+
+
+def test_options():
+    args = parse_args(["-m", "qwen3.5:9b", "-t", "0.5", "-c", "Corrige", "le", "bug"])
+    assert (args.model, args.temperature, args.resume) == ("qwen3.5:9b", 0.5, True)
+    assert args.demande == ["Corrige", "le", "bug"]
+
+
+def test_prompts_et_skills_dans_le_paquet():
+    from mini_agent.config import PACKAGE_DIR, PROMPTS_DIR, SKILLS_DIR
+
+    assert PROMPTS_DIR.parent == SKILLS_DIR.parent == PACKAGE_DIR  # installés avec le code
+    assert (PROMPTS_DIR / "AGENT.md").is_file() and (PROMPTS_DIR / "COMPACT.md").is_file()</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-y-en">
+      <div class="tuto-card-header">
+        <span class="step-num">Y</span>
+        <span class="tuto-card-title">.github/workflows/</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">.github/workflows/ci.yml</div>
+        <div class="code-block"><pre># Intégration continue (étape 18) : à chaque push sur main et à chaque pull
+# request, les tests tournent sous Linux, Windows et macOS, avec Python 3.11
+# à 3.13. Puis le paquet est construit, vérifié et installé comme le ferait
+# un utilisateur.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # voir tous les systèmes en échec, pas seulement le premier
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Installer les dépendances (versions exactes de uv.lock)
+        run: uv sync --locked
+      - name: Tests
+        run: uv run pytest -q
+
+  package:
+    name: Paquet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Construire
+        run: uv build
+      - name: Vérifier le contenu
+        run: python3 scripts/check_package.py
+      - name: Installer le paquet construit et le lancer
+        run: |
+          uv tool install dist/*.whl
+          MINI_AGENT="$(uv tool dir --bin)/mini-agent"
+          "$MINI_AGENT" --version
+          mkdir "$RUNNER_TEMP/projet" &amp;&amp; cd "$RUNNER_TEMP/projet"
+          echo /quit | "$MINI_AGENT"</pre></div>
+        <div class="code-label">.github/workflows/release.yml</div>
+        <div class="code-block"><pre># Publication (étape 18) : quand une étiquette de version (v0.1.0...) est
+# poussée, le paquet est testé, construit et vérifié, publié sur TestPyPI,
+# puis sur PyPI après validation manuelle (environnement « pypi » protégé).
+# Aucun mot de passe ni jeton : PyPI fait confiance à ce workflow précis
+# (Trusted Publishing), qui prouve son identité avec un jeton OIDC de GitHub.
+name: Publication
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Tester et construire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tests
+        run: |
+          uv sync --locked
+          uv run pytest -q
+      - name: Construire
+        run: uv build
+      - name: Vérifier le paquet et la version
+        run: python3 scripts/check_package.py "$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Publier sur TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mini-agent
+    permissions:
+      id-token: write # nécessaire au Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Publier sur PyPI
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mini-agent
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1</pre></div>
+        <div class="code-label">scripts/check_package.py</div>
+        <div class="code-block"><pre>"""Vérifie le paquet construit avant de le publier (étape 18).
+
+    python scripts/check_package.py            # le contenu du paquet (dist/)
+    python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
+"""
+
+import sys
+import tomllib
+import zipfile
+from pathlib import Path
+
+# Fichiers sans lesquels mini-agent ne démarre pas : s'ils manquent dans le
+# paquet, il s'installe sans erreur mais plante au premier lancement.
+REQUIRED = [
+    "mini_agent/cli.py",
+    "mini_agent/prompts/AGENT.md",
+    "mini_agent/prompts/COMPACT.md",
+    "mini_agent/skills/corriger-un-bug.md",
+    "mini_agent/skills/ecrire-tests-pytest.md",
+]
+
+
+def main() -&gt; None:
+    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
+        sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
+    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    if len(wheels) != 1:
+        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+    names = zipfile.ZipFile(wheels[0]).namelist()
+    missing = [name for name in REQUIRED if name not in names]
+    if missing:
+        sys.exit(f"Fichiers absents du paquet : {', '.join(missing)}")
+    print(f"{wheels[0].name} : {len(names)} fichiers, prompts et skills présents.")
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-z-en">
+      <div class="tuto-card-header">
+        <span class="step-num">Z</span>
+        <span class="tuto-card-title">README.md</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">README.md</div>
+        <div class="code-block"><pre># mini-agent
+
+Un agent de code minimal en Python, écrit à la main pour comprendre comment fonctionne un agent de code : boucle agentique, harness, outils, prompt système, skills et garde-fous.
+
+Il pilote un LLM local servi par [Ollama](https://ollama.com) (par défaut `qwen3.5:4b`) via l'API native `/api/chat`. Aucun framework d'agent : une seule dépendance, `requests`.
+
+![Interface de mini-agent : la mascotte, puis chaque tour de la boucle avec le modèle, le harness et l'outil](https://nils-malmberg.fr/media/projets/project8/interface.png)
+
+📖 Tutoriel complet, étape par étape : [nils-malmberg.fr/project8.html](https://nils-malmberg.fr/project8.html)
+
+## Installation
+
+Prérequis : un serveur [Ollama](https://ollama.com) avec un modèle qui gère les outils (`ollama pull qwen3.5:4b`).
+
+```bash
+uv tool install mini-agent      # ou : pipx install mini-agent
+```
+
+Si Ollama ne tourne pas sur la même machine, indiquez son adresse dans `~/.mini-agent/config.toml` (sous Windows : `C:\Users\&lt;vous&gt;\.mini-agent\config.toml`) :
+
+```toml
+url = "http://192.168.1.76:11434"
+```
+
+## Utilisation
+
+```bash
+cd chemin/vers/mon-projet
+mini-agent                                   # mode conversation
+mini-agent "Trouve le bug dans @calc.py"     # une seule demande, puis on quitte
+mini-agent -c                                # reprendre la dernière conversation
+mini-agent -m qwen3.5:9b -t 0.5              # choisir le modèle et la température
+mini-agent --help
+```
+
+Le dossier depuis lequel on lance `mini-agent` devient le dossier de travail : les outils de fichiers ne peuvent ni lire ni écrire ailleurs.
+
+Chaque tour de la boucle est affiché avec ses trois acteurs : le **modèle** (ce qu'il demande), le **harness** (ce que les garde-fous en font) et l'**outil** (ce qu'il renvoie).
+
+### Commandes
+
+| Commande | Rôle |
+|---|---|
+| `/help` | liste des commandes |
+| `/init` | préparer le projet : crée `AGENTS.md` et le dossier `.mini-agent/` |
+| `/config` | réglages actuels |
+| `/models`, `/model qwen3.5:9b` | modèles installés, changer de modèle |
+| `/temp 0.5`, `/ctx 16384` | changer la température, la taille du contexte |
+| `/skills`, `/skill corriger-un-bug` | skills disponibles, charger une skill |
+| `/context`, `/compact` | ce qui occupe le contexte, le compacter (automatique à 80 %) |
+| `/sessions`, `/resume 2`, `/delete 2` | conversations sauvegardées |
+| `/allow python -m pytest` | lancer une commande sans confirmation pour la session |
+| `/clear`, `/quit` | effacer la conversation, quitter |
+
+`@chemin` dans une demande joint le contenu du fichier.
+
+## Configuration
+
+Les réglages viennent de cinq sources ; chacune remplace la précédente :
+
+1. les valeurs par défaut ;
+2. le fichier global `~/.mini-agent/config.toml` ;
+3. le fichier du projet `.mini-agent/config.toml` ;
+4. les variables d'environnement `OLLAMA_URL` et `OLLAMA_MODEL` ;
+5. les options de la ligne de commande.
+
+```toml
+url = "http://localhost:11434"
+model = "qwen3.5:4b"
+temperature = 0.2
+num_ctx = 8192
+allowed_commands = ["python -m pytest", "git status", "git diff"]
+```
+
+Autres variables : `MINI_AGENT_WORKDIR` (dossier de travail) et `NO_COLOR` (affichage sans couleurs).
+
+## Personnaliser un projet
+
+```
+mon-projet/
+├── AGENTS.md              # consignes du projet, ajoutées au prompt système
+└── .mini-agent/
+    ├── .gitignore         # exclut sessions/ de git
+    ├── config.toml        # réglages du projet
+    ├── sessions/          # conversations sauvegardées
+    └── skills/            # skills du projet (remplacent les globales de même nom)
+```
+
+`/init` crée ces fichiers. Une skill est un fichier Markdown avec un en-tête `description:` ; le modèle la charge avec l'outil `load_skill` quand la demande correspond.
+
+```markdown
+---
+description: Écrire des tests pytest pour un module Python.
+---
+# Écrire des tests pytest
+
+1. Lis le module à tester avec read_file.
+2. ...
+```
+
+## Limites
+
+- Seuls les outils de fichiers sont confinés au dossier de travail. Une commande lancée par `run_command` peut écrire ailleurs : la protection est la confirmation `[o/N]`. Les commandes autorisées sont un confort, pas une barrière de sécurité.
+- Avec un modèle 4B et 8192 tokens, le contexte se remplit vite : `/compact` le résume.
+- Un petit modèle peut inventer un outil, se tromper de chemin ou répéter un appel. Les erreurs lui sont renvoyées pour qu'il se corrige, mais il n'y arrive pas toujours.
+
+## Développement
+
+```bash
+git clone https://github.com/nils-malmberg/mini-agent.git
+cd mini-agent
+uv sync
+uv run pytest -q
+uv tool install -e .     # la commande mini-agent utilise ce dossier
+```
+
+Chaque push lance les tests sous Windows, macOS et Linux (Python 3.11 à 3.13). Pour publier une version : mettre à jour `version` dans `pyproject.toml`, puis créer et pousser l'étiquette correspondante (`git tag v0.1.0 &amp;&amp; git push origin v0.1.0`) ; le paquet est publié sur TestPyPI, puis sur PyPI après validation.
+
+## Licence
+
+MIT, voir [LICENSE](https://github.com/nils-malmberg/mini-agent/blob/main/LICENSE).</pre></div>
       </div>
     </div>
 
