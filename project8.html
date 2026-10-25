@@ -4600,7 +4600,7 @@ def test_animation_sans_terminal(texte_simple):
       </div>
       <div class="tuto-card-body">
         <h3>Objectif</h3>
-        <p>Tester automatiquement mini-agent sous Windows, macOS et Linux à chaque modification, et le publier sur PyPI pour que n'importe qui l'installe avec <code>uv tool install mini-agent</code>.</p>
+        <p>Tester automatiquement mini-agent sous Windows, macOS et Linux à chaque modification, et le publier sur PyPI pour que n'importe qui l'installe avec <code>uv tool install llamagent</code>.</p>
         <h3>Concept</h3>
         <p>La <strong>CI</strong> (intégration continue) relance les tests à chaque push, sur des machines neuves fournies par GitHub Actions. La <strong>CD</strong> (déploiement continu) publie une nouvelle version quand on pousse une étiquette comme <code>v0.1.0</code>. Les deux sont décrites dans des fichiers YAML, dans <code>.github/workflows/</code>.</p>
         <ul>
@@ -4609,9 +4609,12 @@ def test_animation_sans_terminal(texte_simple):
           <li><strong>Trusted Publishing</strong> : aucun mot de passe ni jeton dans le dépôt. PyPI fait confiance à <em>ce</em> workflow, de <em>ce</em> dépôt, dans <em>cet</em> environnement GitHub ; GitHub lui prouve son identité avec un jeton de courte durée (OIDC), d'où <code>permissions: id-token: write</code>.</li>
           <li><strong>Préparer le paquet</strong> : <code>prompts/</code> et <code>skills/</code> passent dans <code>src/mini_agent/</code> pour être installés avec le code. L'adresse par défaut devient celle d'Ollama sur la machine (<code>http://localhost:11434</code>) : un Ollama distant se règle dans <code>~/.mini-agent/config.toml</code>. La fiche du paquet (licence, liens, classifiers) est complétée, et <code>mini-agent --version</code> affiche la version installée.</li>
         </ul>
+        <p>Trois noms à ne pas confondre : le <strong>paquet</strong> sur PyPI s'appelle <code>llamagent</code> (c'est lui qu'on installe), la <strong>commande</strong> reste <code>mini-agent</code> (<code>[project.scripts]</code>) et le <strong>module</strong> Python reste <code>mini_agent</code> (le dossier <code>src/mini_agent/</code>).</p>
         <div class="code-label">pyproject.toml (version finale)</div>
         <div class="code-block"><pre>[project]
-name = "mini-agent"
+# Nom du paquet sur PyPI (« mini-agent » y est refusé, trop proche de « miniagent »).
+# La commande installée reste mini-agent, et le module Python mini_agent.
+name = "llamagent"
 version = "0.1.0"
 description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
 readme = "README.md"
@@ -4649,6 +4652,11 @@ mini-agent = "mini_agent.cli:main"
 # 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
 requires = ["hatchling&gt;=1.27"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Le paquet ne s'appelle plus comme le dossier du code : hatchling ne peut
+# plus le deviner (llamagent -&gt; src/llamagent), on le lui indique.
+packages = ["src/mini_agent"]
 
 [dependency-groups]
 dev = [
@@ -4753,7 +4761,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/mini-agent
+      url: https://test.pypi.org/p/llamagent
     permissions:
       id-token: write # nécessaire au Trusted Publishing
     steps:
@@ -4771,7 +4779,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/mini-agent
+      url: https://pypi.org/p/llamagent
     permissions:
       id-token: write
     steps:
@@ -4787,6 +4795,7 @@ jobs:
     python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
 """
 
+import re
 import sys
 import tomllib
 import zipfile
@@ -4804,12 +4813,15 @@ REQUIRED = [
 
 
 def main() -&gt; None:
-    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+    version = project["version"]
+    # Dans le nom du fichier .whl, le nom du paquet est normalisé : « - » devient « _ ».
+    name = re.sub(r"[-_.]+", "_", project["name"]).lower()
     if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
         sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
-    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    wheels = list(Path("dist").glob(f"{name}-{version}-*.whl"))
     if len(wheels) != 1:
-        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+        sys.exit(f"Un seul paquet {name}-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
     names = zipfile.ZipFile(wheels[0]).namelist()
     missing = [name for name in REQUIRED if name not in names]
     if missing:
@@ -4893,7 +4905,7 @@ def run_command(ctx: ToolContext, command: str) -&gt; str:
         <ol>
           <li>Sur <a href="https://pypi.org/manage/account/publishing/">pypi.org</a> : <em>Your account → Publishing → Add a new pending publisher</em> (GitHub), avec :</li>
         </ol>
-        <div class="code-block"><pre>PyPI Project Name : mini-agent
+        <div class="code-block"><pre>PyPI Project Name : llamagent
 Owner             : nils-malmberg
 Repository name   : mini-agent
 Workflow name     : release.yml
@@ -4917,24 +4929,17 @@ git push origin v0.1.0
 #    puis valider le déploiement « pypi » (Review deployments → Approve)
 
 # 4. Installer depuis PyPI, comme n'importe qui :
-uv tool install mini-agent</pre></div>
+uv tool install llamagent</pre></div>
         <h3>Ce qu'on doit observer</h3>
         <p>Les workflows ne tournent que sur GitHub. Ici, leurs commandes ont été rejouées à l'identique : construction, vérification du paquet (et refus d'une étiquette qui ne correspond pas), installation du paquet construit dans un dossier vierge, puis lancement. Sortie réelle :</p>
         <div class="code-block"><pre>$ uv build
-Successfully built dist/mini_agent-0.1.0.tar.gz
-Successfully built dist/mini_agent-0.1.0-py3-none-any.whl
+Successfully built dist/llamagent-0.1.0.tar.gz
+Successfully built dist/llamagent-0.1.0-py3-none-any.whl
 $ python3 scripts/check_package.py v0.1.0
-mini_agent-0.1.0-py3-none-any.whl : 21 fichiers, prompts et skills présents.
+llamagent-0.1.0-py3-none-any.whl : 21 fichiers, prompts et skills présents.
 $ python3 scripts/check_package.py v0.2.0
 L'étiquette v0.2.0 ne correspond pas à la version v0.1.0 de pyproject.toml.
-$ uv tool install dist/mini_agent-0.1.0-py3-none-any.whl
-Installed 6 packages in 6ms
- + certifi==2026.10.23
- + charset-normalizer==3.5.2
- + idna==3.20
- + mini-agent==0.1.0 (from file:///home/user/mini-agent/dist/mini_agent-0.1.0-py3-none-any.whl)
- + requests==2.34.2
- + urllib3==2.8.0
+$ uv tool install dist/llamagent-0.1.0-py3-none-any.whl
 Installed 1 executable: mini-agent
 $ mini-agent --version
 mini-agent 0.1.0
@@ -4952,7 +4957,7 @@ $ cd projet-vierge &amp;&amp; echo /quit | mini-agent
   projet   2 skills · /init pour préparer le projet
 
   vous</pre></div>
-        <p>Sur GitHub, l'onglet <em>Actions</em> montre les 9 jobs de tests et le job « Paquet » ; lors d'une publication, le job « Publier sur PyPI » attend ta validation. La page du projet apparaît ensuite sur <a href="https://pypi.org/project/mini-agent/">pypi.org/project/mini-agent</a>, avec le README comme description.</p>
+        <p>Sur GitHub, l'onglet <em>Actions</em> montre les 9 jobs de tests et le job « Paquet » ; lors d'une publication, le job « Publier sur PyPI » attend ta validation. La page du projet apparaît ensuite sur <a href="https://pypi.org/project/llamagent/">pypi.org/project/llamagent</a>, avec le README comme description.</p>
         <h3>Tests</h3>
         <div class="code-label">tests/test_cli.py</div>
         <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
@@ -4961,13 +4966,13 @@ from importlib.metadata import version
 
 import pytest
 
-from mini_agent.cli import parse_args
+from mini_agent.cli import PACKAGE_NAME, parse_args
 
 
 def test_version(capsys):
     with pytest.raises(SystemExit):
         parse_args(["--version"])
-    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+    assert capsys.readouterr().out.strip() == f"mini-agent {version(PACKAGE_NAME)}"
 
 
 def test_options():
@@ -4983,10 +4988,12 @@ def test_prompts_et_skills_dans_le_paquet():
     assert (PROMPTS_DIR / "AGENT.md").is_file() and (PROMPTS_DIR / "COMPACT.md").is_file()</pre></div>
         <h3>Pièges à surveiller</h3>
         <ul>
+          <li><strong>Rencontré : nom refusé.</strong> PyPI a refusé <code>mini-agent</code> (« trop similaire à un projet existant ») alors qu'aucun projet ne porte ce nom exact. PyPI compare des noms « ultra-normalisés » : minuscules, sans <code>-</code>, <code>_</code> ni <code>.</code>, avec <code>o</code> = <code>0</code> et <code>i</code> = <code>l</code> = <code>1</code>. <code>mini-agent</code> et le projet existant <code>miniagent</code> donnent la même forme. Vérifier un nom, c'est appliquer cette règle à la liste complète des projets (<code>https://pypi.org/simple/</code>), pas chercher le nom exact.</li>
+          <li><strong>Rencontré :</strong> une fois le paquet renommé, hatchling ne trouvait plus le code : il cherchait <code>src/llamagent/</code>. Quand le nom du paquet diffère du dossier, il faut l'indiquer : <code>[tool.hatch.build.targets.wheel] packages = ["src/mini_agent"]</code>.</li>
           <li><strong>Rencontré :</strong> l'installation éditable (<code>uv tool install -e</code>) cachait un vrai problème : <code>prompts/</code> et <code>skills/</code> n'étaient pas dans le paquet. Seul un test sur le paquet construit, installé ailleurs, le révèle : d'où le job « Paquet » et <code>check_package.py</code>.</li>
           <li><strong>Rencontré :</strong> le timeout de <code>run_command</code> et les sous-processus, ci-dessus. La branche Windows de <code>kill_process_tree</code> (<code>taskkill</code>) n'a encore tourné que dans la CI : c'est le rôle de la matrice Windows.</li>
           <li>Une version publiée sur PyPI ne peut jamais être republiée, même après suppression : changer le numéro à chaque publication. C'est pour ça qu'on passe d'abord par TestPyPI.</li>
-          <li>Une publication « en attente » ne réserve pas le nom : si quelqu'un publie <code>mini-agent</code> avant toi, elle devient invalide. Publier la première version sans trop tarder.</li>
+          <li>Une publication « en attente » ne réserve pas le nom : si quelqu'un publie <code>llamagent</code> avant toi, elle devient invalide. Publier la première version sans trop tarder.</li>
           <li><code>uv sync --locked</code> échoue si <code>uv.lock</code> n'est plus à jour : relancer <code>uv lock</code> après chaque modification de <code>pyproject.toml</code>.</li>
           <li>Le premier passage sous Windows et macOS peut révéler d'autres différences (chemins, encodage, commandes) : c'est exactement à ça que sert la CI. Corriger, repousser, jusqu'au vert.</li>
           <li>Ton Ollama est sur le NAS : depuis cette étape, l'adresse par défaut est <code>localhost</code>. Mettre <code>url = "http://192.168.1.76:11434"</code> dans <code>~/.mini-agent/config.toml</code>.</li>
@@ -5006,7 +5013,9 @@ def test_prompts_et_skills_dans_le_paquet():
       <div class="tuto-card-body">
         <div class="code-label">pyproject.toml</div>
         <div class="code-block"><pre>[project]
-name = "mini-agent"
+# Nom du paquet sur PyPI (« mini-agent » y est refusé, trop proche de « miniagent »).
+# La commande installée reste mini-agent, et le module Python mini_agent.
+name = "llamagent"
 version = "0.1.0"
 description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
 readme = "README.md"
@@ -5044,6 +5053,11 @@ mini-agent = "mini_agent.cli:main"
 # 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
 requires = ["hatchling&gt;=1.27"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Le paquet ne s'appelle plus comme le dossier du code : hatchling ne peut
+# plus le deviner (llamagent -&gt; src/llamagent), on le lui indique.
+packages = ["src/mini_agent"]
 
 [dependency-groups]
 dev = [
@@ -6803,6 +6817,9 @@ from mini_agent.history import find_session, resume_session, save_session
 from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
 from mini_agent.tools import available_skills
 
+# Nom du paquet sur PyPI (étape 18) : différent de la commande, mini-agent.
+PACKAGE_NAME = "llamagent"
+
 
 def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser = argparse.ArgumentParser(prog="mini-agent", description="Un agent de code minimal autour d'Ollama.")
@@ -6812,7 +6829,7 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
     parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
-    parser.add_argument("--version", action="version", version=f"mini-agent {version('mini-agent')}")
+    parser.add_argument("--version", action="version", version=f"mini-agent {version(PACKAGE_NAME)}")
     return parser.parse_args(argv)
 
 
@@ -8042,13 +8059,13 @@ from importlib.metadata import version
 
 import pytest
 
-from mini_agent.cli import parse_args
+from mini_agent.cli import PACKAGE_NAME, parse_args
 
 
 def test_version(capsys):
     with pytest.raises(SystemExit):
         parse_args(["--version"])
-    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+    assert capsys.readouterr().out.strip() == f"mini-agent {version(PACKAGE_NAME)}"
 
 
 def test_options():
@@ -8158,7 +8175,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/mini-agent
+      url: https://test.pypi.org/p/llamagent
     permissions:
       id-token: write # nécessaire au Trusted Publishing
     steps:
@@ -8176,7 +8193,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/mini-agent
+      url: https://pypi.org/p/llamagent
     permissions:
       id-token: write
     steps:
@@ -8192,6 +8209,7 @@ jobs:
     python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
 """
 
+import re
 import sys
 import tomllib
 import zipfile
@@ -8209,12 +8227,15 @@ REQUIRED = [
 
 
 def main() -&gt; None:
-    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+    version = project["version"]
+    # Dans le nom du fichier .whl, le nom du paquet est normalisé : « - » devient « _ ».
+    name = re.sub(r"[-_.]+", "_", project["name"]).lower()
     if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
         sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
-    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    wheels = list(Path("dist").glob(f"{name}-{version}-*.whl"))
     if len(wheels) != 1:
-        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+        sys.exit(f"Un seul paquet {name}-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
     names = zipfile.ZipFile(wheels[0]).namelist()
     missing = [name for name in REQUIRED if name not in names]
     if missing:
@@ -8237,6 +8258,8 @@ if __name__ == "__main__":
         <div class="code-label">README.md</div>
         <div class="code-block"><pre># mini-agent
 
+&gt; Sur PyPI, le paquet s'appelle **llamagent** ; la commande installée est `mini-agent`.
+
 Un agent de code minimal en Python, écrit à la main pour comprendre comment fonctionne un agent de code : boucle agentique, harness, outils, prompt système, skills et garde-fous.
 
 Il pilote un LLM local servi par [Ollama](https://ollama.com) (par défaut `qwen3.5:4b`) via l'API native `/api/chat`. Aucun framework d'agent : une seule dépendance, `requests`.
@@ -8250,7 +8273,7 @@ Il pilote un LLM local servi par [Ollama](https://ollama.com) (par défaut `qwen
 Prérequis : un serveur [Ollama](https://ollama.com) avec un modèle qui gère les outils (`ollama pull qwen3.5:4b`).
 
 ```bash
-uv tool install mini-agent      # ou : pipx install mini-agent
+uv tool install llamagent      # ou : pipx install llamagent
 ```
 
 Si Ollama ne tourne pas sur la même machine, indiquez son adresse dans `~/.mini-agent/config.toml` (sous Windows : `C:\Users\&lt;vous&gt;\.mini-agent\config.toml`) :
@@ -12961,7 +12984,7 @@ def test_animation_sans_terminal(texte_simple):
       </div>
       <div class="tuto-card-body">
         <h3>Goal</h3>
-        <p>Automatically test mini-agent on Windows, macOS and Linux on every change, and publish it on PyPI so anyone can install it with <code>uv tool install mini-agent</code>.</p>
+        <p>Automatically test mini-agent on Windows, macOS and Linux on every change, and publish it on PyPI so anyone can install it with <code>uv tool install llamagent</code>.</p>
         <h3>Concept</h3>
         <p><strong>CI</strong> (continuous integration) reruns the tests on every push, on fresh machines provided by GitHub Actions. <strong>CD</strong> (continuous deployment) publishes a new version when a tag such as <code>v0.1.0</code> is pushed. Both are described in YAML files, in <code>.github/workflows/</code>.</p>
         <ul>
@@ -12970,9 +12993,12 @@ def test_animation_sans_terminal(texte_simple):
           <li><strong>Trusted Publishing</strong>: no password or token in the repository. PyPI trusts <em>this</em> workflow, from <em>this</em> repository, in <em>this</em> GitHub environment; GitHub proves its identity with a short-lived token (OIDC), hence <code>permissions: id-token: write</code>.</li>
           <li><strong>Preparing the package</strong>: <code>prompts/</code> and <code>skills/</code> move into <code>src/mini_agent/</code> to be installed with the code. The default address becomes Ollama's on the machine (<code>http://localhost:11434</code>): a remote Ollama is set in <code>~/.mini-agent/config.toml</code>. The package metadata (licence, links, classifiers) is completed, and <code>mini-agent --version</code> prints the installed version.</li>
         </ul>
+        <p>Three names not to confuse: the <strong>package</strong> on PyPI is called <code>llamagent</code> (the one you install), the <strong>command</strong> stays <code>mini-agent</code> (<code>[project.scripts]</code>) and the Python <strong>module</strong> stays <code>mini_agent</code> (the <code>src/mini_agent/</code> folder).</p>
         <div class="code-label">pyproject.toml (final version)</div>
         <div class="code-block"><pre>[project]
-name = "mini-agent"
+# Nom du paquet sur PyPI (« mini-agent » y est refusé, trop proche de « miniagent »).
+# La commande installée reste mini-agent, et le module Python mini_agent.
+name = "llamagent"
 version = "0.1.0"
 description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
 readme = "README.md"
@@ -13010,6 +13036,11 @@ mini-agent = "mini_agent.cli:main"
 # 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
 requires = ["hatchling&gt;=1.27"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Le paquet ne s'appelle plus comme le dossier du code : hatchling ne peut
+# plus le deviner (llamagent -&gt; src/llamagent), on le lui indique.
+packages = ["src/mini_agent"]
 
 [dependency-groups]
 dev = [
@@ -13114,7 +13145,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/mini-agent
+      url: https://test.pypi.org/p/llamagent
     permissions:
       id-token: write # nécessaire au Trusted Publishing
     steps:
@@ -13132,7 +13163,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/mini-agent
+      url: https://pypi.org/p/llamagent
     permissions:
       id-token: write
     steps:
@@ -13148,6 +13179,7 @@ jobs:
     python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
 """
 
+import re
 import sys
 import tomllib
 import zipfile
@@ -13165,12 +13197,15 @@ REQUIRED = [
 
 
 def main() -&gt; None:
-    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+    version = project["version"]
+    # Dans le nom du fichier .whl, le nom du paquet est normalisé : « - » devient « _ ».
+    name = re.sub(r"[-_.]+", "_", project["name"]).lower()
     if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
         sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
-    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    wheels = list(Path("dist").glob(f"{name}-{version}-*.whl"))
     if len(wheels) != 1:
-        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+        sys.exit(f"Un seul paquet {name}-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
     names = zipfile.ZipFile(wheels[0]).namelist()
     missing = [name for name in REQUIRED if name not in names]
     if missing:
@@ -13254,7 +13289,7 @@ def run_command(ctx: ToolContext, command: str) -&gt; str:
         <ol>
           <li>On <a href="https://pypi.org/manage/account/publishing/">pypi.org</a>: <em>Your account → Publishing → Add a new pending publisher</em> (GitHub), with:</li>
         </ol>
-        <div class="code-block"><pre>PyPI Project Name : mini-agent
+        <div class="code-block"><pre>PyPI Project Name : llamagent
 Owner             : nils-malmberg
 Repository name   : mini-agent
 Workflow name     : release.yml
@@ -13278,24 +13313,17 @@ git push origin v0.1.0
 #    then approve the "pypi" deployment (Review deployments → Approve)
 
 # 4. Install from PyPI, like anyone else:
-uv tool install mini-agent</pre></div>
+uv tool install llamagent</pre></div>
         <h3>What we should observe</h3>
         <p>The workflows only run on GitHub. Here, their commands were replayed identically: build, package check (and rejection of a tag that does not match), installation of the built package in an empty folder, then launch. Real output:</p>
         <div class="code-block"><pre>$ uv build
-Successfully built dist/mini_agent-0.1.0.tar.gz
-Successfully built dist/mini_agent-0.1.0-py3-none-any.whl
+Successfully built dist/llamagent-0.1.0.tar.gz
+Successfully built dist/llamagent-0.1.0-py3-none-any.whl
 $ python3 scripts/check_package.py v0.1.0
-mini_agent-0.1.0-py3-none-any.whl : 21 fichiers, prompts et skills présents.
+llamagent-0.1.0-py3-none-any.whl : 21 fichiers, prompts et skills présents.
 $ python3 scripts/check_package.py v0.2.0
 L'étiquette v0.2.0 ne correspond pas à la version v0.1.0 de pyproject.toml.
-$ uv tool install dist/mini_agent-0.1.0-py3-none-any.whl
-Installed 6 packages in 6ms
- + certifi==2026.10.23
- + charset-normalizer==3.5.2
- + idna==3.20
- + mini-agent==0.1.0 (from file:///home/user/mini-agent/dist/mini_agent-0.1.0-py3-none-any.whl)
- + requests==2.34.2
- + urllib3==2.8.0
+$ uv tool install dist/llamagent-0.1.0-py3-none-any.whl
 Installed 1 executable: mini-agent
 $ mini-agent --version
 mini-agent 0.1.0
@@ -13313,7 +13341,7 @@ $ cd projet-vierge &amp;&amp; echo /quit | mini-agent
   projet   2 skills · /init pour préparer le projet
 
   vous</pre></div>
-        <p>On GitHub, the <em>Actions</em> tab shows the 9 test jobs and the "Paquet" job; during a release, the "Publier sur PyPI" job waits for your approval. The project page then appears on <a href="https://pypi.org/project/mini-agent/">pypi.org/project/mini-agent</a>, with the README as description.</p>
+        <p>On GitHub, the <em>Actions</em> tab shows the 9 test jobs and the "Paquet" job; during a release, the "Publier sur PyPI" job waits for your approval. The project page then appears on <a href="https://pypi.org/project/llamagent/">pypi.org/project/llamagent</a>, with the README as description.</p>
         <h3>Tests</h3>
         <div class="code-label">tests/test_cli.py</div>
         <div class="code-block"><pre>"""Tests de la ligne de commande (cli.py)."""
@@ -13322,13 +13350,13 @@ from importlib.metadata import version
 
 import pytest
 
-from mini_agent.cli import parse_args
+from mini_agent.cli import PACKAGE_NAME, parse_args
 
 
 def test_version(capsys):
     with pytest.raises(SystemExit):
         parse_args(["--version"])
-    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+    assert capsys.readouterr().out.strip() == f"mini-agent {version(PACKAGE_NAME)}"
 
 
 def test_options():
@@ -13344,10 +13372,12 @@ def test_prompts_et_skills_dans_le_paquet():
     assert (PROMPTS_DIR / "AGENT.md").is_file() and (PROMPTS_DIR / "COMPACT.md").is_file()</pre></div>
         <h3>Pitfalls to watch</h3>
         <ul>
+          <li><strong>Hit: name rejected.</strong> PyPI rejected <code>mini-agent</code> ("too similar to an existing project") although no project has that exact name. PyPI compares "ultra-normalised" names: lowercase, without <code>-</code>, <code>_</code> or <code>.</code>, with <code>o</code> = <code>0</code> and <code>i</code> = <code>l</code> = <code>1</code>. <code>mini-agent</code> and the existing <code>miniagent</code> project give the same form. Checking a name means applying this rule to the full project list (<code>https://pypi.org/simple/</code>), not looking for the exact name.</li>
+          <li><strong>Hit:</strong> once the package was renamed, hatchling no longer found the code: it was looking for <code>src/llamagent/</code>. When the package name differs from the folder, you have to say so: <code>[tool.hatch.build.targets.wheel] packages = ["src/mini_agent"]</code>.</li>
           <li><strong>Hit:</strong> the editable install (<code>uv tool install -e</code>) hid a real problem: <code>prompts/</code> and <code>skills/</code> were not in the package. Only a test on the built package, installed elsewhere, reveals it: hence the "Paquet" job and <code>check_package.py</code>.</li>
           <li><strong>Hit:</strong> the <code>run_command</code> timeout and subprocesses, above. The Windows branch of <code>kill_process_tree</code> (<code>taskkill</code>) has only run in CI so far: that is what the Windows matrix is for.</li>
           <li>A version published on PyPI can never be published again, even after deletion: change the number for every release. That is why we go through TestPyPI first.</li>
-          <li>A "pending" publisher does not reserve the name: if someone publishes <code>mini-agent</code> before you, it becomes invalid. Publish the first version without delay.</li>
+          <li>A "pending" publisher does not reserve the name: if someone publishes <code>llamagent</code> before you, it becomes invalid. Publish the first version without delay.</li>
           <li><code>uv sync --locked</code> fails if <code>uv.lock</code> is out of date: rerun <code>uv lock</code> after every change to <code>pyproject.toml</code>.</li>
           <li>The first run on Windows and macOS may reveal other differences (paths, encoding, commands): that is exactly what CI is for. Fix, push again, until green.</li>
           <li>Your Ollama is on the NAS: from this step on, the default address is <code>localhost</code>. Put <code>url = "http://192.168.1.76:11434"</code> in <code>~/.mini-agent/config.toml</code>.</li>
@@ -13367,7 +13397,9 @@ def test_prompts_et_skills_dans_le_paquet():
       <div class="tuto-card-body">
         <div class="code-label">pyproject.toml</div>
         <div class="code-block"><pre>[project]
-name = "mini-agent"
+# Nom du paquet sur PyPI (« mini-agent » y est refusé, trop proche de « miniagent »).
+# La commande installée reste mini-agent, et le module Python mini_agent.
+name = "llamagent"
 version = "0.1.0"
 description = "Un agent de code minimal autour d'Ollama, écrit à la main pour comprendre chaque brique."
 readme = "README.md"
@@ -13405,6 +13437,11 @@ mini-agent = "mini_agent.cli:main"
 # 1.27 : première version qui comprend « license = "MIT" » (PEP 639).
 requires = ["hatchling&gt;=1.27"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Le paquet ne s'appelle plus comme le dossier du code : hatchling ne peut
+# plus le deviner (llamagent -&gt; src/llamagent), on le lui indique.
+packages = ["src/mini_agent"]
 
 [dependency-groups]
 dev = [
@@ -15164,6 +15201,9 @@ from mini_agent.history import find_session, resume_session, save_session
 from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
 from mini_agent.tools import available_skills
 
+# Nom du paquet sur PyPI (étape 18) : différent de la commande, mini-agent.
+PACKAGE_NAME = "llamagent"
+
 
 def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser = argparse.ArgumentParser(prog="mini-agent", description="Un agent de code minimal autour d'Ollama.")
@@ -15173,7 +15213,7 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
     parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
-    parser.add_argument("--version", action="version", version=f"mini-agent {version('mini-agent')}")
+    parser.add_argument("--version", action="version", version=f"mini-agent {version(PACKAGE_NAME)}")
     return parser.parse_args(argv)
 
 
@@ -16403,13 +16443,13 @@ from importlib.metadata import version
 
 import pytest
 
-from mini_agent.cli import parse_args
+from mini_agent.cli import PACKAGE_NAME, parse_args
 
 
 def test_version(capsys):
     with pytest.raises(SystemExit):
         parse_args(["--version"])
-    assert capsys.readouterr().out.strip() == f"mini-agent {version('mini-agent')}"
+    assert capsys.readouterr().out.strip() == f"mini-agent {version(PACKAGE_NAME)}"
 
 
 def test_options():
@@ -16519,7 +16559,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/mini-agent
+      url: https://test.pypi.org/p/llamagent
     permissions:
       id-token: write # nécessaire au Trusted Publishing
     steps:
@@ -16537,7 +16577,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/mini-agent
+      url: https://pypi.org/p/llamagent
     permissions:
       id-token: write
     steps:
@@ -16553,6 +16593,7 @@ jobs:
     python scripts/check_package.py v0.1.0     # et l'étiquette correspond à la version
 """
 
+import re
 import sys
 import tomllib
 import zipfile
@@ -16570,12 +16611,15 @@ REQUIRED = [
 
 
 def main() -&gt; None:
-    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+    version = project["version"]
+    # Dans le nom du fichier .whl, le nom du paquet est normalisé : « - » devient « _ ».
+    name = re.sub(r"[-_.]+", "_", project["name"]).lower()
     if len(sys.argv) &gt; 1 and sys.argv[1] != f"v{version}":
         sys.exit(f"L'étiquette {sys.argv[1]} ne correspond pas à la version v{version} de pyproject.toml.")
-    wheels = list(Path("dist").glob(f"mini_agent-{version}-*.whl"))
+    wheels = list(Path("dist").glob(f"{name}-{version}-*.whl"))
     if len(wheels) != 1:
-        sys.exit(f"Un seul paquet mini_agent-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
+        sys.exit(f"Un seul paquet {name}-{version} attendu dans dist/, trouvé : {[w.name for w in wheels]}")
     names = zipfile.ZipFile(wheels[0]).namelist()
     missing = [name for name in REQUIRED if name not in names]
     if missing:
@@ -16598,6 +16642,8 @@ if __name__ == "__main__":
         <div class="code-label">README.md</div>
         <div class="code-block"><pre># mini-agent
 
+&gt; Sur PyPI, le paquet s'appelle **llamagent** ; la commande installée est `mini-agent`.
+
 Un agent de code minimal en Python, écrit à la main pour comprendre comment fonctionne un agent de code : boucle agentique, harness, outils, prompt système, skills et garde-fous.
 
 Il pilote un LLM local servi par [Ollama](https://ollama.com) (par défaut `qwen3.5:4b`) via l'API native `/api/chat`. Aucun framework d'agent : une seule dépendance, `requests`.
@@ -16611,7 +16657,7 @@ Il pilote un LLM local servi par [Ollama](https://ollama.com) (par défaut `qwen
 Prérequis : un serveur [Ollama](https://ollama.com) avec un modèle qui gère les outils (`ollama pull qwen3.5:4b`).
 
 ```bash
-uv tool install mini-agent      # ou : pipx install mini-agent
+uv tool install llamagent      # ou : pipx install llamagent
 ```
 
 Si Ollama ne tourne pas sur la même machine, indiquez son adresse dans `~/.mini-agent/config.toml` (sous Windows : `C:\Users\&lt;vous&gt;\.mini-agent\config.toml`) :
