@@ -140,6 +140,7 @@
 │   └── ecrire-tests-pytest.md
 ├── demo/stats.py           # script buggé pour la démo
 └── tests/                  # pytest, Ollama remplacé par un faux modèle
+    ├── test_config.py
     ├── test_guards.py
     ├── test_tools.py
     └── test_agent.py</pre></div>
@@ -149,17 +150,16 @@
     <ul>
       <li><code>OLLAMA_URL</code> : adresse du serveur Ollama (défaut <code>http://192.168.1.76:11434</code>).</li>
       <li><code>OLLAMA_MODEL</code> : modèle utilisé (défaut <code>qwen3.5:4b</code>).</li>
-      <li><code>MINI_AGENT_WORKDIR</code> : le seul dossier où l'agent peut lire, écrire et lancer des commandes (défaut : le dossier depuis lequel on lance l'agent).</li>
+      <li><code>MINI_AGENT_WORKDIR</code> (facultatif) : le seul dossier où l'agent peut lire, écrire et lancer des commandes. Par défaut, c'est le dossier depuis lequel on lance l'agent. S'il est défini, il doit exister : sinon l'agent s'arrête au démarrage.</li>
       <li><code>NO_COLOR</code> : si elle existe, les logs ne sont pas colorés.</li>
     </ul>
         <div class="code-label">macOS (zsh / bash)</div>
         <div class="code-block"><pre>export OLLAMA_URL="http://192.168.1.76:11434"
-export OLLAMA_MODEL="qwen3.5:4b"
-export MINI_AGENT_WORKDIR="$HOME/projets/demo"</pre></div>
+export OLLAMA_MODEL="qwen3.5:4b"</pre></div>
         <div class="code-label">Windows (PowerShell)</div>
         <div class="code-block"><pre>$env:OLLAMA_URL = "http://192.168.1.76:11434"
-$env:OLLAMA_MODEL = "qwen3.5:4b"
-$env:MINI_AGENT_WORKDIR = "$HOME\projets\demo"</pre></div>
+$env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
+    <p>Une variable définie dans PowerShell reste active jusqu'à la fermeture du terminal. Pour l'effacer : <code>Remove-Item Env:MINI_AGENT_WORKDIR</code> (macOS : <code>unset MINI_AGENT_WORKDIR</code>).</p>
     <p>Les réglages du modèle et les limites des garde-fous sont des constantes de <code>config.py</code> : <code>TEMPERATURE = 0.2</code>, <code>NUM_CTX = 8192</code>, <code>REQUEST_TIMEOUT = 120</code> s, <code>MAX_TOURS = 15</code>, <code>COMMAND_TIMEOUT = 30</code> s, <code>MAX_OUTPUT_CHARS = 4000</code>.</p>
     <p>Chaque appel au modèle envoie le même JSON à <code>POST /api/chat</code> :</p>
         <div class="code-block"><pre>{
@@ -836,6 +836,10 @@ def load_config() -&gt; Config:
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     # Par défaut, l'agent travaille dans le dossier où on le lance.
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # Un dossier de travail absent ferait échouer tous les outils plus tard,
+    # avec des erreurs obscures (WinError 267 sous Windows) : on s'arrête net.
+    if not workdir.is_dir():
+        raise SystemExit(f"Dossier de travail introuvable : {workdir} (vérifie MINI_AGENT_WORKDIR).")
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
         <div class="code-label">src/mini_agent/llm.py</div>
@@ -1169,7 +1173,13 @@ uv run pytest -q</pre></div>
         <h3>Ce qu'on doit observer</h3>
         <p>Un appel à <code>list_files</code>, puis à <code>read_file</code> sur <code>pyproject.toml</code>, puis une réponse qui cite <code>requests</code>. Les tests passent.</p>
         <h3>Pièges à surveiller</h3>
-        <div class="warning-block"><strong>Rencontré au premier essai réel :</strong> l'agent a répondu « le dossier de travail est vide ». Cause probable : le modèle a appelé <code>list_files</code> avec un chemin qui n'existe pas (par exemple le nom du projet, <code>mini-agent</code>). Pour un dossier absent, <code>os.walk</code> ne renvoie rien sans lever d'erreur : <code>list_files</code> répondait « (aucun fichier) » et le modèle l'a cru. Correction : <code>list_files</code> renvoie maintenant une erreur explicite qui lui dit d'utiliser <code>'.'</code>, et <code>try_step5.py</code> affiche les appels d'outils pour voir ce qui se passe.</div>
+        <div class="warning-block"><strong>Observé lors des premiers essais réels :</strong></div>
+        <ul>
+          <li>L'agent a répondu « le dossier de travail est vide ». Pour un dossier qui n'existe pas, <code>os.walk</code> ne signale aucune erreur : <code>list_files</code> répondait « (aucun fichier) » et le modèle l'a cru. <code>list_files</code> renvoie maintenant une erreur explicite, et <code>load_config</code> refuse au démarrage un dossier de travail inexistant.</li>
+          <li>Pour lister les fichiers, qwen3.5:4b a préféré <code>run_command("ls -la")</code> à l'outil <code>list_files</code>. Après un refus, il a proposé <code>ls -la &amp;&amp; cat pyproject.toml</code>. Ces commandes Unix n'existent pas dans <code>cmd.exe</code> sous Windows : le prompt système de l'étape 7 indique le shell au modèle et lui demande d'utiliser les outils.</li>
+          <li>Sous Windows, un dossier de travail inexistant fait échouer <code>run_command</code> avec <code>NotADirectoryError: [WinError 267]</code> : c'est le <code>cwd</code> de <code>subprocess.run</code> qui est invalide. À l'étape 5, <code>execute_tool</code> ne rattrape pas encore les exceptions : l'agent plante (corrigé à l'étape 8).</li>
+          <li><code>try_step5.py</code> affiche maintenant le dossier de travail et chaque appel d'outil : sans ça, impossible de savoir ce que le modèle a demandé.</li>
+        </ul>
         <ul>
           <li>Le modèle appelle <code>read_file</code> sur un dossier, ou <code>list_files</code> sur un fichier : l'erreur lui est renvoyée.</li>
           <li><code>write_file</code> avec seulement la partie modifiée : le reste du fichier serait perdu. D'où « Remplace TOUT le contenu » dans la description et le diff montré avant écriture.</li>
@@ -1257,6 +1267,10 @@ def load_config() -&gt; Config:
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     # Par défaut, l'agent travaille dans le dossier où on le lance.
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # Un dossier de travail absent ferait échouer tous les outils plus tard,
+    # avec des erreurs obscures (WinError 267 sous Windows) : on s'arrête net.
+    if not workdir.is_dir():
+        raise SystemExit(f"Dossier de travail introuvable : {workdir} (vérifie MINI_AGENT_WORKDIR).")
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
         <p>Dans <code>agent.py</code>, on complète les imports, puis une ligne suffit pour la troncature :</p>
@@ -1871,6 +1885,10 @@ def load_config() -&gt; Config:
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     # Par défaut, l'agent travaille dans le dossier où on le lance.
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # Un dossier de travail absent ferait échouer tous les outils plus tard,
+    # avec des erreurs obscures (WinError 267 sous Windows) : on s'arrête net.
+    if not workdir.is_dir():
+        raise SystemExit(f"Dossier de travail introuvable : {workdir} (vérifie MINI_AGENT_WORKDIR).")
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
       </div>
@@ -2543,6 +2561,38 @@ if __name__ == "__main__":
     <div class="tuto-card" id="mini-agent-code-j-fr">
       <div class="tuto-card-header">
         <span class="step-num">J</span>
+        <span class="tuto-card-title">tests/test_config.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_config.py</div>
+        <div class="code-block"><pre>"""Tests de la configuration (config.py)."""
+
+import pytest
+
+from mini_agent.config import DEFAULT_OLLAMA_MODEL, load_config
+
+
+def test_valeurs_par_defaut(monkeypatch, tmp_path):
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434/")
+    monkeypatch.setenv("MINI_AGENT_WORKDIR", str(tmp_path))
+    config = load_config()
+    assert config.model == DEFAULT_OLLAMA_MODEL
+    assert config.chat_url == "http://localhost:11434/api/chat"  # "/" final retiré
+    assert config.workdir == tmp_path.resolve()
+
+
+def test_dossier_de_travail_inexistant(monkeypatch, tmp_path):
+    monkeypatch.setenv("MINI_AGENT_WORKDIR", str(tmp_path / "absent"))
+    with pytest.raises(SystemExit, match="Dossier de travail introuvable"):
+        load_config()</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-k-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">K</span>
         <span class="tuto-card-title">tests/test_guards.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -2602,9 +2652,9 @@ def test_confirmation(monkeypatch, reponse, attendu):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-k-fr">
+    <div class="tuto-card" id="mini-agent-code-l-fr">
       <div class="tuto-card-header">
-        <span class="step-num">K</span>
+        <span class="step-num">L</span>
         <span class="tuto-card-title">tests/test_tools.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -2740,9 +2790,9 @@ def test_exception_python_renvoyee_au_modele(ctx):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-l-fr">
+    <div class="tuto-card" id="mini-agent-code-m-fr">
       <div class="tuto-card-header">
-        <span class="step-num">L</span>
+        <span class="step-num">M</span>
         <span class="tuto-card-title">tests/test_agent.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -2999,6 +3049,7 @@ def test_vrai_prompt_et_vraies_skills():
 │   └── ecrire-tests-pytest.md
 ├── demo/stats.py           # buggy script for the demo
 └── tests/                  # pytest, Ollama replaced by a fake model
+    ├── test_config.py
     ├── test_guards.py
     ├── test_tools.py
     └── test_agent.py</pre></div>
@@ -3008,17 +3059,16 @@ def test_vrai_prompt_et_vraies_skills():
     <ul>
       <li><code>OLLAMA_URL</code>: address of the Ollama server (default <code>http://192.168.1.76:11434</code>).</li>
       <li><code>OLLAMA_MODEL</code>: model used (default <code>qwen3.5:4b</code>).</li>
-      <li><code>MINI_AGENT_WORKDIR</code>: the only folder where the agent may read, write and run commands (default: the folder the agent is started from).</li>
+      <li><code>MINI_AGENT_WORKDIR</code> (optional): the only folder where the agent may read, write and run commands. By default, it is the folder the agent is started from. If set, it must exist: otherwise the agent stops at startup.</li>
       <li><code>NO_COLOR</code>: if set, logs are not coloured.</li>
     </ul>
         <div class="code-label">macOS (zsh / bash)</div>
         <div class="code-block"><pre>export OLLAMA_URL="http://192.168.1.76:11434"
-export OLLAMA_MODEL="qwen3.5:4b"
-export MINI_AGENT_WORKDIR="$HOME/projects/demo"</pre></div>
+export OLLAMA_MODEL="qwen3.5:4b"</pre></div>
         <div class="code-label">Windows (PowerShell)</div>
         <div class="code-block"><pre>$env:OLLAMA_URL = "http://192.168.1.76:11434"
-$env:OLLAMA_MODEL = "qwen3.5:4b"
-$env:MINI_AGENT_WORKDIR = "$HOME\projects\demo"</pre></div>
+$env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
+    <p>A variable set in PowerShell stays active until the terminal is closed. To clear it: <code>Remove-Item Env:MINI_AGENT_WORKDIR</code> (macOS: <code>unset MINI_AGENT_WORKDIR</code>).</p>
     <p>Model settings and guardrail limits are constants in <code>config.py</code>: <code>TEMPERATURE = 0.2</code>, <code>NUM_CTX = 8192</code>, <code>REQUEST_TIMEOUT = 120</code> s, <code>MAX_TOURS = 15</code>, <code>COMMAND_TIMEOUT = 30</code> s, <code>MAX_OUTPUT_CHARS = 4000</code>.</p>
     <p>Every call to the model sends the same JSON to <code>POST /api/chat</code>:</p>
         <div class="code-block"><pre>{
@@ -3695,6 +3745,10 @@ def load_config() -&gt; Config:
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     # Par défaut, l'agent travaille dans le dossier où on le lance.
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # Un dossier de travail absent ferait échouer tous les outils plus tard,
+    # avec des erreurs obscures (WinError 267 sous Windows) : on s'arrête net.
+    if not workdir.is_dir():
+        raise SystemExit(f"Dossier de travail introuvable : {workdir} (vérifie MINI_AGENT_WORKDIR).")
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
         <div class="code-label">src/mini_agent/llm.py</div>
@@ -4028,7 +4082,13 @@ uv run pytest -q</pre></div>
         <h3>What we should observe</h3>
         <p>A call to <code>list_files</code>, then to <code>read_file</code> on <code>pyproject.toml</code>, then an answer mentioning <code>requests</code>. The tests pass.</p>
         <h3>Pitfalls to watch</h3>
-        <div class="warning-block"><strong>Hit on the first real run:</strong> the agent answered "the working folder is empty". Likely cause: the model called <code>list_files</code> with a path that does not exist (for example the project name, <code>mini-agent</code>). For a missing folder, <code>os.walk</code> returns nothing without raising an error: <code>list_files</code> answered "(aucun fichier)" and the model believed it. Fix: <code>list_files</code> now returns an explicit error telling it to use <code>'.'</code>, and <code>try_step5.py</code> prints the tool calls so we can see what happens.</div>
+        <div class="warning-block"><strong>Observed during the first real runs:</strong></div>
+        <ul>
+          <li>The agent answered "the working folder is empty". For a folder that does not exist, <code>os.walk</code> reports no error: <code>list_files</code> answered "(aucun fichier)" and the model believed it. <code>list_files</code> now returns an explicit error, and <code>load_config</code> rejects a missing working folder at startup.</li>
+          <li>To list files, qwen3.5:4b preferred <code>run_command("ls -la")</code> over the <code>list_files</code> tool. After a refusal, it suggested <code>ls -la &amp;&amp; cat pyproject.toml</code>. These Unix commands do not exist in <code>cmd.exe</code> on Windows: the step 7 system prompt tells the model which shell it has and asks it to use the tools.</li>
+          <li>On Windows, a missing working folder makes <code>run_command</code> fail with <code>NotADirectoryError: [WinError 267]</code>: the <code>cwd</code> given to <code>subprocess.run</code> is invalid. At step 5, <code>execute_tool</code> does not catch exceptions yet: the agent crashes (fixed at step 8).</li>
+          <li><code>try_step5.py</code> now prints the working folder and every tool call: without it, there is no way to know what the model asked for.</li>
+        </ul>
         <ul>
           <li>The model calls <code>read_file</code> on a folder, or <code>list_files</code> on a file: the error is sent back to it.</li>
           <li><code>write_file</code> with only the modified part: the rest of the file would be lost. Hence "Remplace TOUT le contenu" in the description and the diff shown before writing.</li>
@@ -4116,6 +4176,10 @@ def load_config() -&gt; Config:
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     # Par défaut, l'agent travaille dans le dossier où on le lance.
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # Un dossier de travail absent ferait échouer tous les outils plus tard,
+    # avec des erreurs obscures (WinError 267 sous Windows) : on s'arrête net.
+    if not workdir.is_dir():
+        raise SystemExit(f"Dossier de travail introuvable : {workdir} (vérifie MINI_AGENT_WORKDIR).")
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
         <p>In <code>agent.py</code>, complete the imports, then one line is enough for truncation:</p>
@@ -4730,6 +4794,10 @@ def load_config() -&gt; Config:
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     # Par défaut, l'agent travaille dans le dossier où on le lance.
     workdir = Path(os.environ.get("MINI_AGENT_WORKDIR", Path.cwd())).resolve()
+    # Un dossier de travail absent ferait échouer tous les outils plus tard,
+    # avec des erreurs obscures (WinError 267 sous Windows) : on s'arrête net.
+    if not workdir.is_dir():
+        raise SystemExit(f"Dossier de travail introuvable : {workdir} (vérifie MINI_AGENT_WORKDIR).")
     # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model, workdir=workdir)</pre></div>
       </div>
@@ -5402,6 +5470,38 @@ if __name__ == "__main__":
     <div class="tuto-card" id="mini-agent-code-j-en">
       <div class="tuto-card-header">
         <span class="step-num">J</span>
+        <span class="tuto-card-title">tests/test_config.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_config.py</div>
+        <div class="code-block"><pre>"""Tests de la configuration (config.py)."""
+
+import pytest
+
+from mini_agent.config import DEFAULT_OLLAMA_MODEL, load_config
+
+
+def test_valeurs_par_defaut(monkeypatch, tmp_path):
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434/")
+    monkeypatch.setenv("MINI_AGENT_WORKDIR", str(tmp_path))
+    config = load_config()
+    assert config.model == DEFAULT_OLLAMA_MODEL
+    assert config.chat_url == "http://localhost:11434/api/chat"  # "/" final retiré
+    assert config.workdir == tmp_path.resolve()
+
+
+def test_dossier_de_travail_inexistant(monkeypatch, tmp_path):
+    monkeypatch.setenv("MINI_AGENT_WORKDIR", str(tmp_path / "absent"))
+    with pytest.raises(SystemExit, match="Dossier de travail introuvable"):
+        load_config()</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-k-en">
+      <div class="tuto-card-header">
+        <span class="step-num">K</span>
         <span class="tuto-card-title">tests/test_guards.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5461,9 +5561,9 @@ def test_confirmation(monkeypatch, reponse, attendu):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-k-en">
+    <div class="tuto-card" id="mini-agent-code-l-en">
       <div class="tuto-card-header">
-        <span class="step-num">K</span>
+        <span class="step-num">L</span>
         <span class="tuto-card-title">tests/test_tools.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5599,9 +5699,9 @@ def test_exception_python_renvoyee_au_modele(ctx):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-l-en">
+    <div class="tuto-card" id="mini-agent-code-m-en">
       <div class="tuto-card-header">
-        <span class="step-num">L</span>
+        <span class="step-num">M</span>
         <span class="tuto-card-title">tests/test_agent.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
