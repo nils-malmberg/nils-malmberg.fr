@@ -47,7 +47,7 @@
     <p>Ce projet a un but simple : <strong>comprendre comment fonctionne un agent de code</strong> en le construisant de A à Z en Python. Un agent de code est un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
     <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main. Le code est sur GitHub : <a href="https://github.com/nils-malmberg/mini-agent">nils-malmberg/mini-agent</a>.</p>
     <p>Le LLM tourne en local sur mon NAS (voir le <a href="project6.html">projet NAS Lab</a>) : <strong>qwen3.5:4b</strong> servi par Ollama sur une RTX 3050 de 6 Go. Un modèle aussi petit impose des choix : peu d'outils (5 au maximum), des descriptions très claires et des résultats d'outils tronqués.</p>
-    <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 14 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, et capable de recevoir des fichiers tagués.</p>
+    <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 16 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, capable de recevoir des fichiers tagués, de reprendre une conversation et de compacter son contexte.</p>
 
     <h2>Architecture</h2>
     <p>Le modèle ne sait que produire du texte. Tout le reste — lire un fichier, exécuter une commande, demander une confirmation, s'arrêter — est fait par le code qui l'entoure : le <strong>harness</strong>. Au cœur du harness se trouve la <strong>boucle agentique</strong>, la seule partie qui parle au LLM.</p>
@@ -135,9 +135,13 @@
 │   ├── guards.py           # garde-fous
 │   ├── agent.py            # boucle agentique
 │   ├── session.py          # état de la conversation (partie 2)
+│   ├── history.py          # sauvegarde des conversations (partie 2)
+│   ├── context.py          # mesure et compactage du contexte (partie 2)
 │   ├── commands.py         # commandes /... (partie 2)
 │   └── cli.py              # point d'entrée `mini-agent`
-├── prompts/AGENT.md        # prompt système
+├── prompts/
+│   ├── AGENT.md            # prompt système
+│   └── COMPACT.md          # consignes de résumé (partie 2)
 ├── skills/                 # skills en Markdown
 │   ├── corriger-un-bug.md
 │   └── ecrire-tests-pytest.md
@@ -148,7 +152,9 @@
     ├── test_tools.py
     ├── test_agent.py
     ├── test_session.py
-    └── test_commands.py</pre></div>
+    ├── test_commands.py
+    ├── test_history.py
+    └── test_context.py</pre></div>
 
     <h2 id="mini-agent-config-fr">Configuration</h2>
     <p>Tout ce qui dépend de la machine se règle par variables d'environnement :</p>
@@ -199,6 +205,8 @@ $env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
         <li><a href="#mini-agent-step12-fr">Options et fichiers config.toml</a></li>
         <li><a href="#mini-agent-step13-fr">Compteur de contexte et edit_file</a></li>
         <li><a href="#mini-agent-step14-fr">Commandes autorisées sans confirmation</a></li>
+        <li><a href="#mini-agent-step15-fr">Sauvegarder et reprendre les conversations</a></li>
+        <li><a href="#mini-agent-step16-fr">Mesurer et compacter le contexte</a></li>
       </ol>
       <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-code-fr">Code complet de la version finale</a> · <a href="#mini-agent-glossary-fr">Glossaire</a></p>
     </div>
@@ -1793,7 +1801,7 @@ AssertionError: moyenne attendue : 13.5, obtenue : 10.5</pre></div>
     </div>
 
     <h3 id="mini-agent-part2-fr">Partie 2 — vers un agent du quotidien, comme opencode</h3>
-    <p>Les étapes 9 à 14 transforment mini-agent en outil qu'on lance dans n'importe quel projet : consignes et skills du projet, commandes <code>/…</code>, fichiers tagués, réglages persistants, édition ciblée et commandes autorisées.</p>
+    <p>Les étapes 9 à 16 transforment mini-agent en outil qu'on lance dans n'importe quel projet : consignes et skills du projet, commandes <code>/…</code>, fichiers tagués, réglages persistants, édition ciblée, commandes autorisées, sauvegarde des conversations et compactage du contexte.</p>
     <div class="warning-block"><strong>Comment suivre cette partie.</strong> Ces fonctionnalités touchent les mêmes fichiers (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), et certains extraits utilisent une fonction d'une étape suivante. Le plus sûr : remplacer d'abord <code>src/</code>, <code>prompts/</code>, <code>skills/</code> et <code>tests/</code> par le <a href="#mini-agent-code-fr">code complet</a> (version finale), lancer <code>uv run pytest -q</code>, puis suivre chaque étape pour comprendre et essayer la fonctionnalité. Tous les extraits viennent de cette version finale.</div>
 
     <div class="tuto-card" id="mini-agent-step9-fr">
@@ -1823,7 +1831,9 @@ mini-agent</pre></div>
         <div class="code-block"><pre>mon-projet/
 ├── AGENTS.md              # consignes du projet, ajoutées au prompt système
 └── .mini-agent/
+    ├── .gitignore         # exclut sessions/ de git (étape 15)
     ├── config.toml        # réglages du projet (étape 12)
+    ├── sessions/          # conversations sauvegardées (étape 15)
     └── skills/            # skills du projet
         └── deployer.md</pre></div>
         <div class="warning-block"><strong>Ces fichiers n'existent pas d'avance.</strong> <code>AGENTS.md</code> et le dossier <code>.mini-agent/</code> se créent dans chaque projet où l'on lance mini-agent, et non dans le dépôt de mini-agent (qui garde, lui, les skills globales de <code>skills/</code>). Le plus simple : la commande <code>/init</code> (<a href="#mini-agent-step10-fr">étape 10</a>). Ou à la main :</div>
@@ -1952,7 +1962,7 @@ Tape ta demande, ou /help pour les commandes.</pre></div>
           <li><code>Session.chat</code> lit <code>self.config</code> à chaque appel : un <code>/temp</code> s'applique dès la demande suivante.</li>
           <li><strong>Registre de commandes</strong> : le même principe que le registre d'outils, un dictionnaire nom → (fonction, aide). Ajouter une commande ne touche ni à la boucle ni à <code>cli.py</code>.</li>
           <li><code>/models</code> interroge <code>GET /api/tags</code> : la liste des modèles installés sur le serveur Ollama.</li>
-          <li><code>/init</code> prépare le projet courant : il crée <code>AGENTS.md</code>, <code>.mini-agent/config.toml</code> (réglages en commentaire, donc sans effet tant qu'on ne les active pas) et <code>.mini-agent/skills/LISEZMOI.txt</code>, qui explique le format des skills. Il demande confirmation, ne remplace jamais un fichier existant et reconstruit le prompt système pour y inclure <code>AGENTS.md</code>. Le fichier d'explication est un <code>.txt</code> : une skill d'exemple en <code>.md</code> serait listée dans le prompt système, et le modèle pourrait la charger pour rien.</li>
+          <li><code>/init</code> prépare le projet courant : il crée <code>AGENTS.md</code>, <code>.mini-agent/config.toml</code> (réglages en commentaire, donc sans effet tant qu'on ne les active pas), <code>.mini-agent/.gitignore</code> (qui exclut les sauvegardes de l'étape 15 de git) et <code>.mini-agent/skills/LISEZMOI.txt</code>, qui explique le format des skills. Il demande confirmation, ne remplace jamais un fichier existant et reconstruit le prompt système pour y inclure <code>AGENTS.md</code>. Le fichier d'explication est un <code>.txt</code> : une skill d'exemple en <code>.md</code> serait listée dans le prompt système, et le modèle pourrait la charger pour rien.</li>
         </ul>
         <div class="code-label">src/mini_agent/llm.py</div>
         <div class="code-block"><pre>"""Appel au LLM via l'API native d'Ollama.
@@ -2014,6 +2024,9 @@ class Session:
     ctx: ToolContext
     messages: list[dict] = field(default_factory=list)
     context_tokens: int = 0  # taille du dernier échange, d'après Ollama
+    context_estimated: bool = False  # vrai si context_tokens est une estimation (étape 16)
+    session_id: str | None = None  # nom du fichier de sauvegarde (étape 15)
+    title: str = ""  # titre de la sauvegarde : début de la première demande
 
     def __post_init__(self) -&gt; None:
         self.reset()
@@ -2028,6 +2041,19 @@ class Session:
         une skill ou un AGENTS.md modifié est pris en compte."""
         self.messages = [{"role": "system", "content": self.system_prompt()}]
         self.context_tokens = 0
+        # Nouvelle conversation : elle sera sauvegardée dans un nouveau fichier.
+        self.session_id = None
+        self.title = ""
+
+    def remember_title(self) -&gt; None:
+        """Retient le début de la première demande comme titre (étape 15).
+
+        Le titre est fixé une fois pour toutes : après un compactage, la
+        première demande a disparu, mais le titre reste le même.
+        """
+        if not self.title:
+            first = next((m["content"] for m in self.messages if m["role"] == "user"), "")
+            self.title = first.splitlines()[0][:TITLE_LENGTH] if first else ""
 
     def update(self, **changes) -&gt; None:
         """Change un réglage (modèle, température...) en gardant la conversation."""
@@ -2039,6 +2065,7 @@ class Session:
         data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
         return data["message"]
 
     def ask(self, text: str) -&gt; str:
@@ -2071,8 +2098,10 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.context import compact, context_report
 from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
 
@@ -2099,6 +2128,9 @@ INIT_FILES = {
 # num_ctx = 8192
 # allowed_commands = ["python -m pytest", "git status", "git diff"]
 """,
+    # Les conversations sauvegardées contiennent le contenu des fichiers lus :
+    # elles ne doivent pas finir dans le dépôt git du projet.
+    f"{PROJECT_DIR_NAME}/.gitignore": "sessions/\n",
     f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
 
 Format :
@@ -2215,6 +2247,53 @@ def cmd_clear(session: Session, arg: str) -&gt; str:
     return "Conversation effacée. Prompt système, skills et AGENTS.md relus."
 
 
+def cmd_sessions(session: Session, arg: str) -&gt; str:
+    sessions = list_sessions(session.config.workdir)
+    if not sessions:
+        return "Aucune conversation sauvegardée dans ce projet."
+    lines = []
+    for number, data in enumerate(sessions, start=1):
+        current = "*" if data["id"] == session.session_id else " "
+        date = data.get("updated", "?").replace("T", " ")[:16]
+        lines.append(f"{current}{number:&gt;3}. {date}  {len(data.get('messages', [])):&gt;3} messages  {data.get('title', '')}")
+    return "\n".join(lines + ["", "/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer."])
+
+
+def cmd_resume(session: Session, arg: str) -&gt; str:
+    # Sans argument : la conversation la plus récente.
+    data = find_session(session.config.workdir, arg or "1")
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    resume_session(session, data)
+    return f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)."
+
+
+def cmd_delete(session: Session, arg: str) -&gt; str:
+    if not arg:
+        return "Usage : /delete &lt;numéro&gt; (voir /sessions)"
+    data = find_session(session.config.workdir, arg)
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    if not session.ctx.confirm(f"Supprimer la conversation « {data.get('title', '')} » ?"):
+        return "Rien n'a été supprimé."
+    delete_session(data)
+    if data["id"] == session.session_id:
+        session.session_id = None  # la conversation en cours sera sauvegardée dans un nouveau fichier
+    return f"Conversation supprimée : {data.get('title', '')}"
+
+
+def cmd_context(session: Session, arg: str) -&gt; str:
+    return context_report(session)
+
+
+def cmd_compact(session: Session, arg: str) -&gt; str:
+    if len(session.messages) &lt;= 1:
+        return "Rien à compacter : la conversation est vide."
+    summary = compact(session)
+    save_session(session)  # le fichier sauvegardé contient désormais le résumé
+    return f"Conversation compactée. Le modèle repart de ce résumé :\n\n{summary}"
+
+
 def cmd_allow(session: Session, arg: str) -&gt; str:
     allowed = session.ctx.allowed_commands
     if not arg:
@@ -2237,6 +2316,11 @@ COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/skills": (cmd_skills, "skills disponibles"),
     "/skill": (cmd_skill, "charger une skill : /skill corriger-un-bug"),
     "/clear": (cmd_clear, "effacer la conversation"),
+    "/context": (cmd_context, "ce qui occupe le contexte"),
+    "/compact": (cmd_compact, "résumer la conversation pour libérer du contexte"),
+    "/sessions": (cmd_sessions, "conversations sauvegardées dans ce projet"),
+    "/resume": (cmd_resume, "reprendre une conversation : /resume 2 (sans numéro : la dernière)"),
+    "/delete": (cmd_delete, "supprimer une conversation : /delete 2"),
     "/allow": (cmd_allow, "lancer une commande sans confirmation : /allow python -m pytest"),
 }
 
@@ -2264,6 +2348,13 @@ def execute_command(session: Session, line: str) -&gt; str:
     print(f"Dossier de travail : {config.workdir}")
     if load_project_instructions(config.workdir):
         print("Instructions du projet : AGENTS.md")
+    if args.resume:
+        data = find_session(config.workdir, "1")
+        if data is None:
+            print("Aucune conversation à reprendre dans ce projet : nouvelle conversation.")
+        else:
+            resume_session(session, data)
+            print(f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)")
 
     try:
         # Mode « une seule demande » : la demande est passée en argument.
@@ -2298,11 +2389,13 @@ def execute_command(session: Session, line: str) -&gt; str:
 Fichiers à créer :
   AGENTS.md
   .mini-agent/config.toml
+  .mini-agent/.gitignore
   .mini-agent/skills/LISEZMOI.txt
 Les créer dans …/rfact ? [o/N] o
 Créé :
   AGENTS.md
   .mini-agent/config.toml
+  .mini-agent/.gitignore
   .mini-agent/skills/LISEZMOI.txt
 Complète AGENTS.md, puis ajoute tes skills dans .mini-agent/skills/.
 
@@ -2319,6 +2412,11 @@ Ce projet est déjà initialisé : rien à créer.</pre></div>
 /skills   skills disponibles
 /skill    charger une skill : /skill corriger-un-bug
 /clear    effacer la conversation
+/context  ce qui occupe le contexte
+/compact  résumer la conversation pour libérer du contexte
+/sessions conversations sauvegardées dans ce projet
+/resume   reprendre une conversation : /resume 2 (sans numéro : la dernière)
+/delete   supprimer une conversation : /delete 2
 /allow    lancer une commande sans confirmation : /allow python -m pytest
 /quit     quitter
 
@@ -2437,7 +2535,46 @@ def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
 def test_init_refuse_par_l_utilisateur(session, tmp_path):
     session.ctx.confirm = lambda question: False
     assert execute_command(session, "/init") == "Rien n'a été créé."
-    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_sessions_reprise_et_suppression(session, tmp_path):
+    from mini_agent.history import save_session
+
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+    session.messages.append({"role": "user", "content": "Corrige le bug"})
+    save_session(session)
+    assert "Corrige le bug" in execute_command(session, "/sessions")
+
+    execute_command(session, "/clear")
+    assert execute_command(session, "/resume").startswith("Conversation reprise : Corrige le bug")
+    assert session.messages[-1]["content"] == "Corrige le bug"
+    assert "introuvable" in execute_command(session, "/resume 9")
+
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/delete 1") == "Rien n'a été supprimé."
+    session.ctx.confirm = lambda question: True
+    assert execute_command(session, "/delete 1").startswith("Conversation supprimée")
+    assert session.session_id is None
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+
+
+def test_context_et_compact(session, monkeypatch):
+    assert "total estimé" in execute_command(session, "/context")
+    assert execute_command(session, "/compact") == "Rien à compacter : la conversation est vide."
+    monkeypatch.setattr(llm, "chat", lambda config, messages, tools=None: {"role": "assistant", "content": "Résumé."})
+    session.messages.append({"role": "user", "content": "Bonjour"})
+    assert execute_command(session, "/compact").endswith("Résumé.")
+    # Le fichier sauvegardé contient la conversation compactée.
+    from mini_agent.history import find_session
+    saved = find_session(session.config.workdir, "1")
+    assert "Résumé." in saved["messages"][0]["content"]
+    assert saved["title"] == "Bonjour"  # le titre ne change pas après un compactage
+
+
+def test_init_cree_un_gitignore_pour_les_sessions(session, tmp_path):
+    execute_command(session, "/init")
+    assert (tmp_path / ".mini-agent" / ".gitignore").read_text(encoding="utf-8") == "sessions/\n"</pre></div>
         <h3>Pièges à surveiller</h3>
         <ul>
           <li>Un modèle qui ne gère pas les outils (certains modèles anciens) : Ollama répond une erreur HTTP 400 (« does not support tools »). Le message s'affiche, la session continue : revenir en arrière avec <code>/model</code>.</li>
@@ -2508,7 +2645,17 @@ def expand_mentions(text: str, workdir: Path) -&gt; str:
         print(f"Erreur de communication avec Ollama : {error}")
         return
     print(f"\nagent &gt; {answer}")
-    print(context_status(session))</pre></div>
+    print(context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(f"Compactage impossible : {error}")
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)</pre></div>
         <h3>Essayer</h3>
         <div class="code-block"><pre>mini-agent "Corrige le bug de @calc.py"</pre></div>
         <h3>Ce qu'on doit observer</h3>
@@ -2663,6 +2810,8 @@ REQUEST_TIMEOUT = 120
 MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
 COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
 MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
+# Compactage automatique quand le contexte est rempli à 80 % (étape 16).
+COMPACT_THRESHOLD = 0.8
 
 # Dossiers du projet mini-agent : prompts/ et skills/ sont à la racine du
 # dépôt, deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
@@ -2756,6 +2905,7 @@ def load_config(cli_options: dict | None = None) -&gt; Config:
     parser.add_argument("-t", "--temperature", type=float, help="température, ex. 0.2")
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
+    parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
     return parser.parse_args(argv)</pre></div>
         <h3>Essayer</h3>
         <div class="code-block"><pre>mini-agent --help
@@ -2899,14 +3049,15 @@ def test_valeur_invalide(tmp_path):
         data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
         return data["message"]</pre></div>
         <div class="code-label">src/mini_agent/cli.py — context_status</div>
         <div class="code-block"><pre>def context_status(session: Session) -&gt; str:
     """Une ligne qui montre la place occupée dans le contexte du modèle."""
     used, size = session.context_tokens, session.config.num_ctx
-    text = f"[contexte : {used} / {size} tokens]"
+    text = f"[contexte : {'≈ ' if session.context_estimated else ''}{used} / {size} tokens]"
     if used &gt;= size:
-        return color(text + " plein : Ollama a coupé le début de la conversation, tape /clear", RED)
+        return color(text + " plein : Ollama a coupé le début de la conversation", RED)
     if used &gt;= 0.75 * size:
         return color(text + " presque plein", YELLOW)
     return color(text, GREY)</pre></div>
@@ -3169,8 +3320,599 @@ def test_commandes_autorisees(commande, attendu):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-step15-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">15</span>
+        <span class="tuto-card-title">Sauvegarder et reprendre les conversations</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Objectif</h3>
+        <p>Retrouver une conversation après avoir quitté mini-agent, et pouvoir supprimer les anciennes.</p>
+        <h3>Concept</h3>
+        <p>Une conversation n'est qu'une liste de messages (étape 2) : la sauvegarder, c'est écrire cette liste dans un fichier JSON. Chaque conversation a son fichier dans <code>.mini-agent/sessions/</code> du projet, nommé d'après sa date de début. Il est réécrit après chaque demande : en cas d'arrêt brutal, on ne perd que la demande en cours.</p>
+        <ul>
+          <li>Le prompt système n'est pas sauvegardé : à la reprise, il est reconstruit avec l'<code>AGENTS.md</code> et les skills du moment.</li>
+          <li>On écrit dans un fichier temporaire, puis on le renomme : un Ctrl+C au mauvais moment ne laisse jamais un fichier à moitié écrit.</li>
+          <li>Le titre (début de la première demande) est fixé une fois pour toutes, pour rester lisible après un compactage (étape 16).</li>
+          <li><code>/sessions</code> liste les conversations (1 = la plus récente), <code>/resume</code> en reprend une, <code>/delete</code> en supprime une après confirmation, et <code>mini-agent -c</code> reprend la dernière au démarrage. <code>/clear</code> commence une nouvelle conversation : l'ancienne reste sauvegardée.</li>
+          <li><code>/delete</code> supprime le fichier trouvé dans le dossier des sauvegardes, jamais un chemin lu dans le JSON : un fichier modifié à la main ne peut pas faire supprimer autre chose.</li>
+        </ul>
+        <div class="code-label">src/mini_agent/history.py</div>
+        <div class="code-block"><pre>"""Sauvegarde des conversations, pour les reprendre plus tard (étape 15).
+
+Chaque conversation est un fichier JSON dans .mini-agent/sessions/ du
+projet. Il est réécrit après chaque demande : en cas d'arrêt brutal, on
+perd au plus la demande en cours.
+"""
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from mini_agent.config import PROJECT_DIR_NAME
+from mini_agent.context import estimate_messages
+from mini_agent.session import Session
+
+def sessions_dir(workdir: Path) -&gt; Path:
+    return workdir / PROJECT_DIR_NAME / "sessions"
+
+
+def save_session(session: Session) -&gt; None:
+    """Enregistre la conversation, sans le prompt système (reconstruit à la reprise)."""
+    conversation = session.messages[1:]
+    if not any(m["role"] == "user" for m in conversation):
+        return  # conversation vide : rien à sauvegarder
+    now = datetime.now()
+    if session.session_id is None:
+        session.session_id = now.strftime("%Y-%m-%d_%H-%M-%S")
+    session.remember_title()
+    data = {
+        "id": session.session_id,
+        "title": session.title,
+        "updated": now.isoformat(timespec="seconds"),
+        "model": session.config.model,
+        "messages": conversation,
+    }
+    folder = sessions_dir(session.config.workdir)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{session.session_id}.json"
+    # On écrit dans un fichier temporaire, puis on le renomme : un Ctrl+C
+    # pendant l'écriture ne laisse jamais un fichier à moitié écrit.
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporary.replace(path)
+
+
+def list_sessions(workdir: Path) -&gt; list[dict]:
+    """Les conversations sauvegardées, de la plus récente à la plus ancienne."""
+    folder = sessions_dir(workdir)
+    if not folder.is_dir():
+        return []
+    sessions = []
+    for path in folder.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue  # fichier abîmé : on l'ignore plutôt que de planter
+        data["path"] = path  # pour /delete : on supprime ce fichier-là, rien d'autre
+        sessions.append(data)
+    return sorted(sessions, key=lambda data: data.get("updated", ""), reverse=True)
+
+
+def find_session(workdir: Path, ref: str) -&gt; dict | None:
+    """ref : numéro affiché par /sessions (1 = la plus récente) ou identifiant."""
+    sessions = list_sessions(workdir)
+    if ref.isdigit() and 1 &lt;= int(ref) &lt;= len(sessions):
+        return sessions[int(ref) - 1]
+    return next((data for data in sessions if data.get("id") == ref), None)
+
+
+def resume_session(session: Session, data: dict) -&gt; None:
+    """Remplace la conversation en cours par une conversation sauvegardée."""
+    session.reset()  # prompt système relu : AGENTS.md et skills à jour
+    session.messages += data["messages"]
+    session.session_id = data["id"]
+    session.title = data.get("title", "")
+    # Ollama ne mesurera le contexte qu'au prochain appel : en attendant, une estimation.
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+
+
+def delete_session(data: dict) -&gt; None:
+    data["path"].unlink(missing_ok=True)</pre></div>
+        <div class="code-label">src/mini_agent/session.py — le titre de la sauvegarde</div>
+        <div class="code-block"><pre>class Session:
+    ...
+
+    def remember_title(self) -&gt; None:
+        """Retient le début de la première demande comme titre (étape 15).
+
+        Le titre est fixé une fois pour toutes : après un compactage, la
+        première demande a disparu, mais le titre reste le même.
+        """
+        if not self.title:
+            first = next((m["content"] for m in self.messages if m["role"] == "user"), "")
+            self.title = first.splitlines()[0][:TITLE_LENGTH] if first else ""</pre></div>
+        <div class="code-label">src/mini_agent/commands.py — /sessions, /resume, /delete</div>
+        <div class="code-block"><pre>def cmd_sessions(session: Session, arg: str) -&gt; str:
+    sessions = list_sessions(session.config.workdir)
+    if not sessions:
+        return "Aucune conversation sauvegardée dans ce projet."
+    lines = []
+    for number, data in enumerate(sessions, start=1):
+        current = "*" if data["id"] == session.session_id else " "
+        date = data.get("updated", "?").replace("T", " ")[:16]
+        lines.append(f"{current}{number:&gt;3}. {date}  {len(data.get('messages', [])):&gt;3} messages  {data.get('title', '')}")
+    return "\n".join(lines + ["", "/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer."])
+
+
+def cmd_resume(session: Session, arg: str) -&gt; str:
+    # Sans argument : la conversation la plus récente.
+    data = find_session(session.config.workdir, arg or "1")
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    resume_session(session, data)
+    return f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)."
+
+
+def cmd_delete(session: Session, arg: str) -&gt; str:
+    if not arg:
+        return "Usage : /delete &lt;numéro&gt; (voir /sessions)"
+    data = find_session(session.config.workdir, arg)
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    if not session.ctx.confirm(f"Supprimer la conversation « {data.get('title', '')} » ?"):
+        return "Rien n'a été supprimé."
+    delete_session(data)
+    if data["id"] == session.session_id:
+        session.session_id = None  # la conversation en cours sera sauvegardée dans un nouveau fichier
+    return f"Conversation supprimée : {data.get('title', '')}"</pre></div>
+        <div class="code-label">src/mini_agent/cli.py — sauvegarde après chaque demande</div>
+        <div class="code-block"><pre>def handle_request(session: Session, text: str) -&gt; None:
+    """Envoie une demande à l'agent et affiche sa réponse."""
+    for path in find_mentions(text):
+        print(color(f"   + fichier joint : {path}", GREY))
+    try:
+        answer = session.ask(text)
+    except requests.RequestException as error:
+        print(f"Erreur de communication avec Ollama : {error}")
+        return
+    print(f"\nagent &gt; {answer}")
+    print(context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(f"Compactage impossible : {error}")
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)</pre></div>
+        <p>Dans <code>main</code>, l'option <code>-c</code> reprend la dernière conversation (voir <code>cli.py</code> dans le <a href="#mini-agent-code-fr">code complet</a>).</p>
+        <h3>Essayer</h3>
+        <div class="code-block"><pre>mini-agent
+vous &gt; Corrige le bug de @calc.py
+vous &gt; /sessions
+vous &gt; /quit
+
+mini-agent -c
+vous &gt; /sessions
+vous &gt; /delete 1</pre></div>
+        <h3>Ce qu'on doit observer</h3>
+        <p>Sorties réelles du harness (faux modèle) : la liste, puis une reprise avec <code>-c</code> et une suppression.</p>
+        <div class="code-block"><pre>vous &gt; /sessions
+*  1. 2026-10-25 22:03    2 messages  Corrige le bug de @calc.py
+
+/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer.</pre></div>
+        <div class="code-block"><pre>mini-agent — modèle qwen3.5:4b sur http://127.0.0.1:8781
+Dossier de travail : …/p15
+Conversation reprise : Corrige le bug de @calc.py (2 messages)
+Tape ta demande, ou /help pour les commandes.
+
+vous &gt; /sessions
+*  1. 2026-10-25 22:03    2 messages  Corrige le bug de @calc.py
+
+/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer.
+
+vous &gt; /delete 1
+Supprimer la conversation « Corrige le bug de @calc.py » ? [o/N] o
+Conversation supprimée : Corrige le bug de @calc.py
+
+vous &gt; /sessions
+Aucune conversation sauvegardée dans ce projet.</pre></div>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_history.py</div>
+        <div class="code-block"><pre>"""Tests de la sauvegarde des conversations (history.py)."""
+
+import json
+
+import pytest
+
+from mini_agent.config import Config
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session, sessions_dir
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    return create_session(config, confirm=lambda question: True)
+
+
+def converse(session, *texts):
+    for text in texts:
+        session.messages.append({"role": "user", "content": text})
+        session.messages.append({"role": "assistant", "content": f"réponse à {text}"})
+
+
+def test_conversation_vide_pas_sauvegardee(session, tmp_path):
+    save_session(session)
+    assert list_sessions(tmp_path) == []
+
+
+def test_sauvegarde_et_liste(session, tmp_path):
+    converse(session, "Corrige le bug de calc.py\nmerci", "Et ajoute un test")
+    save_session(session)
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 1
+    data = sessions[0]
+    assert data["id"] == session.session_id
+    assert data["title"] == "Corrige le bug de calc.py"  # première ligne de la première demande
+    assert data["model"] == "qwen3.5:4b"
+    assert [m["role"] for m in data["messages"]] == ["user", "assistant", "user", "assistant"]  # sans le prompt système
+
+
+def test_meme_fichier_tant_que_la_conversation_continue(session, tmp_path):
+    converse(session, "Première demande")
+    save_session(session)
+    converse(session, "Deuxième demande")
+    save_session(session)
+    assert len(list(sessions_dir(tmp_path).glob("*.json"))) == 1
+    assert len(list_sessions(tmp_path)[0]["messages"]) == 4
+
+
+def test_clear_commence_un_nouveau_fichier(session, tmp_path):
+    converse(session, "Première conversation")
+    save_session(session)
+    session.reset()
+    assert session.session_id is None
+
+
+def test_reprise(session, tmp_path):
+    converse(session, "Corrige le bug")
+    save_session(session)
+    saved_id = session.session_id
+    session.reset()
+    (tmp_path / "AGENTS.md").write_text("Nouvelle consigne.", encoding="utf-8")
+
+    resume_session(session, find_session(tmp_path, "1"))
+    assert session.session_id == saved_id
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert session.messages[0]["content"].endswith("Nouvelle consigne.")  # prompt système relu
+    assert session.context_tokens &gt; 0  # estimation en attendant Ollama
+
+
+def test_recherche_par_numero_ou_identifiant(tmp_path):
+    folder = sessions_dir(tmp_path)
+    folder.mkdir(parents=True)
+    for name, updated in (("ancienne", "2026-10-01T10:00:00"), ("recente", "2026-10-25T10:00:00")):
+        data = {"id": name, "title": name, "updated": updated, "model": "m", "messages": []}
+        (folder / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    assert find_session(tmp_path, "1")["id"] == "recente"
+    assert find_session(tmp_path, "2")["id"] == "ancienne"
+    assert find_session(tmp_path, "ancienne")["id"] == "ancienne"
+    assert find_session(tmp_path, "3") is None
+
+
+def test_fichier_abime_ignore(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    (sessions_dir(tmp_path) / "abime.json").write_text("{pas du json", encoding="utf-8")
+    assert len(list_sessions(tmp_path)) == 1
+
+
+def test_suppression(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    delete_session(find_session(tmp_path, "1"))
+    assert list_sessions(tmp_path) == []</pre></div>
+        <h3>Pièges à surveiller</h3>
+        <ul>
+          <li>Une sauvegarde contient tout : contenu des fichiers lus, sorties des commandes. <code>/init</code> ajoute un <code>.mini-agent/.gitignore</code> qui exclut <code>sessions/</code> de git ; sans <code>/init</code>, l'ajouter à la main.</li>
+          <li>Reprendre une conversation avec un autre modèle fonctionne, mais il relit des appels d'outils qu'il n'a pas faits.</li>
+          <li>Les sauvegardes s'accumulent : <code>/delete</code>, ou vider le dossier <code>.mini-agent/sessions/</code>.</li>
+          <li>Une conversation reprise peut être longue : le compteur affiche une estimation (<code>≈</code>) jusqu'au prochain appel, et <code>/compact</code> (étape 16) la raccourcit.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-step16-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">16</span>
+        <span class="tuto-card-title">Mesurer et compacter le contexte</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Objectif</h3>
+        <p>Voir ce qui remplit le contexte, et le libérer en résumant la conversation, à la demande ou automatiquement.</p>
+        <h3>Concept</h3>
+        <p>L'étape 13 affiche le total mesuré par Ollama. Pour savoir ce qui le remplit, <code>/context</code> estime la part de chaque catégorie de messages à partir du nombre de caractères (environ 4 caractères par token). C'est une approximation : sans le tokenizer du modèle, et sans ajouter de dépendance, on ne peut pas faire mieux. La vraie mesure reste celle d'Ollama.</p>
+        <p>Compacter, c'est remplacer la conversation par un résumé. On transforme la conversation en texte simple (résultats d'outils et arguments raccourcis à 300 caractères), on demande au modèle de la résumer avec les consignes de <code>prompts/COMPACT.md</code>, sans outils, puis on ne garde que trois messages : le prompt système, le résumé (en message utilisateur) et un court accusé de réception de l'assistant, pour que les rôles continuent d'alterner.</p>
+        <ul>
+          <li><code>/compact</code> compacte à la demande ; le compactage est automatique entre deux demandes quand le contexte dépasse 80 % (<code>COMPACT_THRESHOLD</code>).</li>
+          <li>Le texte à résumer doit lui-même tenir dans le contexte : il est limité à la moitié, en coupant le milieu.</li>
+          <li>Après un compactage ou une reprise, le compteur est une estimation, marquée <code>≈</code>, jusqu'au prochain appel.</li>
+        </ul>
+        <div class="code-label">src/mini_agent/config.py — seuil de compactage</div>
+        <div class="code-block"><pre># Compactage automatique quand le contexte est rempli à 80 % (étape 16).
+COMPACT_THRESHOLD = 0.8</pre></div>
+        <div class="code-label">prompts/COMPACT.md</div>
+        <div class="code-block"><pre>Tu résumes une conversation entre un utilisateur et un agent de code, pour que l'agent puisse continuer le travail sans la relire.
+
+Garde :
+- ce que l'utilisateur a demandé, et ce qui reste à faire ;
+- les fichiers lus, créés ou modifiés, et ce qui a changé dans chacun ;
+- les décisions prises et les erreurs rencontrées ;
+- les commandes utiles (tests, lancement).
+
+Règles :
+- 15 lignes au maximum, en français.
+- Pas de code complet : seulement les noms de fichiers, de fonctions et les points importants.
+- Écris uniquement le résumé, sans introduction.</pre></div>
+        <div class="code-label">src/mini_agent/context.py</div>
+        <div class="code-block"><pre>"""Mesurer et compacter le contexte (étape 16).
+
+Mesurer : Ollama donne la taille totale après chaque appel (étape 13). Pour
+savoir ce qui remplit le contexte, on estime la part de chaque catégorie de
+messages à partir du nombre de caractères.
+
+Compacter : quand le contexte est presque plein, on demande au modèle de
+résumer la conversation, puis on remplace toute la conversation par ce
+résumé. Le prompt système, lui, est gardé tel quel.
+"""
+
+import json
+
+from mini_agent import llm
+from mini_agent.config import COMPACT_THRESHOLD, PROMPTS_DIR
+from mini_agent.guards import truncate
+from mini_agent.tools import tool_schemas
+
+# Approximation : environ 4 caractères par token, en français comme en code.
+# Ce n'est qu'une estimation ; la vraie mesure vient d'Ollama.
+CHARS_PER_TOKEN = 4
+# Dans le texte à résumer, chaque résultat d'outil ou argument est raccourci.
+TRANSCRIPT_ITEM_CHARS = 300
+
+
+def estimate_tokens(text: str) -&gt; int:
+    return len(text) // CHARS_PER_TOKEN
+
+
+def message_text(message: dict) -&gt; str:
+    """Tout le texte d'un message, appels d'outils compris."""
+    calls = message.get("tool_calls") or []
+    return (message.get("content") or "") + (json.dumps(calls, ensure_ascii=False) if calls else "")
+
+
+def estimate_messages(messages: list[dict]) -&gt; int:
+    """Estimation de la place occupée par des messages et par les schémas des outils."""
+    text = "".join(message_text(m) for m in messages) + json.dumps(tool_schemas(), ensure_ascii=False)
+    return estimate_tokens(text)
+
+
+def context_report(session) -&gt; str:
+    """Ce qui occupe le contexte, catégorie par catégorie (commande /context)."""
+    parts = {
+        "prompt système": 0,
+        "schémas des outils": estimate_tokens(json.dumps(tool_schemas(), ensure_ascii=False)),
+        "vos messages": 0,
+        "réponses du modèle": 0,
+        "résultats d'outils": 0,
+    }
+    category = {"system": "prompt système", "user": "vos messages", "assistant": "réponses du modèle", "tool": "résultats d'outils"}
+    for message in session.messages:
+        parts[category[message["role"]]] += estimate_tokens(message_text(message))
+    total = sum(parts.values())
+    size = session.config.num_ctx
+    filled = min(20, round(20 * total / size))
+    lines = [f"{name:&lt;20} ≈ {tokens:&gt;6} tokens" for name, tokens in parts.items()]
+    lines += [
+        f"{'total estimé':&lt;20} ≈ {total:&gt;6} tokens  [{'#' * filled}{'-' * (20 - filled)}] {100 * total // size} % de {size}",
+        f"dernier total : {session.context_tokens} tokens ({'estimation' if session.context_estimated else 'mesuré par Ollama'})",
+        f"compactage automatique à {int(COMPACT_THRESHOLD * 100)} %, ou maintenant avec /compact",
+    ]
+    return "\n".join(lines)
+
+
+def transcript(messages: list[dict]) -&gt; str:
+    """La conversation en texte simple, pour la faire résumer par le modèle."""
+    lines = []
+    for message in messages:
+        role = message["role"]
+        if role == "user":
+            lines.append(f"UTILISATEUR : {truncate(message['content'], 4 * TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "assistant":
+            if message.get("content"):
+                lines.append(f"AGENT : {message['content']}")
+            for call in message.get("tool_calls") or []:
+                arguments = json.dumps(call["function"].get("arguments", {}), ensure_ascii=False)
+                lines.append(f"AGENT appelle {call['function']['name']} {truncate(arguments, TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "tool":
+            lines.append(f"RÉSULTAT de {message.get('tool_name', '?')} : {truncate(message['content'], TRANSCRIPT_ITEM_CHARS)}")
+    return "\n".join(lines)
+
+
+def needs_compaction(session) -&gt; bool:
+    return session.context_tokens &gt;= COMPACT_THRESHOLD * session.config.num_ctx
+
+
+def compact(session) -&gt; str:
+    """Remplace la conversation par un résumé écrit par le modèle, et renvoie ce résumé."""
+    conversation = session.messages[1:]
+    if not conversation:
+        return ""
+    # Le texte à résumer doit lui-même tenir dans le contexte : au plus la
+    # moitié, en coupant le milieu (truncate garde le début et la fin).
+    text = truncate(transcript(conversation), session.config.num_ctx * CHARS_PER_TOKEN // 2)
+    instructions = (PROMPTS_DIR / "COMPACT.md").read_text(encoding="utf-8")
+    # Appel sans outils : on veut du texte, pas des tool calls.
+    reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
+    summary = (reply.get("content") or "").strip()
+    session.remember_title()  # avant que la première demande ne disparaisse
+    session.messages = [
+        session.messages[0],  # le prompt système est gardé tel quel
+        {"role": "user", "content": f"Résumé de notre conversation jusqu'ici (le début a été compacté) :\n\n{summary}"},
+        {"role": "assistant", "content": "Compris, je reprends à partir de ce résumé."},
+    ]
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+    return summary</pre></div>
+        <div class="code-label">src/mini_agent/commands.py — /context, /compact</div>
+        <div class="code-block"><pre>def cmd_context(session: Session, arg: str) -&gt; str:
+    return context_report(session)
+
+
+def cmd_compact(session: Session, arg: str) -&gt; str:
+    if len(session.messages) &lt;= 1:
+        return "Rien à compacter : la conversation est vide."
+    summary = compact(session)
+    save_session(session)  # le fichier sauvegardé contient désormais le résumé
+    return f"Conversation compactée. Le modèle repart de ce résumé :\n\n{summary}"</pre></div>
+        <h3>Essayer</h3>
+        <div class="code-block"><pre>vous &gt; /context
+vous &gt; /compact
+vous &gt; /context
+
+mini-agent --num-ctx 2048 "Décris @data1.csv et @data2.csv"</pre></div>
+        <h3>Ce qu'on doit observer</h3>
+        <p>Sorties réelles du harness. Le résumé est écrit ici par un faux modèle ; le vrai qwen3.5:4b écrira le sien, à vérifier. De même, le « dernier total » vient du faux serveur, qui compte autrement qu'Ollama : l'écart avec l'estimation n'a pas de sens ici. Avec le vrai Ollama, c'est cette comparaison qui dira si l'estimation est fiable.</p>
+        <div class="code-block"><pre>vous &gt; /context
+prompt système       ≈    347 tokens
+schémas des outils   ≈    471 tokens
+vos messages         ≈     29 tokens
+réponses du modèle   ≈     65 tokens
+résultats d'outils   ≈     19 tokens
+total estimé         ≈    931 tokens  [##------------------] 11 % de 8192
+dernier total : 436 tokens (mesuré par Ollama)
+compactage automatique à 80 %, ou maintenant avec /compact
+
+vous &gt; /compact
+Conversation compactée. Le modèle repart de ce résumé :
+
+- Demande : corriger le bug de calc.py.
+- calc.py : add() faisait a - b, corrigé en a + b avec edit_file.
+- Vérifié avec `python calc.py` : affiche 5.
+- Reste à faire : rien.
+
+vous &gt; /context
+prompt système       ≈    347 tokens
+schémas des outils   ≈    471 tokens
+vos messages         ≈     60 tokens
+réponses du modèle   ≈     10 tokens
+résultats d'outils   ≈      0 tokens
+total estimé         ≈    888 tokens  [##------------------] 10 % de 8192
+dernier total : 890 tokens (estimation)
+compactage automatique à 80 %, ou maintenant avec /compact</pre></div>
+        <p>Compactage automatique, avec un contexte réduit à 2048 tokens et deux gros fichiers joints :</p>
+        <div class="code-block"><pre>vous &gt; Décris @data1.csv et @data2.csv
+   + fichier joint : data1.csv
+   + fichier joint : data2.csv
+
+agent &gt; data1.csv et data2.csv contiennent des mesures de température, une par ligne.
+[contexte : 2429 / 2048 tokens] plein : Ollama a coupé le début de la conversation
+Contexte presque plein : compactage automatique de la conversation...
+[contexte : ≈ 882 / 2048 tokens]</pre></div>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_context.py</div>
+        <div class="code-block"><pre>"""Tests de la mesure et du compactage du contexte (context.py)."""
+
+import pytest
+
+from mini_agent import llm
+from mini_agent.config import Config
+from mini_agent.context import compact, context_report, estimate_tokens, needs_compaction, transcript
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    session = create_session(config, confirm=lambda question: True)
+    session.messages += [
+        {"role": "user", "content": "Corrige le bug de calc.py"},
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "calc.py"}}}]},
+        {"role": "tool", "tool_name": "read_file", "content": "x" * 5000},
+        {"role": "assistant", "content": "C'est corrigé."},
+    ]
+    return session
+
+
+def test_estimation():
+    assert estimate_tokens("a" * 400) == 100
+
+
+def test_rapport_par_categorie(session):
+    rapport = context_report(session)
+    for categorie in ("prompt système", "schémas des outils", "vos messages", "réponses du modèle", "résultats d'outils", "total estimé"):
+        assert categorie in rapport
+    ligne = next(l for l in rapport.splitlines() if l.startswith("résultats d'outils"))
+    assert ligne.endswith("≈   1250 tokens")  # 5000 caractères / 4
+
+
+def test_transcription_raccourcit_les_resultats(session):
+    texte = transcript(session.messages)
+    assert "UTILISATEUR : Corrige le bug de calc.py" in texte
+    assert 'AGENT appelle read_file {"path": "calc.py"}' in texte
+    assert "RÉSULTAT de read_file :" in texte
+    assert len(texte) &lt; 1000  # le résultat de 5000 caractères est tronqué
+    assert "prompt" not in texte.lower()  # le prompt système n'est pas résumé
+
+
+def test_compactage(monkeypatch, session):
+    envoyes = []
+
+    def faux_chat(config, messages, tools=None):
+        envoyes.append((messages, tools))
+        return {"role": "assistant", "content": "  calc.py : add corrigée (a + b).  "}
+
+    monkeypatch.setattr(llm, "chat", faux_chat)
+    system_prompt = session.messages[0]
+    resume = compact(session)
+
+    assert resume == "calc.py : add corrigée (a + b)."
+    messages, tools = envoyes[0]
+    assert tools is None  # le résumé est demandé sans outils
+    assert "Tu résumes une conversation" in messages[0]["content"]  # prompts/COMPACT.md
+    assert "UTILISATEUR : Corrige le bug de calc.py" in messages[1]["content"]
+    assert session.messages[0] is system_prompt
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert "calc.py : add corrigée" in session.messages[1]["content"]
+    assert 0 &lt; session.context_tokens &lt; 2000
+    assert session.context_estimated
+    assert "(estimation)" in context_report(session)
+
+
+def test_seuil_de_compactage(session):
+    session.context_tokens = 6000
+    assert not needs_compaction(session)  # 6000 / 8192 = 73 %
+    session.context_tokens = 6600
+    assert needs_compaction(session)  # 80 %</pre></div>
+        <h3>Pièges à surveiller</h3>
+        <ul>
+          <li>Un compactage perd des détails : le contenu exact des fichiers lus et les sorties des commandes ne sont plus dans le contexte, et le modèle devra relire les fichiers. La sauvegarde est réécrite avec le résumé : la conversation complète n'est plus récupérable.</li>
+          <li>Un résumé écrit par un modèle 4B peut être incomplet ou inexact : sur une tâche importante, lancer <code>/compact</code> soi-même et relire le résumé.</li>
+          <li>Le compactage automatique n'a lieu qu'entre deux demandes : une seule demande très longue (beaucoup d'appels d'outils) peut encore déborder en cours de route.</li>
+          <li>Dans l'exemple ci-dessus, le contexte était déjà plein avant le compactage : Ollama avait coupé le début de la dernière requête, prompt système compris. Avec <code>num_ctx = 8192</code>, le seuil de 80 % laisse plus de marge.</li>
+          <li>L'estimation à 4 caractères par token est grossière : le code, les accents et les espaces en consomment plus ou moins. Comparer avec le « dernier total » mesuré par Ollama.</li>
+        </ul>
+      </div>
+    </div>
+
     <h2 id="mini-agent-code-fr">Code complet de la version finale</h2>
-    <p>Chaque fichier de la version finale (après l'étape 14), en entier. Les scripts des étapes 1 à 4 sont donnés en entier dans leur étape.</p>
+    <p>Chaque fichier de la version finale (après l'étape 16), en entier. Les scripts des étapes 1 à 4 sont donnés en entier dans leur étape.</p>
 
     <div class="tuto-card" id="mini-agent-code-a-fr">
       <div class="tuto-card-header">
@@ -3248,6 +3990,8 @@ REQUEST_TIMEOUT = 120
 MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
 COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
 MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
+# Compactage automatique quand le contexte est rempli à 80 % (étape 16).
+COMPACT_THRESHOLD = 0.8
 
 # Dossiers du projet mini-agent : prompts/ et skills/ sont à la racine du
 # dépôt, deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
@@ -3985,6 +4729,8 @@ def expand_mentions(text: str, workdir: Path) -&gt; str:
 
 # ─────────────────────────── La session ───────────────────────────
 
+TITLE_LENGTH = 60  # longueur maximale du titre d'une sauvegarde (étape 15)
+
 
 @dataclass
 class Session:
@@ -3995,6 +4741,9 @@ class Session:
     ctx: ToolContext
     messages: list[dict] = field(default_factory=list)
     context_tokens: int = 0  # taille du dernier échange, d'après Ollama
+    context_estimated: bool = False  # vrai si context_tokens est une estimation (étape 16)
+    session_id: str | None = None  # nom du fichier de sauvegarde (étape 15)
+    title: str = ""  # titre de la sauvegarde : début de la première demande
 
     def __post_init__(self) -&gt; None:
         self.reset()
@@ -4009,6 +4758,19 @@ class Session:
         une skill ou un AGENTS.md modifié est pris en compte."""
         self.messages = [{"role": "system", "content": self.system_prompt()}]
         self.context_tokens = 0
+        # Nouvelle conversation : elle sera sauvegardée dans un nouveau fichier.
+        self.session_id = None
+        self.title = ""
+
+    def remember_title(self) -&gt; None:
+        """Retient le début de la première demande comme titre (étape 15).
+
+        Le titre est fixé une fois pour toutes : après un compactage, la
+        première demande a disparu, mais le titre reste le même.
+        """
+        if not self.title:
+            first = next((m["content"] for m in self.messages if m["role"] == "user"), "")
+            self.title = first.splitlines()[0][:TITLE_LENGTH] if first else ""
 
     def update(self, **changes) -&gt; None:
         """Change un réglage (modèle, température...) en gardant la conversation."""
@@ -4020,6 +4782,7 @@ class Session:
         data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
         return data["message"]
 
     def ask(self, text: str) -&gt; str:
@@ -4044,6 +4807,218 @@ def create_session(config: Config, confirm: Callable[[str], bool]) -&gt; Session
     <div class="tuto-card" id="mini-agent-code-h-fr">
       <div class="tuto-card-header">
         <span class="step-num">H</span>
+        <span class="tuto-card-title">src/mini_agent/history.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">src/mini_agent/history.py</div>
+        <div class="code-block"><pre>"""Sauvegarde des conversations, pour les reprendre plus tard (étape 15).
+
+Chaque conversation est un fichier JSON dans .mini-agent/sessions/ du
+projet. Il est réécrit après chaque demande : en cas d'arrêt brutal, on
+perd au plus la demande en cours.
+"""
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from mini_agent.config import PROJECT_DIR_NAME
+from mini_agent.context import estimate_messages
+from mini_agent.session import Session
+
+def sessions_dir(workdir: Path) -&gt; Path:
+    return workdir / PROJECT_DIR_NAME / "sessions"
+
+
+def save_session(session: Session) -&gt; None:
+    """Enregistre la conversation, sans le prompt système (reconstruit à la reprise)."""
+    conversation = session.messages[1:]
+    if not any(m["role"] == "user" for m in conversation):
+        return  # conversation vide : rien à sauvegarder
+    now = datetime.now()
+    if session.session_id is None:
+        session.session_id = now.strftime("%Y-%m-%d_%H-%M-%S")
+    session.remember_title()
+    data = {
+        "id": session.session_id,
+        "title": session.title,
+        "updated": now.isoformat(timespec="seconds"),
+        "model": session.config.model,
+        "messages": conversation,
+    }
+    folder = sessions_dir(session.config.workdir)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{session.session_id}.json"
+    # On écrit dans un fichier temporaire, puis on le renomme : un Ctrl+C
+    # pendant l'écriture ne laisse jamais un fichier à moitié écrit.
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporary.replace(path)
+
+
+def list_sessions(workdir: Path) -&gt; list[dict]:
+    """Les conversations sauvegardées, de la plus récente à la plus ancienne."""
+    folder = sessions_dir(workdir)
+    if not folder.is_dir():
+        return []
+    sessions = []
+    for path in folder.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue  # fichier abîmé : on l'ignore plutôt que de planter
+        data["path"] = path  # pour /delete : on supprime ce fichier-là, rien d'autre
+        sessions.append(data)
+    return sorted(sessions, key=lambda data: data.get("updated", ""), reverse=True)
+
+
+def find_session(workdir: Path, ref: str) -&gt; dict | None:
+    """ref : numéro affiché par /sessions (1 = la plus récente) ou identifiant."""
+    sessions = list_sessions(workdir)
+    if ref.isdigit() and 1 &lt;= int(ref) &lt;= len(sessions):
+        return sessions[int(ref) - 1]
+    return next((data for data in sessions if data.get("id") == ref), None)
+
+
+def resume_session(session: Session, data: dict) -&gt; None:
+    """Remplace la conversation en cours par une conversation sauvegardée."""
+    session.reset()  # prompt système relu : AGENTS.md et skills à jour
+    session.messages += data["messages"]
+    session.session_id = data["id"]
+    session.title = data.get("title", "")
+    # Ollama ne mesurera le contexte qu'au prochain appel : en attendant, une estimation.
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+
+
+def delete_session(data: dict) -&gt; None:
+    data["path"].unlink(missing_ok=True)</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-i-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">I</span>
+        <span class="tuto-card-title">src/mini_agent/context.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">src/mini_agent/context.py</div>
+        <div class="code-block"><pre>"""Mesurer et compacter le contexte (étape 16).
+
+Mesurer : Ollama donne la taille totale après chaque appel (étape 13). Pour
+savoir ce qui remplit le contexte, on estime la part de chaque catégorie de
+messages à partir du nombre de caractères.
+
+Compacter : quand le contexte est presque plein, on demande au modèle de
+résumer la conversation, puis on remplace toute la conversation par ce
+résumé. Le prompt système, lui, est gardé tel quel.
+"""
+
+import json
+
+from mini_agent import llm
+from mini_agent.config import COMPACT_THRESHOLD, PROMPTS_DIR
+from mini_agent.guards import truncate
+from mini_agent.tools import tool_schemas
+
+# Approximation : environ 4 caractères par token, en français comme en code.
+# Ce n'est qu'une estimation ; la vraie mesure vient d'Ollama.
+CHARS_PER_TOKEN = 4
+# Dans le texte à résumer, chaque résultat d'outil ou argument est raccourci.
+TRANSCRIPT_ITEM_CHARS = 300
+
+
+def estimate_tokens(text: str) -&gt; int:
+    return len(text) // CHARS_PER_TOKEN
+
+
+def message_text(message: dict) -&gt; str:
+    """Tout le texte d'un message, appels d'outils compris."""
+    calls = message.get("tool_calls") or []
+    return (message.get("content") or "") + (json.dumps(calls, ensure_ascii=False) if calls else "")
+
+
+def estimate_messages(messages: list[dict]) -&gt; int:
+    """Estimation de la place occupée par des messages et par les schémas des outils."""
+    text = "".join(message_text(m) for m in messages) + json.dumps(tool_schemas(), ensure_ascii=False)
+    return estimate_tokens(text)
+
+
+def context_report(session) -&gt; str:
+    """Ce qui occupe le contexte, catégorie par catégorie (commande /context)."""
+    parts = {
+        "prompt système": 0,
+        "schémas des outils": estimate_tokens(json.dumps(tool_schemas(), ensure_ascii=False)),
+        "vos messages": 0,
+        "réponses du modèle": 0,
+        "résultats d'outils": 0,
+    }
+    category = {"system": "prompt système", "user": "vos messages", "assistant": "réponses du modèle", "tool": "résultats d'outils"}
+    for message in session.messages:
+        parts[category[message["role"]]] += estimate_tokens(message_text(message))
+    total = sum(parts.values())
+    size = session.config.num_ctx
+    filled = min(20, round(20 * total / size))
+    lines = [f"{name:&lt;20} ≈ {tokens:&gt;6} tokens" for name, tokens in parts.items()]
+    lines += [
+        f"{'total estimé':&lt;20} ≈ {total:&gt;6} tokens  [{'#' * filled}{'-' * (20 - filled)}] {100 * total // size} % de {size}",
+        f"dernier total : {session.context_tokens} tokens ({'estimation' if session.context_estimated else 'mesuré par Ollama'})",
+        f"compactage automatique à {int(COMPACT_THRESHOLD * 100)} %, ou maintenant avec /compact",
+    ]
+    return "\n".join(lines)
+
+
+def transcript(messages: list[dict]) -&gt; str:
+    """La conversation en texte simple, pour la faire résumer par le modèle."""
+    lines = []
+    for message in messages:
+        role = message["role"]
+        if role == "user":
+            lines.append(f"UTILISATEUR : {truncate(message['content'], 4 * TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "assistant":
+            if message.get("content"):
+                lines.append(f"AGENT : {message['content']}")
+            for call in message.get("tool_calls") or []:
+                arguments = json.dumps(call["function"].get("arguments", {}), ensure_ascii=False)
+                lines.append(f"AGENT appelle {call['function']['name']} {truncate(arguments, TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "tool":
+            lines.append(f"RÉSULTAT de {message.get('tool_name', '?')} : {truncate(message['content'], TRANSCRIPT_ITEM_CHARS)}")
+    return "\n".join(lines)
+
+
+def needs_compaction(session) -&gt; bool:
+    return session.context_tokens &gt;= COMPACT_THRESHOLD * session.config.num_ctx
+
+
+def compact(session) -&gt; str:
+    """Remplace la conversation par un résumé écrit par le modèle, et renvoie ce résumé."""
+    conversation = session.messages[1:]
+    if not conversation:
+        return ""
+    # Le texte à résumer doit lui-même tenir dans le contexte : au plus la
+    # moitié, en coupant le milieu (truncate garde le début et la fin).
+    text = truncate(transcript(conversation), session.config.num_ctx * CHARS_PER_TOKEN // 2)
+    instructions = (PROMPTS_DIR / "COMPACT.md").read_text(encoding="utf-8")
+    # Appel sans outils : on veut du texte, pas des tool calls.
+    reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
+    summary = (reply.get("content") or "").strip()
+    session.remember_title()  # avant que la première demande ne disparaisse
+    session.messages = [
+        session.messages[0],  # le prompt système est gardé tel quel
+        {"role": "user", "content": f"Résumé de notre conversation jusqu'ici (le début a été compacté) :\n\n{summary}"},
+        {"role": "assistant", "content": "Compris, je reprends à partir de ce résumé."},
+    ]
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+    return summary</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-j-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">J</span>
         <span class="tuto-card-title">src/mini_agent/commands.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4062,8 +5037,10 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.context import compact, context_report
 from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
 
@@ -4090,6 +5067,9 @@ INIT_FILES = {
 # num_ctx = 8192
 # allowed_commands = ["python -m pytest", "git status", "git diff"]
 """,
+    # Les conversations sauvegardées contiennent le contenu des fichiers lus :
+    # elles ne doivent pas finir dans le dépôt git du projet.
+    f"{PROJECT_DIR_NAME}/.gitignore": "sessions/\n",
     f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
 
 Format :
@@ -4206,6 +5186,53 @@ def cmd_clear(session: Session, arg: str) -&gt; str:
     return "Conversation effacée. Prompt système, skills et AGENTS.md relus."
 
 
+def cmd_sessions(session: Session, arg: str) -&gt; str:
+    sessions = list_sessions(session.config.workdir)
+    if not sessions:
+        return "Aucune conversation sauvegardée dans ce projet."
+    lines = []
+    for number, data in enumerate(sessions, start=1):
+        current = "*" if data["id"] == session.session_id else " "
+        date = data.get("updated", "?").replace("T", " ")[:16]
+        lines.append(f"{current}{number:&gt;3}. {date}  {len(data.get('messages', [])):&gt;3} messages  {data.get('title', '')}")
+    return "\n".join(lines + ["", "/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer."])
+
+
+def cmd_resume(session: Session, arg: str) -&gt; str:
+    # Sans argument : la conversation la plus récente.
+    data = find_session(session.config.workdir, arg or "1")
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    resume_session(session, data)
+    return f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)."
+
+
+def cmd_delete(session: Session, arg: str) -&gt; str:
+    if not arg:
+        return "Usage : /delete &lt;numéro&gt; (voir /sessions)"
+    data = find_session(session.config.workdir, arg)
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    if not session.ctx.confirm(f"Supprimer la conversation « {data.get('title', '')} » ?"):
+        return "Rien n'a été supprimé."
+    delete_session(data)
+    if data["id"] == session.session_id:
+        session.session_id = None  # la conversation en cours sera sauvegardée dans un nouveau fichier
+    return f"Conversation supprimée : {data.get('title', '')}"
+
+
+def cmd_context(session: Session, arg: str) -&gt; str:
+    return context_report(session)
+
+
+def cmd_compact(session: Session, arg: str) -&gt; str:
+    if len(session.messages) &lt;= 1:
+        return "Rien à compacter : la conversation est vide."
+    summary = compact(session)
+    save_session(session)  # le fichier sauvegardé contient désormais le résumé
+    return f"Conversation compactée. Le modèle repart de ce résumé :\n\n{summary}"
+
+
 def cmd_allow(session: Session, arg: str) -&gt; str:
     allowed = session.ctx.allowed_commands
     if not arg:
@@ -4228,6 +5255,11 @@ COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/skills": (cmd_skills, "skills disponibles"),
     "/skill": (cmd_skill, "charger une skill : /skill corriger-un-bug"),
     "/clear": (cmd_clear, "effacer la conversation"),
+    "/context": (cmd_context, "ce qui occupe le contexte"),
+    "/compact": (cmd_compact, "résumer la conversation pour libérer du contexte"),
+    "/sessions": (cmd_sessions, "conversations sauvegardées dans ce projet"),
+    "/resume": (cmd_resume, "reprendre une conversation : /resume 2 (sans numéro : la dernière)"),
+    "/delete": (cmd_delete, "supprimer une conversation : /delete 2"),
     "/allow": (cmd_allow, "lancer une commande sans confirmation : /allow python -m pytest"),
 }
 
@@ -4245,9 +5277,9 @@ def execute_command(session: Session, line: str) -&gt; str:
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-i-fr">
+    <div class="tuto-card" id="mini-agent-code-k-fr">
       <div class="tuto-card-header">
-        <span class="step-num">I</span>
+        <span class="step-num">K</span>
         <span class="tuto-card-title">src/mini_agent/cli.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4271,7 +5303,9 @@ import requests
 from mini_agent.agent import GREY, RED, YELLOW, color
 from mini_agent.commands import execute_command
 from mini_agent.config import load_config
+from mini_agent.context import compact, needs_compaction
 from mini_agent.guards import ask_confirmation
+from mini_agent.history import find_session, resume_session, save_session
 from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
 
 
@@ -4282,15 +5316,16 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser.add_argument("-t", "--temperature", type=float, help="température, ex. 0.2")
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
+    parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
     return parser.parse_args(argv)
 
 
 def context_status(session: Session) -&gt; str:
     """Une ligne qui montre la place occupée dans le contexte du modèle."""
     used, size = session.context_tokens, session.config.num_ctx
-    text = f"[contexte : {used} / {size} tokens]"
+    text = f"[contexte : {'≈ ' if session.context_estimated else ''}{used} / {size} tokens]"
     if used &gt;= size:
-        return color(text + " plein : Ollama a coupé le début de la conversation, tape /clear", RED)
+        return color(text + " plein : Ollama a coupé le début de la conversation", RED)
     if used &gt;= 0.75 * size:
         return color(text + " presque plein", YELLOW)
     return color(text, GREY)
@@ -4307,6 +5342,16 @@ def handle_request(session: Session, text: str) -&gt; None:
         return
     print(f"\nagent &gt; {answer}")
     print(context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(f"Compactage impossible : {error}")
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)
 
 
 def main() -&gt; None:
@@ -4321,6 +5366,13 @@ def main() -&gt; None:
     print(f"Dossier de travail : {config.workdir}")
     if load_project_instructions(config.workdir):
         print("Instructions du projet : AGENTS.md")
+    if args.resume:
+        data = find_session(config.workdir, "1")
+        if data is None:
+            print("Aucune conversation à reprendre dans ce projet : nouvelle conversation.")
+        else:
+            resume_session(session, data)
+            print(f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)")
 
     try:
         # Mode « une seule demande » : la demande est passée en argument.
@@ -4348,9 +5400,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-j-fr">
+    <div class="tuto-card" id="mini-agent-code-l-fr">
       <div class="tuto-card-header">
-        <span class="step-num">J</span>
+        <span class="step-num">L</span>
         <span class="tuto-card-title">prompts/ + skills/</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4378,6 +5430,19 @@ if __name__ == "__main__":
 ## Skills
 Une skill est une fiche d'instructions pour un type de tâche. Si la demande correspond à une skill, charge-la d'abord avec load_skill, puis suis ses instructions.
 {skills}</pre></div>
+        <div class="code-label">prompts/COMPACT.md</div>
+        <div class="code-block"><pre>Tu résumes une conversation entre un utilisateur et un agent de code, pour que l'agent puisse continuer le travail sans la relire.
+
+Garde :
+- ce que l'utilisateur a demandé, et ce qui reste à faire ;
+- les fichiers lus, créés ou modifiés, et ce qui a changé dans chacun ;
+- les décisions prises et les erreurs rencontrées ;
+- les commandes utiles (tests, lancement).
+
+Règles :
+- 15 lignes au maximum, en français.
+- Pas de code complet : seulement les noms de fichiers, de fonctions et les points importants.
+- Écris uniquement le résumé, sans introduction.</pre></div>
         <div class="code-label">skills/corriger-un-bug.md</div>
         <div class="code-block"><pre>---
 description: Méthode pour trouver et corriger un bug dans un script Python.
@@ -4409,9 +5474,9 @@ description: Écrire des tests pytest pour un module Python.
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-k-fr">
+    <div class="tuto-card" id="mini-agent-code-m-fr">
       <div class="tuto-card-header">
-        <span class="step-num">K</span>
+        <span class="step-num">M</span>
         <span class="tuto-card-title">demo/stats.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4439,9 +5504,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-l-fr">
+    <div class="tuto-card" id="mini-agent-code-n-fr">
       <div class="tuto-card-header">
-        <span class="step-num">L</span>
+        <span class="step-num">N</span>
         <span class="tuto-card-title">tests/test_config.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4517,9 +5582,9 @@ def test_valeur_invalide(tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-m-fr">
+    <div class="tuto-card" id="mini-agent-code-o-fr">
       <div class="tuto-card-header">
-        <span class="step-num">M</span>
+        <span class="step-num">O</span>
         <span class="tuto-card-title">tests/test_guards.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4597,9 +5662,9 @@ def test_commandes_autorisees(commande, attendu):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-n-fr">
+    <div class="tuto-card" id="mini-agent-code-p-fr">
       <div class="tuto-card-header">
-        <span class="step-num">N</span>
+        <span class="step-num">P</span>
         <span class="tuto-card-title">tests/test_tools.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4773,9 +5838,9 @@ def test_exception_python_renvoyee_au_modele(ctx):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-o-fr">
+    <div class="tuto-card" id="mini-agent-code-q-fr">
       <div class="tuto-card-header">
-        <span class="step-num">O</span>
+        <span class="step-num">Q</span>
         <span class="tuto-card-title">tests/test_agent.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4895,9 +5960,9 @@ def test_vrai_prompt_et_vraies_skills():
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-p-fr">
+    <div class="tuto-card" id="mini-agent-code-r-fr">
       <div class="tuto-card-header">
-        <span class="step-num">P</span>
+        <span class="step-num">R</span>
         <span class="tuto-card-title">tests/test_session.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -4970,9 +6035,9 @@ def test_skills_du_projet(tmp_path, session):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-q-fr">
+    <div class="tuto-card" id="mini-agent-code-s-fr">
       <div class="tuto-card-header">
-        <span class="step-num">Q</span>
+        <span class="step-num">S</span>
         <span class="tuto-card-title">tests/test_commands.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5073,7 +6138,235 @@ def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
 def test_init_refuse_par_l_utilisateur(session, tmp_path):
     session.ctx.confirm = lambda question: False
     assert execute_command(session, "/init") == "Rien n'a été créé."
-    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_sessions_reprise_et_suppression(session, tmp_path):
+    from mini_agent.history import save_session
+
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+    session.messages.append({"role": "user", "content": "Corrige le bug"})
+    save_session(session)
+    assert "Corrige le bug" in execute_command(session, "/sessions")
+
+    execute_command(session, "/clear")
+    assert execute_command(session, "/resume").startswith("Conversation reprise : Corrige le bug")
+    assert session.messages[-1]["content"] == "Corrige le bug"
+    assert "introuvable" in execute_command(session, "/resume 9")
+
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/delete 1") == "Rien n'a été supprimé."
+    session.ctx.confirm = lambda question: True
+    assert execute_command(session, "/delete 1").startswith("Conversation supprimée")
+    assert session.session_id is None
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+
+
+def test_context_et_compact(session, monkeypatch):
+    assert "total estimé" in execute_command(session, "/context")
+    assert execute_command(session, "/compact") == "Rien à compacter : la conversation est vide."
+    monkeypatch.setattr(llm, "chat", lambda config, messages, tools=None: {"role": "assistant", "content": "Résumé."})
+    session.messages.append({"role": "user", "content": "Bonjour"})
+    assert execute_command(session, "/compact").endswith("Résumé.")
+    # Le fichier sauvegardé contient la conversation compactée.
+    from mini_agent.history import find_session
+    saved = find_session(session.config.workdir, "1")
+    assert "Résumé." in saved["messages"][0]["content"]
+    assert saved["title"] == "Bonjour"  # le titre ne change pas après un compactage
+
+
+def test_init_cree_un_gitignore_pour_les_sessions(session, tmp_path):
+    execute_command(session, "/init")
+    assert (tmp_path / ".mini-agent" / ".gitignore").read_text(encoding="utf-8") == "sessions/\n"</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-t-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">T</span>
+        <span class="tuto-card-title">tests/test_history.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_history.py</div>
+        <div class="code-block"><pre>"""Tests de la sauvegarde des conversations (history.py)."""
+
+import json
+
+import pytest
+
+from mini_agent.config import Config
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session, sessions_dir
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    return create_session(config, confirm=lambda question: True)
+
+
+def converse(session, *texts):
+    for text in texts:
+        session.messages.append({"role": "user", "content": text})
+        session.messages.append({"role": "assistant", "content": f"réponse à {text}"})
+
+
+def test_conversation_vide_pas_sauvegardee(session, tmp_path):
+    save_session(session)
+    assert list_sessions(tmp_path) == []
+
+
+def test_sauvegarde_et_liste(session, tmp_path):
+    converse(session, "Corrige le bug de calc.py\nmerci", "Et ajoute un test")
+    save_session(session)
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 1
+    data = sessions[0]
+    assert data["id"] == session.session_id
+    assert data["title"] == "Corrige le bug de calc.py"  # première ligne de la première demande
+    assert data["model"] == "qwen3.5:4b"
+    assert [m["role"] for m in data["messages"]] == ["user", "assistant", "user", "assistant"]  # sans le prompt système
+
+
+def test_meme_fichier_tant_que_la_conversation_continue(session, tmp_path):
+    converse(session, "Première demande")
+    save_session(session)
+    converse(session, "Deuxième demande")
+    save_session(session)
+    assert len(list(sessions_dir(tmp_path).glob("*.json"))) == 1
+    assert len(list_sessions(tmp_path)[0]["messages"]) == 4
+
+
+def test_clear_commence_un_nouveau_fichier(session, tmp_path):
+    converse(session, "Première conversation")
+    save_session(session)
+    session.reset()
+    assert session.session_id is None
+
+
+def test_reprise(session, tmp_path):
+    converse(session, "Corrige le bug")
+    save_session(session)
+    saved_id = session.session_id
+    session.reset()
+    (tmp_path / "AGENTS.md").write_text("Nouvelle consigne.", encoding="utf-8")
+
+    resume_session(session, find_session(tmp_path, "1"))
+    assert session.session_id == saved_id
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert session.messages[0]["content"].endswith("Nouvelle consigne.")  # prompt système relu
+    assert session.context_tokens &gt; 0  # estimation en attendant Ollama
+
+
+def test_recherche_par_numero_ou_identifiant(tmp_path):
+    folder = sessions_dir(tmp_path)
+    folder.mkdir(parents=True)
+    for name, updated in (("ancienne", "2026-10-01T10:00:00"), ("recente", "2026-10-25T10:00:00")):
+        data = {"id": name, "title": name, "updated": updated, "model": "m", "messages": []}
+        (folder / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    assert find_session(tmp_path, "1")["id"] == "recente"
+    assert find_session(tmp_path, "2")["id"] == "ancienne"
+    assert find_session(tmp_path, "ancienne")["id"] == "ancienne"
+    assert find_session(tmp_path, "3") is None
+
+
+def test_fichier_abime_ignore(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    (sessions_dir(tmp_path) / "abime.json").write_text("{pas du json", encoding="utf-8")
+    assert len(list_sessions(tmp_path)) == 1
+
+
+def test_suppression(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    delete_session(find_session(tmp_path, "1"))
+    assert list_sessions(tmp_path) == []</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-u-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">U</span>
+        <span class="tuto-card-title">tests/test_context.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_context.py</div>
+        <div class="code-block"><pre>"""Tests de la mesure et du compactage du contexte (context.py)."""
+
+import pytest
+
+from mini_agent import llm
+from mini_agent.config import Config
+from mini_agent.context import compact, context_report, estimate_tokens, needs_compaction, transcript
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    session = create_session(config, confirm=lambda question: True)
+    session.messages += [
+        {"role": "user", "content": "Corrige le bug de calc.py"},
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "calc.py"}}}]},
+        {"role": "tool", "tool_name": "read_file", "content": "x" * 5000},
+        {"role": "assistant", "content": "C'est corrigé."},
+    ]
+    return session
+
+
+def test_estimation():
+    assert estimate_tokens("a" * 400) == 100
+
+
+def test_rapport_par_categorie(session):
+    rapport = context_report(session)
+    for categorie in ("prompt système", "schémas des outils", "vos messages", "réponses du modèle", "résultats d'outils", "total estimé"):
+        assert categorie in rapport
+    ligne = next(l for l in rapport.splitlines() if l.startswith("résultats d'outils"))
+    assert ligne.endswith("≈   1250 tokens")  # 5000 caractères / 4
+
+
+def test_transcription_raccourcit_les_resultats(session):
+    texte = transcript(session.messages)
+    assert "UTILISATEUR : Corrige le bug de calc.py" in texte
+    assert 'AGENT appelle read_file {"path": "calc.py"}' in texte
+    assert "RÉSULTAT de read_file :" in texte
+    assert len(texte) &lt; 1000  # le résultat de 5000 caractères est tronqué
+    assert "prompt" not in texte.lower()  # le prompt système n'est pas résumé
+
+
+def test_compactage(monkeypatch, session):
+    envoyes = []
+
+    def faux_chat(config, messages, tools=None):
+        envoyes.append((messages, tools))
+        return {"role": "assistant", "content": "  calc.py : add corrigée (a + b).  "}
+
+    monkeypatch.setattr(llm, "chat", faux_chat)
+    system_prompt = session.messages[0]
+    resume = compact(session)
+
+    assert resume == "calc.py : add corrigée (a + b)."
+    messages, tools = envoyes[0]
+    assert tools is None  # le résumé est demandé sans outils
+    assert "Tu résumes une conversation" in messages[0]["content"]  # prompts/COMPACT.md
+    assert "UTILISATEUR : Corrige le bug de calc.py" in messages[1]["content"]
+    assert session.messages[0] is system_prompt
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert "calc.py : add corrigée" in session.messages[1]["content"]
+    assert 0 &lt; session.context_tokens &lt; 2000
+    assert session.context_estimated
+    assert "(estimation)" in context_report(session)
+
+
+def test_seuil_de_compactage(session):
+    session.context_tokens = 6000
+    assert not needs_compaction(session)  # 6000 / 8192 = 73 %
+    session.context_tokens = 6600
+    assert needs_compaction(session)  # 80 %</pre></div>
       </div>
     </div>
 
@@ -5126,7 +6419,7 @@ def test_init_refuse_par_l_utilisateur(session, tmp_path):
     <p>This project has a simple goal: <strong>understanding how a coding agent works</strong> by building one from scratch in Python. A coding agent is a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
     <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand. The code is on GitHub: <a href="https://github.com/nils-malmberg/mini-agent">nils-malmberg/mini-agent</a>.</p>
     <p>The LLM runs locally on my NAS (see the <a href="project6.html">NAS Lab project</a>): <strong>qwen3.5:4b</strong> served by Ollama on a 6 GB RTX 3050. Such a small model forces some choices: few tools (5 at most), very clear descriptions and truncated tool results.</p>
-    <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 14 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, and able to receive tagged files.</p>
+    <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 16 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, able to receive tagged files, resume a conversation and compact its context.</p>
 
     <h2>Architecture</h2>
     <p>The model can only produce text. Everything else — reading a file, running a command, asking for confirmation, stopping — is done by the code around it: the <strong>harness</strong>. At the heart of the harness is the <strong>agentic loop</strong>, the only part that talks to the LLM.</p>
@@ -5214,9 +6507,13 @@ def test_init_refuse_par_l_utilisateur(session, tmp_path):
 │   ├── guards.py           # guardrails
 │   ├── agent.py            # agentic loop
 │   ├── session.py          # conversation state (part 2)
+│   ├── history.py          # saved conversations (part 2)
+│   ├── context.py          # context measuring and compaction (part 2)
 │   ├── commands.py         # /... commands (part 2)
 │   └── cli.py              # entry point `mini-agent`
-├── prompts/AGENT.md        # system prompt
+├── prompts/
+│   ├── AGENT.md            # system prompt
+│   └── COMPACT.md          # summary instructions (part 2)
 ├── skills/                 # Markdown skills
 │   ├── corriger-un-bug.md
 │   └── ecrire-tests-pytest.md
@@ -5227,7 +6524,9 @@ def test_init_refuse_par_l_utilisateur(session, tmp_path):
     ├── test_tools.py
     ├── test_agent.py
     ├── test_session.py
-    └── test_commands.py</pre></div>
+    ├── test_commands.py
+    ├── test_history.py
+    └── test_context.py</pre></div>
 
     <h2 id="mini-agent-config-en">Configuration</h2>
     <p>Everything that depends on the machine is set through environment variables:</p>
@@ -5278,6 +6577,8 @@ $env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
         <li><a href="#mini-agent-step12-en">Options and config.toml files</a></li>
         <li><a href="#mini-agent-step13-en">Context counter and edit_file</a></li>
         <li><a href="#mini-agent-step14-en">Commands allowed without confirmation</a></li>
+        <li><a href="#mini-agent-step15-en">Saving and resuming conversations</a></li>
+        <li><a href="#mini-agent-step16-en">Measuring and compacting the context</a></li>
       </ol>
       <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-code-en">Full code of the final version</a> · <a href="#mini-agent-glossary-en">Glossary</a></p>
     </div>
@@ -6872,7 +8173,7 @@ AssertionError: moyenne attendue : 13.5, obtenue : 10.5</pre></div>
     </div>
 
     <h3 id="mini-agent-part2-en">Part 2 — towards an everyday agent, like opencode</h3>
-    <p>Steps 9 to 14 turn mini-agent into a tool you start in any project: project instructions and skills, <code>/…</code> commands, tagged files, persistent settings, targeted editing and allowed commands.</p>
+    <p>Steps 9 to 16 turn mini-agent into a tool you start in any project: project instructions and skills, <code>/…</code> commands, tagged files, persistent settings, targeted editing, allowed commands, saved conversations and context compaction.</p>
     <div class="warning-block"><strong>How to follow this part.</strong> These features touch the same files (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), and some excerpts use a function from a later step. The safest way: first replace <code>src/</code>, <code>prompts/</code>, <code>skills/</code> and <code>tests/</code> with the <a href="#mini-agent-code-en">full code</a> (final version), run <code>uv run pytest -q</code>, then follow each step to understand and try the feature. All excerpts come from that final version.</div>
 
     <div class="tuto-card" id="mini-agent-step9-en">
@@ -6902,7 +8203,9 @@ mini-agent</pre></div>
         <div class="code-block"><pre>my-project/
 ├── AGENTS.md              # project instructions, appended to the system prompt
 └── .mini-agent/
+    ├── .gitignore         # keeps sessions/ out of git (step 15)
     ├── config.toml        # project settings (step 12)
+    ├── sessions/          # saved conversations (step 15)
     └── skills/            # project skills
         └── deploy.md</pre></div>
         <div class="warning-block"><strong>These files do not exist beforehand.</strong> <code>AGENTS.md</code> and the <code>.mini-agent/</code> folder are created in each project where mini-agent is started, not in the mini-agent repository (which keeps the global skills in <code>skills/</code>). The simplest way: the <code>/init</code> command (<a href="#mini-agent-step10-en">step 10</a>). Or by hand:</div>
@@ -7031,7 +8334,7 @@ Tape ta demande, ou /help pour les commandes.</pre></div>
           <li><code>Session.chat</code> reads <code>self.config</code> on every call: a <code>/temp</code> applies from the next request.</li>
           <li><strong>Command registry</strong>: the same idea as the tool registry, a name → (function, help) dictionary. Adding a command touches neither the loop nor <code>cli.py</code>.</li>
           <li><code>/models</code> queries <code>GET /api/tags</code>: the list of models installed on the Ollama server.</li>
-          <li><code>/init</code> prepares the current project: it creates <code>AGENTS.md</code>, <code>.mini-agent/config.toml</code> (settings commented out, so without effect until enabled) and <code>.mini-agent/skills/LISEZMOI.txt</code>, which explains the skill format. It asks for confirmation, never replaces an existing file and rebuilds the system prompt to include <code>AGENTS.md</code>. The explanation file is a <code>.txt</code>: an example skill in <code>.md</code> would be listed in the system prompt, and the model might load it for nothing.</li>
+          <li><code>/init</code> prepares the current project: it creates <code>AGENTS.md</code>, <code>.mini-agent/config.toml</code> (settings commented out, so without effect until enabled), <code>.mini-agent/.gitignore</code> (which keeps step 15's saves out of git) and <code>.mini-agent/skills/LISEZMOI.txt</code>, which explains the skill format. It asks for confirmation, never replaces an existing file and rebuilds the system prompt to include <code>AGENTS.md</code>. The explanation file is a <code>.txt</code>: an example skill in <code>.md</code> would be listed in the system prompt, and the model might load it for nothing.</li>
         </ul>
         <div class="code-label">src/mini_agent/llm.py</div>
         <div class="code-block"><pre>"""Appel au LLM via l'API native d'Ollama.
@@ -7093,6 +8396,9 @@ class Session:
     ctx: ToolContext
     messages: list[dict] = field(default_factory=list)
     context_tokens: int = 0  # taille du dernier échange, d'après Ollama
+    context_estimated: bool = False  # vrai si context_tokens est une estimation (étape 16)
+    session_id: str | None = None  # nom du fichier de sauvegarde (étape 15)
+    title: str = ""  # titre de la sauvegarde : début de la première demande
 
     def __post_init__(self) -&gt; None:
         self.reset()
@@ -7107,6 +8413,19 @@ class Session:
         une skill ou un AGENTS.md modifié est pris en compte."""
         self.messages = [{"role": "system", "content": self.system_prompt()}]
         self.context_tokens = 0
+        # Nouvelle conversation : elle sera sauvegardée dans un nouveau fichier.
+        self.session_id = None
+        self.title = ""
+
+    def remember_title(self) -&gt; None:
+        """Retient le début de la première demande comme titre (étape 15).
+
+        Le titre est fixé une fois pour toutes : après un compactage, la
+        première demande a disparu, mais le titre reste le même.
+        """
+        if not self.title:
+            first = next((m["content"] for m in self.messages if m["role"] == "user"), "")
+            self.title = first.splitlines()[0][:TITLE_LENGTH] if first else ""
 
     def update(self, **changes) -&gt; None:
         """Change un réglage (modèle, température...) en gardant la conversation."""
@@ -7118,6 +8437,7 @@ class Session:
         data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
         return data["message"]
 
     def ask(self, text: str) -&gt; str:
@@ -7150,8 +8470,10 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.context import compact, context_report
 from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
 
@@ -7178,6 +8500,9 @@ INIT_FILES = {
 # num_ctx = 8192
 # allowed_commands = ["python -m pytest", "git status", "git diff"]
 """,
+    # Les conversations sauvegardées contiennent le contenu des fichiers lus :
+    # elles ne doivent pas finir dans le dépôt git du projet.
+    f"{PROJECT_DIR_NAME}/.gitignore": "sessions/\n",
     f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
 
 Format :
@@ -7294,6 +8619,53 @@ def cmd_clear(session: Session, arg: str) -&gt; str:
     return "Conversation effacée. Prompt système, skills et AGENTS.md relus."
 
 
+def cmd_sessions(session: Session, arg: str) -&gt; str:
+    sessions = list_sessions(session.config.workdir)
+    if not sessions:
+        return "Aucune conversation sauvegardée dans ce projet."
+    lines = []
+    for number, data in enumerate(sessions, start=1):
+        current = "*" if data["id"] == session.session_id else " "
+        date = data.get("updated", "?").replace("T", " ")[:16]
+        lines.append(f"{current}{number:&gt;3}. {date}  {len(data.get('messages', [])):&gt;3} messages  {data.get('title', '')}")
+    return "\n".join(lines + ["", "/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer."])
+
+
+def cmd_resume(session: Session, arg: str) -&gt; str:
+    # Sans argument : la conversation la plus récente.
+    data = find_session(session.config.workdir, arg or "1")
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    resume_session(session, data)
+    return f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)."
+
+
+def cmd_delete(session: Session, arg: str) -&gt; str:
+    if not arg:
+        return "Usage : /delete &lt;numéro&gt; (voir /sessions)"
+    data = find_session(session.config.workdir, arg)
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    if not session.ctx.confirm(f"Supprimer la conversation « {data.get('title', '')} » ?"):
+        return "Rien n'a été supprimé."
+    delete_session(data)
+    if data["id"] == session.session_id:
+        session.session_id = None  # la conversation en cours sera sauvegardée dans un nouveau fichier
+    return f"Conversation supprimée : {data.get('title', '')}"
+
+
+def cmd_context(session: Session, arg: str) -&gt; str:
+    return context_report(session)
+
+
+def cmd_compact(session: Session, arg: str) -&gt; str:
+    if len(session.messages) &lt;= 1:
+        return "Rien à compacter : la conversation est vide."
+    summary = compact(session)
+    save_session(session)  # le fichier sauvegardé contient désormais le résumé
+    return f"Conversation compactée. Le modèle repart de ce résumé :\n\n{summary}"
+
+
 def cmd_allow(session: Session, arg: str) -&gt; str:
     allowed = session.ctx.allowed_commands
     if not arg:
@@ -7316,6 +8688,11 @@ COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/skills": (cmd_skills, "skills disponibles"),
     "/skill": (cmd_skill, "charger une skill : /skill corriger-un-bug"),
     "/clear": (cmd_clear, "effacer la conversation"),
+    "/context": (cmd_context, "ce qui occupe le contexte"),
+    "/compact": (cmd_compact, "résumer la conversation pour libérer du contexte"),
+    "/sessions": (cmd_sessions, "conversations sauvegardées dans ce projet"),
+    "/resume": (cmd_resume, "reprendre une conversation : /resume 2 (sans numéro : la dernière)"),
+    "/delete": (cmd_delete, "supprimer une conversation : /delete 2"),
     "/allow": (cmd_allow, "lancer une commande sans confirmation : /allow python -m pytest"),
 }
 
@@ -7343,6 +8720,13 @@ def execute_command(session: Session, line: str) -&gt; str:
     print(f"Dossier de travail : {config.workdir}")
     if load_project_instructions(config.workdir):
         print("Instructions du projet : AGENTS.md")
+    if args.resume:
+        data = find_session(config.workdir, "1")
+        if data is None:
+            print("Aucune conversation à reprendre dans ce projet : nouvelle conversation.")
+        else:
+            resume_session(session, data)
+            print(f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)")
 
     try:
         # Mode « une seule demande » : la demande est passée en argument.
@@ -7377,11 +8761,13 @@ def execute_command(session: Session, line: str) -&gt; str:
 Fichiers à créer :
   AGENTS.md
   .mini-agent/config.toml
+  .mini-agent/.gitignore
   .mini-agent/skills/LISEZMOI.txt
 Les créer dans …/rfact ? [o/N] o
 Créé :
   AGENTS.md
   .mini-agent/config.toml
+  .mini-agent/.gitignore
   .mini-agent/skills/LISEZMOI.txt
 Complète AGENTS.md, puis ajoute tes skills dans .mini-agent/skills/.
 
@@ -7398,6 +8784,11 @@ Ce projet est déjà initialisé : rien à créer.</pre></div>
 /skills   skills disponibles
 /skill    charger une skill : /skill corriger-un-bug
 /clear    effacer la conversation
+/context  ce qui occupe le contexte
+/compact  résumer la conversation pour libérer du contexte
+/sessions conversations sauvegardées dans ce projet
+/resume   reprendre une conversation : /resume 2 (sans numéro : la dernière)
+/delete   supprimer une conversation : /delete 2
 /allow    lancer une commande sans confirmation : /allow python -m pytest
 /quit     quitter
 
@@ -7516,7 +8907,46 @@ def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
 def test_init_refuse_par_l_utilisateur(session, tmp_path):
     session.ctx.confirm = lambda question: False
     assert execute_command(session, "/init") == "Rien n'a été créé."
-    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_sessions_reprise_et_suppression(session, tmp_path):
+    from mini_agent.history import save_session
+
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+    session.messages.append({"role": "user", "content": "Corrige le bug"})
+    save_session(session)
+    assert "Corrige le bug" in execute_command(session, "/sessions")
+
+    execute_command(session, "/clear")
+    assert execute_command(session, "/resume").startswith("Conversation reprise : Corrige le bug")
+    assert session.messages[-1]["content"] == "Corrige le bug"
+    assert "introuvable" in execute_command(session, "/resume 9")
+
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/delete 1") == "Rien n'a été supprimé."
+    session.ctx.confirm = lambda question: True
+    assert execute_command(session, "/delete 1").startswith("Conversation supprimée")
+    assert session.session_id is None
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+
+
+def test_context_et_compact(session, monkeypatch):
+    assert "total estimé" in execute_command(session, "/context")
+    assert execute_command(session, "/compact") == "Rien à compacter : la conversation est vide."
+    monkeypatch.setattr(llm, "chat", lambda config, messages, tools=None: {"role": "assistant", "content": "Résumé."})
+    session.messages.append({"role": "user", "content": "Bonjour"})
+    assert execute_command(session, "/compact").endswith("Résumé.")
+    # Le fichier sauvegardé contient la conversation compactée.
+    from mini_agent.history import find_session
+    saved = find_session(session.config.workdir, "1")
+    assert "Résumé." in saved["messages"][0]["content"]
+    assert saved["title"] == "Bonjour"  # le titre ne change pas après un compactage
+
+
+def test_init_cree_un_gitignore_pour_les_sessions(session, tmp_path):
+    execute_command(session, "/init")
+    assert (tmp_path / ".mini-agent" / ".gitignore").read_text(encoding="utf-8") == "sessions/\n"</pre></div>
         <h3>Pitfalls to watch</h3>
         <ul>
           <li>A model without tool support (some older models): Ollama answers with an HTTP 400 error ("does not support tools"). The message is printed and the session continues: switch back with <code>/model</code>.</li>
@@ -7587,7 +9017,17 @@ def expand_mentions(text: str, workdir: Path) -&gt; str:
         print(f"Erreur de communication avec Ollama : {error}")
         return
     print(f"\nagent &gt; {answer}")
-    print(context_status(session))</pre></div>
+    print(context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(f"Compactage impossible : {error}")
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)</pre></div>
         <h3>Try it</h3>
         <div class="code-block"><pre>mini-agent "Corrige le bug de @calc.py"</pre></div>
         <h3>What we should observe</h3>
@@ -7742,6 +9182,8 @@ REQUEST_TIMEOUT = 120
 MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
 COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
 MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
+# Compactage automatique quand le contexte est rempli à 80 % (étape 16).
+COMPACT_THRESHOLD = 0.8
 
 # Dossiers du projet mini-agent : prompts/ et skills/ sont à la racine du
 # dépôt, deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
@@ -7835,6 +9277,7 @@ def load_config(cli_options: dict | None = None) -&gt; Config:
     parser.add_argument("-t", "--temperature", type=float, help="température, ex. 0.2")
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
+    parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
     return parser.parse_args(argv)</pre></div>
         <h3>Try it</h3>
         <div class="code-block"><pre>mini-agent --help
@@ -7978,14 +9421,15 @@ def test_valeur_invalide(tmp_path):
         data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
         return data["message"]</pre></div>
         <div class="code-label">src/mini_agent/cli.py — context_status</div>
         <div class="code-block"><pre>def context_status(session: Session) -&gt; str:
     """Une ligne qui montre la place occupée dans le contexte du modèle."""
     used, size = session.context_tokens, session.config.num_ctx
-    text = f"[contexte : {used} / {size} tokens]"
+    text = f"[contexte : {'≈ ' if session.context_estimated else ''}{used} / {size} tokens]"
     if used &gt;= size:
-        return color(text + " plein : Ollama a coupé le début de la conversation, tape /clear", RED)
+        return color(text + " plein : Ollama a coupé le début de la conversation", RED)
     if used &gt;= 0.75 * size:
         return color(text + " presque plein", YELLOW)
     return color(text, GREY)</pre></div>
@@ -8248,8 +9692,599 @@ def test_commandes_autorisees(commande, attendu):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-step15-en">
+      <div class="tuto-card-header">
+        <span class="step-num">15</span>
+        <span class="tuto-card-title">Saving and resuming conversations</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Goal</h3>
+        <p>Get a conversation back after quitting mini-agent, and be able to delete old ones.</p>
+        <h3>Concept</h3>
+        <p>A conversation is just a list of messages (step 2): saving it means writing that list to a JSON file. Each conversation has its file in the project's <code>.mini-agent/sessions/</code>, named after its start date. It is rewritten after each request: after a crash, only the current request is lost.</p>
+        <ul>
+          <li>The system prompt is not saved: on resume, it is rebuilt with the current <code>AGENTS.md</code> and skills.</li>
+          <li>We write to a temporary file, then rename it: a Ctrl+C at the wrong moment never leaves a half-written file.</li>
+          <li>The title (start of the first request) is set once and for all, so it stays readable after a compaction (step 16).</li>
+          <li><code>/sessions</code> lists the conversations (1 = most recent), <code>/resume</code> resumes one, <code>/delete</code> deletes one after confirmation, and <code>mini-agent -c</code> resumes the last one at startup. <code>/clear</code> starts a new conversation: the old one stays saved.</li>
+          <li><code>/delete</code> deletes the file found in the sessions folder, never a path read from the JSON: a hand-edited file cannot get something else deleted.</li>
+        </ul>
+        <div class="code-label">src/mini_agent/history.py</div>
+        <div class="code-block"><pre>"""Sauvegarde des conversations, pour les reprendre plus tard (étape 15).
+
+Chaque conversation est un fichier JSON dans .mini-agent/sessions/ du
+projet. Il est réécrit après chaque demande : en cas d'arrêt brutal, on
+perd au plus la demande en cours.
+"""
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from mini_agent.config import PROJECT_DIR_NAME
+from mini_agent.context import estimate_messages
+from mini_agent.session import Session
+
+def sessions_dir(workdir: Path) -&gt; Path:
+    return workdir / PROJECT_DIR_NAME / "sessions"
+
+
+def save_session(session: Session) -&gt; None:
+    """Enregistre la conversation, sans le prompt système (reconstruit à la reprise)."""
+    conversation = session.messages[1:]
+    if not any(m["role"] == "user" for m in conversation):
+        return  # conversation vide : rien à sauvegarder
+    now = datetime.now()
+    if session.session_id is None:
+        session.session_id = now.strftime("%Y-%m-%d_%H-%M-%S")
+    session.remember_title()
+    data = {
+        "id": session.session_id,
+        "title": session.title,
+        "updated": now.isoformat(timespec="seconds"),
+        "model": session.config.model,
+        "messages": conversation,
+    }
+    folder = sessions_dir(session.config.workdir)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{session.session_id}.json"
+    # On écrit dans un fichier temporaire, puis on le renomme : un Ctrl+C
+    # pendant l'écriture ne laisse jamais un fichier à moitié écrit.
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporary.replace(path)
+
+
+def list_sessions(workdir: Path) -&gt; list[dict]:
+    """Les conversations sauvegardées, de la plus récente à la plus ancienne."""
+    folder = sessions_dir(workdir)
+    if not folder.is_dir():
+        return []
+    sessions = []
+    for path in folder.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue  # fichier abîmé : on l'ignore plutôt que de planter
+        data["path"] = path  # pour /delete : on supprime ce fichier-là, rien d'autre
+        sessions.append(data)
+    return sorted(sessions, key=lambda data: data.get("updated", ""), reverse=True)
+
+
+def find_session(workdir: Path, ref: str) -&gt; dict | None:
+    """ref : numéro affiché par /sessions (1 = la plus récente) ou identifiant."""
+    sessions = list_sessions(workdir)
+    if ref.isdigit() and 1 &lt;= int(ref) &lt;= len(sessions):
+        return sessions[int(ref) - 1]
+    return next((data for data in sessions if data.get("id") == ref), None)
+
+
+def resume_session(session: Session, data: dict) -&gt; None:
+    """Remplace la conversation en cours par une conversation sauvegardée."""
+    session.reset()  # prompt système relu : AGENTS.md et skills à jour
+    session.messages += data["messages"]
+    session.session_id = data["id"]
+    session.title = data.get("title", "")
+    # Ollama ne mesurera le contexte qu'au prochain appel : en attendant, une estimation.
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+
+
+def delete_session(data: dict) -&gt; None:
+    data["path"].unlink(missing_ok=True)</pre></div>
+        <div class="code-label">src/mini_agent/session.py — the saved title</div>
+        <div class="code-block"><pre>class Session:
+    ...
+
+    def remember_title(self) -&gt; None:
+        """Retient le début de la première demande comme titre (étape 15).
+
+        Le titre est fixé une fois pour toutes : après un compactage, la
+        première demande a disparu, mais le titre reste le même.
+        """
+        if not self.title:
+            first = next((m["content"] for m in self.messages if m["role"] == "user"), "")
+            self.title = first.splitlines()[0][:TITLE_LENGTH] if first else ""</pre></div>
+        <div class="code-label">src/mini_agent/commands.py — /sessions, /resume, /delete</div>
+        <div class="code-block"><pre>def cmd_sessions(session: Session, arg: str) -&gt; str:
+    sessions = list_sessions(session.config.workdir)
+    if not sessions:
+        return "Aucune conversation sauvegardée dans ce projet."
+    lines = []
+    for number, data in enumerate(sessions, start=1):
+        current = "*" if data["id"] == session.session_id else " "
+        date = data.get("updated", "?").replace("T", " ")[:16]
+        lines.append(f"{current}{number:&gt;3}. {date}  {len(data.get('messages', [])):&gt;3} messages  {data.get('title', '')}")
+    return "\n".join(lines + ["", "/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer."])
+
+
+def cmd_resume(session: Session, arg: str) -&gt; str:
+    # Sans argument : la conversation la plus récente.
+    data = find_session(session.config.workdir, arg or "1")
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    resume_session(session, data)
+    return f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)."
+
+
+def cmd_delete(session: Session, arg: str) -&gt; str:
+    if not arg:
+        return "Usage : /delete &lt;numéro&gt; (voir /sessions)"
+    data = find_session(session.config.workdir, arg)
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    if not session.ctx.confirm(f"Supprimer la conversation « {data.get('title', '')} » ?"):
+        return "Rien n'a été supprimé."
+    delete_session(data)
+    if data["id"] == session.session_id:
+        session.session_id = None  # la conversation en cours sera sauvegardée dans un nouveau fichier
+    return f"Conversation supprimée : {data.get('title', '')}"</pre></div>
+        <div class="code-label">src/mini_agent/cli.py — saving after each request</div>
+        <div class="code-block"><pre>def handle_request(session: Session, text: str) -&gt; None:
+    """Envoie une demande à l'agent et affiche sa réponse."""
+    for path in find_mentions(text):
+        print(color(f"   + fichier joint : {path}", GREY))
+    try:
+        answer = session.ask(text)
+    except requests.RequestException as error:
+        print(f"Erreur de communication avec Ollama : {error}")
+        return
+    print(f"\nagent &gt; {answer}")
+    print(context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(f"Compactage impossible : {error}")
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)</pre></div>
+        <p>In <code>main</code>, the <code>-c</code> option resumes the last conversation (see <code>cli.py</code> in the <a href="#mini-agent-code-en">full code</a>).</p>
+        <h3>Try it</h3>
+        <div class="code-block"><pre>mini-agent
+vous &gt; Corrige le bug de @calc.py
+vous &gt; /sessions
+vous &gt; /quit
+
+mini-agent -c
+vous &gt; /sessions
+vous &gt; /delete 1</pre></div>
+        <h3>What we should observe</h3>
+        <p>Real harness outputs (fake model): the list, then a resume with <code>-c</code> and a deletion.</p>
+        <div class="code-block"><pre>vous &gt; /sessions
+*  1. 2026-10-25 22:03    2 messages  Corrige le bug de @calc.py
+
+/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer.</pre></div>
+        <div class="code-block"><pre>mini-agent — modèle qwen3.5:4b sur http://127.0.0.1:8781
+Dossier de travail : …/p15
+Conversation reprise : Corrige le bug de @calc.py (2 messages)
+Tape ta demande, ou /help pour les commandes.
+
+vous &gt; /sessions
+*  1. 2026-10-25 22:03    2 messages  Corrige le bug de @calc.py
+
+/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer.
+
+vous &gt; /delete 1
+Supprimer la conversation « Corrige le bug de @calc.py » ? [o/N] o
+Conversation supprimée : Corrige le bug de @calc.py
+
+vous &gt; /sessions
+Aucune conversation sauvegardée dans ce projet.</pre></div>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_history.py</div>
+        <div class="code-block"><pre>"""Tests de la sauvegarde des conversations (history.py)."""
+
+import json
+
+import pytest
+
+from mini_agent.config import Config
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session, sessions_dir
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    return create_session(config, confirm=lambda question: True)
+
+
+def converse(session, *texts):
+    for text in texts:
+        session.messages.append({"role": "user", "content": text})
+        session.messages.append({"role": "assistant", "content": f"réponse à {text}"})
+
+
+def test_conversation_vide_pas_sauvegardee(session, tmp_path):
+    save_session(session)
+    assert list_sessions(tmp_path) == []
+
+
+def test_sauvegarde_et_liste(session, tmp_path):
+    converse(session, "Corrige le bug de calc.py\nmerci", "Et ajoute un test")
+    save_session(session)
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 1
+    data = sessions[0]
+    assert data["id"] == session.session_id
+    assert data["title"] == "Corrige le bug de calc.py"  # première ligne de la première demande
+    assert data["model"] == "qwen3.5:4b"
+    assert [m["role"] for m in data["messages"]] == ["user", "assistant", "user", "assistant"]  # sans le prompt système
+
+
+def test_meme_fichier_tant_que_la_conversation_continue(session, tmp_path):
+    converse(session, "Première demande")
+    save_session(session)
+    converse(session, "Deuxième demande")
+    save_session(session)
+    assert len(list(sessions_dir(tmp_path).glob("*.json"))) == 1
+    assert len(list_sessions(tmp_path)[0]["messages"]) == 4
+
+
+def test_clear_commence_un_nouveau_fichier(session, tmp_path):
+    converse(session, "Première conversation")
+    save_session(session)
+    session.reset()
+    assert session.session_id is None
+
+
+def test_reprise(session, tmp_path):
+    converse(session, "Corrige le bug")
+    save_session(session)
+    saved_id = session.session_id
+    session.reset()
+    (tmp_path / "AGENTS.md").write_text("Nouvelle consigne.", encoding="utf-8")
+
+    resume_session(session, find_session(tmp_path, "1"))
+    assert session.session_id == saved_id
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert session.messages[0]["content"].endswith("Nouvelle consigne.")  # prompt système relu
+    assert session.context_tokens &gt; 0  # estimation en attendant Ollama
+
+
+def test_recherche_par_numero_ou_identifiant(tmp_path):
+    folder = sessions_dir(tmp_path)
+    folder.mkdir(parents=True)
+    for name, updated in (("ancienne", "2026-10-01T10:00:00"), ("recente", "2026-10-25T10:00:00")):
+        data = {"id": name, "title": name, "updated": updated, "model": "m", "messages": []}
+        (folder / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    assert find_session(tmp_path, "1")["id"] == "recente"
+    assert find_session(tmp_path, "2")["id"] == "ancienne"
+    assert find_session(tmp_path, "ancienne")["id"] == "ancienne"
+    assert find_session(tmp_path, "3") is None
+
+
+def test_fichier_abime_ignore(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    (sessions_dir(tmp_path) / "abime.json").write_text("{pas du json", encoding="utf-8")
+    assert len(list_sessions(tmp_path)) == 1
+
+
+def test_suppression(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    delete_session(find_session(tmp_path, "1"))
+    assert list_sessions(tmp_path) == []</pre></div>
+        <h3>Pitfalls to watch</h3>
+        <ul>
+          <li>A save holds everything: content of the files read, command outputs. <code>/init</code> adds a <code>.mini-agent/.gitignore</code> that keeps <code>sessions/</code> out of git; without <code>/init</code>, add it by hand.</li>
+          <li>Resuming a conversation with another model works, but it rereads tool calls it did not make.</li>
+          <li>Saves pile up: <code>/delete</code>, or empty the <code>.mini-agent/sessions/</code> folder.</li>
+          <li>A resumed conversation can be long: the counter shows an estimate (<code>≈</code>) until the next call, and <code>/compact</code> (step 16) shortens it.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-step16-en">
+      <div class="tuto-card-header">
+        <span class="step-num">16</span>
+        <span class="tuto-card-title">Measuring and compacting the context</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Goal</h3>
+        <p>See what fills the context, and free it by summarising the conversation, on demand or automatically.</p>
+        <h3>Concept</h3>
+        <p>Step 13 shows the total measured by Ollama. To know what fills it, <code>/context</code> estimates the share of each category of messages from the number of characters (about 4 characters per token). It is an approximation: without the model's tokenizer, and without adding a dependency, we cannot do better. The real measure remains Ollama's.</p>
+        <p>Compacting means replacing the conversation with a summary. We turn the conversation into plain text (tool results and arguments shortened to 300 characters), ask the model to summarise it with the instructions in <code>prompts/COMPACT.md</code>, without tools, then keep only three messages: the system prompt, the summary (as a user message) and a short acknowledgement from the assistant, so the roles keep alternating.</p>
+        <ul>
+          <li><code>/compact</code> compacts on demand; compaction is automatic between two requests when the context goes over 80% (<code>COMPACT_THRESHOLD</code>).</li>
+          <li>The text to summarise must itself fit in the context: it is capped at half of it, cutting the middle.</li>
+          <li>After a compaction or a resume, the counter is an estimate, marked <code>≈</code>, until the next call.</li>
+        </ul>
+        <div class="code-label">src/mini_agent/config.py — compaction threshold</div>
+        <div class="code-block"><pre># Compactage automatique quand le contexte est rempli à 80 % (étape 16).
+COMPACT_THRESHOLD = 0.8</pre></div>
+        <div class="code-label">prompts/COMPACT.md</div>
+        <div class="code-block"><pre>Tu résumes une conversation entre un utilisateur et un agent de code, pour que l'agent puisse continuer le travail sans la relire.
+
+Garde :
+- ce que l'utilisateur a demandé, et ce qui reste à faire ;
+- les fichiers lus, créés ou modifiés, et ce qui a changé dans chacun ;
+- les décisions prises et les erreurs rencontrées ;
+- les commandes utiles (tests, lancement).
+
+Règles :
+- 15 lignes au maximum, en français.
+- Pas de code complet : seulement les noms de fichiers, de fonctions et les points importants.
+- Écris uniquement le résumé, sans introduction.</pre></div>
+        <div class="code-label">src/mini_agent/context.py</div>
+        <div class="code-block"><pre>"""Mesurer et compacter le contexte (étape 16).
+
+Mesurer : Ollama donne la taille totale après chaque appel (étape 13). Pour
+savoir ce qui remplit le contexte, on estime la part de chaque catégorie de
+messages à partir du nombre de caractères.
+
+Compacter : quand le contexte est presque plein, on demande au modèle de
+résumer la conversation, puis on remplace toute la conversation par ce
+résumé. Le prompt système, lui, est gardé tel quel.
+"""
+
+import json
+
+from mini_agent import llm
+from mini_agent.config import COMPACT_THRESHOLD, PROMPTS_DIR
+from mini_agent.guards import truncate
+from mini_agent.tools import tool_schemas
+
+# Approximation : environ 4 caractères par token, en français comme en code.
+# Ce n'est qu'une estimation ; la vraie mesure vient d'Ollama.
+CHARS_PER_TOKEN = 4
+# Dans le texte à résumer, chaque résultat d'outil ou argument est raccourci.
+TRANSCRIPT_ITEM_CHARS = 300
+
+
+def estimate_tokens(text: str) -&gt; int:
+    return len(text) // CHARS_PER_TOKEN
+
+
+def message_text(message: dict) -&gt; str:
+    """Tout le texte d'un message, appels d'outils compris."""
+    calls = message.get("tool_calls") or []
+    return (message.get("content") or "") + (json.dumps(calls, ensure_ascii=False) if calls else "")
+
+
+def estimate_messages(messages: list[dict]) -&gt; int:
+    """Estimation de la place occupée par des messages et par les schémas des outils."""
+    text = "".join(message_text(m) for m in messages) + json.dumps(tool_schemas(), ensure_ascii=False)
+    return estimate_tokens(text)
+
+
+def context_report(session) -&gt; str:
+    """Ce qui occupe le contexte, catégorie par catégorie (commande /context)."""
+    parts = {
+        "prompt système": 0,
+        "schémas des outils": estimate_tokens(json.dumps(tool_schemas(), ensure_ascii=False)),
+        "vos messages": 0,
+        "réponses du modèle": 0,
+        "résultats d'outils": 0,
+    }
+    category = {"system": "prompt système", "user": "vos messages", "assistant": "réponses du modèle", "tool": "résultats d'outils"}
+    for message in session.messages:
+        parts[category[message["role"]]] += estimate_tokens(message_text(message))
+    total = sum(parts.values())
+    size = session.config.num_ctx
+    filled = min(20, round(20 * total / size))
+    lines = [f"{name:&lt;20} ≈ {tokens:&gt;6} tokens" for name, tokens in parts.items()]
+    lines += [
+        f"{'total estimé':&lt;20} ≈ {total:&gt;6} tokens  [{'#' * filled}{'-' * (20 - filled)}] {100 * total // size} % de {size}",
+        f"dernier total : {session.context_tokens} tokens ({'estimation' if session.context_estimated else 'mesuré par Ollama'})",
+        f"compactage automatique à {int(COMPACT_THRESHOLD * 100)} %, ou maintenant avec /compact",
+    ]
+    return "\n".join(lines)
+
+
+def transcript(messages: list[dict]) -&gt; str:
+    """La conversation en texte simple, pour la faire résumer par le modèle."""
+    lines = []
+    for message in messages:
+        role = message["role"]
+        if role == "user":
+            lines.append(f"UTILISATEUR : {truncate(message['content'], 4 * TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "assistant":
+            if message.get("content"):
+                lines.append(f"AGENT : {message['content']}")
+            for call in message.get("tool_calls") or []:
+                arguments = json.dumps(call["function"].get("arguments", {}), ensure_ascii=False)
+                lines.append(f"AGENT appelle {call['function']['name']} {truncate(arguments, TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "tool":
+            lines.append(f"RÉSULTAT de {message.get('tool_name', '?')} : {truncate(message['content'], TRANSCRIPT_ITEM_CHARS)}")
+    return "\n".join(lines)
+
+
+def needs_compaction(session) -&gt; bool:
+    return session.context_tokens &gt;= COMPACT_THRESHOLD * session.config.num_ctx
+
+
+def compact(session) -&gt; str:
+    """Remplace la conversation par un résumé écrit par le modèle, et renvoie ce résumé."""
+    conversation = session.messages[1:]
+    if not conversation:
+        return ""
+    # Le texte à résumer doit lui-même tenir dans le contexte : au plus la
+    # moitié, en coupant le milieu (truncate garde le début et la fin).
+    text = truncate(transcript(conversation), session.config.num_ctx * CHARS_PER_TOKEN // 2)
+    instructions = (PROMPTS_DIR / "COMPACT.md").read_text(encoding="utf-8")
+    # Appel sans outils : on veut du texte, pas des tool calls.
+    reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
+    summary = (reply.get("content") or "").strip()
+    session.remember_title()  # avant que la première demande ne disparaisse
+    session.messages = [
+        session.messages[0],  # le prompt système est gardé tel quel
+        {"role": "user", "content": f"Résumé de notre conversation jusqu'ici (le début a été compacté) :\n\n{summary}"},
+        {"role": "assistant", "content": "Compris, je reprends à partir de ce résumé."},
+    ]
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+    return summary</pre></div>
+        <div class="code-label">src/mini_agent/commands.py — /context, /compact</div>
+        <div class="code-block"><pre>def cmd_context(session: Session, arg: str) -&gt; str:
+    return context_report(session)
+
+
+def cmd_compact(session: Session, arg: str) -&gt; str:
+    if len(session.messages) &lt;= 1:
+        return "Rien à compacter : la conversation est vide."
+    summary = compact(session)
+    save_session(session)  # le fichier sauvegardé contient désormais le résumé
+    return f"Conversation compactée. Le modèle repart de ce résumé :\n\n{summary}"</pre></div>
+        <h3>Try it</h3>
+        <div class="code-block"><pre>vous &gt; /context
+vous &gt; /compact
+vous &gt; /context
+
+mini-agent --num-ctx 2048 "Décris @data1.csv et @data2.csv"</pre></div>
+        <h3>What we should observe</h3>
+        <p>Real harness outputs. The summary here is written by a fake model; the real qwen3.5:4b will write its own, to be checked. Likewise, the "dernier total" comes from the fake server, which counts differently from Ollama: the gap with the estimate means nothing here. With the real Ollama, that comparison will tell whether the estimate is reliable.</p>
+        <div class="code-block"><pre>vous &gt; /context
+prompt système       ≈    347 tokens
+schémas des outils   ≈    471 tokens
+vos messages         ≈     29 tokens
+réponses du modèle   ≈     65 tokens
+résultats d'outils   ≈     19 tokens
+total estimé         ≈    931 tokens  [##------------------] 11 % de 8192
+dernier total : 436 tokens (mesuré par Ollama)
+compactage automatique à 80 %, ou maintenant avec /compact
+
+vous &gt; /compact
+Conversation compactée. Le modèle repart de ce résumé :
+
+- Demande : corriger le bug de calc.py.
+- calc.py : add() faisait a - b, corrigé en a + b avec edit_file.
+- Vérifié avec `python calc.py` : affiche 5.
+- Reste à faire : rien.
+
+vous &gt; /context
+prompt système       ≈    347 tokens
+schémas des outils   ≈    471 tokens
+vos messages         ≈     60 tokens
+réponses du modèle   ≈     10 tokens
+résultats d'outils   ≈      0 tokens
+total estimé         ≈    888 tokens  [##------------------] 10 % de 8192
+dernier total : 890 tokens (estimation)
+compactage automatique à 80 %, ou maintenant avec /compact</pre></div>
+        <p>Automatic compaction, with a context reduced to 2048 tokens and two big attached files:</p>
+        <div class="code-block"><pre>vous &gt; Décris @data1.csv et @data2.csv
+   + fichier joint : data1.csv
+   + fichier joint : data2.csv
+
+agent &gt; data1.csv et data2.csv contiennent des mesures de température, une par ligne.
+[contexte : 2429 / 2048 tokens] plein : Ollama a coupé le début de la conversation
+Contexte presque plein : compactage automatique de la conversation...
+[contexte : ≈ 882 / 2048 tokens]</pre></div>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_context.py</div>
+        <div class="code-block"><pre>"""Tests de la mesure et du compactage du contexte (context.py)."""
+
+import pytest
+
+from mini_agent import llm
+from mini_agent.config import Config
+from mini_agent.context import compact, context_report, estimate_tokens, needs_compaction, transcript
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    session = create_session(config, confirm=lambda question: True)
+    session.messages += [
+        {"role": "user", "content": "Corrige le bug de calc.py"},
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "calc.py"}}}]},
+        {"role": "tool", "tool_name": "read_file", "content": "x" * 5000},
+        {"role": "assistant", "content": "C'est corrigé."},
+    ]
+    return session
+
+
+def test_estimation():
+    assert estimate_tokens("a" * 400) == 100
+
+
+def test_rapport_par_categorie(session):
+    rapport = context_report(session)
+    for categorie in ("prompt système", "schémas des outils", "vos messages", "réponses du modèle", "résultats d'outils", "total estimé"):
+        assert categorie in rapport
+    ligne = next(l for l in rapport.splitlines() if l.startswith("résultats d'outils"))
+    assert ligne.endswith("≈   1250 tokens")  # 5000 caractères / 4
+
+
+def test_transcription_raccourcit_les_resultats(session):
+    texte = transcript(session.messages)
+    assert "UTILISATEUR : Corrige le bug de calc.py" in texte
+    assert 'AGENT appelle read_file {"path": "calc.py"}' in texte
+    assert "RÉSULTAT de read_file :" in texte
+    assert len(texte) &lt; 1000  # le résultat de 5000 caractères est tronqué
+    assert "prompt" not in texte.lower()  # le prompt système n'est pas résumé
+
+
+def test_compactage(monkeypatch, session):
+    envoyes = []
+
+    def faux_chat(config, messages, tools=None):
+        envoyes.append((messages, tools))
+        return {"role": "assistant", "content": "  calc.py : add corrigée (a + b).  "}
+
+    monkeypatch.setattr(llm, "chat", faux_chat)
+    system_prompt = session.messages[0]
+    resume = compact(session)
+
+    assert resume == "calc.py : add corrigée (a + b)."
+    messages, tools = envoyes[0]
+    assert tools is None  # le résumé est demandé sans outils
+    assert "Tu résumes une conversation" in messages[0]["content"]  # prompts/COMPACT.md
+    assert "UTILISATEUR : Corrige le bug de calc.py" in messages[1]["content"]
+    assert session.messages[0] is system_prompt
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert "calc.py : add corrigée" in session.messages[1]["content"]
+    assert 0 &lt; session.context_tokens &lt; 2000
+    assert session.context_estimated
+    assert "(estimation)" in context_report(session)
+
+
+def test_seuil_de_compactage(session):
+    session.context_tokens = 6000
+    assert not needs_compaction(session)  # 6000 / 8192 = 73 %
+    session.context_tokens = 6600
+    assert needs_compaction(session)  # 80 %</pre></div>
+        <h3>Pitfalls to watch</h3>
+        <ul>
+          <li>A compaction loses details: the exact content of the files read and the command outputs are no longer in the context, and the model will have to reread the files. The save is rewritten with the summary: the full conversation can no longer be recovered.</li>
+          <li>A summary written by a 4B model may be incomplete or wrong: on an important task, run <code>/compact</code> yourself and read the summary.</li>
+          <li>Automatic compaction only happens between two requests: a single very long request (many tool calls) can still overflow along the way.</li>
+          <li>In the example above, the context was already full before the compaction: Ollama had cut the beginning of the last request, system prompt included. With <code>num_ctx = 8192</code>, the 80% threshold leaves more room.</li>
+          <li>The 4-characters-per-token estimate is rough: code, accents and spaces use more or fewer. Compare with the "dernier total" measured by Ollama.</li>
+        </ul>
+      </div>
+    </div>
+
     <h2 id="mini-agent-code-en">Full code of the final version</h2>
-    <p>Every file of the final version (after step 14), in full. The scripts of steps 1 to 4 are given in full in their step.</p>
+    <p>Every file of the final version (after step 16), in full. The scripts of steps 1 to 4 are given in full in their step.</p>
 
     <div class="tuto-card" id="mini-agent-code-a-en">
       <div class="tuto-card-header">
@@ -8327,6 +10362,8 @@ REQUEST_TIMEOUT = 120
 MAX_TOURS = 15  # nombre maximal d'appels au LLM pour une même demande
 COMMAND_TIMEOUT = 30  # durée maximale d'une commande lancée par run_command (s)
 MAX_OUTPUT_CHARS = 4000  # taille maximale d'un résultat d'outil (~1000 tokens)
+# Compactage automatique quand le contexte est rempli à 80 % (étape 16).
+COMPACT_THRESHOLD = 0.8
 
 # Dossiers du projet mini-agent : prompts/ et skills/ sont à la racine du
 # dépôt, deux niveaux au-dessus de ce fichier (src/mini_agent/config.py).
@@ -9064,6 +11101,8 @@ def expand_mentions(text: str, workdir: Path) -&gt; str:
 
 # ─────────────────────────── La session ───────────────────────────
 
+TITLE_LENGTH = 60  # longueur maximale du titre d'une sauvegarde (étape 15)
+
 
 @dataclass
 class Session:
@@ -9074,6 +11113,9 @@ class Session:
     ctx: ToolContext
     messages: list[dict] = field(default_factory=list)
     context_tokens: int = 0  # taille du dernier échange, d'après Ollama
+    context_estimated: bool = False  # vrai si context_tokens est une estimation (étape 16)
+    session_id: str | None = None  # nom du fichier de sauvegarde (étape 15)
+    title: str = ""  # titre de la sauvegarde : début de la première demande
 
     def __post_init__(self) -&gt; None:
         self.reset()
@@ -9088,6 +11130,19 @@ class Session:
         une skill ou un AGENTS.md modifié est pris en compte."""
         self.messages = [{"role": "system", "content": self.system_prompt()}]
         self.context_tokens = 0
+        # Nouvelle conversation : elle sera sauvegardée dans un nouveau fichier.
+        self.session_id = None
+        self.title = ""
+
+    def remember_title(self) -&gt; None:
+        """Retient le début de la première demande comme titre (étape 15).
+
+        Le titre est fixé une fois pour toutes : après un compactage, la
+        première demande a disparu, mais le titre reste le même.
+        """
+        if not self.title:
+            first = next((m["content"] for m in self.messages if m["role"] == "user"), "")
+            self.title = first.splitlines()[0][:TITLE_LENGTH] if first else ""
 
     def update(self, **changes) -&gt; None:
         """Change un réglage (modèle, température...) en gardant la conversation."""
@@ -9099,6 +11154,7 @@ class Session:
         data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
         return data["message"]
 
     def ask(self, text: str) -&gt; str:
@@ -9123,6 +11179,218 @@ def create_session(config: Config, confirm: Callable[[str], bool]) -&gt; Session
     <div class="tuto-card" id="mini-agent-code-h-en">
       <div class="tuto-card-header">
         <span class="step-num">H</span>
+        <span class="tuto-card-title">src/mini_agent/history.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">src/mini_agent/history.py</div>
+        <div class="code-block"><pre>"""Sauvegarde des conversations, pour les reprendre plus tard (étape 15).
+
+Chaque conversation est un fichier JSON dans .mini-agent/sessions/ du
+projet. Il est réécrit après chaque demande : en cas d'arrêt brutal, on
+perd au plus la demande en cours.
+"""
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from mini_agent.config import PROJECT_DIR_NAME
+from mini_agent.context import estimate_messages
+from mini_agent.session import Session
+
+def sessions_dir(workdir: Path) -&gt; Path:
+    return workdir / PROJECT_DIR_NAME / "sessions"
+
+
+def save_session(session: Session) -&gt; None:
+    """Enregistre la conversation, sans le prompt système (reconstruit à la reprise)."""
+    conversation = session.messages[1:]
+    if not any(m["role"] == "user" for m in conversation):
+        return  # conversation vide : rien à sauvegarder
+    now = datetime.now()
+    if session.session_id is None:
+        session.session_id = now.strftime("%Y-%m-%d_%H-%M-%S")
+    session.remember_title()
+    data = {
+        "id": session.session_id,
+        "title": session.title,
+        "updated": now.isoformat(timespec="seconds"),
+        "model": session.config.model,
+        "messages": conversation,
+    }
+    folder = sessions_dir(session.config.workdir)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{session.session_id}.json"
+    # On écrit dans un fichier temporaire, puis on le renomme : un Ctrl+C
+    # pendant l'écriture ne laisse jamais un fichier à moitié écrit.
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporary.replace(path)
+
+
+def list_sessions(workdir: Path) -&gt; list[dict]:
+    """Les conversations sauvegardées, de la plus récente à la plus ancienne."""
+    folder = sessions_dir(workdir)
+    if not folder.is_dir():
+        return []
+    sessions = []
+    for path in folder.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue  # fichier abîmé : on l'ignore plutôt que de planter
+        data["path"] = path  # pour /delete : on supprime ce fichier-là, rien d'autre
+        sessions.append(data)
+    return sorted(sessions, key=lambda data: data.get("updated", ""), reverse=True)
+
+
+def find_session(workdir: Path, ref: str) -&gt; dict | None:
+    """ref : numéro affiché par /sessions (1 = la plus récente) ou identifiant."""
+    sessions = list_sessions(workdir)
+    if ref.isdigit() and 1 &lt;= int(ref) &lt;= len(sessions):
+        return sessions[int(ref) - 1]
+    return next((data for data in sessions if data.get("id") == ref), None)
+
+
+def resume_session(session: Session, data: dict) -&gt; None:
+    """Remplace la conversation en cours par une conversation sauvegardée."""
+    session.reset()  # prompt système relu : AGENTS.md et skills à jour
+    session.messages += data["messages"]
+    session.session_id = data["id"]
+    session.title = data.get("title", "")
+    # Ollama ne mesurera le contexte qu'au prochain appel : en attendant, une estimation.
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+
+
+def delete_session(data: dict) -&gt; None:
+    data["path"].unlink(missing_ok=True)</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-i-en">
+      <div class="tuto-card-header">
+        <span class="step-num">I</span>
+        <span class="tuto-card-title">src/mini_agent/context.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">src/mini_agent/context.py</div>
+        <div class="code-block"><pre>"""Mesurer et compacter le contexte (étape 16).
+
+Mesurer : Ollama donne la taille totale après chaque appel (étape 13). Pour
+savoir ce qui remplit le contexte, on estime la part de chaque catégorie de
+messages à partir du nombre de caractères.
+
+Compacter : quand le contexte est presque plein, on demande au modèle de
+résumer la conversation, puis on remplace toute la conversation par ce
+résumé. Le prompt système, lui, est gardé tel quel.
+"""
+
+import json
+
+from mini_agent import llm
+from mini_agent.config import COMPACT_THRESHOLD, PROMPTS_DIR
+from mini_agent.guards import truncate
+from mini_agent.tools import tool_schemas
+
+# Approximation : environ 4 caractères par token, en français comme en code.
+# Ce n'est qu'une estimation ; la vraie mesure vient d'Ollama.
+CHARS_PER_TOKEN = 4
+# Dans le texte à résumer, chaque résultat d'outil ou argument est raccourci.
+TRANSCRIPT_ITEM_CHARS = 300
+
+
+def estimate_tokens(text: str) -&gt; int:
+    return len(text) // CHARS_PER_TOKEN
+
+
+def message_text(message: dict) -&gt; str:
+    """Tout le texte d'un message, appels d'outils compris."""
+    calls = message.get("tool_calls") or []
+    return (message.get("content") or "") + (json.dumps(calls, ensure_ascii=False) if calls else "")
+
+
+def estimate_messages(messages: list[dict]) -&gt; int:
+    """Estimation de la place occupée par des messages et par les schémas des outils."""
+    text = "".join(message_text(m) for m in messages) + json.dumps(tool_schemas(), ensure_ascii=False)
+    return estimate_tokens(text)
+
+
+def context_report(session) -&gt; str:
+    """Ce qui occupe le contexte, catégorie par catégorie (commande /context)."""
+    parts = {
+        "prompt système": 0,
+        "schémas des outils": estimate_tokens(json.dumps(tool_schemas(), ensure_ascii=False)),
+        "vos messages": 0,
+        "réponses du modèle": 0,
+        "résultats d'outils": 0,
+    }
+    category = {"system": "prompt système", "user": "vos messages", "assistant": "réponses du modèle", "tool": "résultats d'outils"}
+    for message in session.messages:
+        parts[category[message["role"]]] += estimate_tokens(message_text(message))
+    total = sum(parts.values())
+    size = session.config.num_ctx
+    filled = min(20, round(20 * total / size))
+    lines = [f"{name:&lt;20} ≈ {tokens:&gt;6} tokens" for name, tokens in parts.items()]
+    lines += [
+        f"{'total estimé':&lt;20} ≈ {total:&gt;6} tokens  [{'#' * filled}{'-' * (20 - filled)}] {100 * total // size} % de {size}",
+        f"dernier total : {session.context_tokens} tokens ({'estimation' if session.context_estimated else 'mesuré par Ollama'})",
+        f"compactage automatique à {int(COMPACT_THRESHOLD * 100)} %, ou maintenant avec /compact",
+    ]
+    return "\n".join(lines)
+
+
+def transcript(messages: list[dict]) -&gt; str:
+    """La conversation en texte simple, pour la faire résumer par le modèle."""
+    lines = []
+    for message in messages:
+        role = message["role"]
+        if role == "user":
+            lines.append(f"UTILISATEUR : {truncate(message['content'], 4 * TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "assistant":
+            if message.get("content"):
+                lines.append(f"AGENT : {message['content']}")
+            for call in message.get("tool_calls") or []:
+                arguments = json.dumps(call["function"].get("arguments", {}), ensure_ascii=False)
+                lines.append(f"AGENT appelle {call['function']['name']} {truncate(arguments, TRANSCRIPT_ITEM_CHARS)}")
+        elif role == "tool":
+            lines.append(f"RÉSULTAT de {message.get('tool_name', '?')} : {truncate(message['content'], TRANSCRIPT_ITEM_CHARS)}")
+    return "\n".join(lines)
+
+
+def needs_compaction(session) -&gt; bool:
+    return session.context_tokens &gt;= COMPACT_THRESHOLD * session.config.num_ctx
+
+
+def compact(session) -&gt; str:
+    """Remplace la conversation par un résumé écrit par le modèle, et renvoie ce résumé."""
+    conversation = session.messages[1:]
+    if not conversation:
+        return ""
+    # Le texte à résumer doit lui-même tenir dans le contexte : au plus la
+    # moitié, en coupant le milieu (truncate garde le début et la fin).
+    text = truncate(transcript(conversation), session.config.num_ctx * CHARS_PER_TOKEN // 2)
+    instructions = (PROMPTS_DIR / "COMPACT.md").read_text(encoding="utf-8")
+    # Appel sans outils : on veut du texte, pas des tool calls.
+    reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
+    summary = (reply.get("content") or "").strip()
+    session.remember_title()  # avant que la première demande ne disparaisse
+    session.messages = [
+        session.messages[0],  # le prompt système est gardé tel quel
+        {"role": "user", "content": f"Résumé de notre conversation jusqu'ici (le début a été compacté) :\n\n{summary}"},
+        {"role": "assistant", "content": "Compris, je reprends à partir de ce résumé."},
+    ]
+    session.context_tokens = estimate_messages(session.messages)
+    session.context_estimated = True
+    return summary</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-j-en">
+      <div class="tuto-card-header">
+        <span class="step-num">J</span>
         <span class="tuto-card-title">src/mini_agent/commands.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9141,8 +11409,10 @@ from typing import Callable
 import requests
 
 from mini_agent import llm
+from mini_agent.context import compact, context_report
 from mini_agent.config import PROJECT_DIR_NAME, PROJECT_INSTRUCTIONS
 from mini_agent.guards import SHELL_OPERATORS, GuardError
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session
 from mini_agent.session import Session
 from mini_agent.tools import available_skills, load_skill
 
@@ -9169,6 +11439,9 @@ INIT_FILES = {
 # num_ctx = 8192
 # allowed_commands = ["python -m pytest", "git status", "git diff"]
 """,
+    # Les conversations sauvegardées contiennent le contenu des fichiers lus :
+    # elles ne doivent pas finir dans le dépôt git du projet.
+    f"{PROJECT_DIR_NAME}/.gitignore": "sessions/\n",
     f"{PROJECT_DIR_NAME}/skills/LISEZMOI.txt": """Skills de ce projet : un fichier .md par skill, par exemple deployer.md.
 
 Format :
@@ -9285,6 +11558,53 @@ def cmd_clear(session: Session, arg: str) -&gt; str:
     return "Conversation effacée. Prompt système, skills et AGENTS.md relus."
 
 
+def cmd_sessions(session: Session, arg: str) -&gt; str:
+    sessions = list_sessions(session.config.workdir)
+    if not sessions:
+        return "Aucune conversation sauvegardée dans ce projet."
+    lines = []
+    for number, data in enumerate(sessions, start=1):
+        current = "*" if data["id"] == session.session_id else " "
+        date = data.get("updated", "?").replace("T", " ")[:16]
+        lines.append(f"{current}{number:&gt;3}. {date}  {len(data.get('messages', [])):&gt;3} messages  {data.get('title', '')}")
+    return "\n".join(lines + ["", "/resume &lt;numéro&gt; pour reprendre, /delete &lt;numéro&gt; pour supprimer."])
+
+
+def cmd_resume(session: Session, arg: str) -&gt; str:
+    # Sans argument : la conversation la plus récente.
+    data = find_session(session.config.workdir, arg or "1")
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    resume_session(session, data)
+    return f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)."
+
+
+def cmd_delete(session: Session, arg: str) -&gt; str:
+    if not arg:
+        return "Usage : /delete &lt;numéro&gt; (voir /sessions)"
+    data = find_session(session.config.workdir, arg)
+    if data is None:
+        return f"Conversation introuvable : {arg}. Tape /sessions pour la liste."
+    if not session.ctx.confirm(f"Supprimer la conversation « {data.get('title', '')} » ?"):
+        return "Rien n'a été supprimé."
+    delete_session(data)
+    if data["id"] == session.session_id:
+        session.session_id = None  # la conversation en cours sera sauvegardée dans un nouveau fichier
+    return f"Conversation supprimée : {data.get('title', '')}"
+
+
+def cmd_context(session: Session, arg: str) -&gt; str:
+    return context_report(session)
+
+
+def cmd_compact(session: Session, arg: str) -&gt; str:
+    if len(session.messages) &lt;= 1:
+        return "Rien à compacter : la conversation est vide."
+    summary = compact(session)
+    save_session(session)  # le fichier sauvegardé contient désormais le résumé
+    return f"Conversation compactée. Le modèle repart de ce résumé :\n\n{summary}"
+
+
 def cmd_allow(session: Session, arg: str) -&gt; str:
     allowed = session.ctx.allowed_commands
     if not arg:
@@ -9307,6 +11627,11 @@ COMMANDS: dict[str, tuple[Callable[[Session, str], str], str]] = {
     "/skills": (cmd_skills, "skills disponibles"),
     "/skill": (cmd_skill, "charger une skill : /skill corriger-un-bug"),
     "/clear": (cmd_clear, "effacer la conversation"),
+    "/context": (cmd_context, "ce qui occupe le contexte"),
+    "/compact": (cmd_compact, "résumer la conversation pour libérer du contexte"),
+    "/sessions": (cmd_sessions, "conversations sauvegardées dans ce projet"),
+    "/resume": (cmd_resume, "reprendre une conversation : /resume 2 (sans numéro : la dernière)"),
+    "/delete": (cmd_delete, "supprimer une conversation : /delete 2"),
     "/allow": (cmd_allow, "lancer une commande sans confirmation : /allow python -m pytest"),
 }
 
@@ -9324,9 +11649,9 @@ def execute_command(session: Session, line: str) -&gt; str:
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-i-en">
+    <div class="tuto-card" id="mini-agent-code-k-en">
       <div class="tuto-card-header">
-        <span class="step-num">I</span>
+        <span class="step-num">K</span>
         <span class="tuto-card-title">src/mini_agent/cli.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9350,7 +11675,9 @@ import requests
 from mini_agent.agent import GREY, RED, YELLOW, color
 from mini_agent.commands import execute_command
 from mini_agent.config import load_config
+from mini_agent.context import compact, needs_compaction
 from mini_agent.guards import ask_confirmation
+from mini_agent.history import find_session, resume_session, save_session
 from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
 
 
@@ -9361,15 +11688,16 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
     parser.add_argument("-t", "--temperature", type=float, help="température, ex. 0.2")
     parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
     parser.add_argument("--url", help="adresse du serveur Ollama")
+    parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
     return parser.parse_args(argv)
 
 
 def context_status(session: Session) -&gt; str:
     """Une ligne qui montre la place occupée dans le contexte du modèle."""
     used, size = session.context_tokens, session.config.num_ctx
-    text = f"[contexte : {used} / {size} tokens]"
+    text = f"[contexte : {'≈ ' if session.context_estimated else ''}{used} / {size} tokens]"
     if used &gt;= size:
-        return color(text + " plein : Ollama a coupé le début de la conversation, tape /clear", RED)
+        return color(text + " plein : Ollama a coupé le début de la conversation", RED)
     if used &gt;= 0.75 * size:
         return color(text + " presque plein", YELLOW)
     return color(text, GREY)
@@ -9386,6 +11714,16 @@ def handle_request(session: Session, text: str) -&gt; None:
         return
     print(f"\nagent &gt; {answer}")
     print(context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(f"Compactage impossible : {error}")
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)
 
 
 def main() -&gt; None:
@@ -9400,6 +11738,13 @@ def main() -&gt; None:
     print(f"Dossier de travail : {config.workdir}")
     if load_project_instructions(config.workdir):
         print("Instructions du projet : AGENTS.md")
+    if args.resume:
+        data = find_session(config.workdir, "1")
+        if data is None:
+            print("Aucune conversation à reprendre dans ce projet : nouvelle conversation.")
+        else:
+            resume_session(session, data)
+            print(f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)")
 
     try:
         # Mode « une seule demande » : la demande est passée en argument.
@@ -9427,9 +11772,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-j-en">
+    <div class="tuto-card" id="mini-agent-code-l-en">
       <div class="tuto-card-header">
-        <span class="step-num">J</span>
+        <span class="step-num">L</span>
         <span class="tuto-card-title">prompts/ + skills/</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9457,6 +11802,19 @@ if __name__ == "__main__":
 ## Skills
 Une skill est une fiche d'instructions pour un type de tâche. Si la demande correspond à une skill, charge-la d'abord avec load_skill, puis suis ses instructions.
 {skills}</pre></div>
+        <div class="code-label">prompts/COMPACT.md</div>
+        <div class="code-block"><pre>Tu résumes une conversation entre un utilisateur et un agent de code, pour que l'agent puisse continuer le travail sans la relire.
+
+Garde :
+- ce que l'utilisateur a demandé, et ce qui reste à faire ;
+- les fichiers lus, créés ou modifiés, et ce qui a changé dans chacun ;
+- les décisions prises et les erreurs rencontrées ;
+- les commandes utiles (tests, lancement).
+
+Règles :
+- 15 lignes au maximum, en français.
+- Pas de code complet : seulement les noms de fichiers, de fonctions et les points importants.
+- Écris uniquement le résumé, sans introduction.</pre></div>
         <div class="code-label">skills/corriger-un-bug.md</div>
         <div class="code-block"><pre>---
 description: Méthode pour trouver et corriger un bug dans un script Python.
@@ -9488,9 +11846,9 @@ description: Écrire des tests pytest pour un module Python.
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-k-en">
+    <div class="tuto-card" id="mini-agent-code-m-en">
       <div class="tuto-card-header">
-        <span class="step-num">K</span>
+        <span class="step-num">M</span>
         <span class="tuto-card-title">demo/stats.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9518,9 +11876,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-l-en">
+    <div class="tuto-card" id="mini-agent-code-n-en">
       <div class="tuto-card-header">
-        <span class="step-num">L</span>
+        <span class="step-num">N</span>
         <span class="tuto-card-title">tests/test_config.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9596,9 +11954,9 @@ def test_valeur_invalide(tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-m-en">
+    <div class="tuto-card" id="mini-agent-code-o-en">
       <div class="tuto-card-header">
-        <span class="step-num">M</span>
+        <span class="step-num">O</span>
         <span class="tuto-card-title">tests/test_guards.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9676,9 +12034,9 @@ def test_commandes_autorisees(commande, attendu):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-n-en">
+    <div class="tuto-card" id="mini-agent-code-p-en">
       <div class="tuto-card-header">
-        <span class="step-num">N</span>
+        <span class="step-num">P</span>
         <span class="tuto-card-title">tests/test_tools.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9852,9 +12210,9 @@ def test_exception_python_renvoyee_au_modele(ctx):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-o-en">
+    <div class="tuto-card" id="mini-agent-code-q-en">
       <div class="tuto-card-header">
-        <span class="step-num">O</span>
+        <span class="step-num">Q</span>
         <span class="tuto-card-title">tests/test_agent.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -9974,9 +12332,9 @@ def test_vrai_prompt_et_vraies_skills():
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-p-en">
+    <div class="tuto-card" id="mini-agent-code-r-en">
       <div class="tuto-card-header">
-        <span class="step-num">P</span>
+        <span class="step-num">R</span>
         <span class="tuto-card-title">tests/test_session.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -10049,9 +12407,9 @@ def test_skills_du_projet(tmp_path, session):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-q-en">
+    <div class="tuto-card" id="mini-agent-code-s-en">
       <div class="tuto-card-header">
-        <span class="step-num">Q</span>
+        <span class="step-num">S</span>
         <span class="tuto-card-title">tests/test_commands.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -10152,7 +12510,235 @@ def test_init_ne_remplace_pas_un_fichier_existant(session, tmp_path):
 def test_init_refuse_par_l_utilisateur(session, tmp_path):
     session.ctx.confirm = lambda question: False
     assert execute_command(session, "/init") == "Rien n'a été créé."
-    assert not (tmp_path / "AGENTS.md").exists()</pre></div>
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_sessions_reprise_et_suppression(session, tmp_path):
+    from mini_agent.history import save_session
+
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+    session.messages.append({"role": "user", "content": "Corrige le bug"})
+    save_session(session)
+    assert "Corrige le bug" in execute_command(session, "/sessions")
+
+    execute_command(session, "/clear")
+    assert execute_command(session, "/resume").startswith("Conversation reprise : Corrige le bug")
+    assert session.messages[-1]["content"] == "Corrige le bug"
+    assert "introuvable" in execute_command(session, "/resume 9")
+
+    session.ctx.confirm = lambda question: False
+    assert execute_command(session, "/delete 1") == "Rien n'a été supprimé."
+    session.ctx.confirm = lambda question: True
+    assert execute_command(session, "/delete 1").startswith("Conversation supprimée")
+    assert session.session_id is None
+    assert execute_command(session, "/sessions") == "Aucune conversation sauvegardée dans ce projet."
+
+
+def test_context_et_compact(session, monkeypatch):
+    assert "total estimé" in execute_command(session, "/context")
+    assert execute_command(session, "/compact") == "Rien à compacter : la conversation est vide."
+    monkeypatch.setattr(llm, "chat", lambda config, messages, tools=None: {"role": "assistant", "content": "Résumé."})
+    session.messages.append({"role": "user", "content": "Bonjour"})
+    assert execute_command(session, "/compact").endswith("Résumé.")
+    # Le fichier sauvegardé contient la conversation compactée.
+    from mini_agent.history import find_session
+    saved = find_session(session.config.workdir, "1")
+    assert "Résumé." in saved["messages"][0]["content"]
+    assert saved["title"] == "Bonjour"  # le titre ne change pas après un compactage
+
+
+def test_init_cree_un_gitignore_pour_les_sessions(session, tmp_path):
+    execute_command(session, "/init")
+    assert (tmp_path / ".mini-agent" / ".gitignore").read_text(encoding="utf-8") == "sessions/\n"</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-t-en">
+      <div class="tuto-card-header">
+        <span class="step-num">T</span>
+        <span class="tuto-card-title">tests/test_history.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_history.py</div>
+        <div class="code-block"><pre>"""Tests de la sauvegarde des conversations (history.py)."""
+
+import json
+
+import pytest
+
+from mini_agent.config import Config
+from mini_agent.history import delete_session, find_session, list_sessions, resume_session, save_session, sessions_dir
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    return create_session(config, confirm=lambda question: True)
+
+
+def converse(session, *texts):
+    for text in texts:
+        session.messages.append({"role": "user", "content": text})
+        session.messages.append({"role": "assistant", "content": f"réponse à {text}"})
+
+
+def test_conversation_vide_pas_sauvegardee(session, tmp_path):
+    save_session(session)
+    assert list_sessions(tmp_path) == []
+
+
+def test_sauvegarde_et_liste(session, tmp_path):
+    converse(session, "Corrige le bug de calc.py\nmerci", "Et ajoute un test")
+    save_session(session)
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 1
+    data = sessions[0]
+    assert data["id"] == session.session_id
+    assert data["title"] == "Corrige le bug de calc.py"  # première ligne de la première demande
+    assert data["model"] == "qwen3.5:4b"
+    assert [m["role"] for m in data["messages"]] == ["user", "assistant", "user", "assistant"]  # sans le prompt système
+
+
+def test_meme_fichier_tant_que_la_conversation_continue(session, tmp_path):
+    converse(session, "Première demande")
+    save_session(session)
+    converse(session, "Deuxième demande")
+    save_session(session)
+    assert len(list(sessions_dir(tmp_path).glob("*.json"))) == 1
+    assert len(list_sessions(tmp_path)[0]["messages"]) == 4
+
+
+def test_clear_commence_un_nouveau_fichier(session, tmp_path):
+    converse(session, "Première conversation")
+    save_session(session)
+    session.reset()
+    assert session.session_id is None
+
+
+def test_reprise(session, tmp_path):
+    converse(session, "Corrige le bug")
+    save_session(session)
+    saved_id = session.session_id
+    session.reset()
+    (tmp_path / "AGENTS.md").write_text("Nouvelle consigne.", encoding="utf-8")
+
+    resume_session(session, find_session(tmp_path, "1"))
+    assert session.session_id == saved_id
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert session.messages[0]["content"].endswith("Nouvelle consigne.")  # prompt système relu
+    assert session.context_tokens &gt; 0  # estimation en attendant Ollama
+
+
+def test_recherche_par_numero_ou_identifiant(tmp_path):
+    folder = sessions_dir(tmp_path)
+    folder.mkdir(parents=True)
+    for name, updated in (("ancienne", "2026-10-01T10:00:00"), ("recente", "2026-10-25T10:00:00")):
+        data = {"id": name, "title": name, "updated": updated, "model": "m", "messages": []}
+        (folder / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    assert find_session(tmp_path, "1")["id"] == "recente"
+    assert find_session(tmp_path, "2")["id"] == "ancienne"
+    assert find_session(tmp_path, "ancienne")["id"] == "ancienne"
+    assert find_session(tmp_path, "3") is None
+
+
+def test_fichier_abime_ignore(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    (sessions_dir(tmp_path) / "abime.json").write_text("{pas du json", encoding="utf-8")
+    assert len(list_sessions(tmp_path)) == 1
+
+
+def test_suppression(session, tmp_path):
+    converse(session, "Demande")
+    save_session(session)
+    delete_session(find_session(tmp_path, "1"))
+    assert list_sessions(tmp_path) == []</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-u-en">
+      <div class="tuto-card-header">
+        <span class="step-num">U</span>
+        <span class="tuto-card-title">tests/test_context.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_context.py</div>
+        <div class="code-block"><pre>"""Tests de la mesure et du compactage du contexte (context.py)."""
+
+import pytest
+
+from mini_agent import llm
+from mini_agent.config import Config
+from mini_agent.context import compact, context_report, estimate_tokens, needs_compaction, transcript
+from mini_agent.session import create_session
+
+
+@pytest.fixture
+def session(tmp_path):
+    config = Config(ollama_url="http://ollama", model="qwen3.5:4b", workdir=tmp_path)
+    session = create_session(config, confirm=lambda question: True)
+    session.messages += [
+        {"role": "user", "content": "Corrige le bug de calc.py"},
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "calc.py"}}}]},
+        {"role": "tool", "tool_name": "read_file", "content": "x" * 5000},
+        {"role": "assistant", "content": "C'est corrigé."},
+    ]
+    return session
+
+
+def test_estimation():
+    assert estimate_tokens("a" * 400) == 100
+
+
+def test_rapport_par_categorie(session):
+    rapport = context_report(session)
+    for categorie in ("prompt système", "schémas des outils", "vos messages", "réponses du modèle", "résultats d'outils", "total estimé"):
+        assert categorie in rapport
+    ligne = next(l for l in rapport.splitlines() if l.startswith("résultats d'outils"))
+    assert ligne.endswith("≈   1250 tokens")  # 5000 caractères / 4
+
+
+def test_transcription_raccourcit_les_resultats(session):
+    texte = transcript(session.messages)
+    assert "UTILISATEUR : Corrige le bug de calc.py" in texte
+    assert 'AGENT appelle read_file {"path": "calc.py"}' in texte
+    assert "RÉSULTAT de read_file :" in texte
+    assert len(texte) &lt; 1000  # le résultat de 5000 caractères est tronqué
+    assert "prompt" not in texte.lower()  # le prompt système n'est pas résumé
+
+
+def test_compactage(monkeypatch, session):
+    envoyes = []
+
+    def faux_chat(config, messages, tools=None):
+        envoyes.append((messages, tools))
+        return {"role": "assistant", "content": "  calc.py : add corrigée (a + b).  "}
+
+    monkeypatch.setattr(llm, "chat", faux_chat)
+    system_prompt = session.messages[0]
+    resume = compact(session)
+
+    assert resume == "calc.py : add corrigée (a + b)."
+    messages, tools = envoyes[0]
+    assert tools is None  # le résumé est demandé sans outils
+    assert "Tu résumes une conversation" in messages[0]["content"]  # prompts/COMPACT.md
+    assert "UTILISATEUR : Corrige le bug de calc.py" in messages[1]["content"]
+    assert session.messages[0] is system_prompt
+    assert [m["role"] for m in session.messages] == ["system", "user", "assistant"]
+    assert "calc.py : add corrigée" in session.messages[1]["content"]
+    assert 0 &lt; session.context_tokens &lt; 2000
+    assert session.context_estimated
+    assert "(estimation)" in context_report(session)
+
+
+def test_seuil_de_compactage(session):
+    session.context_tokens = 6000
+    assert not needs_compaction(session)  # 6000 / 8192 = 73 %
+    session.context_tokens = 6600
+    assert needs_compaction(session)  # 80 %</pre></div>
       </div>
     </div>
 
