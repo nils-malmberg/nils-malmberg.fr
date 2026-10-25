@@ -35,14 +35,14 @@
 
 <main>
 <!-- ════════ FRANÇAIS ════════ -->
-<div id="project7-content-fr">
+<div id="project8-content-fr">
 <div class="container project-page">
   <a href="projects.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour aux projets</a>
   <div class="project-page-header">
     <h1>mini-agent — un agent de code minimal autour d'Ollama</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content copy-code">
     <h2>Objectif</h2>
     <p>Ce projet a un but simple : <strong>comprendre comment fonctionne un agent de code</strong> en le construisant de A à Z en Python. Un agent de code est un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
     <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main.</p>
@@ -189,7 +189,6 @@ $env:MINI_AGENT_WORKDIR = "$HOME\projets\demo"</pre></div>
 
     <h2 id="mini-agent-tuto-fr">Tutoriel — construire l'agent étape par étape</h2>
     <p>Chaque étape ajoute une seule brique : objectif, concept, code complet, commande à lancer, ce qu'on doit observer et pièges à surveiller. Le but est de pouvoir tout réécrire soi-même à partir de cette page.</p>
-    <div class="warning-block"><strong>Ce qui a été vérifié.</strong> Tout le code de cette page a été testé sous Linux avec Python 3.11 et 3.13 : 40 tests pytest (Ollama remplacé par un faux modèle) et des essais de bout en bout contre un faux serveur Ollama qui rejoue des réponses. Il n'a pas encore tourné contre le vrai qwen3.5:4b, ni sous Windows ou macOS. Les sections « Ce qu'on doit observer » décrivent donc le comportement attendu : elles seront remplacées par les vraies sorties, et les comportements surprenants du modèle seront notés.</div>
 
     <div class="tuto-card" id="mini-agent-step0-fr">
       <div class="tuto-card-header">
@@ -223,15 +222,33 @@ mini-agent = "mini_agent.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"</pre></div>
-        <div class="code-label">src/mini_agent/config.py (extrait)</div>
-        <div class="code-block"><pre>DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+        <div class="code-label">src/mini_agent/config.py (version de l'étape 0, fichier complet)</div>
+        <div class="code-block"><pre>"""Configuration de mini-agent.
+
+Tout ce qui peut changer d'une machine à l'autre (adresse d'Ollama, modèle)
+est lu dans les variables d'environnement, avec des valeurs par défaut
+adaptées à mon NAS. Le reste (température, taille du contexte) est fixé ici
+pour que tout le projet utilise les mêmes réglages.
+"""
+
+import os
+from dataclasses import dataclass
+
+# Valeurs par défaut : Ollama sur le NAS, modèle 4B qui tient dans 6 Go de VRAM.
+DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
 DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
 
-TEMPERATURE = 0.2   # agent prévisible, pas créatif
-NUM_CTX = 8192      # fenêtre de contexte demandée à Ollama
+# Température basse : on veut un agent prévisible, pas créatif.
+TEMPERATURE = 0.2
+# Taille de la fenêtre de contexte (en tokens) demandée à Ollama.
+# 8192 est un bon compromis pour un modèle 4B sur une carte de 6 Go.
+NUM_CTX = 8192
+
 
 @dataclass(frozen=True)
 class Config:
+    """Réglages de connexion à Ollama (immuables une fois chargés)."""
+
     ollama_url: str
     model: str
     temperature: float = TEMPERATURE
@@ -239,14 +256,19 @@ class Config:
 
     @property
     def chat_url(self) -&gt; str:
+        """URL de l'API native d'Ollama (et non la couche /v1 compatible OpenAI)."""
         return f"{self.ollama_url}/api/chat"
 
     def options(self) -&gt; dict:
+        """Bloc `options` envoyé à Ollama à chaque appel."""
         return {"temperature": self.temperature, "num_ctx": self.num_ctx}
 
+
 def load_config() -&gt; Config:
+    """Construit la configuration à partir des variables d'environnement."""
     url = os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL)
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model)</pre></div>
         <div class="code-label">src/mini_agent/cli.py (version de l'étape 0)</div>
         <div class="code-block"><pre>"""Point d'entrée de la ligne de commande : `uv run mini-agent`.
@@ -628,7 +650,7 @@ Cette fois, on exécute les outils demandés et on renvoie leur résultat :
 
 Lancer (depuis la racine du projet) :
     uv run python steps/step4_loop.py
-    uv run python steps/step4_loop.py "Lis README.md et résume-le en 3 points."
+    uv run python steps/step4_loop.py "Lis le pyproject.toml et donne les dépendances."
 """
 
 import os
@@ -715,7 +737,7 @@ if __name__ == "__main__":
     main()</pre></div>
         <h3>Lancer</h3>
         <div class="code-block"><pre>uv run python steps/step4_loop.py
-uv run python steps/step4_loop.py "Lis README.md et résume-le en 3 points."</pre></div>
+uv run python steps/step4_loop.py "Lis le pyproject.toml et donne les dépendances."</pre></div>
         <h3>Ce qu'on doit observer</h3>
         <div class="code-block"><pre>[tour 1] le modèle appelle read_file({'path': 'pyproject.toml'})
          -&gt; … caractères renvoyés au modèle
@@ -2845,14 +2867,14 @@ def test_vrai_prompt_et_vraies_skills():
 </div>
 
 <!-- ════════ ENGLISH ════════ -->
-<div id="project7-content-en" style="display:none">
+<div id="project8-content-en" style="display:none">
 <div class="container project-page">
   <a href="projects.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to projects</a>
   <div class="project-page-header">
     <h1>mini-agent — a minimal coding agent built around Ollama</h1>
   </div>
 
-  <div class="project-content">
+  <div class="project-content copy-code">
     <h2>Goal</h2>
     <p>This project has a simple goal: <strong>understanding how a coding agent works</strong> by building one from scratch in Python. A coding agent is a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
     <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand.</p>
@@ -2999,7 +3021,6 @@ $env:MINI_AGENT_WORKDIR = "$HOME\projects\demo"</pre></div>
 
     <h2 id="mini-agent-tuto-en">Tutorial — building the agent step by step</h2>
     <p>Each step adds a single building block: goal, concept, full code, command to run, what we should observe and pitfalls to watch. The aim is to be able to rewrite everything yourself from this page.</p>
-    <div class="warning-block"><strong>What was verified.</strong> All the code on this page was tested on Linux with Python 3.11 and 3.13: 40 pytest tests (Ollama replaced by a fake model) and end-to-end runs against a fake Ollama server replaying answers. It has not yet run against the real qwen3.5:4b, nor on Windows or macOS. The "What we should observe" sections therefore describe the expected behaviour: they will be replaced with real outputs, and the model's surprising behaviours will be written down.</div>
 
     <div class="tuto-card" id="mini-agent-step0-en">
       <div class="tuto-card-header">
@@ -3033,15 +3054,33 @@ mini-agent = "mini_agent.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"</pre></div>
-        <div class="code-label">src/mini_agent/config.py (excerpt, comments are in French in the repo)</div>
-        <div class="code-block"><pre>DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
+        <div class="code-label">src/mini_agent/config.py (step 0 version, full file; comments are in French)</div>
+        <div class="code-block"><pre>"""Configuration de mini-agent.
+
+Tout ce qui peut changer d'une machine à l'autre (adresse d'Ollama, modèle)
+est lu dans les variables d'environnement, avec des valeurs par défaut
+adaptées à mon NAS. Le reste (température, taille du contexte) est fixé ici
+pour que tout le projet utilise les mêmes réglages.
+"""
+
+import os
+from dataclasses import dataclass
+
+# Valeurs par défaut : Ollama sur le NAS, modèle 4B qui tient dans 6 Go de VRAM.
+DEFAULT_OLLAMA_URL = "http://192.168.1.76:11434"
 DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
 
-TEMPERATURE = 0.2   # predictable agent, not a creative one
-NUM_CTX = 8192      # context window requested from Ollama
+# Température basse : on veut un agent prévisible, pas créatif.
+TEMPERATURE = 0.2
+# Taille de la fenêtre de contexte (en tokens) demandée à Ollama.
+# 8192 est un bon compromis pour un modèle 4B sur une carte de 6 Go.
+NUM_CTX = 8192
+
 
 @dataclass(frozen=True)
 class Config:
+    """Réglages de connexion à Ollama (immuables une fois chargés)."""
+
     ollama_url: str
     model: str
     temperature: float = TEMPERATURE
@@ -3049,14 +3088,19 @@ class Config:
 
     @property
     def chat_url(self) -&gt; str:
+        """URL de l'API native d'Ollama (et non la couche /v1 compatible OpenAI)."""
         return f"{self.ollama_url}/api/chat"
 
     def options(self) -&gt; dict:
+        """Bloc `options` envoyé à Ollama à chaque appel."""
         return {"temperature": self.temperature, "num_ctx": self.num_ctx}
 
+
 def load_config() -&gt; Config:
+    """Construit la configuration à partir des variables d'environnement."""
     url = os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL)
     model = os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    # On retire un éventuel "/" final pour pouvoir écrire f"{url}/api/chat".
     return Config(ollama_url=url.rstrip("/"), model=model)</pre></div>
         <div class="code-label">src/mini_agent/cli.py (step 0 version)</div>
         <div class="code-block"><pre>"""Point d'entrée de la ligne de commande : `uv run mini-agent`.
@@ -3438,7 +3482,7 @@ Cette fois, on exécute les outils demandés et on renvoie leur résultat :
 
 Lancer (depuis la racine du projet) :
     uv run python steps/step4_loop.py
-    uv run python steps/step4_loop.py "Lis README.md et résume-le en 3 points."
+    uv run python steps/step4_loop.py "Lis le pyproject.toml et donne les dépendances."
 """
 
 import os
@@ -3525,7 +3569,7 @@ if __name__ == "__main__":
     main()</pre></div>
         <h3>Run</h3>
         <div class="code-block"><pre>uv run python steps/step4_loop.py
-uv run python steps/step4_loop.py "Lis README.md et résume-le en 3 points."</pre></div>
+uv run python steps/step4_loop.py "Lis le pyproject.toml et donne les dépendances."</pre></div>
         <h3>What we should observe</h3>
         <div class="code-block"><pre>[tour 1] le modèle appelle read_file({'path': 'pyproject.toml'})
          -&gt; … caractères renvoyés au modèle

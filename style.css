@@ -580,3 +580,30 @@ footer {
     padding-inline: var(--space-6);
   }
 }
+
+/* ── Bouton « copier » des blocs de code (cours, et pages .copy-code) ── */
+.course-content .code-wrap, .copy-code .code-wrap { position: relative; }
+.course-content .code-copy, .copy-code .code-copy {
+  position: absolute; top: var(--space-3); right: var(--space-3); z-index: 2;
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 4px 8px; line-height: 1;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer; opacity: 0;
+  transition: opacity var(--transition), color var(--transition), border-color var(--transition);
+}
+.course-content .code-copy svg, .copy-code .code-copy svg { width: 13px; height: 13px; flex-shrink: 0; }
+.course-content .code-wrap:hover .code-copy, .copy-code .code-wrap:hover .code-copy,
+.course-content .code-copy:focus-visible, .copy-code .code-copy:focus-visible { opacity: 1; }
+.course-content .code-copy:hover, .copy-code .code-copy:hover { color: var(--color-primary); border-color: var(--color-primary); }
+.course-content .code-copy.ok, .copy-code .code-copy.ok { opacity: 1; color: var(--color-success); border-color: var(--color-success); }
+.course-content .code-copy.ko, .copy-code .code-copy.ko { opacity: 1; color: var(--color-error); border-color: var(--color-error); }
+[data-theme="dark"] .course-content .code-copy, [data-theme="dark"] .copy-code .code-copy { background: #161b22; border-color: #2f3542; color: #8b949e; }
+@media (hover: none) { .course-content .code-copy, .copy-code .code-copy { opacity: 1; } }
+@media (max-width: 560px) {
+  .course-content .code-copy span, .copy-code .code-copy span { display: none; }
+  .course-content .code-copy, .copy-code .code-copy { padding: 5px; top: var(--space-2); right: var(--space-2); }
+}
