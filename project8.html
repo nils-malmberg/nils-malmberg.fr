@@ -47,7 +47,8 @@
     <p>Ce projet a un but simple : <strong>comprendre comment fonctionne un agent de code</strong> en le construisant de A à Z en Python. Un agent de code est un programme qui reçoit une consigne (« trouve le bug dans ce script et corrige-le »), lit des fichiers, lance des commandes et modifie du code en s'appuyant sur un LLM.</p>
     <p>Le but n'est pas d'obtenir le meilleur agent possible mais de <strong>comprendre chaque brique</strong> : la boucle agentique, le harness, les outils, le prompt système et les skills. Aucun framework (pas de LangChain) : une seule dépendance, <code>requests</code>, et tout le reste écrit à la main. Le code est sur GitHub : <a href="https://github.com/nils-malmberg/mini-agent">nils-malmberg/mini-agent</a>.</p>
     <p>Le LLM tourne en local sur mon NAS (voir le <a href="project6.html">projet NAS Lab</a>) : <strong>qwen3.5:4b</strong> servi par Ollama sur une RTX 3050 de 6 Go. Un modèle aussi petit impose des choix : peu d'outils (5 au maximum), des descriptions très claires et des résultats d'outils tronqués.</p>
-    <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 16 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, capable de recevoir des fichiers tagués, de reprendre une conversation et de compacter son contexte.</p>
+    <p>Le tutoriel a deux parties. Les étapes 0 à 8 construisent l'agent pas à pas. Les étapes 9 à 17 en font un outil du quotidien, sur le modèle d'opencode : lancé dans n'importe quel projet, réglable en cours de route, capable de recevoir des fichiers tagués, de reprendre une conversation et de compacter son contexte, avec une interface soignée.</p>
+    <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="Interface de mini-agent dans un terminal : logo en dégradé, appels d'outils, diff en couleurs et réponse mise en forme" width="690"></div>
 
     <h2>Architecture</h2>
     <p>Le modèle ne sait que produire du texte. Tout le reste — lire un fichier, exécuter une commande, demander une confirmation, s'arrêter — est fait par le code qui l'entoure : le <strong>harness</strong>. Au cœur du harness se trouve la <strong>boucle agentique</strong>, la seule partie qui parle au LLM.</p>
@@ -138,6 +139,7 @@
 │   ├── history.py          # sauvegarde des conversations (partie 2)
 │   ├── context.py          # mesure et compactage du contexte (partie 2)
 │   ├── commands.py         # commandes /... (partie 2)
+│   ├── ui.py               # interface : couleurs, logo, animation (partie 2)
 │   └── cli.py              # point d'entrée `mini-agent`
 ├── prompts/
 │   ├── AGENT.md            # prompt système
@@ -154,7 +156,8 @@
     ├── test_session.py
     ├── test_commands.py
     ├── test_history.py
-    └── test_context.py</pre></div>
+    ├── test_context.py
+    └── test_ui.py</pre></div>
 
     <h2 id="mini-agent-config-fr">Configuration</h2>
     <p>Tout ce qui dépend de la machine se règle par variables d'environnement :</p>
@@ -207,6 +210,7 @@ $env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
         <li><a href="#mini-agent-step14-fr">Commandes autorisées sans confirmation</a></li>
         <li><a href="#mini-agent-step15-fr">Sauvegarder et reprendre les conversations</a></li>
         <li><a href="#mini-agent-step16-fr">Mesurer et compacter le contexte</a></li>
+        <li><a href="#mini-agent-step17-fr">Une interface plus jolie</a></li>
       </ol>
       <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-code-fr">Code complet de la version finale</a> · <a href="#mini-agent-glossary-fr">Glossaire</a></p>
     </div>
@@ -1801,8 +1805,8 @@ AssertionError: moyenne attendue : 13.5, obtenue : 10.5</pre></div>
     </div>
 
     <h3 id="mini-agent-part2-fr">Partie 2 — vers un agent du quotidien, comme opencode</h3>
-    <p>Les étapes 9 à 16 transforment mini-agent en outil qu'on lance dans n'importe quel projet : consignes et skills du projet, commandes <code>/…</code>, fichiers tagués, réglages persistants, édition ciblée, commandes autorisées, sauvegarde des conversations et compactage du contexte.</p>
-    <div class="warning-block"><strong>Comment suivre cette partie.</strong> Ces fonctionnalités touchent les mêmes fichiers (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), et certains extraits utilisent une fonction d'une étape suivante. Le plus sûr : remplacer d'abord <code>src/</code>, <code>prompts/</code>, <code>skills/</code> et <code>tests/</code> par le <a href="#mini-agent-code-fr">code complet</a> (version finale), lancer <code>uv run pytest -q</code>, puis suivre chaque étape pour comprendre et essayer la fonctionnalité. Tous les extraits viennent de cette version finale.</div>
+    <p>Les étapes 9 à 17 transforment mini-agent en outil qu'on lance dans n'importe quel projet : consignes et skills du projet, commandes <code>/…</code>, fichiers tagués, réglages persistants, édition ciblée, commandes autorisées, sauvegarde des conversations, compactage du contexte et interface soignée.</p>
+    <div class="warning-block"><strong>Comment suivre cette partie.</strong> Ces fonctionnalités touchent les mêmes fichiers (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), et certains extraits utilisent une fonction d'une étape suivante. Le plus sûr : remplacer d'abord <code>src/</code>, <code>prompts/</code>, <code>skills/</code> et <code>tests/</code> par le <a href="#mini-agent-code-fr">code complet</a> (version finale), lancer <code>uv run pytest -q</code>, puis suivre chaque étape pour comprendre et essayer la fonctionnalité. Les extraits des étapes 9 à 16 montrent le code tel qu'il était à la fin de l'étape 16 ; l'étape 17 ne change que l'affichage.</div>
 
     <div class="tuto-card" id="mini-agent-step9-fr">
       <div class="tuto-card-header">
@@ -3911,8 +3915,581 @@ def test_seuil_de_compactage(session):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-step17-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">17</span>
+        <span class="tuto-card-title">Une interface plus jolie</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Objectif</h3>
+        <p>Une interface agréable : un grand logo au démarrage, des réponses mises en forme, une animation pendant l'attente. Sans ajouter de dépendance.</p>
+        <h3>Concept</h3>
+        <p>Un terminal comprend des séquences d'échappement ANSI : <code>\033[1m</code> passe en gras, <code>\033[38;5;45m</code> choisit la couleur 45 de la palette de 256 couleurs, <code>\033[0m</code> revient au style normal, <code>\r</code> ramène le curseur en début de ligne et <code>\033[K</code> efface la fin de la ligne. Tout le module <code>ui.py</code> repose sur ces quelques codes. Une bibliothèque comme <code>rich</code> ferait la même chose en quelques lignes, mais au prix d'une dépendance : ici, on voit comment ça marche.</p>
+        <ul>
+          <li><strong>Logo</strong> : dessiné dans le style « ANSI Shadow » (lettres en blocs <code>█</code>, ombre en traits doubles <code>╗ ║ ╝</code>). Chaque <code>█</code> prend la couleur de sa colonne dans un dégradé du cyan au violet ; l'ombre reste gris foncé. Si le terminal fait moins de 79 colonnes, un titre simple le remplace.</li>
+          <li><strong>Encadré de démarrage</strong> : modèle, serveur, dossier, et ce que le projet apporte (<code>AGENTS.md</code>, skills, <code>config.toml</code>). Pour aligner les bords, on mesure la longueur <em>visible</em> du texte : <code>visible_len()</code> retire les codes ANSI avant de compter.</li>
+          <li><strong>Animation d'attente</strong> : un fil d'exécution (thread) réécrit la même ligne toutes les 0,1 s grâce à <code>\r</code>, puis l'efface avec <code>\033[K</code>. La session la reçoit sous forme d'un gestionnaire de contexte (<code>session.waiting</code>) : par défaut il ne fait rien, ce qui garde les tests simples.</li>
+          <li><strong>Réponses</strong> : un rendu Markdown minimal (titres, gras, <code>code</code>, listes, blocs de code). Les appels d'outils affichent le chemin ou la commande plutôt que le JSON, le diff est en couleurs, et une jauge montre le contexte utilisé.</li>
+          <li><strong>Repli</strong> : si la sortie n'est pas un terminal (redirection vers un fichier) ou si <code>NO_COLOR</code> est défini, tout s'affiche en texte simple ; si la console ne sait pas afficher un caractère spécial, il est remplacé par un équivalent ASCII.</li>
+        </ul>
+        <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="Interface de mini-agent : logo en dégradé, encadré, appels d&#x27;outils, diff en couleurs et réponse mise en forme" width="690" loading="lazy"></div>
+        <div class="code-label">src/mini_agent/ui.py</div>
+        <div class="code-block"><pre>"""Une interface plus jolie, sans dépendance (étape 17).
+
+Tout passe par des codes ANSI : « \\033[...m » change la couleur ou le style
+du texte qui suit, « \\033[0m » revient au style normal. Les couleurs sont
+prises dans la palette de 256 couleurs, connue de Windows Terminal comme
+du Terminal de macOS.
+
+On n'utilise que des caractères présents dans les polices de console
+courantes (Consolas, Menlo...). Si la sortie n'est pas un terminal
+(redirection vers un fichier) ou si NO_COLOR est défini, on affiche du
+texte simple.
+"""
+
+import itertools
+import json
+import os
+import re
+import shutil
+import sys
+import threading
+import time
+from contextlib import contextmanager
+
+
+def _supports_style() -&gt; bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+
+def _supports_unicode() -&gt; bool:
+    """Vrai si la console sait afficher les caractères du logo et des cadres."""
+    try:
+        "█╗║│─┌●›…".encode(sys.stdout.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+STYLE = _supports_style()
+UNICODE = _supports_unicode()
+
+# Codes de style. « 38;5;N » choisit la couleur N de la palette de 256.
+BOLD = "1"
+ACCENT = "38;5;45"  # cyan
+GREY = "38;5;245"
+SHADOW = "38;5;240"  # gris foncé, pour l'ombre du logo
+GREEN = "38;5;78"
+RED = "38;5;203"
+YELLOW = "38;5;221"
+CODE = "38;5;117"  # bleu clair, pour le code
+# Dégradé du logo, de gauche à droite : du cyan au violet.
+GRADIENT = ["38;5;51", "38;5;45", "38;5;39", "38;5;33", "38;5;63", "38;5;99", "38;5;135", "38;5;171"]
+
+# Le logo, dessiné dans le style « ANSI Shadow » : des blocs █ pour les
+# lettres, et des traits doubles (╗ ║ ╝) pour leur ombre.
+LOGO = """\
+███╗   ███╗██╗███╗   ██╗██╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+████╗ ████║██║████╗  ██║██║      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██╔████╔██║██║██╔██╗ ██║██║█████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
+██║╚██╔╝██║██║██║╚██╗██║██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
+██║ ╚═╝ ██║██║██║ ╚████║██║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║
+╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝"""
+
+ANSI_CODE = re.compile(r"\033\[[0-9;]*[mK]")
+
+
+def style(text: str, *codes: str) -&gt; str:
+    """Entoure le texte des codes ANSI demandés (ou le laisse tel quel)."""
+    if not STYLE or not codes:
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
+
+def visible_len(text: str) -&gt; int:
+    """Longueur affichée d'un texte : les codes ANSI ne prennent pas de place."""
+    return len(ANSI_CODE.sub("", text))
+
+
+def shorten(text: str, width: int) -&gt; str:
+    """Raccourcit par le début (on garde la fin d'un chemin, la plus parlante)."""
+    if len(text) &lt;= width:
+        return text
+    return ("…" if UNICODE else "...") + text[-(width - 1):]
+
+
+def symbol(fancy: str, plain: str) -&gt; str:
+    return fancy if UNICODE else plain
+
+
+# ─────────────────────────── Démarrage ───────────────────────────
+
+
+def logo() -&gt; str:
+    lines = LOGO.splitlines()
+    width = max(len(line) for line in lines)
+    # Terminal trop étroit ou police sans ces caractères : titre simple.
+    if not UNICODE or shutil.get_terminal_size().columns &lt; width + 2:
+        return style("mini-agent", BOLD, ACCENT)
+    colored = []
+    for line in lines:
+        chars = []
+        for column, char in enumerate(line):
+            if char == "█":
+                # La couleur dépend de la colonne : c'est ce qui fait le dégradé.
+                chars.append(style(char, GRADIENT[column * len(GRADIENT) // width]))
+            elif char == " ":
+                chars.append(char)
+            else:
+                chars.append(style(char, SHADOW))
+        colored.append("".join(chars))
+    return "\n".join(colored)
+
+
+def box(rows: list[tuple[str, str]]) -&gt; str:
+    """Un encadré de lignes « étiquette   valeur »."""
+    label_width = max(len(label) for label, _ in rows)
+    value_width = shutil.get_terminal_size().columns - label_width - 9
+    rows = [(label, shorten(value, value_width)) for label, value in rows]
+    width = max(label_width + 3 + len(value) for _, value in rows)
+    h, v = symbol("─", "-"), symbol("│", "|")
+    top = style(symbol("┌", "+") + h * (width + 2) + symbol("┐", "+"), GREY)
+    bottom = style(symbol("└", "+") + h * (width + 2) + symbol("┘", "+"), GREY)
+    lines = [top]
+    for label, value in rows:
+        padding = " " * (width - label_width - 3 - len(value))
+        lines.append(f"{style(v, GREY)} {style(label.ljust(label_width), GREY)}   {style(value, BOLD)}{padding} {style(v, GREY)}")
+    lines.append(bottom)
+    return "\n".join(lines)
+
+
+def banner(rows: list[tuple[str, str]]) -&gt; str:
+    dot = symbol(" · ", " - ")
+    hint = (
+        style("/help", ACCENT) + style(" commandes", GREY) + style(dot, GREY)
+        + style("@fichier", ACCENT) + style(" joindre un fichier", GREY) + style(dot, GREY)
+        + style("/quit", ACCENT) + style(" quitter", GREY)
+    )
+    return f"\n{logo()}\n{style('  un agent de code minimal autour d’Ollama', GREY)}\n\n{box(rows)}\n {hint}"
+
+
+# ─────────────────────────── Conversation ───────────────────────────
+
+
+def prompt() -&gt; str:
+    """L'invite affichée devant la saisie de l'utilisateur."""
+    return "\n" + style(symbol("›", "&gt;"), ACCENT, BOLD) + " "
+
+
+@contextmanager
+def thinking(label: str = "le modèle réfléchit"):
+    """Petite animation pendant qu'on attend la réponse du modèle.
+
+    Elle tourne dans un fil d'exécution (thread) séparé : le programme
+    principal, lui, est bloqué dans la requête HTTP.
+    """
+    if not STYLE:
+        yield
+        return
+    stop = threading.Event()
+
+    def animate() -&gt; None:
+        start = time.monotonic()
+        dots = symbol("…", "...")
+        for frame in itertools.cycle("|/-\\"):
+            elapsed = time.monotonic() - start
+            sys.stdout.write(f"\r  {style(frame, ACCENT)} {style(f'{label}{dots} {elapsed:.0f} s', GREY)}")
+            sys.stdout.flush()
+            if stop.wait(0.1):  # attend 0,1 s, ou s'arrête si on le lui demande
+                break
+        sys.stdout.write("\r\033[K")  # efface la ligne de l'animation
+        sys.stdout.flush()
+
+    thread = threading.Thread(target=animate, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
+
+
+INLINE_CODE = re.compile(r"`([^`]+)`")
+BOLD_TEXT = re.compile(r"\*\*(.+?)\*\*")
+BULLET = re.compile(r"^(\s*)[-*] (.*)")
+
+
+def render_markdown(text: str) -&gt; str:
+    """Un rendu très simple du Markdown des réponses : titres, gras, `code`,
+    listes et blocs de code. Sans couleurs, le texte reste tel quel."""
+    if not STYLE:
+        return text
+    lines, in_code = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code  # les lignes ``` elles-mêmes ne sont pas affichées
+            continue
+        if in_code:
+            lines.append(style(symbol("│ ", "| "), GREY) + style(line, CODE))
+            continue
+        if line.startswith("#"):
+            lines.append(style(line.lstrip("#").strip(), BOLD, ACCENT))
+            continue
+        bullet = BULLET.match(line)
+        if bullet:
+            line = f"{bullet.group(1)}{symbol('•', '-')} {bullet.group(2)}"
+        line = BOLD_TEXT.sub(lambda match: style(match.group(1), BOLD), line)
+        line = INLINE_CODE.sub(lambda match: style(match.group(1), CODE), line)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def answer(text: str) -&gt; str:
+    """La réponse finale de l'agent, sous un petit en-tête."""
+    header = style(symbol("●", "*"), ACCENT) + " " + style("mini-agent", BOLD)
+    body = "\n".join("  " + line for line in render_markdown(text).splitlines())
+    return f"\n{header}\n{body}"
+
+
+def context_gauge(model: str, used: int, size: int, estimated: bool) -&gt; str:
+    """Une jauge de remplissage du contexte, affichée sous chaque réponse."""
+    ratio = min(1.0, used / size)
+    filled = round(ratio * 20)
+    bar = symbol("█", "#") * filled + symbol("░", "-") * (20 - filled)
+    level = RED if used &gt;= size else YELLOW if used &gt;= 0.75 * size else GREY
+    dot = symbol(" · ", " - ")
+    text = (
+        style(f"  {model}{dot}contexte ", GREY) + style(bar, level)
+        + style(f" {symbol('≈', '~') if estimated else ''}{used} / {size} tokens ({int(ratio * 100)} %)", GREY)
+    )
+    if used &gt;= size:
+        text += style("  plein : Ollama a coupé le début de la conversation", RED)
+    return text
+
+
+# ─────────────────────────── Outils ───────────────────────────
+
+# L'argument le plus parlant de chaque outil, affiché à la place du JSON.
+MAIN_ARGUMENT = {"read_file": "path", "list_files": "path", "edit_file": "path", "run_command": "command", "load_skill": "name"}
+
+
+def tool_call(tour: int, name: str, arguments) -&gt; str:
+    key = MAIN_ARGUMENT.get(name)
+    if isinstance(arguments, dict) and key in arguments:
+        detail = str(arguments[key])
+    elif isinstance(arguments, dict) and not arguments:
+        detail = ""
+    else:
+        detail = json.dumps(arguments, ensure_ascii=False)
+    detail = detail if len(detail) &lt;= 80 else detail[:79] + symbol("…", "...")
+    return f"  {style(symbol('●', '*'), ACCENT)} {style(name, BOLD)} {detail}  {style(f'tour {tour}', GREY)}"
+
+
+def tool_result(result: str) -&gt; str:
+    is_error = result.startswith(("Erreur", "Refusé"))
+    lines = result.splitlines() or [""]
+    preview = lines[0][:100] + (f"  (+{len(lines) - 1} lignes)" if len(lines) &gt; 1 else "")
+    return style(f"    {symbol('└', '`-')} {preview}", RED if is_error else GREY)
+
+
+def confirm(question: str) -&gt; bool:
+    """Comme guards.ask_confirmation, avec le diff en couleurs."""
+    lines = question.splitlines() or [""]
+    for line in lines[:-1]:
+        if line.startswith(("+++", "---")):
+            line = style(line, GREY)
+        elif line.startswith("+"):
+            line = style(line, GREEN)
+        elif line.startswith("-"):
+            line = style(line, RED)
+        elif line.startswith("@@"):
+            line = style(line, CODE)
+        print("    " + line)  # décalé comme les appels d'outils
+    reply = input(f"  {style('?', YELLOW, BOLD)} {lines[-1]} {style('[o/N]', BOLD)} ")
+    return reply.strip().lower() in ("o", "oui")
+
+
+def info(text: str) -&gt; str:
+    """Un message secondaire (fichier joint, compactage...)."""
+    return style(f"  {text}", GREY)
+
+
+def warning(text: str) -&gt; str:
+    return style(f"  {text}", YELLOW)
+
+
+def error(text: str) -&gt; str:
+    return style(f"  {symbol('×', 'x')} {text}", RED)
+
+
+def indent(text: str) -&gt; str:
+    """Décale un bloc de texte (sortie des commandes /...)."""
+    return "\n".join("  " + line for line in text.splitlines())</pre></div>
+        <div class="code-label">src/mini_agent/session.py — l'animation entoure l'appel au modèle</div>
+        <div class="code-block"><pre>class Session:
+    ...
+
+    def chat(self, messages: list[dict], tools: list[dict]) -&gt; dict:
+        """La fonction `chat` donnée à la boucle. Elle lit self.config à chaque
+        appel : un /model ou un /temp s'applique dès l'appel suivant."""
+        with self.waiting():
+            data = llm.chat_full(self.config, messages, tools)
+        # Tokens lus + tokens générés : la place occupée dans le contexte.
+        self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
+        return data["message"]</pre></div>
+        <div class="code-label">src/mini_agent/agent.py — dans run_turn, l'affichage passe par ui</div>
+        <div class="code-block"><pre>            print(ui.tool_call(tour, name, arguments))
+            ...
+            print(ui.tool_result(result))</pre></div>
+        <div class="code-label">src/mini_agent/cli.py (version finale)</div>
+        <div class="code-block"><pre>"""Point d'entrée de la ligne de commande : `mini-agent`.
+
+    mini-agent                          # mode conversation dans le dossier courant
+    mini-agent "corrige le bug..."      # une seule demande, puis on quitte
+    mini-agent -m qwen3.5:9b -t 0.5     # options : voir mini-agent --help
+
+C'est ici qu'on assemble le harness : configuration, session (prompt
+système, outils, garde-fous), commandes /..., puis la boucle agentique.
+Tout l'affichage passe par ui.py (étape 17).
+"""
+
+import argparse
+import os
+
+import requests
+
+from mini_agent import ui
+from mini_agent.commands import execute_command
+from mini_agent.config import PROJECT_DIR_NAME, load_config
+from mini_agent.context import compact, needs_compaction
+from mini_agent.history import find_session, resume_session, save_session
+from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
+from mini_agent.tools import available_skills
+
+
+def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="mini-agent", description="Un agent de code minimal autour d'Ollama.")
+    parser.add_argument("demande", nargs="*", help="demande à traiter avant de quitter (sinon : mode conversation)")
+    parser.add_argument("-m", "--model", help="modèle Ollama, ex. qwen3.5:4b")
+    parser.add_argument("-t", "--temperature", type=float, help="température, ex. 0.2")
+    parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
+    parser.add_argument("--url", help="adresse du serveur Ollama")
+    parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
+    return parser.parse_args(argv)
+
+
+def context_status(session: Session) -&gt; str:
+    """La jauge de contexte affichée sous chaque réponse."""
+    c = session.config
+    return ui.context_gauge(c.model, session.context_tokens, c.num_ctx, session.context_estimated)
+
+
+def handle_request(session: Session, text: str) -&gt; None:
+    """Envoie une demande à l'agent et affiche sa réponse."""
+    for path in find_mentions(text):
+        print(ui.info(f"@ fichier joint : {path}"))
+    print()
+    try:
+        answer = session.ask(text)
+    except requests.RequestException as error:
+        print(ui.error(f"Erreur de communication avec Ollama : {error}"))
+        return
+    print(ui.answer(answer))
+    print("\n" + context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(ui.warning("Contexte presque plein : compactage automatique de la conversation..."))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(ui.error(f"Compactage impossible : {error}"))
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)
+
+
+def project_summary(session: Session) -&gt; str:
+    """Une ligne qui résume ce que le projet apporte : AGENTS.md, skills, réglages."""
+    workdir = session.config.workdir
+    has_instructions = bool(load_project_instructions(workdir))
+    parts = ["AGENTS.md"] if has_instructions else []
+    parts.append(f"{len(available_skills(session.ctx.skills_dirs))} skills")
+    if (workdir / PROJECT_DIR_NAME / "config.toml").is_file():
+        parts.append("config.toml")
+    if not has_instructions:
+        parts.append("/init pour préparer le projet")
+    return ui.symbol(" · ", " - ").join(parts)
+
+
+def main() -&gt; None:
+    if os.name == "nt":
+        os.system("")  # active les codes ANSI (couleurs) dans les consoles Windows
+
+    args = parse_args()
+    config = load_config({"model": args.model, "temperature": args.temperature, "num_ctx": args.num_ctx, "url": args.url})
+    session = create_session(config, confirm=ui.confirm)
+    session.waiting = ui.thinking  # animation pendant l'attente du modèle
+
+    rows = [("modèle", config.model), ("serveur", config.ollama_url), ("dossier", str(config.workdir)), ("projet", project_summary(session))]
+    if args.resume:
+        data = find_session(config.workdir, "1")
+        if data is None:
+            rows.append(("reprise", "aucune conversation sauvegardée : nouvelle conversation"))
+        else:
+            resume_session(session, data)
+            rows.append(("reprise", f"{data.get('title', '')} ({len(data['messages'])} messages)"))
+    print(ui.banner(rows))
+
+    try:
+        # Mode « une seule demande » : la demande est passée en argument.
+        if args.demande:
+            handle_request(session, " ".join(args.demande))
+            return
+
+        while True:
+            text = input(ui.prompt()).strip()
+            if text in ("/quit", "/exit"):
+                break
+            if text.startswith("/"):
+                print(ui.indent(execute_command(session, text)))
+            elif text:
+                handle_request(session, text)
+    except (KeyboardInterrupt, EOFError):
+        print("\n" + ui.info("Au revoir."))
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+        <h3>Essayer</h3>
+        <div class="code-block"><pre>mini-agent
+
+# Pour comparer avec l'affichage simple
+$env:NO_COLOR = "1"; mini-agent          # Windows (PowerShell)
+NO_COLOR=1 mini-agent                     # macOS
+mini-agent "Explique @calc.py" &gt; sortie.txt   # redirection : texte simple</pre></div>
+        <h3>Ce qu'on doit observer</h3>
+        <p>La capture ci-dessus est la sortie réelle de mini-agent (avec un faux modèle), enregistrée dans un pseudo-terminal de 100 colonnes puis convertie en image par un petit émulateur de terminal. Les teintes exactes dépendent du thème de ton terminal. Pendant que le modèle réfléchit :</p>
+        <div class="project-img wide"><img src="media/projets/project8/attente.png" alt="Animation d&#x27;attente : le modèle réfléchit, avec le temps écoulé" width="277" loading="lazy"></div>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_ui.py</div>
+        <div class="code-block"><pre>"""Tests de l'interface (ui.py)."""
+
+import os
+from collections import namedtuple
+
+import pytest
+
+from mini_agent import ui
+
+Size = namedtuple("Size", "columns lines")
+
+
+@pytest.fixture
+def couleurs(monkeypatch):
+    """Comme dans un vrai terminal : couleurs et caractères Unicode."""
+    monkeypatch.setattr(ui, "STYLE", True)
+    monkeypatch.setattr(ui, "UNICODE", True)
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(120, 40))
+
+
+@pytest.fixture
+def texte_simple(monkeypatch):
+    """Comme une sortie redirigée vers un fichier : ni couleurs, ni Unicode."""
+    monkeypatch.setattr(ui, "STYLE", False)
+    monkeypatch.setattr(ui, "UNICODE", False)
+
+
+def test_style_et_longueur_visible(couleurs):
+    texte = ui.style("bonjour", ui.BOLD, ui.ACCENT)
+    assert texte == "\033[1;38;5;45mbonjour\033[0m"
+    assert ui.visible_len(texte) == 7
+
+
+def test_logo_en_degrade(couleurs):
+    logo = ui.logo()
+    assert ui.GRADIENT[0] in logo and ui.GRADIENT[-1] in logo  # du cyan au violet
+    largeurs = {ui.visible_len(ligne) for ligne in logo.splitlines()}
+    assert max(largeurs) == 77
+
+
+def test_logo_terminal_etroit(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(60, 40))
+    assert ui.visible_len(ui.logo()) == len("mini-agent")
+
+
+def test_encadre_aligne(couleurs):
+    cadre = ui.box([("modèle", "qwen3.5:4b"), ("dossier", "C:\\Users\\nilsm\\Documents\\projets\\rfact")])
+    assert len({ui.visible_len(ligne) for ligne in cadre.splitlines()}) == 1  # toutes les lignes ont la même largeur
+
+
+def test_encadre_raccourcit_les_chemins_longs(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(40, 40))
+    cadre = ui.box([("dossier", "/home/nils/" + "x" * 100 + "/rfact")])
+    assert "…" in cadre and "rfact" in cadre  # on garde la fin du chemin
+    assert max(ui.visible_len(ligne) for ligne in cadre.splitlines()) &lt;= 40
+
+
+def test_sans_couleurs_ni_unicode(texte_simple):
+    assert ui.logo() == "mini-agent"
+    assert "\033" not in ui.banner([("modèle", "qwen3.5:4b")])
+    assert ui.box([("a", "b")]).splitlines()[0].startswith("+")
+    assert ui.render_markdown("**gras** et `code`") == "**gras** et `code`"  # Markdown laissé tel quel
+
+
+def test_markdown(couleurs):
+    rendu = ui.render_markdown("# Titre\n- **gras** et `code`\n```\nprint(1)\n```")
+    lignes = rendu.splitlines()
+    assert ui.visible_len(lignes[0]) == len("Titre")
+    assert ui.ANSI_CODE.sub("", lignes[1]) == "• gras et code"
+    assert ui.ANSI_CODE.sub("", lignes[2]) == "│ print(1)"  # les ``` ne sont pas affichés
+    assert len(lignes) == 3
+
+
+def test_appel_d_outil_lisible(couleurs):
+    ligne = ui.ANSI_CODE.sub("", ui.tool_call(2, "edit_file", {"path": "calc.py", "old_text": "a", "new_text": "b"}))
+    assert ligne == "  ● edit_file calc.py  tour 2"  # le chemin, pas tout le JSON
+
+
+def test_resultat_en_erreur(couleurs):
+    assert ui.RED in ui.tool_result("Refusé : chemin refusé")
+    assert ui.RED not in ui.tool_result("Fichier calc.py modifié.")
+
+
+def test_jauge_de_contexte(couleurs):
+    assert "██████████░░░░░░░░░░" in ui.context_gauge("qwen3.5:4b", 4096, 8192, False)
+    assert ui.YELLOW in ui.context_gauge("qwen3.5:4b", 7000, 8192, False)
+    plein = ui.context_gauge("qwen3.5:4b", 9000, 8192, False)
+    assert ui.RED in plein and "plein" in plein
+    assert "≈882 / 2048" in ui.ANSI_CODE.sub("", ui.context_gauge("qwen3.5:4b", 882, 2048, True))
+
+
+def test_confirmation_avec_diff_en_couleurs(couleurs, monkeypatch, capsys):
+    questions = []
+    monkeypatch.setattr("builtins.input", lambda question: questions.append(question) or "o")
+    assert ui.confirm("--- a.py (avant)\n+++ a.py (après)\n-x = 1\n+x = 2\nÉcrire a.py ?") is True
+    sortie = capsys.readouterr().out
+    assert ui.style("-x = 1", ui.RED) in sortie and ui.style("+x = 2", ui.GREEN) in sortie
+    assert "Écrire a.py ?" in questions[0] and "[o/N]" in questions[0]
+
+
+def test_animation_sans_terminal(texte_simple):
+    with ui.thinking():
+        pass  # ne fait rien, et surtout ne bloque pas</pre></div>
+        <h3>Pièges à surveiller</h3>
+        <ul>
+          <li><strong>Rencontré en écrivant ui.py :</strong> Python 3.11 refuse les mêmes guillemets à l'intérieur d'une f-string (<code>f"{d["a"]}"</code>). C'est autorisé seulement depuis Python 3.12 : le code doit tourner sur 3.11, la version minimale du projet.</li>
+          <li>Windows : dans les anciennes consoles, les codes ANSI ne sont actifs qu'après <code>os.system("")</code>, appelé au démarrage. Windows Terminal les comprend directement.</li>
+          <li>Police : le logo et les cadres utilisent des caractères de dessin (<code>█ ╗ ─ │</code>). Consolas, Cascadia Mono et Menlo les ont ; sinon, des carrés apparaissent : changer de police, ou utiliser <code>NO_COLOR</code>.</li>
+          <li>Le Terminal de macOS ne gère que 256 couleurs : d'où la palette <code>38;5;N</code> plutôt que les couleurs 24 bits (<code>38;2;R;G;B</code>), que seuls certains terminaux affichent.</li>
+          <li>L'animation écrit pendant que le programme attend : si un autre texte s'affichait au même moment, les lignes se mélangeraient. Elle n'entoure donc que l'appel au modèle, jamais une confirmation.</li>
+        </ul>
+      </div>
+    </div>
+
     <h2 id="mini-agent-code-fr">Code complet de la version finale</h2>
-    <p>Chaque fichier de la version finale (après l'étape 16), en entier. Les scripts des étapes 1 à 4 sont donnés en entier dans leur étape.</p>
+    <p>Chaque fichier de la version finale (après l'étape 17), en entier. Les scripts des étapes 1 à 4 sont donnés en entier dans leur étape.</p>
 
     <div class="tuto-card" id="mini-agent-code-a-fr">
       <div class="tuto-card-header">
@@ -4549,6 +5126,7 @@ import platform
 from pathlib import Path
 from typing import Callable
 
+from mini_agent import ui
 from mini_agent.config import MAX_OUTPUT_CHARS, MAX_TOURS
 from mini_agent.guards import truncate
 from mini_agent.tools import ToolContext, execute_tool, tool_schemas
@@ -4556,31 +5134,6 @@ from mini_agent.tools import ToolContext, execute_tool, tool_schemas
 # Une fonction qui reçoit (messages, schémas des outils) et renvoie le message
 # de l'assistant. En vrai : llm.chat. Dans les tests : un faux modèle.
 ChatFunction = Callable[[list[dict], list[dict]], dict]
-
-
-# ─────────────────────────── Affichage ───────────────────────────
-
-# Codes couleur ANSI. NO_COLOR=1 les désactive (convention https://no-color.org).
-USE_COLOR = "NO_COLOR" not in os.environ
-GREY, RED, YELLOW, CYAN = "90", "31", "33", "36"
-
-
-def color(text: str, code: str) -&gt; str:
-    return f"\033[{code}m{text}\033[0m" if USE_COLOR else text
-
-
-def log_tool_call(tour: int, name: str, arguments) -&gt; None:
-    args = json.dumps(arguments, ensure_ascii=False)
-    if len(args) &gt; 120:
-        args = args[:120] + "…"
-    print(color(f"[tour {tour}] ", GREY) + color(f"{name}", CYAN) + color(f" {args}", GREY))
-
-
-def log_tool_result(result: str) -&gt; None:
-    is_error = result.startswith(("Erreur", "Refusé"))
-    lines = result.splitlines() or [""]
-    preview = lines[0][:100] + (f"  (+{len(lines) - 1} lignes)" if len(lines) &gt; 1 else "")
-    print(color(f"   → {preview}", RED if is_error else GREY))
 
 
 # ─────────────────────────── Prompt système ───────────────────────────
@@ -4628,7 +5181,7 @@ def run_turn(chat: ChatFunction, messages: list[dict], ctx: ToolContext, max_tou
         for call in tool_calls:
             name = call["function"]["name"]
             arguments = call["function"].get("arguments", {})
-            log_tool_call(tour, name, arguments)
+            print(ui.tool_call(tour, name, arguments))
 
             # Détection de boucle : le même appel deux fois de suite ne
             # donnera pas un résultat différent, on le signale au modèle.
@@ -4643,7 +5196,7 @@ def run_turn(chat: ChatFunction, messages: list[dict], ctx: ToolContext, max_tou
             previous_call = signature
 
             result = truncate(result, MAX_OUTPUT_CHARS)
-            log_tool_result(result)
+            print(ui.tool_result(result))
             # 2) Puis le résultat de l'outil, avec le rôle "tool".
             messages.append({"role": "tool", "tool_name": name, "content": result})
 
@@ -4668,6 +5221,7 @@ commandes peuvent modifier.
 """
 
 import re
+from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
@@ -4744,6 +5298,9 @@ class Session:
     context_estimated: bool = False  # vrai si context_tokens est une estimation (étape 16)
     session_id: str | None = None  # nom du fichier de sauvegarde (étape 15)
     title: str = ""  # titre de la sauvegarde : début de la première demande
+    # Ce qui s'affiche pendant l'attente du modèle (étape 17) : rien par défaut,
+    # l'animation de ui.thinking dans la vraie interface.
+    waiting: Callable = nullcontext
 
     def __post_init__(self) -&gt; None:
         self.reset()
@@ -4779,7 +5336,8 @@ class Session:
     def chat(self, messages: list[dict], tools: list[dict]) -&gt; dict:
         """La fonction `chat` donnée à la boucle. Elle lit self.config à chaque
         appel : un /model ou un /temp s'applique dès l'appel suivant."""
-        data = llm.chat_full(self.config, messages, tools)
+        with self.waiting():
+            data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
         self.context_estimated = False
@@ -5002,7 +5560,8 @@ def compact(session) -&gt; str:
     text = truncate(transcript(conversation), session.config.num_ctx * CHARS_PER_TOKEN // 2)
     instructions = (PROMPTS_DIR / "COMPACT.md").read_text(encoding="utf-8")
     # Appel sans outils : on veut du texte, pas des tool calls.
-    reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
+    with session.waiting():
+        reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
     summary = (reply.get("content") or "").strip()
     session.remember_title()  # avant que la première demande ne disparaisse
     session.messages = [
@@ -5280,6 +5839,308 @@ def execute_command(session: Session, line: str) -&gt; str:
     <div class="tuto-card" id="mini-agent-code-k-fr">
       <div class="tuto-card-header">
         <span class="step-num">K</span>
+        <span class="tuto-card-title">src/mini_agent/ui.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">src/mini_agent/ui.py</div>
+        <div class="code-block"><pre>"""Une interface plus jolie, sans dépendance (étape 17).
+
+Tout passe par des codes ANSI : « \\033[...m » change la couleur ou le style
+du texte qui suit, « \\033[0m » revient au style normal. Les couleurs sont
+prises dans la palette de 256 couleurs, connue de Windows Terminal comme
+du Terminal de macOS.
+
+On n'utilise que des caractères présents dans les polices de console
+courantes (Consolas, Menlo...). Si la sortie n'est pas un terminal
+(redirection vers un fichier) ou si NO_COLOR est défini, on affiche du
+texte simple.
+"""
+
+import itertools
+import json
+import os
+import re
+import shutil
+import sys
+import threading
+import time
+from contextlib import contextmanager
+
+
+def _supports_style() -&gt; bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+
+def _supports_unicode() -&gt; bool:
+    """Vrai si la console sait afficher les caractères du logo et des cadres."""
+    try:
+        "█╗║│─┌●›…".encode(sys.stdout.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+STYLE = _supports_style()
+UNICODE = _supports_unicode()
+
+# Codes de style. « 38;5;N » choisit la couleur N de la palette de 256.
+BOLD = "1"
+ACCENT = "38;5;45"  # cyan
+GREY = "38;5;245"
+SHADOW = "38;5;240"  # gris foncé, pour l'ombre du logo
+GREEN = "38;5;78"
+RED = "38;5;203"
+YELLOW = "38;5;221"
+CODE = "38;5;117"  # bleu clair, pour le code
+# Dégradé du logo, de gauche à droite : du cyan au violet.
+GRADIENT = ["38;5;51", "38;5;45", "38;5;39", "38;5;33", "38;5;63", "38;5;99", "38;5;135", "38;5;171"]
+
+# Le logo, dessiné dans le style « ANSI Shadow » : des blocs █ pour les
+# lettres, et des traits doubles (╗ ║ ╝) pour leur ombre.
+LOGO = """\
+███╗   ███╗██╗███╗   ██╗██╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+████╗ ████║██║████╗  ██║██║      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██╔████╔██║██║██╔██╗ ██║██║█████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
+██║╚██╔╝██║██║██║╚██╗██║██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
+██║ ╚═╝ ██║██║██║ ╚████║██║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║
+╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝"""
+
+ANSI_CODE = re.compile(r"\033\[[0-9;]*[mK]")
+
+
+def style(text: str, *codes: str) -&gt; str:
+    """Entoure le texte des codes ANSI demandés (ou le laisse tel quel)."""
+    if not STYLE or not codes:
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
+
+def visible_len(text: str) -&gt; int:
+    """Longueur affichée d'un texte : les codes ANSI ne prennent pas de place."""
+    return len(ANSI_CODE.sub("", text))
+
+
+def shorten(text: str, width: int) -&gt; str:
+    """Raccourcit par le début (on garde la fin d'un chemin, la plus parlante)."""
+    if len(text) &lt;= width:
+        return text
+    return ("…" if UNICODE else "...") + text[-(width - 1):]
+
+
+def symbol(fancy: str, plain: str) -&gt; str:
+    return fancy if UNICODE else plain
+
+
+# ─────────────────────────── Démarrage ───────────────────────────
+
+
+def logo() -&gt; str:
+    lines = LOGO.splitlines()
+    width = max(len(line) for line in lines)
+    # Terminal trop étroit ou police sans ces caractères : titre simple.
+    if not UNICODE or shutil.get_terminal_size().columns &lt; width + 2:
+        return style("mini-agent", BOLD, ACCENT)
+    colored = []
+    for line in lines:
+        chars = []
+        for column, char in enumerate(line):
+            if char == "█":
+                # La couleur dépend de la colonne : c'est ce qui fait le dégradé.
+                chars.append(style(char, GRADIENT[column * len(GRADIENT) // width]))
+            elif char == " ":
+                chars.append(char)
+            else:
+                chars.append(style(char, SHADOW))
+        colored.append("".join(chars))
+    return "\n".join(colored)
+
+
+def box(rows: list[tuple[str, str]]) -&gt; str:
+    """Un encadré de lignes « étiquette   valeur »."""
+    label_width = max(len(label) for label, _ in rows)
+    value_width = shutil.get_terminal_size().columns - label_width - 9
+    rows = [(label, shorten(value, value_width)) for label, value in rows]
+    width = max(label_width + 3 + len(value) for _, value in rows)
+    h, v = symbol("─", "-"), symbol("│", "|")
+    top = style(symbol("┌", "+") + h * (width + 2) + symbol("┐", "+"), GREY)
+    bottom = style(symbol("└", "+") + h * (width + 2) + symbol("┘", "+"), GREY)
+    lines = [top]
+    for label, value in rows:
+        padding = " " * (width - label_width - 3 - len(value))
+        lines.append(f"{style(v, GREY)} {style(label.ljust(label_width), GREY)}   {style(value, BOLD)}{padding} {style(v, GREY)}")
+    lines.append(bottom)
+    return "\n".join(lines)
+
+
+def banner(rows: list[tuple[str, str]]) -&gt; str:
+    dot = symbol(" · ", " - ")
+    hint = (
+        style("/help", ACCENT) + style(" commandes", GREY) + style(dot, GREY)
+        + style("@fichier", ACCENT) + style(" joindre un fichier", GREY) + style(dot, GREY)
+        + style("/quit", ACCENT) + style(" quitter", GREY)
+    )
+    return f"\n{logo()}\n{style('  un agent de code minimal autour d’Ollama', GREY)}\n\n{box(rows)}\n {hint}"
+
+
+# ─────────────────────────── Conversation ───────────────────────────
+
+
+def prompt() -&gt; str:
+    """L'invite affichée devant la saisie de l'utilisateur."""
+    return "\n" + style(symbol("›", "&gt;"), ACCENT, BOLD) + " "
+
+
+@contextmanager
+def thinking(label: str = "le modèle réfléchit"):
+    """Petite animation pendant qu'on attend la réponse du modèle.
+
+    Elle tourne dans un fil d'exécution (thread) séparé : le programme
+    principal, lui, est bloqué dans la requête HTTP.
+    """
+    if not STYLE:
+        yield
+        return
+    stop = threading.Event()
+
+    def animate() -&gt; None:
+        start = time.monotonic()
+        dots = symbol("…", "...")
+        for frame in itertools.cycle("|/-\\"):
+            elapsed = time.monotonic() - start
+            sys.stdout.write(f"\r  {style(frame, ACCENT)} {style(f'{label}{dots} {elapsed:.0f} s', GREY)}")
+            sys.stdout.flush()
+            if stop.wait(0.1):  # attend 0,1 s, ou s'arrête si on le lui demande
+                break
+        sys.stdout.write("\r\033[K")  # efface la ligne de l'animation
+        sys.stdout.flush()
+
+    thread = threading.Thread(target=animate, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
+
+
+INLINE_CODE = re.compile(r"`([^`]+)`")
+BOLD_TEXT = re.compile(r"\*\*(.+?)\*\*")
+BULLET = re.compile(r"^(\s*)[-*] (.*)")
+
+
+def render_markdown(text: str) -&gt; str:
+    """Un rendu très simple du Markdown des réponses : titres, gras, `code`,
+    listes et blocs de code. Sans couleurs, le texte reste tel quel."""
+    if not STYLE:
+        return text
+    lines, in_code = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code  # les lignes ``` elles-mêmes ne sont pas affichées
+            continue
+        if in_code:
+            lines.append(style(symbol("│ ", "| "), GREY) + style(line, CODE))
+            continue
+        if line.startswith("#"):
+            lines.append(style(line.lstrip("#").strip(), BOLD, ACCENT))
+            continue
+        bullet = BULLET.match(line)
+        if bullet:
+            line = f"{bullet.group(1)}{symbol('•', '-')} {bullet.group(2)}"
+        line = BOLD_TEXT.sub(lambda match: style(match.group(1), BOLD), line)
+        line = INLINE_CODE.sub(lambda match: style(match.group(1), CODE), line)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def answer(text: str) -&gt; str:
+    """La réponse finale de l'agent, sous un petit en-tête."""
+    header = style(symbol("●", "*"), ACCENT) + " " + style("mini-agent", BOLD)
+    body = "\n".join("  " + line for line in render_markdown(text).splitlines())
+    return f"\n{header}\n{body}"
+
+
+def context_gauge(model: str, used: int, size: int, estimated: bool) -&gt; str:
+    """Une jauge de remplissage du contexte, affichée sous chaque réponse."""
+    ratio = min(1.0, used / size)
+    filled = round(ratio * 20)
+    bar = symbol("█", "#") * filled + symbol("░", "-") * (20 - filled)
+    level = RED if used &gt;= size else YELLOW if used &gt;= 0.75 * size else GREY
+    dot = symbol(" · ", " - ")
+    text = (
+        style(f"  {model}{dot}contexte ", GREY) + style(bar, level)
+        + style(f" {symbol('≈', '~') if estimated else ''}{used} / {size} tokens ({int(ratio * 100)} %)", GREY)
+    )
+    if used &gt;= size:
+        text += style("  plein : Ollama a coupé le début de la conversation", RED)
+    return text
+
+
+# ─────────────────────────── Outils ───────────────────────────
+
+# L'argument le plus parlant de chaque outil, affiché à la place du JSON.
+MAIN_ARGUMENT = {"read_file": "path", "list_files": "path", "edit_file": "path", "run_command": "command", "load_skill": "name"}
+
+
+def tool_call(tour: int, name: str, arguments) -&gt; str:
+    key = MAIN_ARGUMENT.get(name)
+    if isinstance(arguments, dict) and key in arguments:
+        detail = str(arguments[key])
+    elif isinstance(arguments, dict) and not arguments:
+        detail = ""
+    else:
+        detail = json.dumps(arguments, ensure_ascii=False)
+    detail = detail if len(detail) &lt;= 80 else detail[:79] + symbol("…", "...")
+    return f"  {style(symbol('●', '*'), ACCENT)} {style(name, BOLD)} {detail}  {style(f'tour {tour}', GREY)}"
+
+
+def tool_result(result: str) -&gt; str:
+    is_error = result.startswith(("Erreur", "Refusé"))
+    lines = result.splitlines() or [""]
+    preview = lines[0][:100] + (f"  (+{len(lines) - 1} lignes)" if len(lines) &gt; 1 else "")
+    return style(f"    {symbol('└', '`-')} {preview}", RED if is_error else GREY)
+
+
+def confirm(question: str) -&gt; bool:
+    """Comme guards.ask_confirmation, avec le diff en couleurs."""
+    lines = question.splitlines() or [""]
+    for line in lines[:-1]:
+        if line.startswith(("+++", "---")):
+            line = style(line, GREY)
+        elif line.startswith("+"):
+            line = style(line, GREEN)
+        elif line.startswith("-"):
+            line = style(line, RED)
+        elif line.startswith("@@"):
+            line = style(line, CODE)
+        print("    " + line)  # décalé comme les appels d'outils
+    reply = input(f"  {style('?', YELLOW, BOLD)} {lines[-1]} {style('[o/N]', BOLD)} ")
+    return reply.strip().lower() in ("o", "oui")
+
+
+def info(text: str) -&gt; str:
+    """Un message secondaire (fichier joint, compactage...)."""
+    return style(f"  {text}", GREY)
+
+
+def warning(text: str) -&gt; str:
+    return style(f"  {text}", YELLOW)
+
+
+def error(text: str) -&gt; str:
+    return style(f"  {symbol('×', 'x')} {text}", RED)
+
+
+def indent(text: str) -&gt; str:
+    """Décale un bloc de texte (sortie des commandes /...)."""
+    return "\n".join("  " + line for line in text.splitlines())</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-l-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">L</span>
         <span class="tuto-card-title">src/mini_agent/cli.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5293,6 +6154,7 @@ def execute_command(session: Session, line: str) -&gt; str:
 
 C'est ici qu'on assemble le harness : configuration, session (prompt
 système, outils, garde-fous), commandes /..., puis la boucle agentique.
+Tout l'affichage passe par ui.py (étape 17).
 """
 
 import argparse
@@ -5300,13 +6162,13 @@ import os
 
 import requests
 
-from mini_agent.agent import GREY, RED, YELLOW, color
+from mini_agent import ui
 from mini_agent.commands import execute_command
-from mini_agent.config import load_config
+from mini_agent.config import PROJECT_DIR_NAME, load_config
 from mini_agent.context import compact, needs_compaction
-from mini_agent.guards import ask_confirmation
 from mini_agent.history import find_session, resume_session, save_session
 from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
+from mini_agent.tools import available_skills
 
 
 def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
@@ -5321,58 +6183,66 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
 
 
 def context_status(session: Session) -&gt; str:
-    """Une ligne qui montre la place occupée dans le contexte du modèle."""
-    used, size = session.context_tokens, session.config.num_ctx
-    text = f"[contexte : {'≈ ' if session.context_estimated else ''}{used} / {size} tokens]"
-    if used &gt;= size:
-        return color(text + " plein : Ollama a coupé le début de la conversation", RED)
-    if used &gt;= 0.75 * size:
-        return color(text + " presque plein", YELLOW)
-    return color(text, GREY)
+    """La jauge de contexte affichée sous chaque réponse."""
+    c = session.config
+    return ui.context_gauge(c.model, session.context_tokens, c.num_ctx, session.context_estimated)
 
 
 def handle_request(session: Session, text: str) -&gt; None:
     """Envoie une demande à l'agent et affiche sa réponse."""
     for path in find_mentions(text):
-        print(color(f"   + fichier joint : {path}", GREY))
+        print(ui.info(f"@ fichier joint : {path}"))
+    print()
     try:
         answer = session.ask(text)
     except requests.RequestException as error:
-        print(f"Erreur de communication avec Ollama : {error}")
+        print(ui.error(f"Erreur de communication avec Ollama : {error}"))
         return
-    print(f"\nagent &gt; {answer}")
-    print(context_status(session))
+    print(ui.answer(answer))
+    print("\n" + context_status(session))
     # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
     if needs_compaction(session):
-        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        print(ui.warning("Contexte presque plein : compactage automatique de la conversation..."))
         try:
             compact(session)
             print(context_status(session))
         except requests.RequestException as error:
-            print(f"Compactage impossible : {error}")
+            print(ui.error(f"Compactage impossible : {error}"))
     # Étape 15 : la conversation est sauvegardée après chaque demande.
     save_session(session)
 
 
+def project_summary(session: Session) -&gt; str:
+    """Une ligne qui résume ce que le projet apporte : AGENTS.md, skills, réglages."""
+    workdir = session.config.workdir
+    has_instructions = bool(load_project_instructions(workdir))
+    parts = ["AGENTS.md"] if has_instructions else []
+    parts.append(f"{len(available_skills(session.ctx.skills_dirs))} skills")
+    if (workdir / PROJECT_DIR_NAME / "config.toml").is_file():
+        parts.append("config.toml")
+    if not has_instructions:
+        parts.append("/init pour préparer le projet")
+    return ui.symbol(" · ", " - ").join(parts)
+
+
 def main() -&gt; None:
     if os.name == "nt":
-        os.system("")  # active les couleurs ANSI dans les anciennes consoles Windows
+        os.system("")  # active les codes ANSI (couleurs) dans les consoles Windows
 
     args = parse_args()
     config = load_config({"model": args.model, "temperature": args.temperature, "num_ctx": args.num_ctx, "url": args.url})
-    session = create_session(config, confirm=ask_confirmation)
+    session = create_session(config, confirm=ui.confirm)
+    session.waiting = ui.thinking  # animation pendant l'attente du modèle
 
-    print(f"mini-agent — modèle {config.model} sur {config.ollama_url}")
-    print(f"Dossier de travail : {config.workdir}")
-    if load_project_instructions(config.workdir):
-        print("Instructions du projet : AGENTS.md")
+    rows = [("modèle", config.model), ("serveur", config.ollama_url), ("dossier", str(config.workdir)), ("projet", project_summary(session))]
     if args.resume:
         data = find_session(config.workdir, "1")
         if data is None:
-            print("Aucune conversation à reprendre dans ce projet : nouvelle conversation.")
+            rows.append(("reprise", "aucune conversation sauvegardée : nouvelle conversation"))
         else:
             resume_session(session, data)
-            print(f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)")
+            rows.append(("reprise", f"{data.get('title', '')} ({len(data['messages'])} messages)"))
+    print(ui.banner(rows))
 
     try:
         # Mode « une seule demande » : la demande est passée en argument.
@@ -5380,17 +6250,16 @@ def main() -&gt; None:
             handle_request(session, " ".join(args.demande))
             return
 
-        print("Tape ta demande, ou /help pour les commandes.")
         while True:
-            text = input("\nvous &gt; ").strip()
+            text = input(ui.prompt()).strip()
             if text in ("/quit", "/exit"):
                 break
             if text.startswith("/"):
-                print(execute_command(session, text))
+                print(ui.indent(execute_command(session, text)))
             elif text:
                 handle_request(session, text)
     except (KeyboardInterrupt, EOFError):
-        print("\nAu revoir.")
+        print("\n" + ui.info("Au revoir."))
 
 
 if __name__ == "__main__":
@@ -5400,9 +6269,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-l-fr">
+    <div class="tuto-card" id="mini-agent-code-m-fr">
       <div class="tuto-card-header">
-        <span class="step-num">L</span>
+        <span class="step-num">M</span>
         <span class="tuto-card-title">prompts/ + skills/</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5474,9 +6343,9 @@ description: Écrire des tests pytest pour un module Python.
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-m-fr">
+    <div class="tuto-card" id="mini-agent-code-n-fr">
       <div class="tuto-card-header">
-        <span class="step-num">M</span>
+        <span class="step-num">N</span>
         <span class="tuto-card-title">demo/stats.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5504,9 +6373,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-n-fr">
+    <div class="tuto-card" id="mini-agent-code-o-fr">
       <div class="tuto-card-header">
-        <span class="step-num">N</span>
+        <span class="step-num">O</span>
         <span class="tuto-card-title">tests/test_config.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5582,9 +6451,9 @@ def test_valeur_invalide(tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-o-fr">
+    <div class="tuto-card" id="mini-agent-code-p-fr">
       <div class="tuto-card-header">
-        <span class="step-num">O</span>
+        <span class="step-num">P</span>
         <span class="tuto-card-title">tests/test_guards.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5662,9 +6531,9 @@ def test_commandes_autorisees(commande, attendu):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-p-fr">
+    <div class="tuto-card" id="mini-agent-code-q-fr">
       <div class="tuto-card-header">
-        <span class="step-num">P</span>
+        <span class="step-num">Q</span>
         <span class="tuto-card-title">tests/test_tools.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5838,9 +6707,9 @@ def test_exception_python_renvoyee_au_modele(ctx):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-q-fr">
+    <div class="tuto-card" id="mini-agent-code-r-fr">
       <div class="tuto-card-header">
-        <span class="step-num">Q</span>
+        <span class="step-num">R</span>
         <span class="tuto-card-title">tests/test_agent.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -5960,9 +6829,9 @@ def test_vrai_prompt_et_vraies_skills():
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-r-fr">
+    <div class="tuto-card" id="mini-agent-code-s-fr">
       <div class="tuto-card-header">
-        <span class="step-num">R</span>
+        <span class="step-num">S</span>
         <span class="tuto-card-title">tests/test_session.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -6035,9 +6904,9 @@ def test_skills_du_projet(tmp_path, session):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-s-fr">
+    <div class="tuto-card" id="mini-agent-code-t-fr">
       <div class="tuto-card-header">
-        <span class="step-num">S</span>
+        <span class="step-num">T</span>
         <span class="tuto-card-title">tests/test_commands.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -6181,9 +7050,9 @@ def test_init_cree_un_gitignore_pour_les_sessions(session, tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-t-fr">
+    <div class="tuto-card" id="mini-agent-code-u-fr">
       <div class="tuto-card-header">
-        <span class="step-num">T</span>
+        <span class="step-num">U</span>
         <span class="tuto-card-title">tests/test_history.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -6286,9 +7155,9 @@ def test_suppression(session, tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-u-fr">
+    <div class="tuto-card" id="mini-agent-code-v-fr">
       <div class="tuto-card-header">
-        <span class="step-num">U</span>
+        <span class="step-num">V</span>
         <span class="tuto-card-title">tests/test_context.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -6370,6 +7239,120 @@ def test_seuil_de_compactage(session):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-code-w-fr">
+      <div class="tuto-card-header">
+        <span class="step-num">W</span>
+        <span class="tuto-card-title">tests/test_ui.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_ui.py</div>
+        <div class="code-block"><pre>"""Tests de l'interface (ui.py)."""
+
+import os
+from collections import namedtuple
+
+import pytest
+
+from mini_agent import ui
+
+Size = namedtuple("Size", "columns lines")
+
+
+@pytest.fixture
+def couleurs(monkeypatch):
+    """Comme dans un vrai terminal : couleurs et caractères Unicode."""
+    monkeypatch.setattr(ui, "STYLE", True)
+    monkeypatch.setattr(ui, "UNICODE", True)
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(120, 40))
+
+
+@pytest.fixture
+def texte_simple(monkeypatch):
+    """Comme une sortie redirigée vers un fichier : ni couleurs, ni Unicode."""
+    monkeypatch.setattr(ui, "STYLE", False)
+    monkeypatch.setattr(ui, "UNICODE", False)
+
+
+def test_style_et_longueur_visible(couleurs):
+    texte = ui.style("bonjour", ui.BOLD, ui.ACCENT)
+    assert texte == "\033[1;38;5;45mbonjour\033[0m"
+    assert ui.visible_len(texte) == 7
+
+
+def test_logo_en_degrade(couleurs):
+    logo = ui.logo()
+    assert ui.GRADIENT[0] in logo and ui.GRADIENT[-1] in logo  # du cyan au violet
+    largeurs = {ui.visible_len(ligne) for ligne in logo.splitlines()}
+    assert max(largeurs) == 77
+
+
+def test_logo_terminal_etroit(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(60, 40))
+    assert ui.visible_len(ui.logo()) == len("mini-agent")
+
+
+def test_encadre_aligne(couleurs):
+    cadre = ui.box([("modèle", "qwen3.5:4b"), ("dossier", "C:\\Users\\nilsm\\Documents\\projets\\rfact")])
+    assert len({ui.visible_len(ligne) for ligne in cadre.splitlines()}) == 1  # toutes les lignes ont la même largeur
+
+
+def test_encadre_raccourcit_les_chemins_longs(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(40, 40))
+    cadre = ui.box([("dossier", "/home/nils/" + "x" * 100 + "/rfact")])
+    assert "…" in cadre and "rfact" in cadre  # on garde la fin du chemin
+    assert max(ui.visible_len(ligne) for ligne in cadre.splitlines()) &lt;= 40
+
+
+def test_sans_couleurs_ni_unicode(texte_simple):
+    assert ui.logo() == "mini-agent"
+    assert "\033" not in ui.banner([("modèle", "qwen3.5:4b")])
+    assert ui.box([("a", "b")]).splitlines()[0].startswith("+")
+    assert ui.render_markdown("**gras** et `code`") == "**gras** et `code`"  # Markdown laissé tel quel
+
+
+def test_markdown(couleurs):
+    rendu = ui.render_markdown("# Titre\n- **gras** et `code`\n```\nprint(1)\n```")
+    lignes = rendu.splitlines()
+    assert ui.visible_len(lignes[0]) == len("Titre")
+    assert ui.ANSI_CODE.sub("", lignes[1]) == "• gras et code"
+    assert ui.ANSI_CODE.sub("", lignes[2]) == "│ print(1)"  # les ``` ne sont pas affichés
+    assert len(lignes) == 3
+
+
+def test_appel_d_outil_lisible(couleurs):
+    ligne = ui.ANSI_CODE.sub("", ui.tool_call(2, "edit_file", {"path": "calc.py", "old_text": "a", "new_text": "b"}))
+    assert ligne == "  ● edit_file calc.py  tour 2"  # le chemin, pas tout le JSON
+
+
+def test_resultat_en_erreur(couleurs):
+    assert ui.RED in ui.tool_result("Refusé : chemin refusé")
+    assert ui.RED not in ui.tool_result("Fichier calc.py modifié.")
+
+
+def test_jauge_de_contexte(couleurs):
+    assert "██████████░░░░░░░░░░" in ui.context_gauge("qwen3.5:4b", 4096, 8192, False)
+    assert ui.YELLOW in ui.context_gauge("qwen3.5:4b", 7000, 8192, False)
+    plein = ui.context_gauge("qwen3.5:4b", 9000, 8192, False)
+    assert ui.RED in plein and "plein" in plein
+    assert "≈882 / 2048" in ui.ANSI_CODE.sub("", ui.context_gauge("qwen3.5:4b", 882, 2048, True))
+
+
+def test_confirmation_avec_diff_en_couleurs(couleurs, monkeypatch, capsys):
+    questions = []
+    monkeypatch.setattr("builtins.input", lambda question: questions.append(question) or "o")
+    assert ui.confirm("--- a.py (avant)\n+++ a.py (après)\n-x = 1\n+x = 2\nÉcrire a.py ?") is True
+    sortie = capsys.readouterr().out
+    assert ui.style("-x = 1", ui.RED) in sortie and ui.style("+x = 2", ui.GREEN) in sortie
+    assert "Écrire a.py ?" in questions[0] and "[o/N]" in questions[0]
+
+
+def test_animation_sans_terminal(texte_simple):
+    with ui.thinking():
+        pass  # ne fait rien, et surtout ne bloque pas</pre></div>
+      </div>
+    </div>
+
 <h2 id="mini-agent-glossary-fr">Glossaire</h2>
     <ul>
       <li><strong>LLM</strong> (<em>Large Language Model</em>) : modèle qui, à partir d'un texte, prédit la suite token par token. Il ne fait que produire du texte : il ne lit aucun fichier et n'exécute rien lui-même. Ici : qwen3.5:4b servi par Ollama.</li>
@@ -6419,7 +7402,8 @@ def test_seuil_de_compactage(session):
     <p>This project has a simple goal: <strong>understanding how a coding agent works</strong> by building one from scratch in Python. A coding agent is a program that takes an instruction ("find the bug in this script and fix it"), reads files, runs commands and edits code, driven by an LLM.</p>
     <p>The aim is not to build the best possible agent but to <strong>understand every building block</strong>: the agentic loop, the harness, tools, the system prompt and skills. No framework (no LangChain): a single dependency, <code>requests</code>, and everything else written by hand. The code is on GitHub: <a href="https://github.com/nils-malmberg/mini-agent">nils-malmberg/mini-agent</a>.</p>
     <p>The LLM runs locally on my NAS (see the <a href="project6.html">NAS Lab project</a>): <strong>qwen3.5:4b</strong> served by Ollama on a 6 GB RTX 3050. Such a small model forces some choices: few tools (5 at most), very clear descriptions and truncated tool results.</p>
-    <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 16 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, able to receive tagged files, resume a conversation and compact its context.</p>
+    <p>The tutorial has two parts. Steps 0 to 8 build the agent step by step. Steps 9 to 17 turn it into an everyday tool, modelled on opencode: started in any project, adjustable on the fly, able to receive tagged files, resume a conversation and compact its context, with a polished interface.</p>
+    <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="mini-agent interface in a terminal: gradient logo, tool calls, coloured diff and formatted answer" width="690"></div>
 
     <h2>Architecture</h2>
     <p>The model can only produce text. Everything else — reading a file, running a command, asking for confirmation, stopping — is done by the code around it: the <strong>harness</strong>. At the heart of the harness is the <strong>agentic loop</strong>, the only part that talks to the LLM.</p>
@@ -6510,6 +7494,7 @@ def test_seuil_de_compactage(session):
 │   ├── history.py          # saved conversations (part 2)
 │   ├── context.py          # context measuring and compaction (part 2)
 │   ├── commands.py         # /... commands (part 2)
+│   ├── ui.py               # interface: colours, logo, animation (part 2)
 │   └── cli.py              # entry point `mini-agent`
 ├── prompts/
 │   ├── AGENT.md            # system prompt
@@ -6526,7 +7511,8 @@ def test_seuil_de_compactage(session):
     ├── test_session.py
     ├── test_commands.py
     ├── test_history.py
-    └── test_context.py</pre></div>
+    ├── test_context.py
+    └── test_ui.py</pre></div>
 
     <h2 id="mini-agent-config-en">Configuration</h2>
     <p>Everything that depends on the machine is set through environment variables:</p>
@@ -6579,6 +7565,7 @@ $env:OLLAMA_MODEL = "qwen3.5:4b"</pre></div>
         <li><a href="#mini-agent-step14-en">Commands allowed without confirmation</a></li>
         <li><a href="#mini-agent-step15-en">Saving and resuming conversations</a></li>
         <li><a href="#mini-agent-step16-en">Measuring and compacting the context</a></li>
+        <li><a href="#mini-agent-step17-en">A nicer interface</a></li>
       </ol>
       <p style="font-size:var(--text-sm);margin:var(--space-3) 0 0"><a href="#mini-agent-code-en">Full code of the final version</a> · <a href="#mini-agent-glossary-en">Glossary</a></p>
     </div>
@@ -8173,8 +9160,8 @@ AssertionError: moyenne attendue : 13.5, obtenue : 10.5</pre></div>
     </div>
 
     <h3 id="mini-agent-part2-en">Part 2 — towards an everyday agent, like opencode</h3>
-    <p>Steps 9 to 16 turn mini-agent into a tool you start in any project: project instructions and skills, <code>/…</code> commands, tagged files, persistent settings, targeted editing, allowed commands, saved conversations and context compaction.</p>
-    <div class="warning-block"><strong>How to follow this part.</strong> These features touch the same files (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), and some excerpts use a function from a later step. The safest way: first replace <code>src/</code>, <code>prompts/</code>, <code>skills/</code> and <code>tests/</code> with the <a href="#mini-agent-code-en">full code</a> (final version), run <code>uv run pytest -q</code>, then follow each step to understand and try the feature. All excerpts come from that final version.</div>
+    <p>Steps 9 to 17 turn mini-agent into a tool you start in any project: project instructions and skills, <code>/…</code> commands, tagged files, persistent settings, targeted editing, allowed commands, saved conversations, context compaction and a polished interface.</p>
+    <div class="warning-block"><strong>How to follow this part.</strong> These features touch the same files (<code>config.py</code>, <code>tools.py</code>, <code>session.py</code>, <code>cli.py</code>), and some excerpts use a function from a later step. The safest way: first replace <code>src/</code>, <code>prompts/</code>, <code>skills/</code> and <code>tests/</code> with the <a href="#mini-agent-code-en">full code</a> (final version), run <code>uv run pytest -q</code>, then follow each step to understand and try the feature. The excerpts of steps 9 to 16 show the code as it was at the end of step 16; step 17 only changes the display.</div>
 
     <div class="tuto-card" id="mini-agent-step9-en">
       <div class="tuto-card-header">
@@ -10283,8 +11270,581 @@ def test_seuil_de_compactage(session):
       </div>
     </div>
 
+    <div class="tuto-card" id="mini-agent-step17-en">
+      <div class="tuto-card-header">
+        <span class="step-num">17</span>
+        <span class="tuto-card-title">A nicer interface</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <h3>Goal</h3>
+        <p>A pleasant interface: a big logo at startup, formatted answers, an animation while waiting. Without adding a dependency.</p>
+        <h3>Concept</h3>
+        <p>A terminal understands ANSI escape sequences: <code>\033[1m</code> switches to bold, <code>\033[38;5;45m</code> picks colour 45 of the 256-colour palette, <code>\033[0m</code> goes back to normal, <code>\r</code> moves the cursor to the start of the line and <code>\033[K</code> clears the end of the line. The whole <code>ui.py</code> module relies on these few codes. A library such as <code>rich</code> would do the same in a few lines, at the cost of a dependency: here, we see how it works.</p>
+        <ul>
+          <li><strong>Logo</strong>: drawn in the "ANSI Shadow" style (letters in <code>█</code> blocks, shadow in double lines <code>╗ ║ ╝</code>). Each <code>█</code> takes the colour of its column in a cyan-to-purple gradient; the shadow stays dark grey. If the terminal is narrower than 79 columns, a plain title replaces it.</li>
+          <li><strong>Startup box</strong>: model, server, folder, and what the project brings (<code>AGENTS.md</code>, skills, <code>config.toml</code>). To align the borders, we measure the <em>visible</em> length of the text: <code>visible_len()</code> strips the ANSI codes before counting.</li>
+          <li><strong>Waiting animation</strong>: a thread rewrites the same line every 0.1 s thanks to <code>\r</code>, then clears it with <code>\033[K</code>. The session receives it as a context manager (<code>session.waiting</code>): by default it does nothing, which keeps the tests simple.</li>
+          <li><strong>Answers</strong>: a minimal Markdown rendering (headings, bold, <code>code</code>, lists, code blocks). Tool calls show the path or the command rather than the JSON, the diff is coloured, and a gauge shows the context used.</li>
+          <li><strong>Fallback</strong>: if the output is not a terminal (redirected to a file) or if <code>NO_COLOR</code> is set, everything is printed as plain text; if the console cannot display a special character, it is replaced by an ASCII equivalent.</li>
+        </ul>
+        <div class="project-img wide"><img src="media/projets/project8/interface.png" alt="mini-agent interface: gradient logo, box, tool calls, coloured diff and formatted answer" width="690" loading="lazy"></div>
+        <div class="code-label">src/mini_agent/ui.py</div>
+        <div class="code-block"><pre>"""Une interface plus jolie, sans dépendance (étape 17).
+
+Tout passe par des codes ANSI : « \\033[...m » change la couleur ou le style
+du texte qui suit, « \\033[0m » revient au style normal. Les couleurs sont
+prises dans la palette de 256 couleurs, connue de Windows Terminal comme
+du Terminal de macOS.
+
+On n'utilise que des caractères présents dans les polices de console
+courantes (Consolas, Menlo...). Si la sortie n'est pas un terminal
+(redirection vers un fichier) ou si NO_COLOR est défini, on affiche du
+texte simple.
+"""
+
+import itertools
+import json
+import os
+import re
+import shutil
+import sys
+import threading
+import time
+from contextlib import contextmanager
+
+
+def _supports_style() -&gt; bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+
+def _supports_unicode() -&gt; bool:
+    """Vrai si la console sait afficher les caractères du logo et des cadres."""
+    try:
+        "█╗║│─┌●›…".encode(sys.stdout.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+STYLE = _supports_style()
+UNICODE = _supports_unicode()
+
+# Codes de style. « 38;5;N » choisit la couleur N de la palette de 256.
+BOLD = "1"
+ACCENT = "38;5;45"  # cyan
+GREY = "38;5;245"
+SHADOW = "38;5;240"  # gris foncé, pour l'ombre du logo
+GREEN = "38;5;78"
+RED = "38;5;203"
+YELLOW = "38;5;221"
+CODE = "38;5;117"  # bleu clair, pour le code
+# Dégradé du logo, de gauche à droite : du cyan au violet.
+GRADIENT = ["38;5;51", "38;5;45", "38;5;39", "38;5;33", "38;5;63", "38;5;99", "38;5;135", "38;5;171"]
+
+# Le logo, dessiné dans le style « ANSI Shadow » : des blocs █ pour les
+# lettres, et des traits doubles (╗ ║ ╝) pour leur ombre.
+LOGO = """\
+███╗   ███╗██╗███╗   ██╗██╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+████╗ ████║██║████╗  ██║██║      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██╔████╔██║██║██╔██╗ ██║██║█████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
+██║╚██╔╝██║██║██║╚██╗██║██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
+██║ ╚═╝ ██║██║██║ ╚████║██║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║
+╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝"""
+
+ANSI_CODE = re.compile(r"\033\[[0-9;]*[mK]")
+
+
+def style(text: str, *codes: str) -&gt; str:
+    """Entoure le texte des codes ANSI demandés (ou le laisse tel quel)."""
+    if not STYLE or not codes:
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
+
+def visible_len(text: str) -&gt; int:
+    """Longueur affichée d'un texte : les codes ANSI ne prennent pas de place."""
+    return len(ANSI_CODE.sub("", text))
+
+
+def shorten(text: str, width: int) -&gt; str:
+    """Raccourcit par le début (on garde la fin d'un chemin, la plus parlante)."""
+    if len(text) &lt;= width:
+        return text
+    return ("…" if UNICODE else "...") + text[-(width - 1):]
+
+
+def symbol(fancy: str, plain: str) -&gt; str:
+    return fancy if UNICODE else plain
+
+
+# ─────────────────────────── Démarrage ───────────────────────────
+
+
+def logo() -&gt; str:
+    lines = LOGO.splitlines()
+    width = max(len(line) for line in lines)
+    # Terminal trop étroit ou police sans ces caractères : titre simple.
+    if not UNICODE or shutil.get_terminal_size().columns &lt; width + 2:
+        return style("mini-agent", BOLD, ACCENT)
+    colored = []
+    for line in lines:
+        chars = []
+        for column, char in enumerate(line):
+            if char == "█":
+                # La couleur dépend de la colonne : c'est ce qui fait le dégradé.
+                chars.append(style(char, GRADIENT[column * len(GRADIENT) // width]))
+            elif char == " ":
+                chars.append(char)
+            else:
+                chars.append(style(char, SHADOW))
+        colored.append("".join(chars))
+    return "\n".join(colored)
+
+
+def box(rows: list[tuple[str, str]]) -&gt; str:
+    """Un encadré de lignes « étiquette   valeur »."""
+    label_width = max(len(label) for label, _ in rows)
+    value_width = shutil.get_terminal_size().columns - label_width - 9
+    rows = [(label, shorten(value, value_width)) for label, value in rows]
+    width = max(label_width + 3 + len(value) for _, value in rows)
+    h, v = symbol("─", "-"), symbol("│", "|")
+    top = style(symbol("┌", "+") + h * (width + 2) + symbol("┐", "+"), GREY)
+    bottom = style(symbol("└", "+") + h * (width + 2) + symbol("┘", "+"), GREY)
+    lines = [top]
+    for label, value in rows:
+        padding = " " * (width - label_width - 3 - len(value))
+        lines.append(f"{style(v, GREY)} {style(label.ljust(label_width), GREY)}   {style(value, BOLD)}{padding} {style(v, GREY)}")
+    lines.append(bottom)
+    return "\n".join(lines)
+
+
+def banner(rows: list[tuple[str, str]]) -&gt; str:
+    dot = symbol(" · ", " - ")
+    hint = (
+        style("/help", ACCENT) + style(" commandes", GREY) + style(dot, GREY)
+        + style("@fichier", ACCENT) + style(" joindre un fichier", GREY) + style(dot, GREY)
+        + style("/quit", ACCENT) + style(" quitter", GREY)
+    )
+    return f"\n{logo()}\n{style('  un agent de code minimal autour d’Ollama', GREY)}\n\n{box(rows)}\n {hint}"
+
+
+# ─────────────────────────── Conversation ───────────────────────────
+
+
+def prompt() -&gt; str:
+    """L'invite affichée devant la saisie de l'utilisateur."""
+    return "\n" + style(symbol("›", "&gt;"), ACCENT, BOLD) + " "
+
+
+@contextmanager
+def thinking(label: str = "le modèle réfléchit"):
+    """Petite animation pendant qu'on attend la réponse du modèle.
+
+    Elle tourne dans un fil d'exécution (thread) séparé : le programme
+    principal, lui, est bloqué dans la requête HTTP.
+    """
+    if not STYLE:
+        yield
+        return
+    stop = threading.Event()
+
+    def animate() -&gt; None:
+        start = time.monotonic()
+        dots = symbol("…", "...")
+        for frame in itertools.cycle("|/-\\"):
+            elapsed = time.monotonic() - start
+            sys.stdout.write(f"\r  {style(frame, ACCENT)} {style(f'{label}{dots} {elapsed:.0f} s', GREY)}")
+            sys.stdout.flush()
+            if stop.wait(0.1):  # attend 0,1 s, ou s'arrête si on le lui demande
+                break
+        sys.stdout.write("\r\033[K")  # efface la ligne de l'animation
+        sys.stdout.flush()
+
+    thread = threading.Thread(target=animate, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
+
+
+INLINE_CODE = re.compile(r"`([^`]+)`")
+BOLD_TEXT = re.compile(r"\*\*(.+?)\*\*")
+BULLET = re.compile(r"^(\s*)[-*] (.*)")
+
+
+def render_markdown(text: str) -&gt; str:
+    """Un rendu très simple du Markdown des réponses : titres, gras, `code`,
+    listes et blocs de code. Sans couleurs, le texte reste tel quel."""
+    if not STYLE:
+        return text
+    lines, in_code = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code  # les lignes ``` elles-mêmes ne sont pas affichées
+            continue
+        if in_code:
+            lines.append(style(symbol("│ ", "| "), GREY) + style(line, CODE))
+            continue
+        if line.startswith("#"):
+            lines.append(style(line.lstrip("#").strip(), BOLD, ACCENT))
+            continue
+        bullet = BULLET.match(line)
+        if bullet:
+            line = f"{bullet.group(1)}{symbol('•', '-')} {bullet.group(2)}"
+        line = BOLD_TEXT.sub(lambda match: style(match.group(1), BOLD), line)
+        line = INLINE_CODE.sub(lambda match: style(match.group(1), CODE), line)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def answer(text: str) -&gt; str:
+    """La réponse finale de l'agent, sous un petit en-tête."""
+    header = style(symbol("●", "*"), ACCENT) + " " + style("mini-agent", BOLD)
+    body = "\n".join("  " + line for line in render_markdown(text).splitlines())
+    return f"\n{header}\n{body}"
+
+
+def context_gauge(model: str, used: int, size: int, estimated: bool) -&gt; str:
+    """Une jauge de remplissage du contexte, affichée sous chaque réponse."""
+    ratio = min(1.0, used / size)
+    filled = round(ratio * 20)
+    bar = symbol("█", "#") * filled + symbol("░", "-") * (20 - filled)
+    level = RED if used &gt;= size else YELLOW if used &gt;= 0.75 * size else GREY
+    dot = symbol(" · ", " - ")
+    text = (
+        style(f"  {model}{dot}contexte ", GREY) + style(bar, level)
+        + style(f" {symbol('≈', '~') if estimated else ''}{used} / {size} tokens ({int(ratio * 100)} %)", GREY)
+    )
+    if used &gt;= size:
+        text += style("  plein : Ollama a coupé le début de la conversation", RED)
+    return text
+
+
+# ─────────────────────────── Outils ───────────────────────────
+
+# L'argument le plus parlant de chaque outil, affiché à la place du JSON.
+MAIN_ARGUMENT = {"read_file": "path", "list_files": "path", "edit_file": "path", "run_command": "command", "load_skill": "name"}
+
+
+def tool_call(tour: int, name: str, arguments) -&gt; str:
+    key = MAIN_ARGUMENT.get(name)
+    if isinstance(arguments, dict) and key in arguments:
+        detail = str(arguments[key])
+    elif isinstance(arguments, dict) and not arguments:
+        detail = ""
+    else:
+        detail = json.dumps(arguments, ensure_ascii=False)
+    detail = detail if len(detail) &lt;= 80 else detail[:79] + symbol("…", "...")
+    return f"  {style(symbol('●', '*'), ACCENT)} {style(name, BOLD)} {detail}  {style(f'tour {tour}', GREY)}"
+
+
+def tool_result(result: str) -&gt; str:
+    is_error = result.startswith(("Erreur", "Refusé"))
+    lines = result.splitlines() or [""]
+    preview = lines[0][:100] + (f"  (+{len(lines) - 1} lignes)" if len(lines) &gt; 1 else "")
+    return style(f"    {symbol('└', '`-')} {preview}", RED if is_error else GREY)
+
+
+def confirm(question: str) -&gt; bool:
+    """Comme guards.ask_confirmation, avec le diff en couleurs."""
+    lines = question.splitlines() or [""]
+    for line in lines[:-1]:
+        if line.startswith(("+++", "---")):
+            line = style(line, GREY)
+        elif line.startswith("+"):
+            line = style(line, GREEN)
+        elif line.startswith("-"):
+            line = style(line, RED)
+        elif line.startswith("@@"):
+            line = style(line, CODE)
+        print("    " + line)  # décalé comme les appels d'outils
+    reply = input(f"  {style('?', YELLOW, BOLD)} {lines[-1]} {style('[o/N]', BOLD)} ")
+    return reply.strip().lower() in ("o", "oui")
+
+
+def info(text: str) -&gt; str:
+    """Un message secondaire (fichier joint, compactage...)."""
+    return style(f"  {text}", GREY)
+
+
+def warning(text: str) -&gt; str:
+    return style(f"  {text}", YELLOW)
+
+
+def error(text: str) -&gt; str:
+    return style(f"  {symbol('×', 'x')} {text}", RED)
+
+
+def indent(text: str) -&gt; str:
+    """Décale un bloc de texte (sortie des commandes /...)."""
+    return "\n".join("  " + line for line in text.splitlines())</pre></div>
+        <div class="code-label">src/mini_agent/session.py — the animation wraps the model call</div>
+        <div class="code-block"><pre>class Session:
+    ...
+
+    def chat(self, messages: list[dict], tools: list[dict]) -&gt; dict:
+        """La fonction `chat` donnée à la boucle. Elle lit self.config à chaque
+        appel : un /model ou un /temp s'applique dès l'appel suivant."""
+        with self.waiting():
+            data = llm.chat_full(self.config, messages, tools)
+        # Tokens lus + tokens générés : la place occupée dans le contexte.
+        self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+        self.context_estimated = False
+        return data["message"]</pre></div>
+        <div class="code-label">src/mini_agent/agent.py — in run_turn, display goes through ui</div>
+        <div class="code-block"><pre>            print(ui.tool_call(tour, name, arguments))
+            ...
+            print(ui.tool_result(result))</pre></div>
+        <div class="code-label">src/mini_agent/cli.py (final version)</div>
+        <div class="code-block"><pre>"""Point d'entrée de la ligne de commande : `mini-agent`.
+
+    mini-agent                          # mode conversation dans le dossier courant
+    mini-agent "corrige le bug..."      # une seule demande, puis on quitte
+    mini-agent -m qwen3.5:9b -t 0.5     # options : voir mini-agent --help
+
+C'est ici qu'on assemble le harness : configuration, session (prompt
+système, outils, garde-fous), commandes /..., puis la boucle agentique.
+Tout l'affichage passe par ui.py (étape 17).
+"""
+
+import argparse
+import os
+
+import requests
+
+from mini_agent import ui
+from mini_agent.commands import execute_command
+from mini_agent.config import PROJECT_DIR_NAME, load_config
+from mini_agent.context import compact, needs_compaction
+from mini_agent.history import find_session, resume_session, save_session
+from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
+from mini_agent.tools import available_skills
+
+
+def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="mini-agent", description="Un agent de code minimal autour d'Ollama.")
+    parser.add_argument("demande", nargs="*", help="demande à traiter avant de quitter (sinon : mode conversation)")
+    parser.add_argument("-m", "--model", help="modèle Ollama, ex. qwen3.5:4b")
+    parser.add_argument("-t", "--temperature", type=float, help="température, ex. 0.2")
+    parser.add_argument("--num-ctx", type=int, help="taille du contexte en tokens, ex. 8192")
+    parser.add_argument("--url", help="adresse du serveur Ollama")
+    parser.add_argument("-c", "--continue", dest="resume", action="store_true", help="reprendre la dernière conversation du projet")
+    return parser.parse_args(argv)
+
+
+def context_status(session: Session) -&gt; str:
+    """La jauge de contexte affichée sous chaque réponse."""
+    c = session.config
+    return ui.context_gauge(c.model, session.context_tokens, c.num_ctx, session.context_estimated)
+
+
+def handle_request(session: Session, text: str) -&gt; None:
+    """Envoie une demande à l'agent et affiche sa réponse."""
+    for path in find_mentions(text):
+        print(ui.info(f"@ fichier joint : {path}"))
+    print()
+    try:
+        answer = session.ask(text)
+    except requests.RequestException as error:
+        print(ui.error(f"Erreur de communication avec Ollama : {error}"))
+        return
+    print(ui.answer(answer))
+    print("\n" + context_status(session))
+    # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
+    if needs_compaction(session):
+        print(ui.warning("Contexte presque plein : compactage automatique de la conversation..."))
+        try:
+            compact(session)
+            print(context_status(session))
+        except requests.RequestException as error:
+            print(ui.error(f"Compactage impossible : {error}"))
+    # Étape 15 : la conversation est sauvegardée après chaque demande.
+    save_session(session)
+
+
+def project_summary(session: Session) -&gt; str:
+    """Une ligne qui résume ce que le projet apporte : AGENTS.md, skills, réglages."""
+    workdir = session.config.workdir
+    has_instructions = bool(load_project_instructions(workdir))
+    parts = ["AGENTS.md"] if has_instructions else []
+    parts.append(f"{len(available_skills(session.ctx.skills_dirs))} skills")
+    if (workdir / PROJECT_DIR_NAME / "config.toml").is_file():
+        parts.append("config.toml")
+    if not has_instructions:
+        parts.append("/init pour préparer le projet")
+    return ui.symbol(" · ", " - ").join(parts)
+
+
+def main() -&gt; None:
+    if os.name == "nt":
+        os.system("")  # active les codes ANSI (couleurs) dans les consoles Windows
+
+    args = parse_args()
+    config = load_config({"model": args.model, "temperature": args.temperature, "num_ctx": args.num_ctx, "url": args.url})
+    session = create_session(config, confirm=ui.confirm)
+    session.waiting = ui.thinking  # animation pendant l'attente du modèle
+
+    rows = [("modèle", config.model), ("serveur", config.ollama_url), ("dossier", str(config.workdir)), ("projet", project_summary(session))]
+    if args.resume:
+        data = find_session(config.workdir, "1")
+        if data is None:
+            rows.append(("reprise", "aucune conversation sauvegardée : nouvelle conversation"))
+        else:
+            resume_session(session, data)
+            rows.append(("reprise", f"{data.get('title', '')} ({len(data['messages'])} messages)"))
+    print(ui.banner(rows))
+
+    try:
+        # Mode « une seule demande » : la demande est passée en argument.
+        if args.demande:
+            handle_request(session, " ".join(args.demande))
+            return
+
+        while True:
+            text = input(ui.prompt()).strip()
+            if text in ("/quit", "/exit"):
+                break
+            if text.startswith("/"):
+                print(ui.indent(execute_command(session, text)))
+            elif text:
+                handle_request(session, text)
+    except (KeyboardInterrupt, EOFError):
+        print("\n" + ui.info("Au revoir."))
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+        <h3>Try it</h3>
+        <div class="code-block"><pre>mini-agent
+
+# To compare with the plain display
+$env:NO_COLOR = "1"; mini-agent          # Windows (PowerShell)
+NO_COLOR=1 mini-agent                     # macOS
+mini-agent "Explique @calc.py" &gt; sortie.txt   # redirected: plain text</pre></div>
+        <h3>What we should observe</h3>
+        <p>The capture above is the real output of mini-agent (with a fake model), recorded in a 100-column pseudo-terminal then turned into an image by a small terminal emulator. The exact colours depend on your terminal theme. While the model is thinking:</p>
+        <div class="project-img wide"><img src="media/projets/project8/attente.png" alt="Waiting animation: the model is thinking, with the elapsed time" width="277" loading="lazy"></div>
+        <h3>Tests</h3>
+        <div class="code-label">tests/test_ui.py</div>
+        <div class="code-block"><pre>"""Tests de l'interface (ui.py)."""
+
+import os
+from collections import namedtuple
+
+import pytest
+
+from mini_agent import ui
+
+Size = namedtuple("Size", "columns lines")
+
+
+@pytest.fixture
+def couleurs(monkeypatch):
+    """Comme dans un vrai terminal : couleurs et caractères Unicode."""
+    monkeypatch.setattr(ui, "STYLE", True)
+    monkeypatch.setattr(ui, "UNICODE", True)
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(120, 40))
+
+
+@pytest.fixture
+def texte_simple(monkeypatch):
+    """Comme une sortie redirigée vers un fichier : ni couleurs, ni Unicode."""
+    monkeypatch.setattr(ui, "STYLE", False)
+    monkeypatch.setattr(ui, "UNICODE", False)
+
+
+def test_style_et_longueur_visible(couleurs):
+    texte = ui.style("bonjour", ui.BOLD, ui.ACCENT)
+    assert texte == "\033[1;38;5;45mbonjour\033[0m"
+    assert ui.visible_len(texte) == 7
+
+
+def test_logo_en_degrade(couleurs):
+    logo = ui.logo()
+    assert ui.GRADIENT[0] in logo and ui.GRADIENT[-1] in logo  # du cyan au violet
+    largeurs = {ui.visible_len(ligne) for ligne in logo.splitlines()}
+    assert max(largeurs) == 77
+
+
+def test_logo_terminal_etroit(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(60, 40))
+    assert ui.visible_len(ui.logo()) == len("mini-agent")
+
+
+def test_encadre_aligne(couleurs):
+    cadre = ui.box([("modèle", "qwen3.5:4b"), ("dossier", "C:\\Users\\nilsm\\Documents\\projets\\rfact")])
+    assert len({ui.visible_len(ligne) for ligne in cadre.splitlines()}) == 1  # toutes les lignes ont la même largeur
+
+
+def test_encadre_raccourcit_les_chemins_longs(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(40, 40))
+    cadre = ui.box([("dossier", "/home/nils/" + "x" * 100 + "/rfact")])
+    assert "…" in cadre and "rfact" in cadre  # on garde la fin du chemin
+    assert max(ui.visible_len(ligne) for ligne in cadre.splitlines()) &lt;= 40
+
+
+def test_sans_couleurs_ni_unicode(texte_simple):
+    assert ui.logo() == "mini-agent"
+    assert "\033" not in ui.banner([("modèle", "qwen3.5:4b")])
+    assert ui.box([("a", "b")]).splitlines()[0].startswith("+")
+    assert ui.render_markdown("**gras** et `code`") == "**gras** et `code`"  # Markdown laissé tel quel
+
+
+def test_markdown(couleurs):
+    rendu = ui.render_markdown("# Titre\n- **gras** et `code`\n```\nprint(1)\n```")
+    lignes = rendu.splitlines()
+    assert ui.visible_len(lignes[0]) == len("Titre")
+    assert ui.ANSI_CODE.sub("", lignes[1]) == "• gras et code"
+    assert ui.ANSI_CODE.sub("", lignes[2]) == "│ print(1)"  # les ``` ne sont pas affichés
+    assert len(lignes) == 3
+
+
+def test_appel_d_outil_lisible(couleurs):
+    ligne = ui.ANSI_CODE.sub("", ui.tool_call(2, "edit_file", {"path": "calc.py", "old_text": "a", "new_text": "b"}))
+    assert ligne == "  ● edit_file calc.py  tour 2"  # le chemin, pas tout le JSON
+
+
+def test_resultat_en_erreur(couleurs):
+    assert ui.RED in ui.tool_result("Refusé : chemin refusé")
+    assert ui.RED not in ui.tool_result("Fichier calc.py modifié.")
+
+
+def test_jauge_de_contexte(couleurs):
+    assert "██████████░░░░░░░░░░" in ui.context_gauge("qwen3.5:4b", 4096, 8192, False)
+    assert ui.YELLOW in ui.context_gauge("qwen3.5:4b", 7000, 8192, False)
+    plein = ui.context_gauge("qwen3.5:4b", 9000, 8192, False)
+    assert ui.RED in plein and "plein" in plein
+    assert "≈882 / 2048" in ui.ANSI_CODE.sub("", ui.context_gauge("qwen3.5:4b", 882, 2048, True))
+
+
+def test_confirmation_avec_diff_en_couleurs(couleurs, monkeypatch, capsys):
+    questions = []
+    monkeypatch.setattr("builtins.input", lambda question: questions.append(question) or "o")
+    assert ui.confirm("--- a.py (avant)\n+++ a.py (après)\n-x = 1\n+x = 2\nÉcrire a.py ?") is True
+    sortie = capsys.readouterr().out
+    assert ui.style("-x = 1", ui.RED) in sortie and ui.style("+x = 2", ui.GREEN) in sortie
+    assert "Écrire a.py ?" in questions[0] and "[o/N]" in questions[0]
+
+
+def test_animation_sans_terminal(texte_simple):
+    with ui.thinking():
+        pass  # ne fait rien, et surtout ne bloque pas</pre></div>
+        <h3>Pitfalls to watch</h3>
+        <ul>
+          <li><strong>Hit while writing ui.py:</strong> Python 3.11 rejects the same quotes inside an f-string (<code>f"{d["a"]}"</code>). This is only allowed since Python 3.12: the code must run on 3.11, the project's minimum version.</li>
+          <li>Windows: in old consoles, ANSI codes only work after <code>os.system("")</code>, called at startup. Windows Terminal understands them directly.</li>
+          <li>Font: the logo and boxes use box-drawing characters (<code>█ ╗ ─ │</code>). Consolas, Cascadia Mono and Menlo have them; otherwise, squares appear: change the font, or use <code>NO_COLOR</code>.</li>
+          <li>macOS Terminal only supports 256 colours: hence the <code>38;5;N</code> palette rather than 24-bit colours (<code>38;2;R;G;B</code>), which only some terminals display.</li>
+          <li>The animation writes while the program waits: if other text were printed at the same time, lines would get mixed up. So it only wraps the model call, never a confirmation.</li>
+        </ul>
+      </div>
+    </div>
+
     <h2 id="mini-agent-code-en">Full code of the final version</h2>
-    <p>Every file of the final version (after step 16), in full. The scripts of steps 1 to 4 are given in full in their step.</p>
+    <p>Every file of the final version (after step 17), in full. The scripts of steps 1 to 4 are given in full in their step.</p>
 
     <div class="tuto-card" id="mini-agent-code-a-en">
       <div class="tuto-card-header">
@@ -10921,6 +12481,7 @@ import platform
 from pathlib import Path
 from typing import Callable
 
+from mini_agent import ui
 from mini_agent.config import MAX_OUTPUT_CHARS, MAX_TOURS
 from mini_agent.guards import truncate
 from mini_agent.tools import ToolContext, execute_tool, tool_schemas
@@ -10928,31 +12489,6 @@ from mini_agent.tools import ToolContext, execute_tool, tool_schemas
 # Une fonction qui reçoit (messages, schémas des outils) et renvoie le message
 # de l'assistant. En vrai : llm.chat. Dans les tests : un faux modèle.
 ChatFunction = Callable[[list[dict], list[dict]], dict]
-
-
-# ─────────────────────────── Affichage ───────────────────────────
-
-# Codes couleur ANSI. NO_COLOR=1 les désactive (convention https://no-color.org).
-USE_COLOR = "NO_COLOR" not in os.environ
-GREY, RED, YELLOW, CYAN = "90", "31", "33", "36"
-
-
-def color(text: str, code: str) -&gt; str:
-    return f"\033[{code}m{text}\033[0m" if USE_COLOR else text
-
-
-def log_tool_call(tour: int, name: str, arguments) -&gt; None:
-    args = json.dumps(arguments, ensure_ascii=False)
-    if len(args) &gt; 120:
-        args = args[:120] + "…"
-    print(color(f"[tour {tour}] ", GREY) + color(f"{name}", CYAN) + color(f" {args}", GREY))
-
-
-def log_tool_result(result: str) -&gt; None:
-    is_error = result.startswith(("Erreur", "Refusé"))
-    lines = result.splitlines() or [""]
-    preview = lines[0][:100] + (f"  (+{len(lines) - 1} lignes)" if len(lines) &gt; 1 else "")
-    print(color(f"   → {preview}", RED if is_error else GREY))
 
 
 # ─────────────────────────── Prompt système ───────────────────────────
@@ -11000,7 +12536,7 @@ def run_turn(chat: ChatFunction, messages: list[dict], ctx: ToolContext, max_tou
         for call in tool_calls:
             name = call["function"]["name"]
             arguments = call["function"].get("arguments", {})
-            log_tool_call(tour, name, arguments)
+            print(ui.tool_call(tour, name, arguments))
 
             # Détection de boucle : le même appel deux fois de suite ne
             # donnera pas un résultat différent, on le signale au modèle.
@@ -11015,7 +12551,7 @@ def run_turn(chat: ChatFunction, messages: list[dict], ctx: ToolContext, max_tou
             previous_call = signature
 
             result = truncate(result, MAX_OUTPUT_CHARS)
-            log_tool_result(result)
+            print(ui.tool_result(result))
             # 2) Puis le résultat de l'outil, avec le rôle "tool".
             messages.append({"role": "tool", "tool_name": name, "content": result})
 
@@ -11040,6 +12576,7 @@ commandes peuvent modifier.
 """
 
 import re
+from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
@@ -11116,6 +12653,9 @@ class Session:
     context_estimated: bool = False  # vrai si context_tokens est une estimation (étape 16)
     session_id: str | None = None  # nom du fichier de sauvegarde (étape 15)
     title: str = ""  # titre de la sauvegarde : début de la première demande
+    # Ce qui s'affiche pendant l'attente du modèle (étape 17) : rien par défaut,
+    # l'animation de ui.thinking dans la vraie interface.
+    waiting: Callable = nullcontext
 
     def __post_init__(self) -&gt; None:
         self.reset()
@@ -11151,7 +12691,8 @@ class Session:
     def chat(self, messages: list[dict], tools: list[dict]) -&gt; dict:
         """La fonction `chat` donnée à la boucle. Elle lit self.config à chaque
         appel : un /model ou un /temp s'applique dès l'appel suivant."""
-        data = llm.chat_full(self.config, messages, tools)
+        with self.waiting():
+            data = llm.chat_full(self.config, messages, tools)
         # Tokens lus + tokens générés : la place occupée dans le contexte.
         self.context_tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
         self.context_estimated = False
@@ -11374,7 +12915,8 @@ def compact(session) -&gt; str:
     text = truncate(transcript(conversation), session.config.num_ctx * CHARS_PER_TOKEN // 2)
     instructions = (PROMPTS_DIR / "COMPACT.md").read_text(encoding="utf-8")
     # Appel sans outils : on veut du texte, pas des tool calls.
-    reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
+    with session.waiting():
+        reply = llm.chat(session.config, [{"role": "system", "content": instructions}, {"role": "user", "content": text}])
     summary = (reply.get("content") or "").strip()
     session.remember_title()  # avant que la première demande ne disparaisse
     session.messages = [
@@ -11652,6 +13194,308 @@ def execute_command(session: Session, line: str) -&gt; str:
     <div class="tuto-card" id="mini-agent-code-k-en">
       <div class="tuto-card-header">
         <span class="step-num">K</span>
+        <span class="tuto-card-title">src/mini_agent/ui.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">src/mini_agent/ui.py</div>
+        <div class="code-block"><pre>"""Une interface plus jolie, sans dépendance (étape 17).
+
+Tout passe par des codes ANSI : « \\033[...m » change la couleur ou le style
+du texte qui suit, « \\033[0m » revient au style normal. Les couleurs sont
+prises dans la palette de 256 couleurs, connue de Windows Terminal comme
+du Terminal de macOS.
+
+On n'utilise que des caractères présents dans les polices de console
+courantes (Consolas, Menlo...). Si la sortie n'est pas un terminal
+(redirection vers un fichier) ou si NO_COLOR est défini, on affiche du
+texte simple.
+"""
+
+import itertools
+import json
+import os
+import re
+import shutil
+import sys
+import threading
+import time
+from contextlib import contextmanager
+
+
+def _supports_style() -&gt; bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+
+def _supports_unicode() -&gt; bool:
+    """Vrai si la console sait afficher les caractères du logo et des cadres."""
+    try:
+        "█╗║│─┌●›…".encode(sys.stdout.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+STYLE = _supports_style()
+UNICODE = _supports_unicode()
+
+# Codes de style. « 38;5;N » choisit la couleur N de la palette de 256.
+BOLD = "1"
+ACCENT = "38;5;45"  # cyan
+GREY = "38;5;245"
+SHADOW = "38;5;240"  # gris foncé, pour l'ombre du logo
+GREEN = "38;5;78"
+RED = "38;5;203"
+YELLOW = "38;5;221"
+CODE = "38;5;117"  # bleu clair, pour le code
+# Dégradé du logo, de gauche à droite : du cyan au violet.
+GRADIENT = ["38;5;51", "38;5;45", "38;5;39", "38;5;33", "38;5;63", "38;5;99", "38;5;135", "38;5;171"]
+
+# Le logo, dessiné dans le style « ANSI Shadow » : des blocs █ pour les
+# lettres, et des traits doubles (╗ ║ ╝) pour leur ombre.
+LOGO = """\
+███╗   ███╗██╗███╗   ██╗██╗       █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+████╗ ████║██║████╗  ██║██║      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██╔████╔██║██║██╔██╗ ██║██║█████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
+██║╚██╔╝██║██║██║╚██╗██║██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
+██║ ╚═╝ ██║██║██║ ╚████║██║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║
+╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝"""
+
+ANSI_CODE = re.compile(r"\033\[[0-9;]*[mK]")
+
+
+def style(text: str, *codes: str) -&gt; str:
+    """Entoure le texte des codes ANSI demandés (ou le laisse tel quel)."""
+    if not STYLE or not codes:
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
+
+def visible_len(text: str) -&gt; int:
+    """Longueur affichée d'un texte : les codes ANSI ne prennent pas de place."""
+    return len(ANSI_CODE.sub("", text))
+
+
+def shorten(text: str, width: int) -&gt; str:
+    """Raccourcit par le début (on garde la fin d'un chemin, la plus parlante)."""
+    if len(text) &lt;= width:
+        return text
+    return ("…" if UNICODE else "...") + text[-(width - 1):]
+
+
+def symbol(fancy: str, plain: str) -&gt; str:
+    return fancy if UNICODE else plain
+
+
+# ─────────────────────────── Démarrage ───────────────────────────
+
+
+def logo() -&gt; str:
+    lines = LOGO.splitlines()
+    width = max(len(line) for line in lines)
+    # Terminal trop étroit ou police sans ces caractères : titre simple.
+    if not UNICODE or shutil.get_terminal_size().columns &lt; width + 2:
+        return style("mini-agent", BOLD, ACCENT)
+    colored = []
+    for line in lines:
+        chars = []
+        for column, char in enumerate(line):
+            if char == "█":
+                # La couleur dépend de la colonne : c'est ce qui fait le dégradé.
+                chars.append(style(char, GRADIENT[column * len(GRADIENT) // width]))
+            elif char == " ":
+                chars.append(char)
+            else:
+                chars.append(style(char, SHADOW))
+        colored.append("".join(chars))
+    return "\n".join(colored)
+
+
+def box(rows: list[tuple[str, str]]) -&gt; str:
+    """Un encadré de lignes « étiquette   valeur »."""
+    label_width = max(len(label) for label, _ in rows)
+    value_width = shutil.get_terminal_size().columns - label_width - 9
+    rows = [(label, shorten(value, value_width)) for label, value in rows]
+    width = max(label_width + 3 + len(value) for _, value in rows)
+    h, v = symbol("─", "-"), symbol("│", "|")
+    top = style(symbol("┌", "+") + h * (width + 2) + symbol("┐", "+"), GREY)
+    bottom = style(symbol("└", "+") + h * (width + 2) + symbol("┘", "+"), GREY)
+    lines = [top]
+    for label, value in rows:
+        padding = " " * (width - label_width - 3 - len(value))
+        lines.append(f"{style(v, GREY)} {style(label.ljust(label_width), GREY)}   {style(value, BOLD)}{padding} {style(v, GREY)}")
+    lines.append(bottom)
+    return "\n".join(lines)
+
+
+def banner(rows: list[tuple[str, str]]) -&gt; str:
+    dot = symbol(" · ", " - ")
+    hint = (
+        style("/help", ACCENT) + style(" commandes", GREY) + style(dot, GREY)
+        + style("@fichier", ACCENT) + style(" joindre un fichier", GREY) + style(dot, GREY)
+        + style("/quit", ACCENT) + style(" quitter", GREY)
+    )
+    return f"\n{logo()}\n{style('  un agent de code minimal autour d’Ollama', GREY)}\n\n{box(rows)}\n {hint}"
+
+
+# ─────────────────────────── Conversation ───────────────────────────
+
+
+def prompt() -&gt; str:
+    """L'invite affichée devant la saisie de l'utilisateur."""
+    return "\n" + style(symbol("›", "&gt;"), ACCENT, BOLD) + " "
+
+
+@contextmanager
+def thinking(label: str = "le modèle réfléchit"):
+    """Petite animation pendant qu'on attend la réponse du modèle.
+
+    Elle tourne dans un fil d'exécution (thread) séparé : le programme
+    principal, lui, est bloqué dans la requête HTTP.
+    """
+    if not STYLE:
+        yield
+        return
+    stop = threading.Event()
+
+    def animate() -&gt; None:
+        start = time.monotonic()
+        dots = symbol("…", "...")
+        for frame in itertools.cycle("|/-\\"):
+            elapsed = time.monotonic() - start
+            sys.stdout.write(f"\r  {style(frame, ACCENT)} {style(f'{label}{dots} {elapsed:.0f} s', GREY)}")
+            sys.stdout.flush()
+            if stop.wait(0.1):  # attend 0,1 s, ou s'arrête si on le lui demande
+                break
+        sys.stdout.write("\r\033[K")  # efface la ligne de l'animation
+        sys.stdout.flush()
+
+    thread = threading.Thread(target=animate, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
+
+
+INLINE_CODE = re.compile(r"`([^`]+)`")
+BOLD_TEXT = re.compile(r"\*\*(.+?)\*\*")
+BULLET = re.compile(r"^(\s*)[-*] (.*)")
+
+
+def render_markdown(text: str) -&gt; str:
+    """Un rendu très simple du Markdown des réponses : titres, gras, `code`,
+    listes et blocs de code. Sans couleurs, le texte reste tel quel."""
+    if not STYLE:
+        return text
+    lines, in_code = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code  # les lignes ``` elles-mêmes ne sont pas affichées
+            continue
+        if in_code:
+            lines.append(style(symbol("│ ", "| "), GREY) + style(line, CODE))
+            continue
+        if line.startswith("#"):
+            lines.append(style(line.lstrip("#").strip(), BOLD, ACCENT))
+            continue
+        bullet = BULLET.match(line)
+        if bullet:
+            line = f"{bullet.group(1)}{symbol('•', '-')} {bullet.group(2)}"
+        line = BOLD_TEXT.sub(lambda match: style(match.group(1), BOLD), line)
+        line = INLINE_CODE.sub(lambda match: style(match.group(1), CODE), line)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def answer(text: str) -&gt; str:
+    """La réponse finale de l'agent, sous un petit en-tête."""
+    header = style(symbol("●", "*"), ACCENT) + " " + style("mini-agent", BOLD)
+    body = "\n".join("  " + line for line in render_markdown(text).splitlines())
+    return f"\n{header}\n{body}"
+
+
+def context_gauge(model: str, used: int, size: int, estimated: bool) -&gt; str:
+    """Une jauge de remplissage du contexte, affichée sous chaque réponse."""
+    ratio = min(1.0, used / size)
+    filled = round(ratio * 20)
+    bar = symbol("█", "#") * filled + symbol("░", "-") * (20 - filled)
+    level = RED if used &gt;= size else YELLOW if used &gt;= 0.75 * size else GREY
+    dot = symbol(" · ", " - ")
+    text = (
+        style(f"  {model}{dot}contexte ", GREY) + style(bar, level)
+        + style(f" {symbol('≈', '~') if estimated else ''}{used} / {size} tokens ({int(ratio * 100)} %)", GREY)
+    )
+    if used &gt;= size:
+        text += style("  plein : Ollama a coupé le début de la conversation", RED)
+    return text
+
+
+# ─────────────────────────── Outils ───────────────────────────
+
+# L'argument le plus parlant de chaque outil, affiché à la place du JSON.
+MAIN_ARGUMENT = {"read_file": "path", "list_files": "path", "edit_file": "path", "run_command": "command", "load_skill": "name"}
+
+
+def tool_call(tour: int, name: str, arguments) -&gt; str:
+    key = MAIN_ARGUMENT.get(name)
+    if isinstance(arguments, dict) and key in arguments:
+        detail = str(arguments[key])
+    elif isinstance(arguments, dict) and not arguments:
+        detail = ""
+    else:
+        detail = json.dumps(arguments, ensure_ascii=False)
+    detail = detail if len(detail) &lt;= 80 else detail[:79] + symbol("…", "...")
+    return f"  {style(symbol('●', '*'), ACCENT)} {style(name, BOLD)} {detail}  {style(f'tour {tour}', GREY)}"
+
+
+def tool_result(result: str) -&gt; str:
+    is_error = result.startswith(("Erreur", "Refusé"))
+    lines = result.splitlines() or [""]
+    preview = lines[0][:100] + (f"  (+{len(lines) - 1} lignes)" if len(lines) &gt; 1 else "")
+    return style(f"    {symbol('└', '`-')} {preview}", RED if is_error else GREY)
+
+
+def confirm(question: str) -&gt; bool:
+    """Comme guards.ask_confirmation, avec le diff en couleurs."""
+    lines = question.splitlines() or [""]
+    for line in lines[:-1]:
+        if line.startswith(("+++", "---")):
+            line = style(line, GREY)
+        elif line.startswith("+"):
+            line = style(line, GREEN)
+        elif line.startswith("-"):
+            line = style(line, RED)
+        elif line.startswith("@@"):
+            line = style(line, CODE)
+        print("    " + line)  # décalé comme les appels d'outils
+    reply = input(f"  {style('?', YELLOW, BOLD)} {lines[-1]} {style('[o/N]', BOLD)} ")
+    return reply.strip().lower() in ("o", "oui")
+
+
+def info(text: str) -&gt; str:
+    """Un message secondaire (fichier joint, compactage...)."""
+    return style(f"  {text}", GREY)
+
+
+def warning(text: str) -&gt; str:
+    return style(f"  {text}", YELLOW)
+
+
+def error(text: str) -&gt; str:
+    return style(f"  {symbol('×', 'x')} {text}", RED)
+
+
+def indent(text: str) -&gt; str:
+    """Décale un bloc de texte (sortie des commandes /...)."""
+    return "\n".join("  " + line for line in text.splitlines())</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-l-en">
+      <div class="tuto-card-header">
+        <span class="step-num">L</span>
         <span class="tuto-card-title">src/mini_agent/cli.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -11665,6 +13509,7 @@ def execute_command(session: Session, line: str) -&gt; str:
 
 C'est ici qu'on assemble le harness : configuration, session (prompt
 système, outils, garde-fous), commandes /..., puis la boucle agentique.
+Tout l'affichage passe par ui.py (étape 17).
 """
 
 import argparse
@@ -11672,13 +13517,13 @@ import os
 
 import requests
 
-from mini_agent.agent import GREY, RED, YELLOW, color
+from mini_agent import ui
 from mini_agent.commands import execute_command
-from mini_agent.config import load_config
+from mini_agent.config import PROJECT_DIR_NAME, load_config
 from mini_agent.context import compact, needs_compaction
-from mini_agent.guards import ask_confirmation
 from mini_agent.history import find_session, resume_session, save_session
 from mini_agent.session import Session, create_session, find_mentions, load_project_instructions
+from mini_agent.tools import available_skills
 
 
 def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
@@ -11693,58 +13538,66 @@ def parse_args(argv: list[str] | None = None) -&gt; argparse.Namespace:
 
 
 def context_status(session: Session) -&gt; str:
-    """Une ligne qui montre la place occupée dans le contexte du modèle."""
-    used, size = session.context_tokens, session.config.num_ctx
-    text = f"[contexte : {'≈ ' if session.context_estimated else ''}{used} / {size} tokens]"
-    if used &gt;= size:
-        return color(text + " plein : Ollama a coupé le début de la conversation", RED)
-    if used &gt;= 0.75 * size:
-        return color(text + " presque plein", YELLOW)
-    return color(text, GREY)
+    """La jauge de contexte affichée sous chaque réponse."""
+    c = session.config
+    return ui.context_gauge(c.model, session.context_tokens, c.num_ctx, session.context_estimated)
 
 
 def handle_request(session: Session, text: str) -&gt; None:
     """Envoie une demande à l'agent et affiche sa réponse."""
     for path in find_mentions(text):
-        print(color(f"   + fichier joint : {path}", GREY))
+        print(ui.info(f"@ fichier joint : {path}"))
+    print()
     try:
         answer = session.ask(text)
     except requests.RequestException as error:
-        print(f"Erreur de communication avec Ollama : {error}")
+        print(ui.error(f"Erreur de communication avec Ollama : {error}"))
         return
-    print(f"\nagent &gt; {answer}")
-    print(context_status(session))
+    print(ui.answer(answer))
+    print("\n" + context_status(session))
     # Étape 16 : entre deux demandes, on compacte si le contexte est presque plein.
     if needs_compaction(session):
-        print(color("Contexte presque plein : compactage automatique de la conversation...", YELLOW))
+        print(ui.warning("Contexte presque plein : compactage automatique de la conversation..."))
         try:
             compact(session)
             print(context_status(session))
         except requests.RequestException as error:
-            print(f"Compactage impossible : {error}")
+            print(ui.error(f"Compactage impossible : {error}"))
     # Étape 15 : la conversation est sauvegardée après chaque demande.
     save_session(session)
 
 
+def project_summary(session: Session) -&gt; str:
+    """Une ligne qui résume ce que le projet apporte : AGENTS.md, skills, réglages."""
+    workdir = session.config.workdir
+    has_instructions = bool(load_project_instructions(workdir))
+    parts = ["AGENTS.md"] if has_instructions else []
+    parts.append(f"{len(available_skills(session.ctx.skills_dirs))} skills")
+    if (workdir / PROJECT_DIR_NAME / "config.toml").is_file():
+        parts.append("config.toml")
+    if not has_instructions:
+        parts.append("/init pour préparer le projet")
+    return ui.symbol(" · ", " - ").join(parts)
+
+
 def main() -&gt; None:
     if os.name == "nt":
-        os.system("")  # active les couleurs ANSI dans les anciennes consoles Windows
+        os.system("")  # active les codes ANSI (couleurs) dans les consoles Windows
 
     args = parse_args()
     config = load_config({"model": args.model, "temperature": args.temperature, "num_ctx": args.num_ctx, "url": args.url})
-    session = create_session(config, confirm=ask_confirmation)
+    session = create_session(config, confirm=ui.confirm)
+    session.waiting = ui.thinking  # animation pendant l'attente du modèle
 
-    print(f"mini-agent — modèle {config.model} sur {config.ollama_url}")
-    print(f"Dossier de travail : {config.workdir}")
-    if load_project_instructions(config.workdir):
-        print("Instructions du projet : AGENTS.md")
+    rows = [("modèle", config.model), ("serveur", config.ollama_url), ("dossier", str(config.workdir)), ("projet", project_summary(session))]
     if args.resume:
         data = find_session(config.workdir, "1")
         if data is None:
-            print("Aucune conversation à reprendre dans ce projet : nouvelle conversation.")
+            rows.append(("reprise", "aucune conversation sauvegardée : nouvelle conversation"))
         else:
             resume_session(session, data)
-            print(f"Conversation reprise : {data.get('title', '')} ({len(data['messages'])} messages)")
+            rows.append(("reprise", f"{data.get('title', '')} ({len(data['messages'])} messages)"))
+    print(ui.banner(rows))
 
     try:
         # Mode « une seule demande » : la demande est passée en argument.
@@ -11752,17 +13605,16 @@ def main() -&gt; None:
             handle_request(session, " ".join(args.demande))
             return
 
-        print("Tape ta demande, ou /help pour les commandes.")
         while True:
-            text = input("\nvous &gt; ").strip()
+            text = input(ui.prompt()).strip()
             if text in ("/quit", "/exit"):
                 break
             if text.startswith("/"):
-                print(execute_command(session, text))
+                print(ui.indent(execute_command(session, text)))
             elif text:
                 handle_request(session, text)
     except (KeyboardInterrupt, EOFError):
-        print("\nAu revoir.")
+        print("\n" + ui.info("Au revoir."))
 
 
 if __name__ == "__main__":
@@ -11772,9 +13624,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-l-en">
+    <div class="tuto-card" id="mini-agent-code-m-en">
       <div class="tuto-card-header">
-        <span class="step-num">L</span>
+        <span class="step-num">M</span>
         <span class="tuto-card-title">prompts/ + skills/</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -11846,9 +13698,9 @@ description: Écrire des tests pytest pour un module Python.
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-m-en">
+    <div class="tuto-card" id="mini-agent-code-n-en">
       <div class="tuto-card-header">
-        <span class="step-num">M</span>
+        <span class="step-num">N</span>
         <span class="tuto-card-title">demo/stats.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -11876,9 +13728,9 @@ if __name__ == "__main__":
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-n-en">
+    <div class="tuto-card" id="mini-agent-code-o-en">
       <div class="tuto-card-header">
-        <span class="step-num">N</span>
+        <span class="step-num">O</span>
         <span class="tuto-card-title">tests/test_config.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -11954,9 +13806,9 @@ def test_valeur_invalide(tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-o-en">
+    <div class="tuto-card" id="mini-agent-code-p-en">
       <div class="tuto-card-header">
-        <span class="step-num">O</span>
+        <span class="step-num">P</span>
         <span class="tuto-card-title">tests/test_guards.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12034,9 +13886,9 @@ def test_commandes_autorisees(commande, attendu):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-p-en">
+    <div class="tuto-card" id="mini-agent-code-q-en">
       <div class="tuto-card-header">
-        <span class="step-num">P</span>
+        <span class="step-num">Q</span>
         <span class="tuto-card-title">tests/test_tools.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12210,9 +14062,9 @@ def test_exception_python_renvoyee_au_modele(ctx):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-q-en">
+    <div class="tuto-card" id="mini-agent-code-r-en">
       <div class="tuto-card-header">
-        <span class="step-num">Q</span>
+        <span class="step-num">R</span>
         <span class="tuto-card-title">tests/test_agent.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12332,9 +14184,9 @@ def test_vrai_prompt_et_vraies_skills():
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-r-en">
+    <div class="tuto-card" id="mini-agent-code-s-en">
       <div class="tuto-card-header">
-        <span class="step-num">R</span>
+        <span class="step-num">S</span>
         <span class="tuto-card-title">tests/test_session.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12407,9 +14259,9 @@ def test_skills_du_projet(tmp_path, session):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-s-en">
+    <div class="tuto-card" id="mini-agent-code-t-en">
       <div class="tuto-card-header">
-        <span class="step-num">S</span>
+        <span class="step-num">T</span>
         <span class="tuto-card-title">tests/test_commands.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12553,9 +14405,9 @@ def test_init_cree_un_gitignore_pour_les_sessions(session, tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-t-en">
+    <div class="tuto-card" id="mini-agent-code-u-en">
       <div class="tuto-card-header">
-        <span class="step-num">T</span>
+        <span class="step-num">U</span>
         <span class="tuto-card-title">tests/test_history.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12658,9 +14510,9 @@ def test_suppression(session, tmp_path):
       </div>
     </div>
 
-    <div class="tuto-card" id="mini-agent-code-u-en">
+    <div class="tuto-card" id="mini-agent-code-v-en">
       <div class="tuto-card-header">
-        <span class="step-num">U</span>
+        <span class="step-num">V</span>
         <span class="tuto-card-title">tests/test_context.py</span>
         <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
@@ -12739,6 +14591,120 @@ def test_seuil_de_compactage(session):
     assert not needs_compaction(session)  # 6000 / 8192 = 73 %
     session.context_tokens = 6600
     assert needs_compaction(session)  # 80 %</pre></div>
+      </div>
+    </div>
+
+    <div class="tuto-card" id="mini-agent-code-w-en">
+      <div class="tuto-card-header">
+        <span class="step-num">W</span>
+        <span class="tuto-card-title">tests/test_ui.py</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-label">tests/test_ui.py</div>
+        <div class="code-block"><pre>"""Tests de l'interface (ui.py)."""
+
+import os
+from collections import namedtuple
+
+import pytest
+
+from mini_agent import ui
+
+Size = namedtuple("Size", "columns lines")
+
+
+@pytest.fixture
+def couleurs(monkeypatch):
+    """Comme dans un vrai terminal : couleurs et caractères Unicode."""
+    monkeypatch.setattr(ui, "STYLE", True)
+    monkeypatch.setattr(ui, "UNICODE", True)
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(120, 40))
+
+
+@pytest.fixture
+def texte_simple(monkeypatch):
+    """Comme une sortie redirigée vers un fichier : ni couleurs, ni Unicode."""
+    monkeypatch.setattr(ui, "STYLE", False)
+    monkeypatch.setattr(ui, "UNICODE", False)
+
+
+def test_style_et_longueur_visible(couleurs):
+    texte = ui.style("bonjour", ui.BOLD, ui.ACCENT)
+    assert texte == "\033[1;38;5;45mbonjour\033[0m"
+    assert ui.visible_len(texte) == 7
+
+
+def test_logo_en_degrade(couleurs):
+    logo = ui.logo()
+    assert ui.GRADIENT[0] in logo and ui.GRADIENT[-1] in logo  # du cyan au violet
+    largeurs = {ui.visible_len(ligne) for ligne in logo.splitlines()}
+    assert max(largeurs) == 77
+
+
+def test_logo_terminal_etroit(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(60, 40))
+    assert ui.visible_len(ui.logo()) == len("mini-agent")
+
+
+def test_encadre_aligne(couleurs):
+    cadre = ui.box([("modèle", "qwen3.5:4b"), ("dossier", "C:\\Users\\nilsm\\Documents\\projets\\rfact")])
+    assert len({ui.visible_len(ligne) for ligne in cadre.splitlines()}) == 1  # toutes les lignes ont la même largeur
+
+
+def test_encadre_raccourcit_les_chemins_longs(couleurs, monkeypatch):
+    monkeypatch.setattr(ui.shutil, "get_terminal_size", lambda fallback=None: Size(40, 40))
+    cadre = ui.box([("dossier", "/home/nils/" + "x" * 100 + "/rfact")])
+    assert "…" in cadre and "rfact" in cadre  # on garde la fin du chemin
+    assert max(ui.visible_len(ligne) for ligne in cadre.splitlines()) &lt;= 40
+
+
+def test_sans_couleurs_ni_unicode(texte_simple):
+    assert ui.logo() == "mini-agent"
+    assert "\033" not in ui.banner([("modèle", "qwen3.5:4b")])
+    assert ui.box([("a", "b")]).splitlines()[0].startswith("+")
+    assert ui.render_markdown("**gras** et `code`") == "**gras** et `code`"  # Markdown laissé tel quel
+
+
+def test_markdown(couleurs):
+    rendu = ui.render_markdown("# Titre\n- **gras** et `code`\n```\nprint(1)\n```")
+    lignes = rendu.splitlines()
+    assert ui.visible_len(lignes[0]) == len("Titre")
+    assert ui.ANSI_CODE.sub("", lignes[1]) == "• gras et code"
+    assert ui.ANSI_CODE.sub("", lignes[2]) == "│ print(1)"  # les ``` ne sont pas affichés
+    assert len(lignes) == 3
+
+
+def test_appel_d_outil_lisible(couleurs):
+    ligne = ui.ANSI_CODE.sub("", ui.tool_call(2, "edit_file", {"path": "calc.py", "old_text": "a", "new_text": "b"}))
+    assert ligne == "  ● edit_file calc.py  tour 2"  # le chemin, pas tout le JSON
+
+
+def test_resultat_en_erreur(couleurs):
+    assert ui.RED in ui.tool_result("Refusé : chemin refusé")
+    assert ui.RED not in ui.tool_result("Fichier calc.py modifié.")
+
+
+def test_jauge_de_contexte(couleurs):
+    assert "██████████░░░░░░░░░░" in ui.context_gauge("qwen3.5:4b", 4096, 8192, False)
+    assert ui.YELLOW in ui.context_gauge("qwen3.5:4b", 7000, 8192, False)
+    plein = ui.context_gauge("qwen3.5:4b", 9000, 8192, False)
+    assert ui.RED in plein and "plein" in plein
+    assert "≈882 / 2048" in ui.ANSI_CODE.sub("", ui.context_gauge("qwen3.5:4b", 882, 2048, True))
+
+
+def test_confirmation_avec_diff_en_couleurs(couleurs, monkeypatch, capsys):
+    questions = []
+    monkeypatch.setattr("builtins.input", lambda question: questions.append(question) or "o")
+    assert ui.confirm("--- a.py (avant)\n+++ a.py (après)\n-x = 1\n+x = 2\nÉcrire a.py ?") is True
+    sortie = capsys.readouterr().out
+    assert ui.style("-x = 1", ui.RED) in sortie and ui.style("+x = 2", ui.GREEN) in sortie
+    assert "Écrire a.py ?" in questions[0] and "[o/N]" in questions[0]
+
+
+def test_animation_sans_terminal(texte_simple):
+    with ui.thinking():
+        pass  # ne fait rien, et surtout ne bloque pas</pre></div>
       </div>
     </div>
 
