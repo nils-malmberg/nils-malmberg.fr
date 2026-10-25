@@ -918,6 +918,10 @@ def read_file(ctx: ToolContext, path: str) -&gt; str:
 def list_files(ctx: ToolContext, path: str = ".") -&gt; str:
     """Liste les fichiers d'un dossier (et de ses sous-dossiers)."""
     root = safe_path(ctx.workdir, path)
+    # Sans cette vérification, os.walk ignore en silence un dossier absent :
+    # on répondrait « aucun fichier » et le modèle croirait le dossier vide.
+    if not root.is_dir():
+        return f"Erreur : '{path}' n'est pas un dossier existant. Utilise '.' pour le dossier de travail."
     workdir = ctx.workdir.resolve()
     files = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -1148,13 +1152,24 @@ ctx = ToolContext(
     confirm=lambda question: input(f"{question} [o/N] ") == "o",
 )
 messages = [{"role": "user", "content": "Liste les fichiers du projet, puis lis pyproject.toml et donne ses dépendances."}]
-print(run_turn(lambda msgs, tools: llm.chat(config, msgs, tools), messages, ctx))</pre></div>
+answer = run_turn(lambda msgs, tools: llm.chat(config, msgs, tools), messages, ctx)
+
+# La boucle de l'étape 5 n'affiche rien : on relit la conversation pour voir
+# quels outils le modèle a appelés et ce qu'il a reçu en retour.
+print(f"Dossier de travail : {config.workdir}\n")
+for message in messages:
+    for call in message.get("tool_calls") or []:
+        print(f"appel    : {call['function']['name']} {call['function']['arguments']}")
+    if message["role"] == "tool":
+        print(f"résultat : {message['content'][:300]}\n")
+print(f"Réponse  : {answer}")</pre></div>
         <p>Toujours depuis la <strong>racine du projet</strong> (le dossier qui contient <code>pyproject.toml</code>) : pytest ne cherche les tests que sous le dossier courant. Lancé depuis <code>src/mini_agent/</code>, il affiche <code>collected 0 items</code>.</p>
         <div class="code-block"><pre>uv run python try_step5.py
 uv run pytest -q</pre></div>
         <h3>Ce qu'on doit observer</h3>
         <p>Un appel à <code>list_files</code>, puis à <code>read_file</code> sur <code>pyproject.toml</code>, puis une réponse qui cite <code>requests</code>. Les tests passent.</p>
         <h3>Pièges à surveiller</h3>
+        <div class="warning-block"><strong>Rencontré au premier essai réel :</strong> l'agent a répondu « le dossier de travail est vide ». Cause probable : le modèle a appelé <code>list_files</code> avec un chemin qui n'existe pas (par exemple le nom du projet, <code>mini-agent</code>). Pour un dossier absent, <code>os.walk</code> ne renvoie rien sans lever d'erreur : <code>list_files</code> répondait « (aucun fichier) » et le modèle l'a cru. Correction : <code>list_files</code> renvoie maintenant une erreur explicite qui lui dit d'utiliser <code>'.'</code>, et <code>try_step5.py</code> affiche les appels d'outils pour voir ce qui se passe.</div>
         <ul>
           <li>Le modèle appelle <code>read_file</code> sur un dossier, ou <code>list_files</code> sur un fichier : l'erreur lui est renvoyée.</li>
           <li><code>write_file</code> avec seulement la partie modifiée : le reste du fichier serait perdu. D'où « Remplace TOUT le contenu » dans la description et le diff montré avant écriture.</li>
@@ -2017,6 +2032,10 @@ def read_file(ctx: ToolContext, path: str) -&gt; str:
 def list_files(ctx: ToolContext, path: str = ".") -&gt; str:
     """Liste les fichiers d'un dossier (et de ses sous-dossiers)."""
     root = safe_path(ctx.workdir, path)
+    # Sans cette vérification, os.walk ignore en silence un dossier absent :
+    # on répondrait « aucun fichier » et le modèle croirait le dossier vide.
+    if not root.is_dir():
+        return f"Erreur : '{path}' n'est pas un dossier existant. Utilise '.' pour le dossier de travail."
     workdir = ctx.workdir.resolve()
     files = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -2633,6 +2652,13 @@ def test_list_files_ignore_dossiers_caches(ctx):
     assert "src/main.py" in resultat.splitlines()  # toujours des "/"
     assert ".venv" not in resultat
     assert "__pycache__" not in resultat
+
+
+def test_list_files_dossier_inexistant(ctx):
+    # Un dossier absent ne doit pas passer pour un dossier vide.
+    (ctx.workdir / "a.txt").write_text("", encoding="utf-8")
+    for path in ("mini-agent", "a.txt"):
+        assert "n'est pas un dossier existant" in execute_tool("list_files", {"path": path}, ctx)
 
 
 def test_write_file_avec_confirmation(ctx):
@@ -3751,6 +3777,10 @@ def read_file(ctx: ToolContext, path: str) -&gt; str:
 def list_files(ctx: ToolContext, path: str = ".") -&gt; str:
     """Liste les fichiers d'un dossier (et de ses sous-dossiers)."""
     root = safe_path(ctx.workdir, path)
+    # Sans cette vérification, os.walk ignore en silence un dossier absent :
+    # on répondrait « aucun fichier » et le modèle croirait le dossier vide.
+    if not root.is_dir():
+        return f"Erreur : '{path}' n'est pas un dossier existant. Utilise '.' pour le dossier de travail."
     workdir = ctx.workdir.resolve()
     files = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -3981,13 +4011,24 @@ ctx = ToolContext(
     confirm=lambda question: input(f"{question} [o/N] ") == "o",
 )
 messages = [{"role": "user", "content": "Liste les fichiers du projet, puis lis pyproject.toml et donne ses dépendances."}]
-print(run_turn(lambda msgs, tools: llm.chat(config, msgs, tools), messages, ctx))</pre></div>
+answer = run_turn(lambda msgs, tools: llm.chat(config, msgs, tools), messages, ctx)
+
+# La boucle de l'étape 5 n'affiche rien : on relit la conversation pour voir
+# quels outils le modèle a appelés et ce qu'il a reçu en retour.
+print(f"Dossier de travail : {config.workdir}\n")
+for message in messages:
+    for call in message.get("tool_calls") or []:
+        print(f"appel    : {call['function']['name']} {call['function']['arguments']}")
+    if message["role"] == "tool":
+        print(f"résultat : {message['content'][:300]}\n")
+print(f"Réponse  : {answer}")</pre></div>
         <p>Always from the <strong>project root</strong> (the folder containing <code>pyproject.toml</code>): pytest only looks for tests under the current folder. Started from <code>src/mini_agent/</code>, it prints <code>collected 0 items</code>.</p>
         <div class="code-block"><pre>uv run python try_step5.py
 uv run pytest -q</pre></div>
         <h3>What we should observe</h3>
         <p>A call to <code>list_files</code>, then to <code>read_file</code> on <code>pyproject.toml</code>, then an answer mentioning <code>requests</code>. The tests pass.</p>
         <h3>Pitfalls to watch</h3>
+        <div class="warning-block"><strong>Hit on the first real run:</strong> the agent answered "the working folder is empty". Likely cause: the model called <code>list_files</code> with a path that does not exist (for example the project name, <code>mini-agent</code>). For a missing folder, <code>os.walk</code> returns nothing without raising an error: <code>list_files</code> answered "(aucun fichier)" and the model believed it. Fix: <code>list_files</code> now returns an explicit error telling it to use <code>'.'</code>, and <code>try_step5.py</code> prints the tool calls so we can see what happens.</div>
         <ul>
           <li>The model calls <code>read_file</code> on a folder, or <code>list_files</code> on a file: the error is sent back to it.</li>
           <li><code>write_file</code> with only the modified part: the rest of the file would be lost. Hence "Remplace TOUT le contenu" in the description and the diff shown before writing.</li>
@@ -4850,6 +4891,10 @@ def read_file(ctx: ToolContext, path: str) -&gt; str:
 def list_files(ctx: ToolContext, path: str = ".") -&gt; str:
     """Liste les fichiers d'un dossier (et de ses sous-dossiers)."""
     root = safe_path(ctx.workdir, path)
+    # Sans cette vérification, os.walk ignore en silence un dossier absent :
+    # on répondrait « aucun fichier » et le modèle croirait le dossier vide.
+    if not root.is_dir():
+        return f"Erreur : '{path}' n'est pas un dossier existant. Utilise '.' pour le dossier de travail."
     workdir = ctx.workdir.resolve()
     files = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -5466,6 +5511,13 @@ def test_list_files_ignore_dossiers_caches(ctx):
     assert "src/main.py" in resultat.splitlines()  # toujours des "/"
     assert ".venv" not in resultat
     assert "__pycache__" not in resultat
+
+
+def test_list_files_dossier_inexistant(ctx):
+    # Un dossier absent ne doit pas passer pour un dossier vide.
+    (ctx.workdir / "a.txt").write_text("", encoding="utf-8")
+    for path in ("mini-agent", "a.txt"):
+        assert "n'est pas un dossier existant" in execute_tool("list_files", {"path": path}, ctx)
 
 
 def test_write_file_avec_confirmation(ctx):
