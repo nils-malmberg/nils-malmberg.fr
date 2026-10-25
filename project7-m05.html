@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 5 - Docker, Compose et Kubernetes - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m05-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 5</div>
+    <h1>Docker, Compose et Kubernetes</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>« Ça marche chez moi. » Ce module traite l'outil qui a rendu cette phrase obsolète : le conteneur. On part de ce qu'est réellement un conteneur — et de ce qui le distingue d'une machine virtuelle —, puis on construit une image pour un projet Python, on orchestre une pile complète avec Docker Compose, et on termine par ce qu'il faut savoir de Kubernetes pour lire un manifeste et comprendre ce que fait une équipe plateforme.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#probleme">Le problème que Docker résout</a></li>
+        <li><a href="#vm">Conteneur ou machine virtuelle ?</a></li>
+        <li><a href="#vocabulaire">Image, conteneur, couche, registre</a></li>
+        <li><a href="#commandes">Les commandes du quotidien</a></li>
+        <li><a href="#dockerfile">Écrire un Dockerfile</a></li>
+        <li><a href="#volumes">Volumes : faire survivre les données</a></li>
+        <li><a href="#reseaux">Réseaux et variables d'environnement</a></li>
+        <li><a href="#compose">Docker Compose</a></li>
+        <li><a href="#k8s">Kubernetes</a></li>
+      </ol>
+    </div>
+
+    <h2 id="probleme">1. Le problème que Docker résout</h2>
+    <p>Un projet Python ne dépend pas que de Python. Il dépend d'une version de l'interpréteur, de bibliothèques compilées (BLAS, libpq, ffmpeg), de paquets système, de variables d'environnement, parfois d'un pilote GPU et d'une version de CUDA. Un environnement virtuel (module 1) fige les bibliothèques <em>Python</em> ; il ne fige rien de tout le reste. C'est pourquoi le même code fonctionne sur un portable et échoue sur le serveur.</p>
+    <p>Un <strong>conteneur</strong> emporte tout ce dont l'application a besoin — code, dépendances Python, bibliothèques système, fichiers de configuration — dans une unité qui s'exécute à l'identique partout où tourne un moteur de conteneurs. Le bénéfice ne se limite pas au déploiement : il rend un résultat reproductible dans six mois, ce qui est exactement ce qu'on cherche en data science (module 26).</p>
+
+    <h2 id="vm">2. Conteneur ou machine virtuelle ?</h2>
+    <p>Les deux isolent une application, mais à des niveaux très différents.</p>
+
+    <div class="code-label">deux façons d'isoler</div>
+    <div class="code-block"><pre>        MACHINE VIRTUELLE                       CONTENEUR
+  ┌───────────────────────────┐        ┌───────────────────────────┐
+  │  App A    │    App B      │        │  App A    │    App B      │
+  ├───────────┼───────────────┤        ├───────────┼───────────────┤
+  │ Biblioth. │  Biblioth.    │        │ Biblioth. │  Biblioth.    │
+  ├───────────┼───────────────┤        ├───────────┴───────────────┤
+  │ Noyau OS  │  Noyau OS     │ ←──┐   │   moteur de conteneurs    │
+  │  invité   │   invité      │    │   ├───────────────────────────┤
+  ├───────────┴───────────────┤    │   │   NOYAU OS DE L'HÔTE      │ ← partagé
+  │        Hyperviseur        │    │   ├───────────────────────────┤
+  ├───────────────────────────┤    │   │        Matériel           │
+  │      Noyau OS hôte        │    │   └───────────────────────────┘
+  ├───────────────────────────┤    │
+  │        Matériel           │    └── chaque VM embarque un système
+  └───────────────────────────┘        d'exploitation complet</pre></div>
+
+    <p>Une <strong>machine virtuelle</strong> simule un ordinateur entier : l'hyperviseur lui présente un processeur, de la mémoire et des disques virtuels, sur lesquels on installe un système d'exploitation complet avec son propre noyau. Isolation très forte, mais coût élevé — plusieurs gigaoctets sur disque, plusieurs centaines de mégaoctets de RAM, des dizaines de secondes de démarrage.</p>
+    <p>Un <strong>conteneur</strong> ne simule rien. C'est un processus ordinaire du système hôte, à qui le noyau ment sur ce qu'il voit :</p>
+    <ul>
+      <li>les <strong>namespaces</strong> cloisonnent sa vision — il ne voit que ses propres processus, sa propre arborescence de fichiers, ses propres interfaces réseau ;</li>
+      <li>les <strong>cgroups</strong> (<em>control groups</em>) limitent ce qu'il consomme — tant de CPU, tant de mémoire.</li>
+    </ul>
+    <p>Puisqu'il n'y a pas de noyau invité, le coût est celui d'un processus : quelques mégaoctets, un démarrage en quelques dizaines de millisecondes. L'analogie la plus juste : une VM est une <em>maison individuelle</em> avec ses propres fondations ; un conteneur est un <em>appartement</em> dans un immeuble — murs séparés, mais fondations et structure partagées.</p>
+
+    <div class="warning-block">
+      <strong>La conséquence à connaître.</strong> Le noyau étant partagé, un conteneur Linux ne peut pas tourner nativement sur un noyau Windows ou macOS : Docker Desktop y fait en réalité tourner une petite machine virtuelle Linux, ce qui explique les performances d'accès disque parfois décevantes sur ces systèmes. Autre conséquence : l'isolation d'un conteneur est réelle mais <em>moins forte</em> que celle d'une VM, puisqu'une faille du noyau les concerne tous. Pour exécuter du code non fiable, une VM reste plus sûre.
+    </div>
+
+    <h2 id="vocabulaire">3. Image, conteneur, couche, registre</h2>
+    <ul>
+      <li>Une <strong>image</strong> est un modèle figé, en lecture seule : un système de fichiers complet plus des métadonnées (commande à lancer, variables d'environnement, port exposé). C'est l'équivalent d'une classe.</li>
+      <li>Un <strong>conteneur</strong> est une instance en cours d'exécution de cette image, avec une fine couche inscriptible par-dessus. C'est l'équivalent d'un objet. On peut lancer vingt conteneurs à partir de la même image.</li>
+      <li>Une <strong>couche</strong> (<em>layer</em>) est une strate de l'image, produite par une instruction du Dockerfile. Les couches sont empilées, partagées entre images et mises en cache individuellement — c'est ce qui rend les reconstructions rapides et les téléchargements légers.</li>
+      <li>Un <strong>registre</strong> est un entrepôt d'images : Docker Hub (public), GitHub Container Registry, ou un registre privé d'entreprise.</li>
+    </ul>
+
+    <h2 id="commandes">4. Les commandes du quotidien</h2>
+
+    <div class="code-label">bash — lancer et inspecter</div>
+    <div class="code-block"><pre># lancer un conteneur (télécharge l'image si nécessaire)
+docker run hello-world
+
+# interactif : un shell dans un conteneur Python jetable
+docker run -it --rm python:3.12-slim bash
+#          │   └─ --rm : supprime le conteneur à la sortie (sinon il s'accumule)
+#          └─ -it : mode interactif avec terminal
+
+# en arrière-plan, avec un nom et une redirection de port
+docker run -d --name mon-api -p 8000:8000 mon-image:1.0
+#          │              └─ port 8000 de la MACHINE → port 8000 du CONTENEUR
+#          └─ -d : detached, rend la main immédiatement
+
+# voir ce qui tourne
+docker ps                    # conteneurs en cours
+docker ps -a                 # y compris ceux qui sont arrêtés
+docker stats                 # consommation CPU / mémoire en direct
+
+# lire les journaux
+docker logs mon-api          # tout depuis le début
+docker logs -f --tail 50 mon-api    # suivre en direct les 50 dernières lignes
+
+# entrer dans un conteneur qui tourne (LE réflexe de débogage)
+docker exec -it mon-api bash
+docker exec mon-api python -c "import torch; print(torch.cuda.is_available())"
+
+# inspecter en détail (configuration, réseaux, montages)
+docker inspect mon-api
+docker port mon-api          # quelles redirections de ports sont actives</pre></div>
+
+    <div class="code-label">bash — construire, partager, nettoyer</div>
+    <div class="code-block"><pre># construire une image à partir du Dockerfile du répertoire courant
+docker build -t mon-api:1.0 .
+docker build -t mon-api:1.0 --build-arg VERSION=1.0 -f docker/Dockerfile .
+
+# lister, étiqueter, publier
+docker images
+docker tag mon-api:1.0 ghcr.io/nils/mon-api:1.0
+docker login ghcr.io &amp;&amp; docker push ghcr.io/nils/mon-api:1.0
+docker pull postgres:16
+
+# arrêter et supprimer
+docker stop mon-api &amp;&amp; docker rm mon-api
+docker rmi mon-api:1.0
+
+# faire de la place (Docker consomme beaucoup de disque avec le temps)
+docker system df             # ce qui occupe l'espace
+docker container prune       # conteneurs arrêtés
+docker image prune -a        # images non utilisées
+docker system prune -a --volumes    # grand nettoyage — supprime aussi les VOLUMES</pre></div>
+
+    <h2 id="dockerfile">5. Écrire un Dockerfile</h2>
+    <p>Un Dockerfile est une recette : chaque instruction produit une couche. Voici les instructions à connaître, avant l'exemple complet.</p>
+
+    <div class="code-label">les instructions essentielles</div>
+    <div class="code-block"><pre>FROM python:3.12-slim      image de départ ("slim" = sans les outils de compilation)
+WORKDIR /app               répertoire de travail ; le crée si besoin
+COPY source destination    copie depuis la machine vers l'image
+RUN commande               exécute PENDANT LA CONSTRUCTION (installer des paquets…)
+ENV CLE=valeur             variable d'environnement, présente à l'exécution
+ARG CLE=valeur             variable disponible seulement pendant la construction
+EXPOSE 8000                documentation du port utilisé (ne publie rien par lui-même)
+USER app                   change d'utilisateur : ne pas rester root
+HEALTHCHECK …              commande que Docker lance pour vérifier la santé
+CMD ["uvicorn", "…"]       commande lancée AU DÉMARRAGE du conteneur
+ENTRYPOINT ["python"]      exécutable fixe ; CMD fournit alors ses arguments</pre></div>
+
+    <div class="step-block">
+      <h4>Le cache des couches : la règle qui divise les temps de build par dix</h4>
+      <p>Docker met en cache chaque couche et la réutilise tant que ni l'instruction ni les fichiers qu'elle copie n'ont changé. Dès qu'une couche est invalidée, <strong>toutes les suivantes</strong> le sont aussi. D'où la règle d'or : <em>ordonner du plus stable au plus volatil</em>. Les dépendances changent une fois par mois, le code change à chaque commit. Si l'on copie tout le projet avant d'installer les dépendances, la moindre modification d'une ligne de code réinstalle l'intégralité de l'environnement — plusieurs minutes à chaque build. En copiant d'abord <code>pyproject.toml</code> et <code>uv.lock</code>, cette couche reste valide tant que les dépendances ne bougent pas.</p>
+    </div>
+
+    <div class="code-label">Dockerfile — projet Python avec UV, construction en deux étapes</div>
+    <div class="code-block"><pre># ════════ étape 1 : construire l'environnement ════════
+FROM python:3.12-slim AS builder
+
+# on récupère le binaire uv depuis son image officielle
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+# ── couche STABLE : les dépendances ──
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+#   --frozen : interdit de modifier le lock (échoue si désynchronisé)
+#   --no-dev : pas de pytest/ruff dans l'image de production
+
+# ── couche VOLATILE : le code ──
+COPY src/ src/
+RUN uv sync --frozen --no-dev
+
+# ════════ étape 2 : image finale, sans outils de build ════════
+FROM python:3.12-slim
+
+WORKDIR /app
+# on ne recopie que le résultat : l'environnement et le code
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+ENV PATH="/app/.venv/bin:$PATH"
+
+# un utilisateur non privilégié : si l'application est compromise,
+# l'attaquant n'est pas root dans le conteneur
+RUN useradd --create-home app &amp;&amp; chown -R app /app
+USER app
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["uvicorn", "mon_projet.api:app", "--host", "0.0.0.0", "--port", "8000"]</pre></div>
+
+    <p>La <strong>construction en deux étapes</strong> (<em>multi-stage</em>) est le point clé : compilateurs, caches et fichiers intermédiaires restent dans l'étape jetable, et seul le résultat utile est recopié dans l'image finale. On passe typiquement de 1,2 Go à 200 Mo — ce qui accélère les déploiements et réduit la surface d'attaque.</p>
+    <p>Deux détails qui comptent : <code>--host 0.0.0.0</code> est obligatoire, car écouter sur <code>127.0.0.1</code> depuis un conteneur signifie « uniquement depuis l'intérieur du conteneur », et la redirection de port ne verrait rien. Et le fichier <code>.dockerignore</code> est indispensable :</p>
+
+    <div class="code-label">.dockerignore</div>
+    <div class="code-block"><pre>.git
+.venv
+data/
+notebooks/
+models/
+__pycache__/
+*.parquet
+*.csv
+.pytest_cache
+.ruff_cache</pre></div>
+    <p>Sans lui, la commande <code>docker build</code> envoie l'intégralité du répertoire au démon Docker avant même de commencer — y compris les 10 Go de données et l'historique Git.</p>
+
+    <h2 id="volumes">6. Volumes : faire survivre les données</h2>
+    <p>Un conteneur est <strong>éphémère</strong> : tout ce qu'il écrit dans son système de fichiers disparaît quand on le supprime. C'est voulu — un conteneur doit être jetable et remplaçable — mais il faut donc un mécanisme pour les données qui doivent survivre. Deux formes de montage :</p>
+
+    <div class="code-label">bash — volume nommé et bind mount</div>
+    <div class="code-block"><pre># VOLUME NOMMÉ : géré par Docker, stocké dans son espace. Pour les DONNÉES.
+docker volume create donnees-pg
+docker run -d --name pg -v donnees-pg:/var/lib/postgresql/data postgres:16
+#                       └─ le volume survit à la suppression du conteneur
+
+docker volume ls
+docker volume inspect donnees-pg
+docker volume rm donnees-pg          # là seulement, les données disparaissent
+
+# BIND MOUNT : un dossier de la MACHINE est monté dans le conteneur.
+# Pour le DÉVELOPPEMENT : le code modifié est visible immédiatement.
+docker run -it --rm -v "$(pwd)":/app -w /app python:3.12-slim python script.py
+
+# montage en lecture seule : un jeu de données que le conteneur ne doit pas modifier
+docker run -v /data/brut:/data:ro mon-image</pre></div>
+
+    <p>La distinction pratique : <em>volume nommé</em> pour ce que produit l'application (base de données, modèles entraînés, fichiers téléversés) ; <em>bind mount</em> pour ce qui vient de la machine (code source en développement, données brutes en lecture seule). Et attention aux permissions : un fichier créé par le conteneur appartient à l'utilisateur du conteneur, ce qui peut donner des fichiers root sur la machine hôte.</p>
+
+    <h2 id="reseaux">7. Réseaux et variables d'environnement</h2>
+    <p>Chaque conteneur reçoit sa propre interface réseau. Trois choses à savoir :</p>
+
+    <div class="code-label">bash — réseaux</div>
+    <div class="code-block"><pre># créer un réseau : les conteneurs qui y sont attachés se voient PAR LEUR NOM
+docker network create app-net
+
+docker run -d --name base --network app-net postgres:16
+docker run -d --name api  --network app-net -p 8000:8000 mon-api:1.0
+# depuis "api", la base est joignable à l'adresse "base:5432" — Docker fournit
+# une résolution DNS interne, il n'y a aucune adresse IP à connaître
+
+# publier un port vers l'extérieur : -p HOTE:CONTENEUR
+docker run -p 8080:8000 mon-api     # http://localhost:8080 → port 8000 du conteneur
+docker run -p 127.0.0.1:8000:8000 mon-api   # accessible uniquement en local
+
+docker network ls
+docker network inspect app-net</pre></div>
+
+    <p>Sans réseau explicite, les conteneurs sont sur le réseau <code>bridge</code> par défaut, où la résolution par nom ne fonctionne pas : c'est la cause la plus fréquente des « connection refused » entre deux conteneurs.</p>
+
+    <div class="code-label">bash — configuration et secrets</div>
+    <div class="code-block"><pre>docker run -e DATABASE_URL="postgresql://user:pass@base:5432/db" mon-api
+docker run --env-file .env mon-api         # toutes les variables d'un fichier
+
+# GPU (nécessite le NVIDIA Container Toolkit sur l'hôte)
+docker run --gpus all nvidia/cuda:12.4.0-base nvidia-smi</pre></div>
+
+    <div class="warning-block">
+      <strong>Jamais de secret dans une image.</strong> Une clé d'API écrite dans un <code>ENV</code> ou copiée dans un fichier reste dans les couches de l'image : quiconque la télécharge peut l'extraire, même si une instruction ultérieure a « supprimé » le fichier — les couches précédentes sont toujours là. Les secrets passent par des variables d'environnement à l'exécution, un fichier monté, ou un gestionnaire de secrets. Et pour le GPU : le pilote reste sur la machine hôte, seules les bibliothèques CUDA sont dans l'image — c'est ce qui explique les incompatibilités de version entre image et pilote, comme dans mon <a href="project6.html">projet NAS</a>.
+    </div>
+
+    <h2 id="compose">8. Docker Compose</h2>
+
+    <h3>À quoi ça sert</h3>
+    <p>Une application réelle n'est jamais un seul conteneur : une API, une base de données, un cache, parfois un serveur de tâches de fond. Les lancer à la main impose de retenir l'ordre de démarrage, de créer le réseau, de nommer les volumes, de recopier les bonnes variables d'environnement — une longue série de commandes fragiles, à refaire à chaque redémarrage.</p>
+    <p><strong>Docker Compose</strong> décrit toute cette pile dans un fichier unique, versionné avec le code. Une commande démarre l'ensemble, une autre l'arrête. C'est l'outil qui permet à quelqu'un de cloner un dépôt et d'avoir l'application complète qui tourne en une minute — y compris la base de données, avec le bon schéma.</p>
+
+    <div class="code-label">compose.yaml — API + PostgreSQL + cache, commenté</div>
+    <div class="code-block"><pre>services:
+
+  api:
+    build: .                        # construire depuis le Dockerfile local
+    # image: ghcr.io/nils/mon-api:1.0   ← en production, on utilise une image publiée
+    ports:
+      - "8000:8000"                 # exposé sur la machine
+    environment:
+      DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@base:5432/annonces
+      REDIS_URL: redis://cache:6379/0
+      LOG_LEVEL: info
+    depends_on:
+      base:
+        condition: service_healthy  # attend que la base réponde VRAIMENT
+      cache:
+        condition: service_started
+    volumes:
+      - ./src:/app/src              # bind mount : rechargement à chaud en dev
+    restart: unless-stopped         # redémarre en cas de crash, sauf arrêt manuel
+
+  base:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}   # lu dans le fichier .env
+      POSTGRES_DB: annonces
+    volumes:
+      - donnees-pg:/var/lib/postgresql/data     # LES DONNÉES SURVIVENT ICI
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro   # schéma au 1er démarrage
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d annonces"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # pas de "ports:" → la base n'est PAS exposée à l'extérieur, seulement à l'api
+
+  cache:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+
+volumes:
+  donnees-pg:                       # volume nommé, géré par Docker</pre></div>
+
+    <div class="code-label">bash — les commandes de Compose</div>
+    <div class="code-block"><pre>docker compose up -d              # démarre toute la pile en arrière-plan
+docker compose up --build         # reconstruit les images avant de démarrer
+docker compose ps                 # état des services
+docker compose logs -f api        # suivre les journaux d'un service
+docker compose exec api bash      # ouvrir un shell dans le service "api"
+docker compose exec base psql -U app annonces      # un client SQL dans la base
+docker compose restart api
+docker compose stop               # arrête sans supprimer
+docker compose down               # arrête ET supprime conteneurs + réseau
+docker compose down -v            # … et SUPPRIME LES VOLUMES (donc les données)
+
+docker compose run --rm api pytest         # lancer une commande ponctuelle
+docker compose --profile dev up            # démarrer un sous-ensemble de services</pre></div>
+
+    <p>Trois points méritent d'être soulignés dans ce fichier. Le <code>healthcheck</code> combiné à <code>depends_on: condition: service_healthy</code> évite l'erreur la plus courante : l'API démarre avant que PostgreSQL n'accepte les connexions et plante immédiatement. L'absence de section <code>ports</code> sur la base signifie qu'elle n'est joignable que depuis le réseau interne — une bonne pratique de sécurité, et suffisante puisque l'API l'atteint par le nom <code>base</code>. Enfin, le script monté dans <code>/docker-entrypoint-initdb.d/</code> est exécuté automatiquement au tout premier démarrage : c'est ainsi qu'on crée le schéma SQL du module 4 sans intervention manuelle. C'est exactement la structure utilisée dans le projet final (<a href="project7-m28.html">module 28</a>).</p>
+
+    <h2 id="k8s">9. Kubernetes</h2>
+
+    <h3>Le problème que Compose ne résout pas</h3>
+    <p>Compose orchestre des conteneurs <em>sur une machine</em>. Dès qu'il faut plusieurs machines, la question change de nature : que se passe-t-il si un serveur tombe ? Comment répartir la charge ? Comment déployer une nouvelle version sans coupure ? Comment redémarrer automatiquement ce qui a planté à 3 h du matin ?</p>
+    <p><strong>Kubernetes</strong> (souvent abrégé « K8s ») répond à cela par un principe simple à énoncer : on lui décrit l'<strong>état souhaité</strong> — « je veux trois exemplaires de cette image, chacun avec 2 Go de mémoire, accessibles derrière une adresse stable » — et il s'emploie en permanence à faire correspondre l'état réel à cette description. Si un serveur meurt, il replace ailleurs les conteneurs perdus, sans intervention. C'est ce qu'on appelle une approche <em>déclarative</em> : on ne donne pas d'ordres, on décrit une cible.</p>
+
+    <h3>L'architecture, en deux moitiés</h3>
+    <div class="code-label">de quoi est fait un cluster</div>
+    <div class="code-block"><pre>PLAN DE CONTRÔLE (le cerveau)          NŒUDS DE TRAVAIL (les bras)
+┌────────────────────────────┐         ┌──────────────┐  ┌──────────────┐
+│ API server  ← tout passe   │         │   kubelet    │  │   kubelet    │
+│              par lui       │◄───────►│      │       │  │      │       │
+│ etcd        ← l'état       │         │   ┌──┴───┐   │  │   ┌──┴───┐   │
+│              souhaité      │         │   │ Pod  │   │  │   │ Pod  │   │
+│ scheduler   ← place les    │         │   │ Pod  │   │  │   │ Pod  │   │
+│              pods          │         │   └──────┘   │  │   └──────┘   │
+│ controllers ← corrigent    │         │ kube-proxy   │  │ kube-proxy   │
+│              les écarts    │         └──────────────┘  └──────────────┘
+└────────────────────────────┘</pre></div>
+    <p>On parle au cluster via l'<em>API server</em>, presque toujours avec la commande <code>kubectl</code>. L'état souhaité est stocké dans <em>etcd</em>. Le <em>scheduler</em> décide sur quel nœud placer chaque pod en fonction des ressources demandées. Les <em>contrôleurs</em> comparent en boucle l'état réel à l'état souhaité et agissent pour combler l'écart — c'est là que se trouve toute l'intelligence du système.</p>
+
+    <h3>Les objets, du plus petit au plus grand</h3>
+
+    <p><strong>Pod</strong> — la plus petite unité déployable. Un pod contient un ou plusieurs conteneurs qui partagent la même adresse IP et les mêmes volumes ; ils sont toujours placés ensemble sur le même nœud. Dans 90 % des cas, un pod = un conteneur ; les cas à plusieurs conteneurs servent au motif <em>sidecar</em> (un conteneur annexe qui collecte les journaux, par exemple). Point essentiel : <strong>un pod est jetable</strong>. Il n'a pas d'adresse stable, il peut être détruit et recréé ailleurs à tout moment. On ne crée donc jamais un pod à la main.</p>
+
+    <p><strong>ReplicaSet</strong> — maintient un nombre donné de pods identiques. Si l'un disparaît, il en recrée un. On ne le manipule pas directement non plus.</p>
+
+    <p><strong>Deployment</strong> — l'objet que l'on écrit réellement. Il gère un ReplicaSet et, surtout, les <em>mises à jour progressives</em> : lors d'un changement de version, il crée les nouveaux pods, attend qu'ils soient prêts, puis retire les anciens, un par un. Pas de coupure de service, et retour arrière en une commande.</p>
+
+    <p><strong>Service</strong> — puisque les pods vont et viennent avec des adresses changeantes, le Service fournit une <em>adresse et un nom stables</em> devant un groupe de pods, et répartit la charge entre eux. Trois variantes : <code>ClusterIP</code> (joignable uniquement dans le cluster, le défaut), <code>NodePort</code> (ouvre un port sur chaque nœud), <code>LoadBalancer</code> (demande un répartiteur au fournisseur cloud).</p>
+
+    <p><strong>Ingress</strong> — l'entrée HTTP depuis l'extérieur : routage par nom de domaine et par chemin, terminaison TLS. C'est le reverse proxy du cluster.</p>
+
+    <p><strong>ConfigMap</strong> et <strong>Secret</strong> — la configuration, séparée de l'image : paramètres non sensibles pour le premier, identifiants et clés pour le second. Cela permet de déployer la <em>même</em> image en test et en production avec des réglages différents.</p>
+
+    <p><strong>PersistentVolumeClaim</strong> — une demande de stockage durable, l'équivalent du volume nommé de Compose.</p>
+
+    <p><strong>Job</strong> et <strong>CronJob</strong> — une tâche qui se termine (un entraînement, un import) et sa version planifiée (un ré-entraînement hebdomadaire, module 26).</p>
+
+    <p><strong>Namespace</strong> — un cloisonnement logique du cluster, pour séparer les équipes ou les environnements.</p>
+
+    <p><strong>HorizontalPodAutoscaler</strong> — ajuste automatiquement le nombre de répliques selon la charge CPU ou une métrique personnalisée.</p>
+
+    <div class="code-label">deployment.yaml — un service d'inférence, commenté</div>
+    <div class="code-block"><pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api
+  labels: { app: model-api }
+spec:
+  replicas: 3                          # trois exemplaires en permanence
+  selector:
+    matchLabels: { app: model-api }    # quels pods ce Deployment gère-t-il
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                      # au plus 1 pod en trop pendant la mise à jour
+      maxUnavailable: 0                # aucun pod indisponible : zéro coupure
+  template:                            # ── le modèle de pod à créer ──
+    metadata:
+      labels: { app: model-api }       # doit correspondre au selector ci-dessus
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/nils/model-api:1.4.2    # JAMAIS :latest en production
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: db-credentials, key: url }
+          resources:
+            requests:                  # RÉSERVÉ : sert au scheduler pour le placement
+              cpu: "500m"              # 500 millicœurs = 0,5 cœur
+              memory: "1Gi"
+            limits:                    # PLAFOND : au-delà, le conteneur est bridé (CPU)
+              cpu: "2"                 #           ou tué (mémoire : OOMKilled)
+              memory: "4Gi"
+              nvidia.com/gpu: 1        # un GPU entier (non partageable par défaut)
+          readinessProbe:              # "puis-je recevoir du trafic ?"
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 20    # laisse le temps de charger le modèle
+            periodSeconds: 10
+          livenessProbe:               # "suis-je encore vivant ?" sinon → redémarrage
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service                          # l'adresse stable devant les 3 pods
+metadata:
+  name: model-api
+spec:
+  selector: { app: model-api }         # sélectionne les pods par leur étiquette
+  ports:
+    - port: 80                         # port du Service
+      targetPort: 8000                 # port du conteneur
+  type: ClusterIP</pre></div>
+
+    <div class="step-block">
+      <h4>Les trois points qui comptent vraiment pour du ML</h4>
+      <ul>
+        <li><strong><code>requests</code> contre <code>limits</code></strong> — la première est une réservation utilisée pour décider où placer le pod, la seconde un plafond appliqué à l'exécution. Un modèle qui charge 3 Go de poids doit le déclarer, sinon il sera tué (<em>OOMKilled</em>) dès le premier pic de charge.</li>
+        <li><strong><code>readinessProbe</code></strong> — sans elle, Kubernetes envoie du trafic à un pod dont le modèle n'est pas encore chargé en mémoire, et les premières requêtes échouent à chaque déploiement.</li>
+        <li><strong><code>livenessProbe</code></strong> — elle redémarre un conteneur bloqué. Mal réglée (délai trop court), elle redémarre en boucle un service qui démarre lentement : c'est la cause classique du <em>CrashLoopBackOff</em>.</li>
+      </ul>
+    </div>
+
+    <div class="code-label">bash — kubectl, les commandes utiles</div>
+    <div class="code-block"><pre>kubectl apply -f deployment.yaml      # applique l'état souhaité (créé ou mis à jour)
+kubectl get pods                      # lister ; -w pour suivre en direct
+kubectl get all -n mon-namespace
+kubectl describe pod model-api-7d9f   # événements : LA commande de diagnostic
+kubectl logs -f model-api-7d9f        # journaux ; --previous après un crash
+kubectl exec -it model-api-7d9f -- bash
+kubectl port-forward svc/model-api 8080:80    # tester en local sans exposer
+
+kubectl rollout status deploy/model-api       # suivre une mise à jour
+kubectl rollout undo deploy/model-api         # RETOUR ARRIÈRE immédiat
+kubectl scale deploy/model-api --replicas=5
+kubectl top pods                              # consommation réelle
+kubectl delete -f deployment.yaml</pre></div>
+
+    <div class="step-block">
+      <h4>En avez-vous besoin ?</h4>
+      <p>Honnêtement, rarement pour un projet personnel ou un prototype : la complexité opérationnelle est réelle, et un conteneur derrière un reverse proxy couvre la grande majorité des besoins. Kubernetes devient pertinent lorsqu'il faut plusieurs machines, de l'autoscaling, des déploiements sans coupure, ou le partage d'un parc de GPU entre plusieurs équipes. La valeur immédiate, pour un data scientist, est de savoir <em>lire</em> un manifeste et déclarer correctement ses ressources : c'est la langue commune des équipes plateforme. Pour s'exercer sans cluster, <strong>k3s</strong>, <strong>kind</strong> ou <strong>minikube</strong> font tourner un cluster complet sur un portable, et <code>kubectl</code> s'y comporte exactement de la même façon.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Un conteneur est un processus isolé par le noyau de l'hôte (namespaces + cgroups) ; une VM embarque un noyau complet.</li>
+        <li>Image = modèle figé, conteneur = instance ; les couches sont mises en cache, d'où l'ordre du plus stable au plus volatil.</li>
+        <li>Construction en deux étapes, utilisateur non root, <code>.dockerignore</code>, jamais de secret dans l'image, <code>--host 0.0.0.0</code>.</li>
+        <li>Volume nommé pour les données produites, bind mount pour le code en développement.</li>
+        <li>Un réseau Docker explicite permet aux conteneurs de se joindre par leur nom.</li>
+        <li>Compose décrit une pile complète dans un fichier ; <code>healthcheck</code> + <code>depends_on</code> évitent les démarrages ratés.</li>
+        <li>Kubernetes maintient un état déclaré : Deployment pour les répliques et les mises à jour, Service pour l'adresse stable, probes et ressources pour un service de modèle qui tient debout.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "Quelle est la différence fondamentale entre un conteneur et une machine virtuelle ?", "choix": ["Le conteneur partage le noyau de l'hôte, la VM embarque son propre système", "Le conteneur est plus petit parce qu'il compresse ses fichiers", "La VM ne peut pas exécuter Linux sur un hôte Windows", "Le conteneur ne peut pas accéder au réseau"], "bonne": 0, "explication": "La VM virtualise le matériel et fait tourner un système d'exploitation complet ; le conteneur isole des processus au sein du noyau de l'hôte, par les namespaces et les cgroups. D'où le démarrage en millisecondes et le poids réduit — mais aussi une isolation moins étanche, et l'obligation de passer par une VM cachée sur macOS et Windows."},
+{"q": "Un environnement virtuel Python ne suffit pas à rendre un projet reproductible. Pourquoi ?", "choix": ["Parce qu'il ne fige pas les versions des paquets", "Parce qu'il ne fige que les bibliothèques Python, pas le système autour", "Parce qu'il est lié à un utilisateur particulier", "Parce qu'il doit être recréé à chaque démarrage"], "bonne": 1, "explication": "Un projet dépend aussi d'une version d'interpréteur, de bibliothèques compilées comme BLAS ou libpq, de paquets système, parfois d'un pilote GPU et d'une version de CUDA. L'environnement virtuel ne fige rien de tout cela — c'est exactement l'espace que le conteneur vient couvrir."},
+{"q": "Dans un Dockerfile, pourquoi copier <code>pyproject.toml<\/code> et installer les dépendances <em>avant<\/em> de copier le code ?", "choix": ["Pour que les dépendances soient disponibles pendant la copie", "Pour que la couche d'installation reste en cache quand seul le code change", "Pour réduire la taille finale de l'image", "Parce que Docker refuse de copier le code en premier"], "bonne": 1, "explication": "Chaque instruction crée une couche, et Docker réutilise le cache tant que l'entrée n'a pas changé. Si le code est copié avant l'installation, la moindre modification d'une ligne invalide le cache et relance l'installation complète. La règle générale : du plus stable au plus volatil."},
+{"q": "À quoi sert une construction multi-étapes (<code>multi-stage build<\/code>) ?", "choix": ["À construire plusieurs images en parallèle", "À ne garder dans l'image finale que le résultat, sans les outils de compilation", "À versionner chaque étape séparément", "À permettre la construction sur plusieurs architectures"], "bonne": 1, "explication": "On compile dans une première étape avec tout l'outillage nécessaire, puis on copie uniquement les artefacts utiles dans une image de base minimale. L'image finale perd des centaines de mégaoctets de compilateurs et d'en-têtes — et, au passage, autant de surface d'attaque."},
+{"q": "Quelle est la différence entre un volume nommé et un montage de répertoire (<code>bind mount<\/code>) ?", "choix": ["Le volume nommé est géré par Docker, le bind mount expose un dossier de l'hôte", "Le volume nommé est plus rapide en lecture", "Le bind mount survit à la suppression du conteneur, le volume non", "Le volume nommé ne fonctionne que sous Linux"], "bonne": 0, "explication": "Le volume nommé vit dans un espace administré par Docker : c'est le bon choix pour les données d'une base. Le bind mount projette un chemin précis de l'hôte dans le conteneur, ce qui sert surtout au développement, pour voir son code modifié en direct. Les deux survivent au conteneur."},
+{"q": "Pourquoi ne faut-il jamais inscrire un mot de passe dans un Dockerfile ?", "choix": ["Parce que Docker refuse les variables contenant des secrets", "Parce qu'il reste dans l'historique des couches, même s'il est supprimé ensuite", "Parce qu'il serait converti en clair dans les journaux", "Parce que les variables d'environnement ne sont pas lues au démarrage"], "bonne": 1, "explication": "Une image est une pile de couches immuables : une valeur écrite puis effacée dans une couche suivante reste lisible dans la précédente, et <code>docker history<\/code> l'expose. Les secrets se passent à l'exécution — variables d'environnement, fichier monté, gestionnaire de secrets — jamais à la construction."},
+{"q": "Que résout Docker Compose que Docker seul ne résout pas ?", "choix": ["La construction d'images plus légères", "La description d'une pile de plusieurs services et de leurs liens dans un fichier", "L'exécution de conteneurs sur plusieurs machines", "La mise à jour automatique des images"], "bonne": 1, "explication": "Une application réelle, c'est une API, une base, un cache : Compose décrit les trois, leur réseau, leurs volumes et leurs dépendances dans un seul fichier versionné, lancé par <code>docker compose up<\/code>. Répartir sur plusieurs machines est le problème suivant, celui de Kubernetes."},
+{"q": "Dans Kubernetes, qu'est-ce qu'un <em>pod<\/em> ?", "choix": ["Une machine du cluster", "La plus petite unité déployable : un ou plusieurs conteneurs qui partagent réseau et stockage", "Une copie d'une image stockée dans un registre", "Un groupe de services exposés ensemble"], "bonne": 1, "explication": "Le pod est l'unité d'ordonnancement : ses conteneurs tournent toujours sur le même nœud et partagent la même adresse réseau. La machine, c'est le nœud ; le groupe de copies maintenu à l'identique, c'est le deployment ; le point d'entrée stable, c'est le service."},
+{"q": "Quel objet Kubernetes fournit une adresse stable à un ensemble de pods qui vont et viennent ?", "choix": ["Le Deployment", "Le ConfigMap", "Le Service", "Le Namespace"], "bonne": 2, "explication": "Les pods sont éphémères et changent d'adresse IP à chaque redémarrage. Le Service leur donne un nom et une adresse stables, et répartit le trafic entre ceux qui sont prêts. Le Deployment, lui, décrit combien de copies maintenir et comment les remplacer lors d'une mise à jour."},
+{"q": "Quelle est la différence entre une sonde <em>readiness<\/em> et une sonde <em>liveness<\/em> ?", "choix": ["La readiness dit si le pod peut recevoir du trafic, la liveness s'il faut le redémarrer", "La readiness s'exécute une fois, la liveness en continu", "La readiness vérifie le réseau, la liveness le disque", "Ce sont deux noms pour la même vérification"], "bonne": 0, "explication": "Un modèle de ML qui charge des poids pendant trente secondes n'est pas prêt, sans être en panne : la readiness le retire du service le temps du chargement. La liveness détecte un processus bloqué et provoque un redémarrage — les confondre fait redémarrer en boucle un pod qui démarrait simplement lentement."},
+{"q": "À quoi correspondent les <em>requests<\/em> et les <em>limits<\/em> d'un conteneur Kubernetes ?", "choix": ["Le nombre de requêtes entrantes minimum et maximum", "La ressource réservée pour l'ordonnancement, et le plafond au-delà duquel on est bridé ou tué", "La durée minimale et maximale d'exécution", "Le nombre de copies minimum et maximum du pod"], "bonne": 1, "explication": "La <em>request<\/em> sert à placer le pod sur un nœud qui a la place ; la <em>limit<\/em> est le plafond dur. Dépasser la limite mémoire tue le conteneur (OOMKilled), dépasser la limite CPU le ralentit seulement. Ne rien déclarer, c'est laisser l'ordonnanceur travailler à l'aveugle."},
+{"q": "Quelle commande permet d'ouvrir un shell dans un conteneur déjà en cours d'exécution ?", "choix": ["<code>docker run -it mon-image bash<\/code>", "<code>docker exec -it mon-conteneur bash<\/code>", "<code>docker attach mon-conteneur<\/code>", "<code>docker start -i mon-conteneur bash<\/code>"], "bonne": 1, "explication": "<code>exec<\/code> lance un processus supplémentaire dans un conteneur existant — c'est l'outil de diagnostic du quotidien. <code>run<\/code> en créerait un nouveau à partir de l'image, avec un état vierge, ce qui ne dit rien sur celui qui pose problème ; <code>attach<\/code> se branche sur le processus principal, au risque de le tuer en sortant."},
+{"q": "Quand Kubernetes est-il probablement surdimensionné ?", "choix": ["Dès qu'on a plus d'un conteneur", "Pour une application sur un ou deux serveurs, sans équipe pour l'exploiter", "Pour des charges de travail GPU", "Quand il faut plusieurs environnements de déploiement"], "bonne": 1, "explication": "Kubernetes résout l'ordonnancement sur une flotte de machines, la montée en charge automatique et la tolérance aux pannes. Pour une API sur deux serveurs, Compose avec un reverse proxy fait le travail sans imposer la complexité opérationnelle — laquelle se paie tous les jours, pas seulement à l'installation."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m04.html" class="btn btn-secondary">← Module 4 : SQL et bases de données</a>
+    <a href="project7-m06.html" class="btn btn-primary">Module 6 : FastAPI et Pydantic →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Docker</span><span class="tag">Compose</span><span class="tag">Kubernetes</span><span class="tag">Volumes</span><span class="tag">kubectl</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m05-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 5</div>
+    <h1>Docker, Compose and Kubernetes</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Why containers exist: a virtual environment freezes Python libraries and nothing else.</li>
+      <li>Containers versus virtual machines, with a diagram: namespaces and cgroups, the shared host kernel, and the consequences (performance on macOS/Windows, weaker isolation than a VM).</li>
+      <li>Vocabulary: images, containers, layers and registries.</li>
+      <li>Everyday commands: run, ps, logs, exec, inspect, build, tag, push, and cleaning up disk space.</li>
+      <li>Writing a Dockerfile: every instruction explained, layer caching and the stable-to-volatile ordering rule, a commented multi-stage build with UV, non-root users, healthchecks and <code>.dockerignore</code>.</li>
+      <li>Volumes: named volumes versus bind mounts, read-only mounts, and permission pitfalls.</li>
+      <li>Networking: user-defined networks and DNS resolution by container name, port publishing, environment variables, GPU access, and why secrets never belong in an image.</li>
+      <li>Docker Compose: the problem it solves, a fully commented stack (API, PostgreSQL with healthcheck and init script, Redis), and the complete command set.</li>
+      <li>Kubernetes at length: the declarative model, control plane and worker nodes, every core object explained (Pod, ReplicaSet, Deployment, Service, Ingress, ConfigMap, Secret, PVC, Job, CronJob, Namespace, HPA), a commented deployment manifest for model serving, requests versus limits, readiness and liveness probes, kubectl commands, and an honest take on when it is overkill.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><strong>Docker, Compose and Kubernetes</strong></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

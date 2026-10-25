@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 21 - ML pour la simulation et l'ingénierie - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m21-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 21</div>
+    <h1>ML pour la simulation et l'ingénierie</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>C'est le module où la formation d'ingénieur devient un avantage plutôt qu'un détour. La situation est toujours la même : on dispose d'un code de calcul fiable mais coûteux — CFD, éléments finis, neutronique, transport Monte-Carlo — et l'on a besoin de milliers d'évaluations pour propager des incertitudes, optimiser une conception ou piloter un système en temps réel. Le machine learning n'y remplace pas la physique : il en construit une approximation utilisable, et il faut savoir exactement dans quelles limites elle reste valide.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#monte-carlo">Monte-Carlo et réduction de variance</a></li>
+        <li><a href="#qmc">Quasi-Monte-Carlo et plans d'expériences</a></li>
+        <li><a href="#propagation">Propagation d'incertitude et chaos polynomial</a></li>
+        <li><a href="#sobol">Analyse de sensibilité globale</a></li>
+        <li><a href="#surrogates">Métamodèles : construire et valider</a></li>
+        <li><a href="#rom">Réduction de modèle : POD, DMD</a></li>
+        <li><a href="#sciml">SciML : opérateurs neuronaux et hybrides</a></li>
+        <li><a href="#assimilation">Assimilation de données et problèmes inverses</a></li>
+        <li><a href="#jumeau">Jumeau numérique et crédibilité</a></li>
+      </ol>
+    </div>
+
+    <h2 id="monte-carlo">1. Monte-Carlo et réduction de variance</h2>
+    <p>Estimer \(I = \mathbb{E}[f(X)]\) par tirage aléatoire donne \(\hat I_N = \frac1N\sum f(x_i)\), d'erreur type \(\sigma/\sqrt{N}\). La propriété remarquable — et la raison pour laquelle la méthode domine en grande dimension — est que <strong>cette vitesse ne dépend pas de la dimension</strong>, contrairement à toute quadrature déterministe : une grille de 10 points par axe fait \(10^{d}\) évaluations, soit un million en dimension 6 et un milliard en dimension 9. Le revers de Monte-Carlo : gagner un chiffre significatif coûte cent fois plus de simulations. D'où l'importance des techniques de réduction de variance, qui s'attaquent au numérateur plutôt qu'au dénominateur.</p>
+
+    <div class="code-label">réduire la variance, plutôt qu'augmenter N</div>
+    <div class="code-block"><pre>Variables antithétiques   tirer u ET 1-u : la corrélation négative entre les deux
+                          annule une partie de la fluctuation. Gain modeste, coût nul.
+Variable de contrôle      utiliser une grandeur g corrélée à f dont l'espérance est
+                          CONNUE : Î = mean(f) - c·(mean(g) - E[g]). Souvent le
+                          meilleur rapport gain/effort — un modèle simplifié ou un
+                          métamodèle fait un excellent contrôle.
+Échantillonnage           tirer selon une loi q qui concentre les tirages là où f
+préférentiel              compte, puis corriger par le poids p/q. INDISPENSABLE pour
+                          les événements rares.
+Stratification / LHS      découper l'espace et garantir une couverture régulière.
+Multi-niveaux (MLMC)      combiner beaucoup de simulations grossières et peu de
+                          simulations fines : réduit le coût de plusieurs ordres.</pre></div>
+
+    <div class="step-block">
+      <h4>Le cas des événements rares</h4>
+      <p>Estimer une probabilité de défaillance de \(10^{-6}\) par Monte-Carlo direct demande de l'ordre de \(10^{8}\) simulations pour une précision de 10 % — hors de portée avec un code coûteux. La raison est simple : pour observer l'événement une centaine de fois, il faut cent millions de tirages. Les méthodes dédiées (échantillonnage préférentiel, <em>subset simulation</em>, FORM/SORM en fiabilité des structures) ramènent cela à quelques milliers d'appels en déplaçant délibérément la loi de tirage vers la zone de défaillance, puis en corrigeant le biais introduit. Elles se combinent avec un métamodèle raffiné près de la surface d'état limite — c'est exactement l'articulation avec l'optimisation bayésienne du module 19 : on enrichit le plan là où la décision se joue.</p>
+    </div>
+
+    <h2 id="qmc">2. Quasi-Monte-Carlo et plans d'expériences</h2>
+    <p>Les suites à faible discordance (Sobol, Halton) remplacent l'aléa par des points délibérément bien répartis : là où un tirage aléatoire laisse des trous et des amas, une suite de Sobol remplit l'espace régulièrement. La convergence passe de \(O(N^{-1/2})\) à \(O((\log N)^d/N)\) — bien meilleure en dimension modérée, l'avantage s'érodant quand \(d\) devient grand.</p>
+
+    <div class="code-label">Python — scipy.stats.qmc</div>
+    <div class="code-block"><pre>from scipy.stats import qmc
+
+# hypercube latin optimisé : projection uniforme sur CHAQUE axe pris séparément
+plan = qmc.LatinHypercube(d=6, optimization="random-cd", seed=0).random(n=120)
+
+# suite de Sobol : extensible par puissances de 2, excellente uniformité
+sobol = qmc.Sobol(d=6, scramble=True, seed=0).random_base2(m=7)     # 128 points
+
+# mise à l'échelle vers les bornes PHYSIQUES des paramètres
+X = qmc.scale(plan, l_bounds=[0.1, 300, 1e5, 0.2, 1.0, 0.0],
+                    u_bounds=[0.9, 600, 5e5, 0.8, 3.0, 1.0])
+print(qmc.discrepancy(plan))              # plus c'est bas, mieux l'espace est couvert</pre></div>
+
+    <p>Règle empirique pour un premier plan destiné à construire un métamodèle : environ dix points par dimension d'entrée, puis enrichissement adaptatif (module 19) plutôt qu'un grand plan figé. Et toujours prévoir un jeu de <em>validation</em> tiré indépendamment : valider un métamodèle sur les points qui ont servi à le construire n'a aucun sens, surtout s'il interpole exactement.</p>
+
+    <h2 id="propagation">3. Propagation d'incertitude et chaos polynomial</h2>
+    <p>Les entrées d'un calcul sont incertaines : propriétés matériaux, conditions aux limites, tolérances géométriques. La propagation consiste à en déduire la loi de la sortie — et pas seulement sa moyenne, car une décision de sûreté porte sur un quantile extrême, pas sur un comportement typique.</p>
+
+    <p>Le <strong>chaos polynomial</strong> (PCE) développe la sortie sur une base de polynômes orthogonaux des variables aléatoires d'entrée :</p>
+    <div style="text-align:center;overflow-x:auto">\[ Y = f(\xi) \approx \sum_{j=0}^{P} \alpha_j \Psi_j(\xi), \qquad \mathbb{E}[Y] = \alpha_0, \quad \operatorname{Var}(Y) = \sum_{j\geq 1}\alpha_j^2 \]</div>
+    <p>La base est choisie selon la loi des entrées : Hermite pour des gaussiennes, Legendre pour des uniformes — c'est cette correspondance qui rend les polynômes orthogonaux <em>pour le produit scalaire défini par la loi</em>, et donc qui donne les formules de moments ci-dessus.</p>
+    <p>L'intérêt est double : moyenne et variance se lisent <em>directement</em> sur les coefficients, sans simulation supplémentaire, et les indices de sensibilité s'en déduisent analytiquement (section suivante). Les coefficients s'obtiennent par projection ou par régression parcimonieuse (LARS), ce qui en fait un cas particulier remarquable de la régression régularisée du module 14. Limites : la taille de la base explose avec la dimension et le degré, et la méthode suppose une réponse régulière — un comportement discontinu (bifurcation, changement de régime) la met en échec, exactement comme un GP à noyau lisse.</p>
+
+    <h2 id="sobol">4. Analyse de sensibilité globale</h2>
+    <p>Question centrale en ingénierie : <em>quelle part de la variabilité de la sortie chaque entrée explique-t-elle ?</em> Les dérivées partielles ne répondent pas — elles ne valent qu'au point où elles sont calculées, et pour une plage de variation infinitésimale. L'analyse de sensibilité <strong>globale</strong> décompose la variance totale sur tout le domaine de variation :</p>
+    <div style="text-align:center;overflow-x:auto">\[ S_i = \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_i]\big)}{\operatorname{Var}(Y)}, \qquad S_{T_i} = 1 - \frac{\operatorname{Var}\big(\mathbb{E}[Y\mid X_{\sim i}]\big)}{\operatorname{Var}(Y)} \]</div>
+
+    <p>\(S_i\) est l'indice du <em>premier ordre</em> : la part de variance qu'on supprimerait en fixant \(X_i\) à sa vraie valeur. \(S_{T_i}\) est l'indice <em>total</em> : effet propre plus toutes les interactions où \(X_i\) intervient.</p>
+
+    <div class="code-label">comment lire les deux ensemble</div>
+    <div class="code-block"><pre>S_Ti ≈ S_i          la variable agit SEULE, sans interaction → effet additif
+S_Ti ≫ S_i          la variable n'agit qu'EN INTERACTION avec d'autres.
+                    Attention : la fixer ferait perdre plus que S_i ne le suggère.
+S_Ti ≈ 0            la variable n'influence rien → on peut la FIXER, ce qui réduit
+                    la dimension du problème (utile pour le module 19)
+Σ S_i &lt; 1           la part manquante est due aux INTERACTIONS
+
+exemple :  conductivité  S=0,45  S_T=0,52   → effet principal, peu d'interaction
+           débit         S=0,10  S_T=0,44   → agit surtout EN INTERACTION
+           épaisseur     S=0,02  S_T=0,03   → négligeable : à fixer</pre></div>
+
+    <div class="code-label">Python — SALib</div>
+    <div class="code-block"><pre>from SALib.sample import sobol as sobol_sample
+from SALib.analyze import sobol as sobol_analyze
+
+probleme = {"num_vars": 4,
+            "names": ["conductivite", "debit", "epaisseur", "coef_echange"],
+            "bounds": [[10, 25], [0.5, 2.0], [1e-3, 5e-3], [200, 900]]}
+
+X = sobol_sample.sample(probleme, 1024)        # N(2d+2) = 10 240 évaluations
+Y = np.array([surrogate(x) for x in X])        # sur le MÉTAMODÈLE, pas le code direct
+
+Si = sobol_analyze.analyze(probleme, Y)
+print(Si["S1"], Si["ST"])</pre></div>
+
+    <p>Le coût — \(N(2d+2)\) évaluations — est la raison pour laquelle on calcule presque toujours les indices de Sobol <em>sur un métamodèle</em> plutôt que sur le code direct. Pour un simple criblage préalable en grande dimension, la méthode de Morris identifie les variables négligeables pour quelques dizaines d'évaluations seulement, et sert à réduire le problème avant l'analyse fine.</p>
+
+    <h2 id="surrogates">5. Métamodèles : construire et valider</h2>
+    <p>Un métamodèle remplace le code de calcul par une fonction bon marché ajustée sur un plan d'expériences. Les familles, et le critère de choix :</p>
+
+    <div class="code-label">choisir un surrogate</div>
+    <div class="code-block"><pre>Krigeage / GP       interpole exactement, fournit une VARIANCE de prédiction.
+(module 19)         Le défaut pour n &lt; quelques milliers de points. Indispensable
+                    si l'on veut enrichir le plan de façon adaptative.
+RBF                 interpolation par fonctions radiales : simple, robuste, très bon
+                    en dimension modérée. Sans incertitude native — c'est exactement
+                    ce que j'ai implémenté dans mdisd (voir le projet).
+Chaos polynomial    moments et indices de Sobol analytiques. Excellent si la réponse
+                    est régulière et la dimension modérée.
+Gradient boosting   robuste aux discontinuités et au bruit numérique, mais N'EXTRAPOLE
+                    PAS (module 14) : dangereux hors du domaine du plan.
+Réseau de neurones  utile quand le plan est très grand (10⁴+) ou la sortie de grande
+                    dimension (un champ complet plutôt qu'un scalaire).</pre></div>
+
+    <div class="warning-block">
+      <strong>Un métamodèle se valide sur des points qu'il n'a jamais vus.</strong> Le critère usuel est le \(Q^2\) — le \(R^2\) calculé sur un jeu de validation indépendant, ou par validation croisée <em>leave-one-out</em>, quasi gratuite pour un krigeage grâce à une formule fermée. Un \(Q^2\) de 0,99 sur les points d'apprentissage ne veut rien dire : un interpolateur passe par tous ses points par construction. Trois vérifications supplémentaires valent d'être systématiques : l'erreur <em>maximale</em> (et non seulement moyenne) sur le jeu de validation, la qualité de l'approximation <em>dans la zone qui décide</em> — près d'un seuil de sûreté, une erreur moyenne faible ne dit rien —, et la cohérence physique : monotonie attendue, signe, ordres de grandeur, comportement aux limites du domaine.
+    </div>
+
+    <h2 id="rom">6. Réduction de modèle : POD, DMD</h2>
+    <p>Les métamodèles précédents prédisent un scalaire. Quand la sortie est un <em>champ</em> — température en tout point, vitesse sur tout le maillage, soit des millions de valeurs —, on passe par la réduction de modèle. L'observation fondatrice : les solutions d'un système physique paramétré, malgré leur taille apparente, vivent presque toujours dans un sous-espace de très faible dimension.</p>
+
+    <p>La <strong>POD</strong> (décomposition orthogonale aux valeurs propres) consiste à assembler une matrice de <em>snapshots</em> — chaque colonne est un champ solution pour un jeu de paramètres — et à en calculer la SVD (module 8). Les premiers vecteurs singuliers forment une base de modes, et la décroissance des valeurs singulières indique combien en garder. C'est, mot pour mot, une PCA appliquée à des champs physiques : les modes obtenus ont souvent une interprétation directe — structures cohérentes d'un écoulement, modes propres de vibration.</p>
+
+    <div class="code-label">Python — POD sur des snapshots</div>
+    <div class="code-block"><pre>import numpy as np
+
+S = np.column_stack(snapshots)                 # (n_degrés_de_liberté, n_simulations)
+moyenne = S.mean(axis=1, keepdims=True)
+U, s, Vt = np.linalg.svd(S - moyenne, full_matrices=False)
+
+energie = np.cumsum(s**2) / np.sum(s**2)
+r = int(np.searchsorted(energie, 0.9999) + 1)  # souvent r ≈ 10-30 pour 99,99 %
+print(f"{S.shape[0]} degrés de liberté réduits à {r} modes")
+Phi = U[:, :r]                                 # la base réduite
+
+# coefficients réduits : LA CIBLE d'un surrogate (GP, RBF) sur les paramètres
+A = Phi.T @ (S - moyenne)                      # (r, n_simulations)
+champ_predit = moyenne + Phi @ coeffs_predits  # reconstruction d'un champ COMPLET</pre></div>
+
+    <p>Deux stratégies en découlent. Le ROM <em>non intrusif</em> — celui du code ci-dessus — apprend simplement les coefficients modaux en fonction des paramètres : facile, applicable à un code fermé dont on n'a que les sorties, mais sans garantie physique. Le ROM <em>intrusif</em> (projection de Galerkin des équations sur la base réduite) conserve la structure des équations et offre de meilleures garanties, mais exige d'accéder aux opérateurs du solveur, et la non-linéarité impose des techniques d'hyper-réduction (DEIM). La <strong>DMD</strong>, elle, extrait des modes associés à des fréquences et des taux de croissance, ce qui en fait l'outil naturel pour analyser une dynamique et prédire à court terme.</p>
+
+    <p>La limite commune est claire : ces méthodes supposent une <em>faible dimension effective</em>. Un écoulement fortement turbulent, un problème avec chocs ou fronts mobiles, une bifurcation — et le spectre ne décroît plus. C'est d'ailleurs l'information utile : <strong>la décroissance des valeurs singulières mesure la réductibilité du problème</strong>, et se calcule avant tout investissement dans un ROM.</p>
+
+    <h2 id="sciml">7. SciML : opérateurs neuronaux et hybrides</h2>
+    <p>Le module 16 présente les PINN, qui apprennent <em>une</em> solution sous contrainte d'EDP. Les <strong>opérateurs neuronaux</strong> visent plus haut : apprendre l'application qui envoie une fonction d'entrée (champ de conditions initiales, de coefficients, de géométrie) sur la fonction solution — donc une famille entière de problèmes, résolue en une seule fois.</p>
+    <ul>
+      <li><strong>DeepONet</strong> — deux réseaux, l'un encodant la fonction d'entrée échantillonnée (<em>branch</em>), l'autre les coordonnées d'évaluation (<em>trunk</em>), combinés par produit scalaire. Fondé sur un théorème d'approximation d'opérateurs.</li>
+      <li><strong>FNO</strong> (<em>Fourier Neural Operator</em>) — effectue la convolution dans l'espace de Fourier en ne gardant que les basses fréquences : le coût passe en \(O(n\log n)\), et le modèle devient <em>indépendant de la discrétisation</em>, donc entraînable sur maillage grossier et évaluable sur maillage fin. Très efficace sur les problèmes à géométrie régulière et périodique.</li>
+      <li><strong>GNN sur maillage</strong> (module 18) — la bonne réponse quand la géométrie est complexe et non structurée.</li>
+    </ul>
+    <p>Une fois entraînés, ces modèles évaluent une solution en millisecondes contre des heures de calcul — d'où leur intérêt pour l'optimisation de forme, le contrôle en temps réel ou l'exploration paramétrique. Le prix à payer : la précision plafonne bien au-dessus de celle d'un solveur, la généralisation hors du régime d'entraînement est mauvaise, et l'entraînement demande un gros corpus de simulations. L'investissement ne se justifie donc que par un grand nombre d'évaluations futures.</p>
+
+    <div class="step-block">
+      <h4>Hybrider plutôt que remplacer</h4>
+      <p>Les approches qui fonctionnent le mieux en pratique ne substituent pas le ML à la physique : elles le placent là où la physique est mal connue. Apprendre une <em>loi de fermeture</em> (turbulence, loi de comportement matériau) tout en conservant les équations de conservation. Apprendre la <em>correction</em> entre un modèle grossier rapide et la réalité expérimentale — c'est le multi-fidélité du module 19, et cela demande beaucoup moins de données qu'apprendre la sortie complète. Imposer des contraintes dures — positivité, conservation de la masse, symétries, équivariance — directement dans l'architecture, ce qui améliore autant la fiabilité que l'efficacité en données (module 15). Un modèle qui viole la conservation de l'énergie n'est pas utilisable, quelle que soit son erreur quadratique moyenne.</p>
+    </div>
+
+    <h2 id="assimilation">8. Assimilation de données et problèmes inverses</h2>
+    <p>L'assimilation combine un modèle physique et des mesures pour estimer l'état ou les paramètres d'un système. C'est le cadre de la météorologie opérationnelle, du recalage de modèles et de la surveillance en ligne. Le formalisme variationnel (4D-Var) s'écrit comme la minimisation d'une fonctionnelle :</p>
+    <div style="text-align:center;overflow-x:auto">\[ J(x_0) = \underbrace{\tfrac12 (x_0-x^b)^\top B^{-1}(x_0-x^b)}_{\text{écart à l'ébauche}} + \underbrace{\tfrac12\sum_{k}(\mathcal{H}(x_k)-z_k)^\top R^{-1}(\mathcal{H}(x_k)-z_k)}_{\text{écart aux observations}} \]</div>
+    <p>On reconnaît un MAP (module 10) : \(B\) encode la confiance dans l'ébauche a priori, \(R\) la précision des capteurs, et minimiser \(J\) revient à maximiser une densité a posteriori gaussienne. La minimisation demande le gradient par rapport à l'état initial, obtenu par le modèle <em>adjoint</em> — c'est exactement de la différentiation automatique en mode inverse, la même mécanique que la rétropropagation (module 16). D'où l'intérêt actuel des <strong>simulateurs différentiables</strong> : quand le solveur lui-même est écrit dans un cadre autodifférentiable (JAX, PyTorch), calibrer un paramètre physique devient une optimisation par gradient ordinaire, et l'on récupère gratuitement des décennies d'outillage.</p>
+    <p>L'alternative séquentielle est le filtre de Kalman d'ensemble (EnKF), qui propage un ensemble d'états au lieu d'une covariance explicite — indispensable dès que la dimension dépasse quelques milliers (module 17).</p>
+
+    <div class="warning-block">
+      <strong>Identifiabilité : la question à poser avant de calibrer.</strong> Un problème inverse est presque toujours mal posé : plusieurs jeux de paramètres reproduisent exactement les mêmes mesures. Deux paramètres peuvent être <em>compensatoires</em> — seule leur combinaison (un produit, un rapport) est identifiable — et un optimiseur retournera alors une valeur précise et arbitraire, qui changera complètement avec une autre initialisation. Les remèdes : régulariser (Tikhonov, c'est-à-dire un a priori), réduire le nombre de paramètres calibrés à ceux que l'analyse de sensibilité désigne comme influents (section 4), et surtout <strong>estimer l'incertitude a posteriori</strong> plutôt qu'un point unique. Un paramètre calibré sans intervalle de crédibilité n'est pas un résultat.
+    </div>
+
+    <h2 id="jumeau">9. Jumeau numérique et crédibilité</h2>
+    <p>Un jumeau numérique n'est pas une simulation 3D animée : c'est un modèle d'un système <em>physique particulier</em>, synchronisé avec ses mesures, et utilisé pour décider. L'architecture typique assemble tout ce module : un modèle réduit ou un surrogate pour tenir la contrainte temps réel, un mécanisme d'assimilation pour se recaler sur les capteurs, une quantification d'incertitude pour assortir chaque prédiction d'une marge (module 10), et un module de décision (maintenance, pilotage — module 24). Les difficultés réelles sont moins scientifiques qu'opérationnelles : qualité et dérive des capteurs, latence, versionnement du modèle et de ses recalages (module 26), et la question de savoir quand le jumeau doit déclarer qu'il ne sait plus.</p>
+
+    <div class="step-block">
+      <h4>Un modèle appris dans un contexte où la sûreté compte</h4>
+      <p>Les référentiels de vérification et validation (V&amp;V) demandent trois choses distinctes : la <em>vérification</em> (résout-on correctement les équations ?), la <em>validation</em> (les équations décrivent-elles la réalité ?) et la quantification des incertitudes. Un modèle appris s'y insère mal par nature : il n'a pas d'équations à vérifier, et son comportement hors domaine est imprévisible. Les pratiques qui le rendent défendable : déclarer explicitement un <strong>domaine de validité</strong> et refuser de prédire au-delà (la variance épistémique d'un GP ou un détecteur de nouveauté servent de garde-fou, module 10) ; assortir chaque sortie d'un intervalle avec garantie de couverture ; conserver un modèle physique de référence comme arbitre sur les cas critiques ; et tracer chaque prédiction jusqu'aux données et à la version du modèle (module 26). Autrement dit : le ML accélère l'exploration, il ne signe pas le dossier de sûreté.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>Monte-Carlo converge en \(1/\sqrt{N}\) indépendamment de la dimension ; pour aller plus vite, réduire la variance plutôt qu'augmenter \(N\).</li>
+        <li>LHS ou Sobol pour un plan initial, puis enrichissement adaptatif guidé par l'incertitude (module 19).</li>
+        <li>Les indices de Sobol totaux disent quelles variables on peut fixer ; les calculer sur un métamodèle.</li>
+        <li>Un surrogate se valide hors échantillon, avec l'erreur maximale et la cohérence physique, pas seulement un \(Q^2\) moyen.</li>
+        <li>La décroissance des valeurs singulières des snapshots mesure la réductibilité d'un problème avant tout investissement.</li>
+        <li>Les opérateurs neuronaux échangent de la précision contre plusieurs ordres de grandeur de vitesse ; hybrider vaut mieux que remplacer.</li>
+        <li>Un problème inverse est mal posé par défaut : vérifier l'identifiabilité et fournir une incertitude, jamais un point seul.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "À quelle vitesse converge une estimation de Monte-Carlo ?", "choix": ["En 1/N", "En 1/√N, indépendamment de la dimension", "En 1/N², mais seulement en petite dimension", "Exponentiellement avec N"], "bonne": 1, "explication": "Diviser l'erreur par dix demande cent fois plus de tirages : c'est lent. Mais cette vitesse ne dépend <em>pas<\/em> de la dimension, contrairement aux méthodes de quadrature déterministes dont le coût explose — c'est précisément ce qui rend Monte-Carlo incontournable en grande dimension."},
+{"q": "Qu'apporte une suite à faible discrépance, en quasi-Monte-Carlo ?", "choix": ["Elle couvre l'espace plus régulièrement, ce qui accélère la convergence", "Elle garantit un résultat exact", "Elle réduit le nombre de dimensions", "Elle élimine le besoin d'un générateur aléatoire"], "bonne": 0, "explication": "Des tirages purement aléatoires laissent des trous et des amas. Une suite de Sobol ou de Halton remplit l'espace plus uniformément et atteint une convergence proche de 1/N sur des fonctions régulières. Le gain se dégrade toutefois en très grande dimension effective."},
+{"q": "Que cherche à quantifier une analyse de sensibilité globale ?", "choix": ["La dérivée de la sortie autour du point nominal", "La part de la variance de la sortie attribuable à chaque entrée, sur tout son domaine", "L'erreur numérique du solveur", "La stabilité du modèle dans le temps"], "bonne": 1, "explication": "Une analyse locale ne regarde qu'autour d'un point et manque les interactions. Les indices de Sobol décomposent la variance totale, en distinguant l'effet propre de chaque entrée et ses effets d'interaction. C'est ce qui permet de justifier qu'on fixe les entrées sans influence, réduisant le problème."},
+{"q": "Qu'est-ce qu'un métamodèle, et pourquoi en construire un ?", "choix": ["Un modèle statistique rapide qui remplace une simulation coûteuse", "Un modèle qui combine plusieurs modèles de ML", "Un modèle de la physique sous-jacente", "Un modèle utilisé pour régler les hyperparamètres"], "bonne": 0, "explication": "Une simulation qui prend six heures ne peut pas être appelée dix mille fois pour une analyse de sensibilité ou une optimisation. On l'échantillonne quelques centaines de fois, on ajuste un substitut — processus gaussien ou chaos polynomial —, et on travaille ensuite sur lui."},
+{"q": "Comment valide-t-on honnêtement un métamodèle ?", "choix": ["Sur les points ayant servi à l'ajuster", "Sur des points de la simulation jamais utilisés pour l'ajustement", "En comparant ses coefficients à la théorie", "En vérifiant qu'il est continu"], "bonne": 1, "explication": "Un métamodèle interpolant passe exactement par ses points d'ajustement : l'erreur y est nulle et ne dit rien. Il faut un jeu de validation indépendant, ou une validation croisée — et regarder aussi où l'erreur est grande, car elle est rarement uniforme sur le domaine."},
+{"q": "Que fait la décomposition orthogonale aux valeurs propres (POD) sur un champ de simulation ?", "choix": ["Elle résout l'équation plus vite", "Elle extrait les modes dominants, ce qui revient à faire une PCA sur les champs", "Elle raffine le maillage automatiquement", "Elle estime l'erreur de discrétisation"], "bonne": 1, "explication": "Chaque instantané du champ devient un vecteur, et la SVD de la matrice de ces instantanés donne les modes classés par énergie. Quelques dizaines de modes reconstruisent souvent le champ à 99 % : on projette alors les équations sur ce sous-espace, ce qui réduit massivement le coût."},
+{"q": "Quelle est la différence entre propagation d'incertitude et problème inverse ?", "choix": ["La première va des entrées vers la sortie, le second remonte des observations vers les paramètres", "La première est déterministe, le second probabiliste", "La première concerne les simulations, le second les données réelles", "Ce sont deux noms pour la même démarche"], "bonne": 0, "explication": "Propager, c'est connaître l'incertitude des entrées et en déduire celle de la sortie. Inverser, c'est observer la sortie et en déduire les paramètres — problème typiquement mal posé, où plusieurs jeux de paramètres expliquent les mêmes observations, d'où le besoin de régularisation ou d'un a priori bayésien."},
+{"q": "Qu'est-ce que l'assimilation de données ?", "choix": ["L'importation de données dans un entrepôt", "La correction continue de l'état d'un modèle par les observations qui arrivent", "Le nettoyage de données de capteurs", "La fusion de plusieurs jeux de données"], "bonne": 1, "explication": "C'est le principe de la prévision météorologique : le modèle prédit, l'observation corrige, et le cycle recommence. Le filtre de Kalman en est la forme linéaire, l'ensemble de Kalman et les filtres particulaires en sont les extensions non linéaires utilisées en géophysique."},
+{"q": "Qu'apporte un opérateur neuronal comme le Fourier Neural Operator ?", "choix": ["Il apprend une application entre fonctions, transférable à d'autres discrétisations", "Il remplace la différentiation automatique", "Il résout exactement les équations aux dérivées partielles", "Il fonctionne uniquement sur des maillages irréguliers"], "bonne": 0, "explication": "Un réseau classique apprend une application entre vecteurs, donc liée au maillage d'entraînement. Un opérateur neuronal apprend une application entre <em>fonctions<\/em>, ce qui permet d'évaluer sur une autre résolution. C'est une approximation apprise, pas une résolution exacte."},
+{"q": "Qu'est-ce qui fait la crédibilité d'un jumeau numérique, au-delà de sa précision ?", "choix": ["La finesse de son maillage", "La documentation de ses hypothèses, de son domaine de validité et de son incertitude", "Sa vitesse d'exécution", "Son interface graphique"], "bonne": 1, "explication": "Un modèle utilisé pour décider doit dire dans quelles conditions il a été validé et jusqu'où on peut le croire. Un modèle très précis sur son domaine d'apprentissage mais utilisé hors de celui-ci, sans que rien ne le signale, est plus dangereux qu'un modèle grossier et honnête."},
+{"q": "Que permet un plan d'expériences comme un hypercube latin ?", "choix": ["Couvrir l'espace des entrées uniformément avec peu de points", "Réduire le nombre de variables d'entrée", "Garantir la convergence de la simulation", "Estimer l'erreur numérique"], "bonne": 0, "explication": "Un tirage purement aléatoire peut laisser des régions entières inexplorées avec peu de points. L'hypercube latin stratifie chaque dimension pour que chaque tranche soit visitée une fois, ce qui améliore nettement la couverture — précieux quand chaque évaluation coûte des heures."},
+{"q": "À quoi sert la réduction de variance en Monte-Carlo ?", "choix": ["À réduire le nombre de dimensions du problème", "À obtenir la même précision avec moins de tirages", "À éliminer le biais de l'estimateur", "À accélérer le générateur aléatoire"], "bonne": 1, "explication": "Variables antithétiques, variables de contrôle, échantillonnage préférentiel : toutes exploitent une structure connue du problème pour réduire la dispersion de l'estimateur sans l'entacher de biais. Sur une simulation coûteuse, diviser la variance par dix équivaut à dix fois plus de tirages gratuits."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m20.html" class="btn btn-secondary">← Module 20 : Renforcement</a>
+    <a href="project7-m22.html" class="btn btn-primary">Module 22 : LLM et RAG →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Monte-Carlo</span><span class="tag">Sobol</span><span class="tag">Surrogate</span><span class="tag">POD/ROM</span><span class="tag">FNO</span><span class="tag">Assimilation</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m21-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 21</div>
+    <h1>Machine learning for simulation and engineering</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Monte Carlo estimation, its dimension-independent 1/√N rate, and variance reduction (antithetics, control variates, importance sampling, stratification, multilevel) — including rare-event failure probabilities.</li>
+      <li>Quasi-Monte Carlo, Latin hypercube and Sobol designs of numerical experiments, with sizing rules and independent validation sets.</li>
+      <li>Uncertainty propagation and polynomial chaos expansion, where moments read directly off the coefficients.</li>
+      <li>Global sensitivity analysis: first-order and total Sobol indices, how to read them together, and Morris screening.</li>
+      <li>Surrogate models compared (kriging/GP, RBF as implemented in my mdisd project, polynomial chaos, boosting, neural networks) and how to validate one honestly — out-of-sample Q², maximum error, accuracy where the decision happens, physical consistency.</li>
+      <li>Model order reduction: POD as an SVD of snapshots, intrusive vs non-intrusive ROMs, DMD, and using singular value decay to measure reducibility upfront.</li>
+      <li>Scientific ML: DeepONet and Fourier Neural Operators, mesh GNNs, and why hybridising (closure models, multi-fidelity corrections, hard physical constraints) beats replacing the solver.</li>
+      <li>Data assimilation: the 4D-Var cost function as a MAP estimate, adjoint gradients as reverse-mode autodiff, ensemble Kalman filters, differentiable simulators — and identifiability as the question to ask before calibrating.</li>
+      <li>Digital twins and what it takes for a learned model to be defensible in a safety context.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><strong>Machine learning for simulation and engineering</strong></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

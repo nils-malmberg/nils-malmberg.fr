@@ -581,6 +581,33 @@ footer {
   }
 }
 
+/* ── Cours data science & ML (project7*) ── */
+.course-content { max-width: 800px; }
+.course-content p,
+.course-content li {
+  max-width: 100%;
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+.course-content .code-block,
+.course-content .step-block,
+.course-content .warning-block,
+.course-content .tuto-toc { max-width: 100%; }
+.course-content .tuto-toc li,
+.course-content .code-block,
+.course-content figcaption { text-align: left; }
+.course-content .code-label { text-align: left; }
+.course-nav {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+.course-content h4.subsection {
+  font-size: var(--text-base); font-weight: 700; color: var(--color-text);
+  margin: var(--space-6) 0 var(--space-2);
+}
+
 /* ── Bouton « copier » des blocs de code (cours, et pages .copy-code) ── */
 .course-content .code-wrap, .copy-code .code-wrap { position: relative; }
 .course-content .code-copy, .copy-code .code-copy {
@@ -606,4 +633,99 @@ footer {
 @media (max-width: 560px) {
   .course-content .code-copy span, .copy-code .code-copy span { display: none; }
   .course-content .code-copy, .copy-code .code-copy { padding: 5px; top: var(--space-2); right: var(--space-2); }
+}
+
+/* Les liens du contenu sont soulignés et colorés (.project-content a) ;
+   un lien stylé en bouton doit garder l'apparence de son variant. */
+.course-content a.btn { text-decoration: none; }
+.course-content a.btn-primary { color: var(--color-text-inverse); }
+.course-content a.btn-secondary, .course-content a.btn-secondary:hover { color: var(--color-primary); }
+.course-content a.btn-ghost { color: var(--color-text-muted); }
+.course-content a.btn-ghost:hover { color: var(--color-text); }
+
+/* ── Cours en un seul document (project7-complet) ── */
+.barre-impression {
+  max-width: 800px; margin-bottom: var(--space-10); padding: var(--space-5);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.barre-impression > p { font-size: var(--text-sm); color: var(--color-text-muted); }
+.barre-impression .course-nav { margin: var(--space-4) 0; }
+.barre-impression .note-impression { font-size: var(--text-xs); color: var(--color-text-muted); margin: 0; }
+.barre-impression .btn svg { margin-right: var(--space-2); vertical-align: -3px; }
+.course-content .module-entete {
+  margin: var(--space-16) 0 var(--space-8); padding-top: var(--space-6);
+  border-top: 2px solid var(--color-divider);
+}
+.course-content .module-entete .section-label { margin-bottom: var(--space-2); }
+.course-content h1.module-titre { font-size: var(--text-2xl); margin: 0; }
+.course-content .sommaire-complet { columns: 2; column-gap: var(--space-8); }
+.course-content .sommaire-complet li { break-inside: avoid; margin-bottom: var(--space-2); }
+.course-content .step-block .course-nav { margin-bottom: 0; }
+@media (max-width: 720px) { .course-content .sommaire-complet { columns: 1; } }
+
+.mention-droits {
+  max-width: 800px; margin-top: var(--space-6);
+  font-size: var(--text-xs); color: var(--color-text-faint); text-align: left;
+}
+.project-page-header .mention-droits { margin-top: var(--space-3); }
+
+/* Mention de droits répétée en bas de chaque page du PDF. Un élément en
+   position fixe ne convient pas : Chrome le rogne à la zone de texte et ne lui
+   réserve aucune place. Le <tfoot> d'un tableau, lui, est répété sur chaque
+   page imprimée ET l'espace est réservé. À l'écran, le tableau est neutralisé
+   en blocs : il ne doit rien changer à la mise en page. */
+.cadre-pdf,
+.cadre-pdf > tbody,
+.cadre-pdf > tbody > tr,
+.cadre-pdf > tbody > tr > td { display: block; }
+.cadre-pdf > tfoot { display: none; }
+
+/* ── Impression : produire un PDF vectoriel lisible ── */
+@media print {
+  :root, :root[data-theme="dark"], [data-theme="dark"] {
+    --color-bg: #ffffff; --color-surface: #ffffff; --color-surface-2: #f7f8fa;
+    --color-surface-offset: #f4f5f7; --color-surface-dynamic: #eef0f3;
+    --color-divider: #d0d4db; --color-border: #c4c9d2;
+    --color-text: #1a1d24; --color-text-muted: #4a5060; --color-text-faint: #6a7280;
+    --color-primary: #0a5a72; --color-accent: #b85c18;
+  }
+  @page { margin: 18mm 15mm; }
+  /* les aplats (fond des blocs de code, des encadrés) ne sont pas imprimés
+     par défaut selon le chemin emprunté — dialogue d'impression, --print-to-pdf
+     ou CDP ; on les impose pour que le PDF soit toujours identique */
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #ffffff !important; }
+  body { font-size: 10.5pt; }
+
+  header, footer, .project-back, .course-nav, .barre-impression, .project-meta,
+  .code-copy, .theme-toggle, #language-switcher, .burger, .divider { display: none !important; }
+  #project7-complet-content-fr { display: block !important; }
+  #project7-complet-content-en { display: none !important; }
+
+  .container, .project-page { max-width: none; padding: 0; margin: 0; }
+  .course-content, .course-content .code-block, .course-content .step-block,
+  .course-content .warning-block, .course-content .tuto-toc { max-width: none; }
+
+  .course-content .module-entete { break-before: page; break-inside: avoid; margin-top: 0; border-top: none; }
+  h1, h2, h3, h4 { break-after: avoid; }
+  p, li { orphans: 3; widows: 3; }
+  .code-block, .step-block, .warning-block, .tuto-toc, figure { break-inside: avoid; }
+  [data-theme="dark"] .code-block { background: #f4f5f7 !important; border-color: #c4c9d2 !important; color: #1a1d24 !important; }
+  .code-block { font-size: 8pt; }
+  .code-block pre { white-space: pre-wrap; word-break: break-word; }
+  a { color: inherit !important; text-decoration: none; }
+  .course-content .sommaire-complet { columns: 2; }
+
+  .cadre-pdf { display: table; width: 100%; border-collapse: collapse; }
+  .cadre-pdf > tbody { display: table-row-group; }
+  .cadre-pdf > tfoot { display: table-footer-group; }
+  .cadre-pdf > tbody > tr,
+  .cadre-pdf > tfoot > tr { display: table-row; }
+  .cadre-pdf > tbody > tr > td,
+  .cadre-pdf > tfoot > tr > td { display: table-cell; padding: 0; border: 0; }
+  .pied-pdf {
+    padding-top: 8mm;
+    font-size: 7.5pt; color: #6a7280; text-align: center; letter-spacing: 0.02em;
+  }
 }

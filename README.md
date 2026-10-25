@@ -1,0 +1,80 @@
+# nils-malmberg.fr
+
+Site personnel statique : du HTML, du CSS et un fichier JavaScript, sans étape
+de construction ni dépendance. Les pages sont à la racine, les ressources dans
+`media/`.
+
+Chaque page contient ses deux versions de langue dans deux blocs
+`#<page>-content-fr` et `#<page>-content-en` ; `script.js` affiche l'un ou
+l'autre selon le sélecteur de langue, et gère aussi le thème clair/sombre.
+
+## Prévisualiser en local
+
+Ouvrir un fichier directement suffit pour la plupart des pages, mais
+`keywords.json` est chargé par `fetch`, ce qui échoue sur `file://`. Mieux vaut
+servir le dossier :
+
+```sh
+python3 -m http.server 8000
+# puis http://localhost:8000
+```
+
+## Générer le PDF du cours
+
+Le cours de data science (`project7*.html`) est téléchargeable en PDF depuis sa
+page d'accueil. Ce PDF **n'est pas versionné** : il pèse près de 5 Mo et serait
+réécrit à chaque modification du cours. Il se régénère en local :
+
+```sh
+./scripts/build-pdf.sh
+```
+
+Le script pilote le Chrome (ou Chromium, ou Edge) déjà installé en mode
+headless, et écrit `media/projets/project7/cours-data-science-ml.pdf`, soit
+environ 460 pages. Il n'y a rien à installer.
+
+Quelques précisions :
+
+- **La source est `project7-complet.html`**, la page qui réunit les 28 modules
+  et les trois annexes. La mise en page vient du bloc `@media print` de
+  `style.css` : marges, saut de page avant chaque module, thème clair forcé,
+  blocs de code et encadrés insécables.
+- **Une connexion est nécessaire.** MathJax est chargé depuis un CDN au moment
+  du rendu ; sans lui, les formules sortiraient en LaTeX brut. Le script teste
+  le CDN avec `curl` et prévient s'il ne l'atteint pas, mais **sans bloquer** :
+  c'est le navigateur qui charge MathJax, et il a ses propres réglages de proxy
+  et de certificats — il y accède souvent quand `curl` échoue. En cas
+  d'avertissement, ouvrez le PDF produit et vérifiez qu'une formule s'affiche,
+  au module 8 par exemple. `BUILD_PDF_SANS_TEST_RESEAU=1` supprime le test.
+- **Le PDF existant n'est jamais détruit par un échec** : la génération écrit
+  dans un fichier temporaire, qui ne remplace le PDF qu'une fois terminée.
+- **Pour un autre navigateur :** `CHROME=/chemin/vers/chrome ./scripts/build-pdf.sh`.
+- **Après génération**, téléverser le PDF avec le reste du site : comme il est
+  dans `.gitignore`, il ne part pas avec le dépôt, et le bouton de
+  téléchargement renverrait une erreur 404 sans lui.
+
+### Sous Windows
+
+Le script est un script shell : il se lance depuis **Git Bash**, livré avec Git
+pour Windows, et non depuis `cmd.exe` ou PowerShell.
+
+```sh
+./scripts/build-pdf.sh
+```
+
+Il connaît les emplacements habituels de Chrome et d'Edge sous Windows. Si le
+navigateur est installé ailleurs, indiquez-le au format Git Bash :
+
+```sh
+CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe" ./scripts/build-pdf.sh
+```
+
+Si vous préférez rester dans PowerShell, la même chose sans le script :
+
+```powershell
+$racine = (Get-Location).Path
+$chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+& $chrome --headless --disable-gpu --no-pdf-header-footer --virtual-time-budget=60000 `
+  "--print-to-pdf=$racine\media\projets\project7\cours-data-science-ml.pdf" `
+  ("file:///" + ($racine -replace '\\', '/') + "/project7-complet.html")
+```

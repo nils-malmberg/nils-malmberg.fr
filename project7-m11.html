@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 11 - Inférence causale : mesurer l'effet d'une action - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m11-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 11</div>
+    <h1>Inférence causale : mesurer l'effet d'une action</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Le module 9 a montré comment décider si une différence observée est réelle, et il s'est arrêté à une phrase importante : quand on ne peut pas randomiser, il existe des méthodes quasi-expérimentales, qui reposent sur des hypothèses à argumenter. Ce module développe cette phrase. C'est probablement le savoir-faire qui distingue le plus nettement quelqu'un qui sait entraîner un modèle de quelqu'un dont l'analyse fonde une décision : la question « quel est l'effet de cette action ? » n'est pas la question « que va-t-il se passer ? », et aucun modèle prédictif, si bon soit-il, ne répond à la première.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#probleme">Le problème : prédire n'est pas agir</a></li>
+        <li><a href="#potentiels">Les résultats potentiels : écrire ce qu'on cherche</a></li>
+        <li><a href="#estimandes">ATE, ATT, CATE : de quel effet parle-t-on ?</a></li>
+        <li><a href="#hypotheses">Les trois hypothèses qu'on ne peut pas tester</a></li>
+        <li><a href="#randomisation">L'expérience randomisée, et CUPED</a></li>
+        <li><a href="#propension">Le score de propension : pondérer ou apparier</a></li>
+        <li><a href="#did">Différences de différences</a></li>
+        <li><a href="#rdd">Régression sur discontinuité</a></li>
+        <li><a href="#iv">Variables instrumentales</a></li>
+        <li><a href="#dml">Double machine learning et effets hétérogènes</a></li>
+        <li><a href="#sensibilite">Et si un confondant manquait ?</a></li>
+        <li><a href="#recap">Récapitulatif et erreurs fréquentes</a></li>
+      </ol>
+    </div>
+
+    <h2 id="probleme">1. Le problème : prédire n'est pas agir</h2>
+
+    <p>Un exemple auquel on ne coupe pas. Une entreprise constate que les clients ayant contacté le support résilient deux fois moins que les autres. Un modèle de classification le confirme : « a contacté le support » est la variable la plus importante. Conclusion tentante : appelons tout le monde.</p>
+
+    <p>Elle est probablement fausse, et pour une raison structurelle. Les gens qui contactent le support sont ceux qui tiennent assez au service pour prendre leur téléphone ; les autres sont déjà partis mentalement. La corrélation est réelle, le modèle n'a pas menti, mais l'<strong>intervention</strong> — appeler quelqu'un qui n'aurait pas appelé — n'est pas la même chose que l'<strong>observation</strong> — constater que quelqu'un a appelé.</p>
+
+    <div class="step-block">
+      <h4>Deux questions que tout oppose</h4>
+      <ul>
+        <li><strong>Prédictive</strong> — « sachant que ce client a appelé le support, quelle est sa probabilité de résilier ? » Un modèle de ML y répond très bien. On note cela \(P(Y \mid X = x)\) : on <em>conditionne</em> sur ce qu'on observe.</li>
+        <li><strong>Causale</strong> — « si j'appelle ce client, de combien sa probabilité de résilier change-t-elle ? » On note cela \(P(Y \mid do(X = x))\) : on <em>intervient</em>, on force la valeur au lieu de la constater.</li>
+      </ul>
+      <p>Les deux quantités coïncident dans un seul cas : quand l'affectation au traitement est indépendante de tout le reste, c'est-à-dire quand on a randomisé. Partout ailleurs, elles diffèrent, et parfois jusqu'à changer de signe — c'est le paradoxe de Simpson du module 9.</p>
+    </div>
+
+    <p>La difficulté de fond est qu'aucune donnée, si abondante soit-elle, ne tranche seule. Deux mondes qui produisent exactement les mêmes données peuvent réclamer deux décisions opposées. Ce qui tranche, c'est une <strong>hypothèse sur le mécanisme</strong>, apportée par la connaissance du domaine, et que l'on écrit explicitement pour pouvoir en discuter. L'inférence causale est l'ensemble des méthodes qui rendent cette hypothèse visible et ses conséquences calculables.</p>
+
+    <h2 id="potentiels">2. Les résultats potentiels : écrire ce qu'on cherche</h2>
+
+    <h3>L'intuition</h3>
+    <p>Le cadre dominant, dû à Rubin, part d'une idée simple. Pour chaque individu \(i\), imaginons deux versions du monde :</p>
+    <ul>
+      <li>\(Y_i(1)\) — ce qui lui serait arrivé <em>s'il avait été traité</em> ;</li>
+      <li>\(Y_i(0)\) — ce qui lui serait arrivé <em>s'il ne l'avait pas été</em>.</li>
+    </ul>
+    <p>L'effet du traitement sur cet individu est la différence \(\tau_i = Y_i(1) - Y_i(0)\). C'est exactement ce qu'on voudrait connaître, et c'est exactement ce qu'on ne peut jamais observer : un individu est traité ou ne l'est pas, jamais les deux. On n'observe que</p>
+    \[ Y_i = T_i\,Y_i(1) + (1 - T_i)\,Y_i(0) \]
+    <p>où \(T_i \in \{0,1\}\) indique le traitement. L'autre terme est manquant, définitivement. C'est ce qu'on appelle le <strong>problème fondamental de l'inférence causale</strong>, et la formulation la plus utile est celle-ci : <em>l'inférence causale est un problème de données manquantes</em>, où ce qui manque est la moitié du tableau.</p>
+
+    <div class="code-label">le tableau qu'on ne verra jamais en entier</div>
+    <div class="code-block"><pre>  individu   T   Y(0)   Y(1)    τ = Y(1)-Y(0)     observé
+  ────────────────────────────────────────────────────────
+     1       1     ?     420         ?              420
+     2       0    310      ?         ?              310
+     3       1     ?     380         ?              380
+     4       0    295      ?         ?              295
+
+  · la colonne τ est entièrement inconnue, ligne par ligne
+  · MAIS sa MOYENNE peut être estimée, si les groupes sont comparables
+  → tout le reste du module consiste à rendre les groupes comparables</pre></div>
+
+    <p>Ce déplacement — renoncer à l'effet individuel, viser une moyenne — est la clé. On ne saura jamais si <em>ce</em> client aurait résilié ; on peut savoir de combien le taux de résiliation change en moyenne sur une population.</p>
+
+    <h2 id="estimandes">3. ATE, ATT, CATE : de quel effet parle-t-on ?</h2>
+
+    <p>« L'effet du traitement » recouvre plusieurs quantités distinctes, qu'il faut nommer avant d'estimer, parce qu'elles n'ont ni la même valeur ni la même utilité.</p>
+
+    <div class="code-label">trois effets, trois questions</div>
+    <div class="code-block"><pre>ATE  — Average Treatment Effect            E[Y(1) - Y(0)]
+       « et si on traitait TOUT LE MONDE ? »
+       la bonne cible pour une politique générale
+
+ATT  — ... on the Treated              E[Y(1) - Y(0) | T = 1]
+       « le programme a-t-il servi à CEUX QUI Y ONT PARTICIPÉ ? »
+       la bonne cible pour évaluer un dispositif existant
+
+CATE — Conditional ATE                 E[Y(1) - Y(0) | X = x]
+       « l'effet pour un individu DE PROFIL x »
+       la bonne cible pour cibler — c'est l'uplift du module 24
+
+LATE — Local ATE : l'effet sur le sous-groupe que l'instrument
+       a réellement fait changer de comportement (section 9)</pre></div>
+
+    <p>La distinction n'est pas académique. Un dispositif de formation professionnelle auquel s'inscrivent surtout les personnes déjà motivées peut avoir un ATT élevé — il aide ceux qui viennent — et un ATE faible — il n'aiderait guère si on l'imposait à tous. Publier l'un pour l'autre est une faute courante, et coûteuse en décision publique.</p>
+
+    <h2 id="hypotheses">4. Les trois hypothèses qu'on ne peut pas tester</h2>
+
+    <p>Estimer un effet causal à partir de données observationnelles exige trois hypothèses. Elles ne se vérifient pas dans les données — c'est leur nature — mais elles se discutent, et une analyse honnête les énonce.</p>
+
+    <div class="step-block">
+      <h4>1. Ignorabilité (absence de confondant non mesuré)</h4>
+      <p>À profil \(X\) identique, recevoir le traitement est indépendant des résultats potentiels :</p>
+      \[ \big(Y(0),\, Y(1)\big) \perp\!\!\!\perp T \;\mid\; X \]
+      <p>Autrement dit : parmi les gens qui se ressemblent sur \(X\), qui a été traité est essentiellement une affaire de hasard. C'est l'hypothèse la plus forte et la plus souvent fausse. Si la motivation détermine à la fois la participation et le résultat, et qu'on ne la mesure pas, tout s'effondre.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>2. Positivité (chevauchement)</h4>
+      <p>Pour tout profil observé, les deux issues doivent être possibles : \(0 < P(T=1 \mid X=x) < 1\). Si aucun client de plus de 70 ans n'a jamais été appelé, on ne peut rien dire de l'effet d'un appel sur eux — il n'existe aucun terme de comparaison. On <em>peut</em>, elle, la vérifier empiriquement : c'est le diagnostic de chevauchement de la section 6.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>3. SUTVA (pas d'interférence, un seul traitement)</h4>
+      <p>Le résultat d'un individu ne dépend pas du traitement des autres, et « être traité » signifie la même chose pour tous. Deux violations très concrètes :</p>
+      <ul>
+        <li><strong>Effets de réseau</strong> — offrir une réduction à la moitié des utilisateurs d'un réseau social : les non-traités en entendent parler. Le groupe témoin est contaminé, l'effet mesuré est sous-estimé.</li>
+        <li><strong>Équilibre général</strong> — un site de covoiturage qui teste une prime conducteur sur 10 % des trajets : ces conducteurs prennent les courses que les autres auraient prises. L'effet mesuré sur le petit groupe ne se reproduira pas à l'échelle.</li>
+      </ul>
+      <p>La parade usuelle est de randomiser par <em>grappes</em> (une ville entière, un réseau entier) plutôt que par individu — au prix d'une forte perte de puissance statistique.</p>
+    </div>
+
+    <h2 id="randomisation">5. L'expérience randomisée, et CUPED</h2>
+
+    <p>Randomiser rend l'affectation indépendante de tout, y compris de ce qu'on n'a pas mesuré : l'ignorabilité devient vraie par construction, sans hypothèse. C'est pour cela que l'essai contrôlé randomisé — l'A/B test du module 9 — reste l'étalon-or, et que la première question devant tout problème causal est : <em>puis-je randomiser ?</em></p>
+
+    <h3>Le problème : la puissance</h3>
+    <p>La randomisation garantit l'absence de biais, pas la précision. Sur une métrique très dispersée — le chiffre d'affaires par utilisateur, où 1 % des utilisateurs font 40 % du total — l'intervalle de confiance reste large même avec un million d'observations. Or l'écart-type entre individus est en grande partie stable dans le temps : un gros acheteur avant l'expérience sera un gros acheteur pendant. Cette part de variance est du bruit prévisible, donc soustrayable.</p>
+
+    <h3>CUPED : retirer le bruit qu'on peut prédire</h3>
+    <p>L'idée tient en une ligne. Soit \(X\) la valeur de la métrique <em>avant</em> l'expérience. On remplace \(Y\) par</p>
+    \[ Y^{\mathrm{cuped}} = Y - \theta\,(X - \bar{X}), \qquad \theta = \frac{\operatorname{Cov}(Y, X)}{\operatorname{Var}(X)} \]
+    <p>Comme \(X\) est mesuré avant l'affectation, il ne peut pas être affecté par le traitement : soustraire sa contribution ne déplace pas la moyenne du traitement, mais réduit la variance d'un facteur \(1 - \rho^2\), où \(\rho\) est la corrélation entre \(X\) et \(Y\). Avec \(\rho = 0{,}7\), la variance tombe de moitié : on obtient la même précision avec deux fois moins d'utilisateurs, ou le même résultat deux fois plus vite.</p>
+
+    <div class="code-label">python — CUPED sur un A/B test</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+n = 20_000
+base = rng.lognormal(3, 1, n)              # dépense AVANT l'expérience
+groupe = rng.integers(0, 2, n)             # 0 = témoin, 1 = traitement
+effet_vrai = 1.5
+apres = 0.8 * base + rng.lognormal(3, 1, n) * 0.4 + effet_vrai * groupe
+
+def ic(y, g):
+    d = y[g == 1].mean() - y[g == 0].mean()
+    se = np.sqrt(y[g == 1].var(ddof=1) / (g == 1).sum()
+                 + y[g == 0].var(ddof=1) / (g == 0).sum())
+    return d, 1.96 * se
+
+theta = np.cov(apres, base)[0, 1] / base.var(ddof=1)
+apres_cuped = apres - theta * (base - base.mean())
+
+d0, m0 = ic(apres, groupe)
+d1, m1 = ic(apres_cuped, groupe)
+print(f"brut  : effet {d0:5.2f} ± {m0:4.2f}")   # effet  1.62 ± 0.94
+print(f"CUPED : effet {d1:5.2f} ± {m1:4.2f}")   # effet  1.55 ± 0.42
+print(f"largeur divisée par {m0 / m1:.1f}")     # largeur divisée par 2.3</pre></div>
+
+    <div class="warning-block">
+      <strong>La condition impérative.</strong> La covariable \(X\) doit être mesurée <em>strictement avant</em> l'affectation au traitement. Utiliser une variable postérieure — même corrélée, même « évidemment indépendante » — conditionne sur une conséquence du traitement et rouvre la porte au biais de collisionneur du module 9. C'est la même règle que l'interdiction de la fuite de données en ML (module 12) : rien qui vienne du futur.
+    </div>
+
+    <h2 id="propension">6. Le score de propension : pondérer ou apparier</h2>
+
+    <h3>Le problème</h3>
+    <p>On n'a pas pu randomiser. Les traités et les non-traités diffèrent sur dix variables : âge, ancienneté, dépense passée, canal d'acquisition. Comparer les moyennes brutes revient à comparer des populations différentes. On voudrait comparer chaque traité à des non-traités « qui lui ressemblent », mais avec dix variables, personne ne ressemble exactement à personne — c'est la malédiction de la dimension.</p>
+
+    <h3>L'intuition : résumer en un seul nombre</h3>
+    <p>Le résultat de Rosenbaum et Rubin est élégant. Définissons le <strong>score de propension</strong></p>
+    \[ e(x) = P(T = 1 \mid X = x) \]
+    <p>c'est-à-dire la probabilité d'être traité compte tenu du profil. Alors, sous l'hypothèse d'ignorabilité, conditionner sur ce <em>seul</em> nombre suffit : deux individus de même score de propension sont comparables, même si leurs profils diffèrent. Dix dimensions se réduisent à une.</p>
+
+    <p>On estime \(e(x)\) par un modèle de classification ordinaire — régression logistique ou gradient boosting du module 14 —, puis on s'en sert de deux façons :</p>
+
+    <div class="step-block">
+      <h4>Pondération (IPW) — reconstruire une population équilibrée</h4>
+      <p>On pondère chaque individu par l'inverse de sa probabilité d'avoir reçu le traitement qu'il a effectivement reçu :</p>
+      \[ \widehat{\mathrm{ATE}} = \frac{1}{n}\sum_{i} \left( \frac{T_i\,Y_i}{e(X_i)} - \frac{(1-T_i)\,Y_i}{1-e(X_i)} \right) \]
+      <p>L'intuition : un traité qui avait peu de chances de l'être est rare, donc il représente beaucoup de gens comme lui — on lui donne un grand poids. On fabrique ainsi une pseudo-population où traitement et profil sont indépendants.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Appariement — constituer des paires</h4>
+      <p>À chaque traité on associe un ou plusieurs témoins de score voisin, et on compare à l'intérieur des paires. Plus intuitif à expliquer, plus facile à auditer, mais on écarte les individus sans correspondant — ce qui change silencieusement la population sur laquelle porte le résultat.</p>
+    </div>
+
+    <div class="code-label">python — IPW avec diagnostic de chevauchement</div>
+    <div class="code-block"><pre>import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.calibration import CalibratedClassifierCV
+
+# X : covariables mesurées AVANT le traitement ; T : 0/1 ; Y : résultat
+modele = CalibratedClassifierCV(LogisticRegression(max_iter=1000), cv=5)
+modele.fit(X, T)
+e = modele.predict_proba(X)[:, 1]
+
+# 1) positivité : les deux groupes doivent se recouvrir
+print("traités   e ∈", np.percentile(e[T == 1], [1, 99]).round(3))
+print("témoins   e ∈", np.percentile(e[T == 0], [1, 99]).round(3))
+# si les plages ne se recouvrent pas, AUCUNE méthode ne sauvera l'analyse
+
+# 2) écrêtage : un score de 0.001 donnerait un poids de 1000
+e = np.clip(e, 0.05, 0.95)
+w = np.where(T == 1, 1 / e, 1 / (1 - e))
+
+# 3) vérifier que la pondération a bien équilibré les covariables
+def diff_standardisee(x, T, w):
+    m1 = np.average(x[T == 1], weights=w[T == 1])
+    m0 = np.average(x[T == 0], weights=w[T == 0])
+    return (m1 - m0) / np.sqrt((x[T == 1].var() + x[T == 0].var()) / 2)
+
+for j, nom in enumerate(noms_colonnes):
+    d = diff_standardisee(X[:, j], T, w)
+    drapeau = "  ⚠ déséquilibré" if abs(d) > 0.1 else ""
+    print(f"{nom:20s} {d:+.3f}{drapeau}")
+
+ate = np.average(Y[T == 1], weights=w[T == 1]) - \
+      np.average(Y[T == 0], weights=w[T == 0])
+print(f"ATE estimé : {ate:.3f}")</pre></div>
+
+    <div class="warning-block">
+      <strong>Le diagnostic n'est pas optionnel.</strong> Un score de propension n'est utile que si (a) les distributions se recouvrent et (b) après pondération, les covariables sont équilibrées — on vise une différence standardisée inférieure à 0,1. Notez le renversement complet par rapport au ML habituel : un modèle de propension qui <em>sépare parfaitement</em> traités et témoins est une catastrophe, parce qu'il signifie qu'il n'existe aucun témoin comparable. Ici, un bon modèle est un modèle qui prédit mal.
+    </div>
+
+    <h2 id="did">7. Différences de différences</h2>
+
+    <h3>Le problème</h3>
+    <p>Une région applique une nouvelle réglementation, l'autre non. Comparer les deux régions après coup ne dit rien : elles différaient déjà avant. Comparer la région traitée avant et après ne dit rien non plus : entre-temps, la conjoncture a bougé pour tout le monde.</p>
+
+    <h3>L'intuition : soustraire deux fois</h3>
+    <p>On combine les deux comparaisons pour éliminer les deux biais. La différence <em>avant/après</em> dans le groupe témoin mesure ce qui se serait passé sans traitement — la tendance commune. On la retranche de la différence avant/après du groupe traité ; ce qui reste est l'effet.</p>
+
+    \[ \widehat{\mathrm{ATT}} = \underbrace{(\bar Y_{\text{tr,apr}} - \bar Y_{\text{tr,av}})}_{\text{évolution des traités}} - \underbrace{(\bar Y_{\text{té,apr}} - \bar Y_{\text{té,av}})}_{\text{évolution des témoins}} \]
+
+    <div class="code-label">ce que la méthode fait, graphiquement</div>
+    <div class="code-block"><pre>  Y
+  │                                        ● traités (observé)
+  │                             ●──────────
+  │                    ●───────╱      ↕ EFFET ESTIMÉ
+  │            ●──────╱    ○ ─ ─ ─ ─ ─   contrefactuel : les traités
+  │                            ╱          s'ils avaient suivi la tendance
+  │        ○──────○──────○────╱           des témoins
+  │                          ○ témoins (observé)
+  └────────────────────────┬──────────────────────────► temps
+                    intervention
+
+  L'hypothèse, INVÉRIFIABLE : sans traitement, les deux courbes seraient
+  restées PARALLÈLES. On ne peut pas la tester après l'intervention —
+  mais on peut regarder si elles l'étaient AVANT. C'est le test de
+  tendances pré-traitement, et c'est le premier graphique à produire.</pre></div>
+
+    <div class="code-label">python — DiD par régression, avec effets fixes</div>
+    <div class="code-block"><pre>import statsmodels.formula.api as smf
+
+# df : une ligne par (unité, période), colonnes traite (0/1), apres (0/1)
+# L'interaction porte TOUT l'effet causal recherché.
+m = smf.ols("y ~ traite * apres", data=df).fit(
+        cov_type="cluster", cov_kwds={"groups": df["unite"]})
+print(m.summary().tables[1])
+#                    coef    std err     P>|t|
+# Intercept        12.400      0.210     0.000   niveau témoins, avant
+# traite            3.100      0.290     0.000   écart initial (biais de niveau)
+# apres             1.800      0.240     0.000   tendance commune
+# traite:apres      2.450      0.330     0.000   ← L'EFFET
+
+# forme plus robuste : effets fixes unité + période, qui absorbent
+# toute différence stable entre unités et tout choc commun aux unités
+m2 = smf.ols("y ~ traite:apres + C(unite) + C(periode)", data=df).fit(
+        cov_type="cluster", cov_kwds={"groups": df["unite"]})</pre></div>
+
+    <div class="warning-block">
+      <strong>Deux pièges classiques.</strong> D'abord, les écarts-types : les observations d'une même unité sont corrélées dans le temps, et l'ignorer divise artificiellement l'erreur type par trois ou quatre. Il faut <em>regrouper</em> (<em>cluster</em>) au niveau de l'unité randomisée. Ensuite, les adoptions échelonnées : quand les unités sont traitées à des dates différentes, la régression DiD classique utilise des unités déjà traitées comme témoins, ce qui peut produire un signe faux. La littérature récente (Callaway–Sant'Anna, Sun–Abraham) fournit des estimateurs corrigés — il faut les utiliser dès que les dates de traitement diffèrent.
+    </div>
+
+    <h2 id="rdd">8. Régression sur discontinuité</h2>
+
+    <h3>L'intuition</h3>
+    <p>Certaines décisions reposent sur un seuil arbitraire : une bourse attribuée en dessous d'un revenu, un rattrapage déclenché sous 10 de moyenne, une remise commerciale au-delà d'un montant de panier. Un élève à 9,9 et un élève à 10,1 sont, à toutes fins pratiques, identiques — sauf que l'un reçoit le dispositif et l'autre non. Au voisinage immédiat du seuil, on dispose donc d'une <strong>quasi-randomisation offerte par la règle</strong>.</p>
+
+    <div class="code-label">l'effet, c'est le saut au seuil</div>
+    <div class="code-block"><pre>  résultat
+  │                                      ╭─── ajustement à droite
+  │                                 ╭────╯
+  │                            ╭────╯
+  │                       ╭────╯  ↕ EFFET = saut à la discontinuité
+  │              ────────╯
+  │        ──────
+  │  ──────
+  └──────────────────────┬───────────────────────► variable de forçage
+                        seuil
+
+  · on ajuste une courbe DE CHAQUE CÔTÉ, séparément
+  · l'effet est l'écart des deux ajustements AU seuil, rien d'autre
+  · la validité décroît vite quand on s'éloigne : l'effet estimé est LOCAL</pre></div>
+
+    <div class="step-block">
+      <h4>Les vérifications qui font la différence</h4>
+      <ul>
+        <li><strong>Pas de manipulation du seuil.</strong> Si les enseignants remontent les 9,7 à 10, la densité de la variable de forçage présente un trou juste avant et une bosse juste après. Le test de McCrary consiste à tracer cet histogramme : un pic au seuil invalide l'analyse.</li>
+        <li><strong>Continuité des covariables.</strong> L'âge, le sexe, l'origine sociale ne doivent pas sauter au seuil. S'ils sautent, quelque chose d'autre change en même temps.</li>
+        <li><strong>Choix de la fenêtre.</strong> Trop large, on mélange des individus dissemblables ; trop étroite, il ne reste rien. On reporte la sensibilité du résultat à ce choix — pas une seule valeur.</li>
+        <li><strong>Degré du polynôme.</strong> Linéaire ou quadratique local ; au-delà, les degrés élevés fabriquent des sauts artificiels aux bords.</li>
+      </ul>
+    </div>
+
+    <div class="code-label">python — RDD local, en quelques lignes</div>
+    <div class="code-block"><pre>import numpy as np, statsmodels.formula.api as smf
+
+seuil, fenetre = 10.0, 1.5
+d = df[np.abs(df["note"] - seuil) &lt;= fenetre].copy()
+d["centre"] = d["note"] - seuil
+d["droite"] = (d["centre"] &gt;= 0).astype(int)
+
+# pentes séparées de part et d'autre : centre * droite
+m = smf.ols("resultat ~ centre * droite", data=d).fit(cov_type="HC1")
+print(f"effet au seuil : {m.params['droite']:.3f} "
+      f"[{m.conf_int().loc['droite', 0]:.3f}, "
+      f"{m.conf_int().loc['droite', 1]:.3f}]")
+
+# sensibilité à la fenêtre : un résultat solide bouge peu
+for h in (0.5, 1.0, 1.5, 2.0, 3.0):
+    dd = df[np.abs(df["note"] - seuil) &lt;= h].copy()
+    dd["centre"] = dd["note"] - seuil
+    dd["droite"] = (dd["centre"] &gt;= 0).astype(int)
+    r = smf.ols("resultat ~ centre * droite", data=dd).fit()
+    print(f"  fenêtre {h}: {r.params['droite']:+.3f}  (n = {len(dd)})")</pre></div>
+
+    <h2 id="iv">9. Variables instrumentales</h2>
+
+    <h3>Le problème</h3>
+    <p>Un confondant non mesuré subsiste, et aucun ajustement ne le corrigera puisqu'on ne l'observe pas. Exemple canonique : l'effet d'une année d'études supplémentaire sur le salaire. La capacité individuelle influence à la fois la poursuite d'études et le salaire, et elle n'est pas dans les données.</p>
+
+    <h3>L'intuition : une source de variation innocente</h3>
+    <p>On cherche une troisième variable \(Z\), l'<strong>instrument</strong>, qui pousse à être traité sans avoir d'effet propre sur le résultat. Elle joue le rôle d'un tirage au sort partiel, fourni par la nature ou l'administration. On n'utilise alors que la part de variation du traitement <em>due à l'instrument</em> — une part dont on sait qu'elle n'est pas contaminée.</p>
+
+    <div class="code-label">les trois conditions, et leur statut</div>
+    <div class="code-block"><pre>          Z ─────────► T ─────────► Y
+          │                ▲
+          │                │
+          └──── ✗ ────►    U (confondant non observé)
+                            │
+                            ▼  (U influence T ET Y)
+
+  1. PERTINENCE      Z influence réellement T      → TESTABLE (statistique F)
+  2. EXCLUSION       Z n'agit sur Y QUE via T      → NON testable, à argumenter
+  3. INDÉPENDANCE    Z n'est lié à aucun confondant → NON testable
+
+  Exemples utilisés en économie :
+   · distance au lycée le plus proche → poursuite d'études → salaire
+   · loterie d'affectation scolaire   → école fréquentée   → résultats
+   · mois de naissance (âge légal de sortie) → années d'études → salaire
+   · en entreprise : une INCITATION randomisée à utiliser une fonction,
+     quand on ne peut pas forcer l'usage → c'est le cas le plus utile</pre></div>
+
+    <div class="code-label">python — moindres carrés en deux étapes</div>
+    <div class="code-block"><pre>from linearmodels.iv import IV2SLS
+
+# y ~ 1 + controles + [traitement ~ instrument]
+res = IV2SLS.from_formula(
+    "salaire ~ 1 + experience + [annees_etudes ~ distance_lycee]",
+    data=df).fit(cov_type="robust")
+print(res.summary)
+
+# LE diagnostic à lire en premier : la première étape
+print(res.first_stage)
+# F < 10  →  instrument FAIBLE : l'estimation est biaisée et son
+#            intervalle de confiance n'a pas la couverture annoncée.
+#            Mieux vaut ne rien conclure que publier ce chiffre.</pre></div>
+
+    <div class="warning-block">
+      <strong>Ce que la méthode estime vraiment.</strong> Pas l'ATE, mais le <strong>LATE</strong> : l'effet moyen sur les seuls individus dont le comportement a été modifié par l'instrument — les « conformistes ». Ceux qui auraient fait des études de toute façon, et ceux qui n'en auraient jamais fait, ne contribuent pas. Le résultat peut donc ne pas se transposer à la population entière, et deux instruments valides peuvent légitimement donner deux valeurs différentes.
+    </div>
+
+    <h2 id="dml">10. Double machine learning et effets hétérogènes</h2>
+
+    <h3>Le problème</h3>
+    <p>On voudrait ajuster sur beaucoup de covariables, avec des relations non linéaires — exactement ce que le gradient boosting du module 14 fait bien. Mais brancher un modèle de ML dans une estimation causale échoue de deux façons. D'abord, la <strong>régularisation</strong> qui aide à prédire biaise l'estimation de l'effet : elle rétrécit tous les coefficients, y compris celui qui nous intéresse. Ensuite, le <strong>surapprentissage</strong> : un modèle qui a vu un individu à l'entraînement produit sur lui un résidu artificiellement petit.</p>
+
+    <h3>L'intuition : régresser le bruit sur le bruit</h3>
+    <p>La méthode de Chernozhukov et coauteurs repose sur une idée ancienne — le théorème de Frisch–Waugh — appliquée avec du ML :</p>
+    <ol>
+      <li>prédire le résultat à partir des covariables, \(\hat{m}(X) \approx E[Y \mid X]\), et garder le résidu \(\tilde{Y} = Y - \hat{m}(X)\) ;</li>
+      <li>prédire le traitement à partir des covariables, \(\hat{e}(X) \approx E[T \mid X]\), et garder le résidu \(\tilde{T} = T - \hat{e}(X)\) ;</li>
+      <li>régresser \(\tilde{Y}\) sur \(\tilde{T}\) : la pente est l'effet causal.</li>
+    </ol>
+    <p>Les deux premières étapes retirent tout ce que les covariables expliquent ; ce qui reste dans \(\tilde{T}\) est la part d'affectation au traitement qui ne s'explique pas par le profil — la part « comme si » elle avait été tirée au sort. Deux ingrédients rendent la construction valide :</p>
+    <ul>
+      <li><strong>L'orthogonalisation</strong> — résidualiser des deux côtés rend l'estimation insensible au premier ordre aux erreurs des modèles auxiliaires. Ceux-ci peuvent être imparfaits sans invalider l'effet.</li>
+      <li><strong>Le découpage croisé</strong> (<em>cross-fitting</em>) — on prédit toujours un individu avec un modèle entraîné sans lui, comme en validation croisée (module 12). C'est ce qui neutralise le surapprentissage.</li>
+    </ul>
+
+    <div class="code-label">python — DML, puis effets hétérogènes</div>
+    <div class="code-block"><pre>from econml.dml import LinearDML, CausalForestDML
+from sklearn.ensemble import HistGradientBoostingRegressor as HGB
+from sklearn.ensemble import HistGradientBoostingClassifier as HGC
+
+# ---- effet moyen, avec ajustement non linéaire sur X
+est = LinearDML(model_y=HGB(), model_t=HGC(),
+                discrete_treatment=True, cv=5)   # cv = découpage croisé
+est.fit(Y, T, X=X, W=W)          # X : modulateurs d'effet ; W : contrôles
+print("ATE :", est.ate(X), est.ate_interval(X, alpha=0.05))
+
+# ---- effet PAR INDIVIDU : qui gagne à être traité ?
+foret = CausalForestDML(model_y=HGB(), model_t=HGC(),
+                        discrete_treatment=True, cv=5, n_estimators=500)
+foret.fit(Y, T, X=X, W=W)
+cate = foret.effect(X)                     # un effet estimé par individu
+
+print(f"effet médian   : {np.median(cate):+.3f}")
+print(f"part d'effets négatifs : {(cate &lt; 0).mean():.1%}")
+# → si 30 % des individus ont un effet négatif, traiter tout le monde
+#   est une mauvaise politique même si l'ATE est positif.
+
+# quelles variables portent l'hétérogénéité ?
+print(foret.feature_importances())</pre></div>
+
+    <p>Cette dernière sortie est le pont vers l'action : un effet moyen positif peut masquer un sous-groupe que le traitement dégrade. C'est précisément l'<em>uplift</em> du module 24, qui reprend ce résultat pour décider <em>qui</em> traiter sous contrainte de budget.</p>
+
+    <h2 id="sensibilite">11. Et si un confondant manquait ?</h2>
+
+    <p>Toutes les méthodes observationnelles reposent sur une hypothèse invérifiable. Plutôt que de l'affirmer, on peut mesurer sa <strong>fragilité</strong> : quelle force devrait avoir un confondant caché pour annuler la conclusion ?</p>
+
+    <div class="step-block">
+      <h4>La valeur E, en une phrase</h4>
+      <p>C'est la force d'association minimale — avec le traitement <em>et</em> avec le résultat — que devrait avoir un confondant non mesuré pour ramener l'effet observé à zéro. Une valeur E de 1,3 signifie qu'une variable oubliée assez banale suffirait : la conclusion est fragile. Une valeur E de 4 signifie qu'il faudrait un facteur très puissant, que l'on aurait probablement remarqué : la conclusion est robuste.</p>
+      <p>L'exemple historique est éclairant. Pour le lien tabac–cancer, la valeur E dépassait 10 : aucun confondant plausible ne pouvait produire une association aussi forte. C'est ce raisonnement, et non un essai randomisé — impossible à mener —, qui a emporté la conviction.</p>
+    </div>
+
+    <div class="code-label">python — calculer la valeur E d'un risque relatif</div>
+    <div class="code-block"><pre>import numpy as np
+
+def valeur_e(rr: float) -&gt; float:
+    """Valeur E d'un risque relatif (ou de sa borne de confiance)."""
+    if rr &lt; 1:
+        rr = 1 / rr
+    return rr + np.sqrt(rr * (rr - 1))
+
+print(f"RR = 1.2 → E = {valeur_e(1.2):.2f}")   # 1.69  fragile
+print(f"RR = 2.0 → E = {valeur_e(2.0):.2f}")   # 3.41  solide
+print(f"RR = 5.0 → E = {valeur_e(5.0):.2f}")   # 9.47  très solide
+# On reporte TOUJOURS la valeur E de la borne de confiance la plus
+# proche de 1 : c'est le scénario le moins favorable compatible
+# avec les données.</pre></div>
+
+    <p>Reporter une valeur E change la nature du débat : on ne discute plus de savoir si l'hypothèse est vraie — question sans réponse —, mais de savoir si un confondant de cette force est plausible dans ce domaine. C'est une question à laquelle un expert métier peut répondre.</p>
+
+    <h2 id="recap">12. Récapitulatif et erreurs fréquentes</h2>
+
+    <div class="code-label">choisir sa méthode</div>
+    <div class="code-block"><pre>Puis-je randomiser ?
+├─ OUI  → A/B test (module 9) + CUPED pour la puissance
+│         randomiser par grappes si les unités interagissent
+└─ NON  → quelle structure les données offrent-elles ?
+   │
+   ├─ Un seuil administratif décide du traitement
+   │    → RÉGRESSION SUR DISCONTINUITÉ      effet local, très crédible
+   │
+   ├─ Deux groupes observés avant ET après
+   │    → DIFFÉRENCES DE DIFFÉRENCES        hypothèse : tendances parallèles
+   │
+   ├─ Une variable pousse au traitement sans agir sur le résultat
+   │    → VARIABLES INSTRUMENTALES           estime le LATE ; vérifier F > 10
+   │
+   ├─ Je crois avoir mesuré tous les confondants
+   │    → SCORE DE PROPENSION / DOUBLE ML    hypothèse la plus forte
+   │      + diagnostic de chevauchement OBLIGATOIRE
+   │
+   └─ Rien de tout cela
+        → décrire, ne pas conclure. Une corrélation présentée comme
+          telle vaut mieux qu'un effet causal inventé.</pre></div>
+
+    <div class="step-block">
+      <h4>Les six erreurs qui reviennent</h4>
+      <ol>
+        <li><strong>Contrôler par tout ce qu'on a.</strong> Ajouter des variables n'est pas neutre : conditionner sur un médiateur efface l'effet, conditionner sur un collisionneur en crée un (module 9). Le choix des variables d'ajustement se déduit d'un graphe causal, pas de la disponibilité des colonnes.</li>
+        <li><strong>Ajuster sur une variable postérieure au traitement.</strong> Même règle que la fuite de données du module 12 : tout ce qui est mesuré après l'affectation est suspect.</li>
+        <li><strong>Lire l'importance des variables comme un effet causal.</strong> Un SHAP élevé (module 14) signifie « utile pour prédire », jamais « agir dessus produira un effet ».</li>
+        <li><strong>Oublier le regroupement des écarts-types.</strong> Quand la randomisation porte sur des villes et l'analyse sur des individus, l'erreur type est sous-estimée d'un facteur trois ou quatre, et tout devient « significatif ».</li>
+        <li><strong>Publier l'ATT pour l'ATE.</strong> « Le dispositif a aidé ses participants » n'est pas « le dispositif aiderait tout le monde ».</li>
+        <li><strong>Traiter tout le monde parce que l'effet moyen est positif.</strong> S'il existe un sous-groupe où l'effet est négatif, la bonne politique est de cibler — c'est l'objet du module 24.</li>
+      </ol>
+    </div>
+
+    <p>Une dernière remarque, qui vaut pour tout le reste du cours. Un modèle prédictif et un modèle causal ne s'évaluent pas de la même manière : le premier se juge sur des données de test, le second ne se juge sur rien — il n'existe pas de vérité terrain pour un effet causal, puisque le contrefactuel est manquant par construction. C'est pourquoi la crédibilité repose ici sur la <em>conception</em> de l'étude, sur les diagnostics, et sur l'énoncé explicite des hypothèses. Le module 12 reprend maintenant le fil de la pratique : comment passer d'un problème métier à un jeu de données exploitable.</p>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "Pourquoi le problème fondamental de l'inférence causale est-il un problème de données manquantes ?", "choix": ["Parce que les données causales sont souvent incomplètes", "Parce qu'on n'observe jamais, pour un même individu, ce qui se serait passé dans l'autre branche", "Parce que les confondants ne sont pas mesurés", "Parce que les groupes traité et témoin ont des tailles différentes"], "bonne": 1, "explication": "Chaque individu a deux résultats potentiels, Y(1) et Y(0), mais un seul est observé — l'autre manque définitivement. L'effet individuel est donc inconnaissable ; toute l'inférence causale consiste à estimer une <em>moyenne<\/em> de ces différences, en rendant les groupes comparables."},
+{"q": "Un dispositif de formation auquel s'inscrivent surtout les personnes déjà motivées. Que mesure-t-on en comparant les inscrits aux non-inscrits, même après ajustement ?", "choix": ["L'ATE, l'effet si l'on formait tout le monde", "L'ATT, l'effet sur ceux qui ont effectivement participé", "Le CATE conditionnel à la motivation", "Rien d'interprétable"], "bonne": 1, "explication": "L'ATT répond à « le dispositif a-t-il servi à ceux qui sont venus ? ». L'ATE répondrait à « servirait-il si on l'imposait à tous ? » — et peut être bien plus faible. Publier l'un pour l'autre est une faute courante et coûteuse en décision publique."},
+{"q": "Que suppose l'hypothèse de positivité, et peut-on la vérifier ?", "choix": ["Que l'effet du traitement est positif ; non vérifiable", "Que chaque profil a une chance non nulle d'être traité et de ne pas l'être ; vérifiable empiriquement", "Que les résultats potentiels sont positifs ; vérifiable", "Que le traitement précède le résultat ; non vérifiable"], "bonne": 1, "explication": "Si aucun client de plus de 70 ans n'a jamais été appelé, aucune méthode ne dira l'effet d'un appel sur eux — il n'existe aucun terme de comparaison. Contrairement à l'ignorabilité, celle-ci se contrôle : c'est le diagnostic de chevauchement des scores de propension."},
+{"q": "Qu'est-ce que la violation de SUTVA par effet de réseau ?", "choix": ["Le traitement a un effet différent selon les individus", "Les non-traités sont affectés parce que les traités leur en parlent", "Le traitement n'est pas appliqué de la même façon partout", "Les groupes n'ont pas la même taille"], "bonne": 1, "explication": "Offrir une réduction à la moitié des utilisateurs d'un réseau social contamine le groupe témoin : l'effet mesuré est sous-estimé. La parade usuelle est de randomiser par grappes — une ville, un réseau entier — au prix d'une forte perte de puissance statistique."},
+{"q": "Que fait CUPED, et à quelle condition impérative ?", "choix": ["Il augmente la taille de l'échantillon ; il faut des données historiques", "Il retranche la part de la métrique prédictible par une mesure antérieure ; celle-ci doit précéder l'affectation", "Il corrige le biais de sélection ; il faut connaître les confondants", "Il ajuste les p-values ; il faut connaître le nombre de tests"], "bonne": 1, "explication": "La variance tombe d'un facteur 1−ρ² : avec ρ = 0,7, on atteint la même précision avec deux fois moins d'utilisateurs. Mais la covariable doit être mesurée <em>strictement avant<\/em> l'affectation ; une variable postérieure conditionnerait sur une conséquence du traitement et rouvrirait la porte au biais."},
+{"q": "Quel est le résultat de Rosenbaum et Rubin sur le score de propension ?", "choix": ["Le score de propension est toujours estimable par régression logistique", "Conditionner sur ce seul nombre suffit à rendre les groupes comparables, sous ignorabilité", "Le score de propension élimine les confondants non observés", "Le score de propension est indépendant du traitement"], "bonne": 1, "explication": "Dix dimensions se réduisent à une : deux individus de même probabilité d'être traités sont comparables, même si leurs profils diffèrent. Cela ne crée aucune information — les confondants non mesurés restent hors de portée, quelle que soit la qualité du modèle."},
+{"q": "Un modèle de score de propension qui sépare parfaitement traités et témoins est :", "choix": ["Un excellent modèle, gage de fiabilité", "Une catastrophe : il n'existe aucun témoin comparable", "Sans conséquence sur l'estimation", "Le signe qu'il faut ajouter des variables"], "bonne": 1, "explication": "C'est le renversement complet par rapport au ML habituel : ici, un bon modèle est un modèle qui prédit mal. Une séparation parfaite signifie une violation de positivité — les scores ne se recouvrent pas, donc aucune comparaison n'est possible, et pondérer amplifierait quelques individus extrêmes."},
+{"q": "Quelle hypothèse porte la méthode des différences de différences, et comment l'examine-t-on ?", "choix": ["L'absence de confondant ; on la teste par régression", "Les tendances parallèles ; on regarde si elles l'étaient avant l'intervention", "La randomisation ; on vérifie l'équilibre des covariables", "L'indépendance des observations ; on calcule la corrélation"], "bonne": 1, "explication": "Sans traitement, les deux courbes seraient restées parallèles : l'hypothèse porte sur l'après, donc invérifiable. On l'examine indirectement en traçant les tendances <em>avant<\/em> l'intervention — c'est le premier graphique à produire, et son absence doit rendre méfiant."},
+{"q": "Une régression sur discontinuité estime l'effet :", "choix": ["Sur toute la population", "Au voisinage immédiat du seuil seulement", "Sur les individus les plus éloignés du seuil", "Sur le groupe qui a choisi le traitement"], "bonne": 1, "explication": "Un élève à 9,9 et un élève à 10,1 sont comparables ; un élève à 6 et un élève à 16 ne le sont pas. L'effet obtenu est donc local, et rien ne garantit qu'il se transpose loin du seuil. C'est le prix d'une crédibilité interne très forte."},
+{"q": "Parmi les trois conditions d'un instrument valide, laquelle est testable dans les données ?", "choix": ["L'exclusion : l'instrument n'agit sur Y que via le traitement", "L'indépendance : l'instrument n'est lié à aucun confondant", "La pertinence : l'instrument influence réellement le traitement", "Aucune des trois"], "bonne": 2, "explication": "La pertinence se lit dans la première étape, via la statistique F : en dessous de 10, l'instrument est faible, l'estimation est biaisée et son intervalle n'a pas la couverture annoncée. Les deux autres conditions doivent être argumentées par la connaissance du domaine, jamais supposées silencieusement."},
+{"q": "Que fait le double machine learning pour éviter que la régularisation ne biaise l'estimation causale ?", "choix": ["Il désactive la régularisation dans le modèle final", "Il résidualise le résultat et le traitement, puis régresse les résidus l'un sur l'autre", "Il utilise uniquement des modèles linéaires", "Il augmente la taille de l'échantillon par bootstrap"], "bonne": 1, "explication": "Résidualiser des deux côtés rend l'estimation insensible au premier ordre aux erreurs des modèles auxiliaires : ils peuvent être imparfaits sans invalider l'effet. Le second ingrédient est le découpage croisé, qui prédit chaque individu avec un modèle entraîné sans lui et neutralise le surapprentissage."},
+{"q": "Une forêt causale indique que 30 % des individus ont un effet estimé négatif, alors que l'ATE est positif. Quelle conclusion ?", "choix": ["L'estimation est incohérente, il faut la refaire", "Traiter tout le monde est une mauvaise politique : il faut cibler", "L'ATE doit être recalculé sur les 70 % restants", "Les 30 % sont du bruit, à ignorer"], "bonne": 1, "explication": "Un effet moyen positif peut parfaitement masquer un sous-groupe que le traitement dégrade. C'est exactement l'argument de l'uplift : cibler ceux que l'action fait basculer, plutôt que d'arroser. Encore faut-il vérifier que l'hétérogénéité est réelle et non du bruit, par des intervalles de confiance."},
+{"q": "Que mesure une valeur E ?", "choix": ["La taille de l'effet estimé", "La force minimale qu'un confondant non mesuré devrait avoir pour annuler l'effet observé", "L'erreur type de l'estimation", "La proportion de variance expliquée"], "bonne": 1, "explication": "Une valeur E de 1,3 signifie qu'une variable oubliée assez banale suffirait : la conclusion est fragile. Une valeur E de 4 exigerait un facteur très puissant, qu'on aurait remarqué. Pour le lien tabac–cancer, elle dépassait 10 — et c'est ce raisonnement, non un essai randomisé impossible, qui a emporté la conviction."},
+{"q": "Une variable a une importance SHAP élevée dans un modèle prédictif. Qu'en conclure sur l'effet d'agir dessus ?", "choix": ["Agir dessus aura un effet proportionnel à son importance", "Rien : l'importance dit « utile pour prédire », pas « agir dessus change le résultat »", "L'effet causal est au moins du même signe", "L'effet causal est nul"], "bonne": 1, "explication": "« Les clients qui contactent le support résilient moins, donc appelons tout le monde » confond corrélation et intervention : ceux qui appellent sont peut-être simplement les plus attachés au service. Un modèle prédictif exploite des corrélations, ce qui est légitime tant qu'on ne l'utilise que pour prédire."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m10.html" class="btn btn-secondary">← Module 10 : Inférence bayésienne</a>
+    <a href="project7-m12.html" class="btn btn-primary">Module 12 : Data science en pratique →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">Inférence causale</span><span class="tag">Score de propension</span><span class="tag">DiD</span><span class="tag">Variables instrumentales</span><span class="tag">Double ML</span><span class="tag">CUPED</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m11-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 11</div>
+    <h1>Causal inference: measuring the effect of an action</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>Why prediction is not action: the support-call example, and the difference between conditioning on an observation and intervening on it.</li>
+      <li>The potential-outcomes framework: the fundamental problem of causal inference stated as a missing-data problem, with the table you can never fully observe.</li>
+      <li>Naming the estimand before estimating it: ATE, ATT, CATE and LATE, and why publishing one for another misleads.</li>
+      <li>The three untestable assumptions — ignorability, positivity and SUTVA — with concrete violations (network spillovers, general-equilibrium effects) and the cluster-randomisation remedy.</li>
+      <li>Randomised experiments and statistical power: CUPED derived and measured, with the strict rule that the covariate must predate assignment.</li>
+      <li>Propensity scores: the dimension-reduction result, inverse-probability weighting versus matching, and the overlap and covariate-balance diagnostics that decide whether the analysis is admissible at all.</li>
+      <li>Difference-in-differences: the double subtraction drawn out, the parallel-trends assumption and its pre-trend check, clustered standard errors, and the staggered-adoption trap.</li>
+      <li>Regression discontinuity: thresholds as natural experiments, the McCrary density test, bandwidth sensitivity, and a local estimation in a few lines.</li>
+      <li>Instrumental variables: relevance, exclusion and independence, the weak-instrument F statistic, two-stage least squares, and what LATE actually measures.</li>
+      <li>Double machine learning: why regularisation and overfitting break naive ML-based estimation, orthogonalisation via Frisch–Waugh, cross-fitting, and causal forests for individual-level effects.</li>
+      <li>Sensitivity analysis: the E-value as a measure of how strong an unmeasured confounder would have to be, illustrated with the smoking–cancer case.</li>
+      <li>A decision tree for choosing a method, and the six recurring mistakes — including reading feature importance as a causal effect.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><strong>Causal inference: measuring the effect of an action</strong></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><a href="project7-m17.html">Time series, signals and time-to-event data</a></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

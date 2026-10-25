@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="media/favicons/logo.png" type="image/x-icon" style="border-radius: 4px;">
+  <title>Module 17 - Séries temporelles, signaux et durées de vie - Nils Malmberg</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<header><div class="header-inner">
+    <a href="index.html" class="site-logo">
+      <img src="media/favicons/logo.png" href="index.html" alt="Logo de Nils Malmberg" width="25" height="25" style="border-radius: 4px;">
+      <span>Nils <em>Malmberg</em></span>
+    </a>  <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  <nav id="navbar"><ul>
+    <li><a href="index.html" id="nav-home">Accueil</a></li>
+    <li><a href="cv.html" id="nav-cv">CV</a></li>
+    <li><a href="projects.html" id="nav-projects" class="active">Projets</a></li>
+  </ul></nav>
+  <div class="header-controls">
+    <button class="theme-toggle" aria-label="Basculer le thème"></button>
+    <div id="language-switcher" onclick="toggleLanguageMenu()">
+      <div class="current-language" role="button" tabindex="0"><img src="media/logo/logo_fr.svg" alt="Langue" width="18" height="18"><span class="lang-label">FR</span><span class="arrow-down"></span></div>
+      <div class="language-menu" id="language-menu">
+        <div class="language-option" onclick="changeLanguage('fr')"><img src="media/logo/logo_fr.svg" alt="" width="18" height="18"> Français</div>
+        <div class="language-option" onclick="changeLanguage('en')"><img src="media/logo/logo_en.svg" alt="" width="18" height="18"> English</div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main>
+<!-- ════════ FRANÇAIS ════════ -->
+<div id="project7-m17-content-fr">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Retour au sommaire du cours</a>
+  <div class="project-page-header">
+    <div class="section-label">Cours data science &amp; ML · Module 17</div>
+    <h1>Séries temporelles, signaux et durées de vie</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <p>Dès que le temps entre en jeu, l'hypothèse d'indépendance des observations — sur laquelle repose tout le reste du cours — tombe. Validation croisée, tests statistiques, feature engineering : tout doit être repensé. Ce module couvre les trois familles de problèmes temporels que l'on rencontre réellement : prévoir une trajectoire, analyser un signal, et estimer une durée avant événement.</p>
+
+    <div class="tuto-toc">
+      <h4>📋 Au programme</h4>
+      <ol>
+        <li><a href="#specificites">Ce que le temps change</a></li>
+        <li><a href="#decomposition">Décomposition et stationnarité</a></li>
+        <li><a href="#acf">Lire une ACF et une PACF</a></li>
+        <li><a href="#classiques">Modèles classiques : ETS et ARIMA</a></li>
+        <li><a href="#ml">Approche ML : variables et gradient boosting</a></li>
+        <li><a href="#dl">Deep learning et modèles de fondation</a></li>
+        <li><a href="#proba">Prévision probabiliste et évaluation</a></li>
+        <li><a href="#kalman">Espace d'états et filtre de Kalman</a></li>
+        <li><a href="#rupture">Ruptures et anomalies</a></li>
+        <li><a href="#spectral">Analyse spectrale et filtrage</a></li>
+        <li><a href="#survie">Durées de vie, censure et fiabilité</a></li>
+      </ol>
+    </div>
+
+    <h2 id="specificites">1. Ce que le temps change</h2>
+    <div class="code-label">quatre conséquences directes</div>
+    <div class="code-block"><pre>Autocorrélation   les observations voisines se ressemblent : la taille d'échantillon
+                  EFFECTIVE est bien inférieure à n. Un test qui l'ignore déclare
+                  significatif ce qui ne l'est pas (module 9).
+Non-stationnarité moyenne, variance et saisonnalité évoluent. Le passé lointain
+                  peut être trompeur plutôt qu'informatif.
+Ordre imposé      entraîner sur le futur pour prédire le passé n'a aucun sens :
+                  la validation devient séquentielle (module 12).
+Horizon           prévoir à J+1 et à J+30 sont deux problèmes différents, avec des
+                  variables et des performances différentes.</pre></div>
+
+    <div class="step-block">
+      <h4>L'autocorrélation, concrètement</h4>
+      <p>Si la température d'aujourd'hui ressemble fortement à celle d'hier, 365 mesures quotidiennes ne contiennent pas 365 informations indépendantes — peut-être l'équivalent de trente. Toutes les formules du module 9 en \(\sqrt{n}\) deviennent alors optimistes : un intervalle de confiance calculé naïvement sur des données autocorrélées est beaucoup trop étroit, et l'on conclut à des effets qui n'existent pas. C'est la raison pour laquelle on ne peut pas appliquer directement les outils des modules précédents à une série temporelle.</p>
+    </div>
+
+    <div class="warning-block">
+      <strong>La première question à poser.</strong> S'agit-il vraiment d'une prévision ? Beaucoup de problèmes présentés comme temporels sont en réalité des régressions ordinaires où la date sert de variable explicative parmi d'autres. On ne fait de la prévision que lorsqu'il faut extrapoler <em>au-delà</em> de la dernière observation, sans connaître les variables explicatives futures. Si les régresseurs futurs sont connus (un calendrier, une météo prévue, un plan de production), le problème est plus simple et les outils du module 14 suffisent.
+    </div>
+
+    <h2 id="decomposition">2. Décomposition et stationnarité</h2>
+    <p>Une série se lit d'abord comme la somme (ou le produit) de trois composantes : <strong>tendance</strong> (l'évolution de fond), <strong>saisonnalité</strong> (le motif qui se répète à période fixe) et <strong>résidu</strong> (ce qui reste). La décomposition <strong>STL</strong>, par lissage local, est l'outil de référence : robuste aux valeurs aberrantes, elle accepte une saisonnalité qui évolue lentement.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import polars as pl, pandas as pd
+from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.stattools import adfuller, kpss
+
+serie = pd.read_csv("conso.csv", index_col="date", parse_dates=True)["valeur"].asfreq("D")
+
+res = STL(serie, period=7, robust=True).fit()
+res.plot()                                   # tendance, saison, résidu
+
+print("ADF  p =", adfuller(serie)[1])        # H0 = racine unitaire (NON stationnaire)
+print("KPSS p =", kpss(serie, regression="c")[1])   # H0 = stationnarité</pre></div>
+
+    <p>Une série est <strong>stationnaire</strong> si ses propriétés statistiques ne dépendent pas de la date : même moyenne, même variance, même structure de dépendance à tout moment. Les modèles classiques l'exigent, parce qu'ils estiment des coefficients supposés constants. On s'y ramène par différenciation (\(\nabla y_t = y_t - y_{t-1}\), qui élimine une tendance linéaire), différenciation saisonnière (\(y_t - y_{t-s}\)) ou transformation stabilisante (logarithme si la variance croît avec le niveau).</p>
+    <p>Utiliser ADF et KPSS <em>ensemble</em> est plus sûr : leurs hypothèses nulles sont inversées, donc un désaccord signale une situation ambiguë qu'il vaut mieux examiner graphiquement plutôt que trancher mécaniquement.</p>
+
+    <h2 id="acf">3. Lire une ACF et une PACF</h2>
+    <p>L'<strong>autocorrélation</strong> (ACF) au décalage \(k\) mesure la corrélation entre la série et elle-même décalée de \(k\) pas. La <strong>PACF</strong> mesure la même chose en <em>retirant</em> l'effet des décalages intermédiaires — la corrélation directe entre \(y_t\) et \(y_{t-k}\), une fois les \(k-1\) précédents pris en compte.</p>
+
+    <div class="code-label">ce que chaque forme signale</div>
+    <div class="code-block"><pre>ACF qui décroît TRÈS LENTEMENT        → série non stationnaire : différencier
+ACF avec un pic à 7, 14, 21…          → saisonnalité hebdomadaire
+ACF qui se coupe net après q          → processus MA(q)
+PACF qui se coupe net après p         → processus AR(p)
+ACF et PACF décroissant toutes deux   → ARMA mixte : laisser l'auto-sélection choisir
+
+  ACF │█                               PACF │█
+      │█ █                                  │█
+      │█ █ █ ▄                              │█ ▄
+      │█ █ █ █ ▄ ▂                          │─ ─ ─ ─ ─ ─  ← coupure après 2
+      └──────────────► décalage             └──────────────► décalage
+      décroissance lente = AR               → AR(2)</pre></div>
+
+    <div class="code-block"><pre>from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+plot_acf(serie.diff().dropna(), lags=40)     # sur la série DIFFÉRENCIÉE
+plot_pacf(serie.diff().dropna(), lags=40)</pre></div>
+
+    <h2 id="classiques">4. Modèles classiques : ETS et ARIMA</h2>
+    <p><strong>Lissage exponentiel (ETS)</strong> — l'idée tient en une ligne : une moyenne pondérée du passé dont les poids décroissent géométriquement, de sorte que le passé récent compte davantage. Holt-Winters ajoute une tendance et une saisonnalité, chacune avec son propre coefficient de lissage :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \ell_t = \alpha\,(y_t - s_{t-m}) + (1-\alpha)(\ell_{t-1}+b_{t-1}), \qquad \hat y_{t+h} = \ell_t + h\,b_t + s_{t+h-m} \]</div>
+    <p>où \(\ell\) est le niveau, \(b\) la pente et \(s\) la composante saisonnière. Simple, rapide, et étonnamment difficile à battre sur des séries métier courtes et régulières.</p>
+
+    <p><strong>ARIMA(p,d,q)</strong> — \(d\) différenciations pour se ramener à la stationnarité, \(p\) termes autorégressifs (le passé de la série) et \(q\) termes de moyenne mobile (le passé des <em>erreurs</em>) :</p>
+    <div style="text-align:center;overflow-x:auto">\[ \nabla^d y_t = c + \sum_{i=1}^{p}\phi_i \nabla^d y_{t-i} + \sum_{j=1}^{q}\theta_j \varepsilon_{t-j} + \varepsilon_t \]</div>
+    <p>La partie AR dit « la valeur d'aujourd'hui ressemble à celles d'hier » ; la partie MA dit « l'erreur d'aujourd'hui ressemble à celles d'hier », ce qui capte les chocs dont l'effet se dissipe. SARIMA ajoute les mêmes termes à la fréquence saisonnière, SARIMAX ajoute des régresseurs externes.</p>
+
+    <div class="code-label">Python — sélection automatique et prévision</div>
+    <div class="code-block"><pre>from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive
+
+sf = StatsForecast(
+    models=[AutoARIMA(season_length=7), AutoETS(season_length=7),
+            SeasonalNaive(season_length=7)],      # LA baseline à battre
+    freq="D", n_jobs=-1,
+)
+sf.fit(df)                                        # df : unique_id, ds, y
+prev = sf.forecast(h=28, level=[80, 95])          # avec intervalles de prédiction
+print(prev.head())</pre></div>
+
+    <div class="step-block">
+      <h4>Quand les modèles classiques battent le machine learning</h4>
+      <p>Systématiquement quand : la série est <em>courte</em> (moins de quelques centaines de points), il y en a <em>peu</em> (une ou dix, pas dix mille), la structure est régulière, et il faut des intervalles de prévision fiables. Les compétitions M4 et M5 l'ont confirmé : les méthodes statistiques simples, et surtout les <em>combinaisons</em> de méthodes simples, restent redoutables. Le ML prend l'avantage quand on doit prévoir des milliers de séries apparentées simultanément, avec beaucoup de régresseurs externes — une chaîne de magasins, un parc de capteurs — parce qu'il apprend alors des motifs communs à toutes les séries.</p>
+    </div>
+
+    <h2 id="ml">5. Approche ML : variables et gradient boosting</h2>
+    <p>On transforme la prévision en régression tabulaire en construisant des variables exclusivement passées, puis on applique le module 14.</p>
+
+    <div class="code-label">Python — polars, fenêtres strictement passées</div>
+    <div class="code-block"><pre>import numpy as np, polars as pl
+
+df = (
+    df.sort("date")
+      .with_columns(
+          # décalages : la valeur d'il y a 1, 7 et 364 jours (même jour de semaine)
+          *[pl.col("y").shift(k).over("serie_id").alias(f"lag_{k}") for k in (1, 7, 364)],
+
+          # moyennes glissantes sur le PASSÉ uniquement — le shift(1) est ESSENTIEL
+          pl.col("y").shift(1).rolling_mean(7).over("serie_id").alias("ma_7"),
+          pl.col("y").shift(1).rolling_mean(28).over("serie_id").alias("ma_28"),
+          pl.col("y").shift(1).rolling_std(28).over("serie_id").alias("sd_28"),
+          # tendance courte : rapport des deux moyennes
+          (pl.col("y").shift(1).rolling_mean(7) /
+           pl.col("y").shift(1).rolling_mean(28)).over("serie_id").alias("ratio_7_28"),
+
+          # calendrier et saisonnalité cyclique (module 12)
+          pl.col("date").dt.weekday().alias("jour_semaine"),
+          (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).sin().alias("an_sin"),
+          (2 * np.pi * pl.col("date").dt.ordinal_day() / 365.25).cos().alias("an_cos"),
+      )
+)</pre></div>
+
+    <p>Deux décisions structurent ensuite le travail. <strong>Stratégie d'horizon</strong> : la prévision <em>récursive</em> réinjecte ses propres prédictions pour avancer pas à pas (simple, mais les erreurs s'accumulent) ; la prévision <em>directe</em> entraîne un modèle par horizon (plus coûteux, plus stable au-delà de quelques pas). <strong>Validation</strong> : uniquement en avançant dans le temps, avec une fenêtre glissante ou extensible, et en respectant un <em>écart</em> égal à l'horizon entre entraînement et test — sans quoi on évalue une situation impossible en production.</p>
+
+    <div class="warning-block">
+      <strong>Le piège qui invalide silencieusement un projet de prévision.</strong> Une moyenne glissante calculée sans <code>shift(1)</code> inclut la valeur courante : le modèle « prédit » en lisant sa propre cible, et le score est spectaculaire jusqu'à la mise en production. Le second piège est la <em>disponibilité</em> : une variable peut être passée mais ne pas être encore <em>connue</em> au moment où la prévision doit être produite — un chiffre consolidé publié avec trois jours de retard. Toujours raisonner en « que sais-je à l'instant où je prédis ? », pas en « quelle est la date de cette ligne ? ».
+    </div>
+
+    <h2 id="dl">6. Deep learning et modèles de fondation</h2>
+    <ul>
+      <li><strong>N-BEATS / N-HiTS</strong> — empilements de blocs résiduels, sans composante récurrente ; performances solides et entraînement rapide.</li>
+      <li><strong>DeepAR</strong> — modèle autorégressif probabiliste entraîné sur un ensemble de séries apparentées : il apprend des motifs partagés, ce qui aide beaucoup les séries courtes.</li>
+      <li><strong>Temporal Fusion Transformer</strong> — attention sur les séquences (module 16) avec gestion propre des covariables connues à l'avance (calendrier, promotions) et une part d'interprétabilité.</li>
+      <li><strong>Modèles de fondation</strong> (Chronos, TimesFM, Moirai, TimeGPT) — pré-entraînés sur d'énormes corpus de séries, utilisables en <em>zero-shot</em>. Intéressants pour obtenir une baseline sans entraînement ; pas systématiquement meilleurs qu'un bon modèle spécifique, et à manier avec précaution quand la série contient de l'information confidentielle (module 27).</li>
+    </ul>
+    <p>La bibliothèque <code>nixtla</code> (statsforecast / mlforecast / neuralforecast) donne accès aux trois familles avec la même interface, ce qui permet de les comparer honnêtement — la seule façon de trancher.</p>
+
+    <h2 id="proba">7. Prévision probabiliste et évaluation</h2>
+    <p>Une prévision ponctuelle est rarement suffisante : dimensionner un stock ou une réserve d'énergie demande un quantile, pas une moyenne (module 24). On entraîne donc directement sur la <strong>perte pinball</strong>, qui pénalise asymétriquement selon le quantile visé :</p>
+    <div style="text-align:center;overflow-x:auto">\[ L_\tau(y,\hat y) = \max\big(\tau(y-\hat y),\; (\tau-1)(y-\hat y)\big) \]</div>
+    <p>Pour \(\tau = 0{,}9\), sous-estimer coûte neuf fois plus cher que surestimer : le modèle apprend donc à viser haut, et sa prédiction converge vers le quantile 90 %.</p>
+
+    <div class="code-label">métriques de prévision</div>
+    <div class="code-block"><pre>MAE / RMSE   interprétables, mais non comparables entre séries d'échelles différentes
+MAPE         en pourcentage ; explose si y proche de 0 et pénalise asymétriquement
+             (surestimer de 100 % est borné, sous-estimer ne l'est pas)
+sMAPE        version symétrique, un peu moins instable
+MASE         erreur rapportée à celle de la prévision NAÏVE : &lt; 1 = mieux que naïf.
+             LA métrique à préférer pour comparer des séries hétérogènes.
+Pinball      évalue un quantile donné
+CRPS         évalue toute la distribution prédictive ; se réduit à la MAE pour une
+             prévision ponctuelle. La référence en prévision probabiliste.</pre></div>
+
+    <p>Et la règle d'or : toujours comparer à la <strong>prévision naïve</strong> — la dernière valeur, ou la valeur de la même période l'an dernier. Un modèle qui ne bat pas la naïve saisonnière ne sert à rien, et c'est plus fréquent qu'on ne le croit.</p>
+
+    <h2 id="kalman">8. Espace d'états et filtre de Kalman</h2>
+    <p>Un modèle espace-état sépare ce qu'on cherche à connaître — un <em>état caché</em> \(x_t\) qui évolue selon une dynamique — de ce qu'on observe — \(z_t\), bruité et parfois indirect :</p>
+    <div style="text-align:center;overflow-x:auto">\[ x_t = F x_{t-1} + B u_t + w_t, \qquad z_t = H x_t + v_t, \qquad w_t\sim\mathcal{N}(0,Q),\; v_t\sim\mathcal{N}(0,R) \]</div>
+
+    <p>Le <strong>filtre de Kalman</strong> alterne deux étapes à chaque instant :</p>
+    <div class="code-label">prédiction puis correction</div>
+    <div class="code-block"><pre>PRÉDICTION   x̂ = F·x̂      "d'après mon modèle de dynamique, voilà où je devrais être"
+             P  = F·P·Fᵀ + Q   l'incertitude AUGMENTE (le modèle n'est pas parfait)
+
+CORRECTION   K  = P·Hᵀ(H·P·Hᵀ + R)⁻¹     le GAIN : combien croire la mesure ?
+             x̂ = x̂ + K(z - H·x̂)          on corrige avec l'écart à la mesure
+             P  = (I - K·H)·P             l'incertitude DIMINUE
+
+Si R est grand (capteur bruité) → K petit → on fait confiance au modèle
+Si Q est grand (modèle grossier) → K grand → on fait confiance à la mesure</pre></div>
+
+    <p>C'est l'estimateur optimal au sens de la variance minimale dans le cas linéaire-gaussien, et il est <em>récursif</em> : coût constant par pas, mémoire constante, quelle que soit la longueur de l'historique. D'où son omniprésence en navigation, en poursuite de cible et en fusion de capteurs. Les extensions traitent le cas non linéaire : EKF (linéarisation locale), UKF (propagation de points sigma, plus stable), et filtres particulaires (Monte-Carlo séquentiel, sans hypothèse gaussienne).</p>
+    <p>Pour un ingénieur, l'intérêt est double : lisser un signal bruité en temps réel, et estimer des grandeurs <em>non mesurables directement</em> à partir de mesures indirectes — ce qui relie ce module à l'assimilation de données du <a href="project7-m21.html">module 21</a>.</p>
+
+    <h2 id="rupture">9. Ruptures et anomalies</h2>
+    <ul>
+      <li><strong>Détection de rupture</strong> — identifier les dates où le régime change (changement de moyenne, de variance, de tendance). La bibliothèque <code>ruptures</code> implémente PELT et la segmentation binaire ; CUSUM reste la méthode de référence pour une surveillance en ligne. Usage concret : savoir <em>à partir de quand</em> les données sont encore représentatives, donc à partir de quand réentraîner (module 26).</li>
+      <li><strong>Anomalies ponctuelles</strong> — un point s'écarte fortement de la prévision : on compare le résidu à un intervalle de prédiction plutôt qu'à un seuil fixe, ce qui rend la détection insensible à la saisonnalité (un pic le samedi n'est pas une anomalie si tous les samedis font un pic).</li>
+      <li><strong>Anomalies collectives</strong> — un motif anormal sur une fenêtre, détectable par distance entre sous-séquences (<em>matrix profile</em>) ou par erreur de reconstruction d'un autoencodeur (module 16).</li>
+      <li><strong>Un rappel utile</strong> — sur un flux, tester en continu revient à faire des milliers de tests : sans contrôle du taux de fausses alertes (module 9), le système d'alerte devient du bruit et finit ignoré.</li>
+    </ul>
+
+    <h2 id="spectral">10. Analyse spectrale et filtrage</h2>
+    <p>Sur un signal physique — vibration, acoustique, mesure de capteur —, le domaine fréquentiel révèle souvent ce que le domaine temporel cache. La FFT donne le périodogramme, la méthode de Welch le lisse en moyennant des segments (ce qui réduit la variance de l'estimation au prix de la résolution), et la densité spectrale de puissance identifie les composantes périodiques : une fréquence de rotation, une résonance, un harmonique de défaut de roulement.</p>
+
+    <div class="code-label">Python</div>
+    <div class="code-block"><pre>import numpy as np
+from scipy import signal
+
+f, Pxx = signal.welch(x, fs=25_600, nperseg=4096)        # densité spectrale de puissance
+pic = f[np.argmax(Pxx)]
+print(f"fréquence dominante : {pic:.1f} Hz")
+
+# spectrogramme : évolution du contenu fréquentiel DANS LE TEMPS
+f, t, Sxx = signal.spectrogram(x, fs=25_600, nperseg=1024)
+
+# filtrage passe-bande SANS déphasage (filtrage aller-retour)
+sos = signal.butter(4, [50, 2000], btype="band", fs=25_600, output="sos")
+x_filtre = signal.sosfiltfilt(sos, x)      # filtfilt : phase nulle, ordre doublé</pre></div>
+
+    <p>Deux usages en machine learning. D'abord, le spectre fournit d'excellentes <strong>variables</strong> : énergie par bande, fréquence dominante, kurtosis spectral, coefficients cepstraux — c'est la base de la maintenance prédictive sur signaux vibratoires. Ensuite, le <strong>spectrogramme</strong> transforme un signal unidimensionnel en image bidimensionnelle, ce qui permet d'appliquer directement un CNN (modules 16 et 18) — l'approche standard en classification audio.</p>
+    <p>Deux pièges classiques du traitement du signal restent valables ici : le <em>repliement de spectre</em> (respecter Shannon, filtrer avant d'échantillonner, sinon les hautes fréquences se déguisent en basses) et les <em>fuites spectrales</em> (utiliser une fenêtre de Hann plutôt qu'une troncature brutale, qui introduit des discontinuités artificielles). Et pour les phénomènes non stationnaires, la transformée en ondelettes offre un meilleur compromis temps-fréquence que la FFT à fenêtre.</p>
+
+    <h2 id="survie">11. Durées de vie, censure et fiabilité</h2>
+    <p>Troisième famille temporelle, et la plus mal traitée en pratique : on veut prédire le <em>temps avant un événement</em> — panne d'un composant, résiliation d'un client, rechute d'un patient. La difficulté s'appelle la <strong>censure</strong> : à la fin de l'étude, beaucoup d'unités n'ont pas encore connu l'événement.</p>
+
+    <div class="code-label">pourquoi on ne peut pas ignorer la censure</div>
+    <div class="code-block"><pre>  unité 1  ├──────────✕                      ✕ = panne observée (durée connue : 8 mois)
+  unité 2  ├───────────────────────→         → = toujours en service à la fin
+  unité 3  ├────✕                                 (durée INCONNUE, mais ≥ 14 mois)
+  unité 4  ├──────────────────→
+           └──────────────────────────► temps
+
+  Les EXCLURE   → on ne garde que les pannes précoces → durée de vie SOUS-ESTIMÉE
+  Les compter   → on suppose qu'elles tombent en panne à la date de fin d'étude
+  comme pannes     → encore sous-estimée
+  → il faut une méthode qui utilise l'information "a survécu AU MOINS 14 mois"</pre></div>
+
+    <p>Deux fonctions suffisent à tout exprimer — la survie et le taux de défaillance instantané :</p>
+    <div style="text-align:center;overflow-x:auto">\[ S(t) = \mathbb{P}(T \gt t), \qquad h(t) = \lim_{dt\to 0}\frac{\mathbb{P}(t \leq T \lt t+dt \mid T \geq t)}{dt}, \qquad S(t) = e^{-\int_0^t h(u)\,du} \]</div>
+    <p>\(h(t)\) se lit « sachant que l'unité a tenu jusqu'à \(t\), quel est son risque de tomber maintenant ? » — c'est la quantité qui intéresse un ingénieur fiabiliste, et elle est directement reliée à la survie par l'exponentielle de son intégrale.</p>
+
+    <div class="code-label">les outils, par ordre d'usage</div>
+    <div class="code-block"><pre>Kaplan-Meier      estimation non paramétrique de S(t), gérant la censure.
+                  Le point de départ, toujours.
+Test du log-rank  comparer deux courbes de survie (deux lots, deux traitements).
+Cox (PH)          h(t|x) = h₀(t)·exp(βᵀx) : les covariables agissent de façon
+                  MULTIPLICATIVE sur le risque, sans qu'on spécifie h₀.
+                  exp(β) se lit comme un rapport de risques.
+                  Hypothèse à vérifier : risques proportionnels (résidus de Schoenfeld).
+Weibull / AFT     modèle paramétrique : les covariables ACCÉLÈRENT le temps.
+                  Permet d'EXTRAPOLER au-delà de la fenêtre d'observation,
+                  ce que Cox ne fait pas.
+Survie par ML     Random Survival Forest, gradient boosting de Cox, DeepSurv :
+                  capturent non-linéarités et interactions.</pre></div>
+
+    <p>Le paramètre de forme de la <strong>loi de Weibull</strong> se lit directement comme un diagnostic de mode de défaillance : \(k \lt 1\) correspond à un taux décroissant (mortalité infantile, défauts de fabrication), \(k = 1\) à un taux constant (défaillances aléatoires, loi exponentielle sans mémoire), \(k \gt 1\) à un taux croissant (usure). C'est la lecture de la courbe en baignoire de la fiabilité, et c'est ce qui permet de distinguer un problème de qualité d'un problème de vieillissement — deux situations qui appellent des actions opposées.</p>
+
+    <div class="code-label">Python — lifelines</div>
+    <div class="code-block"><pre>from lifelines import KaplanMeierFitter, CoxPHFitter, WeibullFitter
+from lifelines.statistics import logrank_test
+
+# evenement = 1 si la panne a été observée, 0 si l'unité était encore en service
+km = KaplanMeierFitter().fit(durees, evenement_observe)
+km.plot_survival_function()
+print("durée médiane de survie :", km.median_survival_time_)
+
+# comparer deux lots
+print(logrank_test(d_lotA, d_lotB, e_lotA, e_lotB).p_value)
+
+cox = CoxPHFitter().fit(df, duration_col="duree", event_col="panne")
+cox.print_summary()                      # rapports de risques et intervalles
+cox.check_assumptions(df)                # test des risques proportionnels
+
+wb = WeibullFitter().fit(durees, evenement_observe)
+print(f"paramètre de forme ρ = {wb.rho_:.2f}")   # &lt; 1 rodage, ≈ 1 aléatoire, &gt; 1 usure</pre></div>
+
+    <div class="step-block">
+      <h4>Le lien avec la maintenance prédictive</h4>
+      <p>Prédire la <em>durée de vie résiduelle</em> (RUL) d'un équipement combine tout ce module : variables spectrales issues des capteurs (section 10), modèle de dégradation en espace d'états (section 8), et modèle de survie pour la probabilité de défaillance à un horizon donné (section 11). Deux exigences industrielles s'ajoutent : une <strong>prédiction probabiliste</strong>, parce qu'une décision de remplacement se prend sur un quantile bas et non sur une espérance (module 24), et une <strong>anticipation suffisante</strong> — un modèle qui prédit la panne deux heures avant est exact et inutile. La métrique doit donc incorporer le coût asymétrique entre une intervention inutile et une défaillance subie.</p>
+    </div>
+
+    <div class="step-block">
+      <h4>Ce qu'il faut retenir du module</h4>
+      <ul>
+        <li>L'autocorrélation réduit l'information effective : les tests et la validation doivent en tenir compte.</li>
+        <li>Décomposer et stationnariser avant de modéliser ; ACF et PACF restent les graphiques les plus instructifs.</li>
+        <li>ETS et ARIMA battent souvent le ML sur peu de séries courtes ; le ML gagne sur beaucoup de séries avec covariables.</li>
+        <li>Toute variable doit être strictement passée <em>et</em> réellement disponible au moment de la prévision.</li>
+        <li>Comparer systématiquement à la prévision naïve, et préférer MASE et CRPS.</li>
+        <li>Kalman estime un état caché en temps réel, avec un coût constant par pas ; le gain arbitre entre modèle et mesure.</li>
+        <li>La censure ne s'ignore pas : Kaplan-Meier, Cox et Weibull existent pour ça, et le paramètre de forme de Weibull diagnostique le mode de défaillance.</li>
+      </ul>
+    </div>
+
+    <div class="bloc-quiz">
+      <div id="quiz" class="quiz"></div>
+      <script>window.QUIZ =
+[
+{"q": "Qu'est-ce qui change fondamentalement quand les données sont temporelles ?", "choix": ["Les observations sont plus nombreuses", "Les observations ne sont pas indépendantes, et l'ordre porte de l'information", "Les variables sont toujours numériques", "Les valeurs manquantes sont plus fréquentes"], "bonne": 1, "explication": "L'indépendance des observations est l'hypothèse implicite de presque toute la statistique classique et de la validation croisée aléatoire. Sur une série, la valeur d'aujourd'hui ressemble à celle d'hier : un découpage mélangé laisse fuiter le futur, et les intervalles de confiance usuels deviennent trop étroits."},
+{"q": "Que signifie qu'une série est stationnaire ?", "choix": ["Elle ne varie pas dans le temps", "Ses caractéristiques statistiques — moyenne, variance, autocorrélation — ne dépendent pas du temps", "Elle est dépourvue de saisonnalité", "Elle a été normalisée"], "bonne": 1, "explication": "Une série stationnaire fluctue, mais autour d'un comportement stable. C'est la condition d'application d'ARIMA, et c'est le rôle du « I » : différencier pour retirer une tendance. Une série non stationnaire modélisée telle quelle produit des régressions fallacieuses, où deux séries sans lien paraissent fortement corrélées."},
+{"q": "Que lit-on sur un autocorrélogramme partiel (PACF) ?", "choix": ["La corrélation avec chaque retard, en retirant l'effet des retards intermédiaires", "La corrélation brute avec chaque retard", "La variance expliquée par la saisonnalité", "Le nombre de points aberrants"], "bonne": 0, "explication": "L'ACF brute reste élevée sur plusieurs retards par simple propagation : si aujourd'hui dépend d'hier et hier d'avant-hier, la corrélation à deux jours apparaît sans lien direct. La PACF isole l'effet propre de chaque retard, ce qui guide le choix de l'ordre auto-régressif."},
+{"q": "Quelle baseline faut-il systématiquement établir avant tout modèle de prévision ?", "choix": ["Une moyenne globale", "La valeur de la même période précédente, comme le même jour la semaine dernière", "Une régression linéaire sur le temps", "Un modèle ARIMA automatique"], "bonne": 1, "explication": "La baseline naïve saisonnière est étonnamment difficile à battre, et un ARIMA mal configuré perd régulièrement contre elle. Rapporter l'erreur du modèle à celle de cette baseline est aussi la seule façon d'interpréter un chiffre : un RMSE absolu ne dit rien."},
+{"q": "Comment évaluer un modèle de série temporelle ?", "choix": ["Par validation croisée aléatoire", "Par validation glissante, en entraînant sur le passé et en évaluant sur le futur", "Sur le jeu d'entraînement, la série étant unique", "Par un découpage stratifié sur la saison"], "bonne": 1, "explication": "On reproduit la situation réelle : à chaque étape, on n'utilise que l'information disponible à cette date. Un découpage aléatoire laisserait le modèle s'entraîner sur des jours postérieurs à ceux qu'il prédit, et donnerait un score sans rapport avec la performance future."},
+{"q": "Quelles variables sont typiquement les plus utiles pour une approche ML sur série temporelle ?", "choix": ["Des retards de la cible et des variables calendaires", "Des composantes principales de la série", "La moyenne mobile sur toute la période", "Le rang de chaque observation"], "bonne": 0, "explication": "Les retards — valeur d'hier, de la semaine dernière — portent l'autocorrélation ; les variables calendaires portent la saisonnalité, les jours fériés et les vacances. Attention à la fenêtre des moyennes mobiles : une moyenne centrée inclut le futur, ce qui est une fuite pure et simple."},
+{"q": "Qu'est-ce qu'un pinball loss évalue ?", "choix": ["La qualité d'une prévision ponctuelle", "La qualité d'une prévision par quantile", "La stationnarité d'une série", "Le nombre de ruptures détectées"], "bonne": 1, "explication": "Il pénalise asymétriquement selon qu'on est au-dessus ou en dessous du quantile visé, ce qui en fait la fonction de perte naturelle pour une prévision probabiliste. Prévoir un intervalle plutôt qu'un point change la décision en aval : un stock se dimensionne sur un quantile haut, pas sur la moyenne."},
+{"q": "Que fait un filtre de Kalman ?", "choix": ["Il lisse une série par moyenne mobile", "Il estime récursivement l'état caché d'un système à partir d'observations bruitées", "Il supprime les hautes fréquences d'un signal", "Il détecte les ruptures de tendance"], "bonne": 1, "explication": "À chaque pas, il combine une prédiction issue du modèle de dynamique et une nouvelle mesure, pondérées par leurs incertitudes respectives. Il est récursif — inutile de garder l'historique — ce qui en fait l'outil de référence pour le suivi en temps réel, de la navigation au suivi de capteurs."},
+{"q": "Qu'est-ce que la censure à droite, en analyse de survie ?", "choix": ["Une valeur manquante dans la variable de durée", "Le fait de savoir que l'événement n'est pas encore survenu au moment de l'observation", "Une durée mesurée avec erreur", "Un individu exclu de l'étude"], "bonne": 1, "explication": "Ce n'est pas une donnée manquante : on sait que la durée dépasse la durée observée, ce qui est une information réelle. Ignorer ces individus ou traiter leur durée observée comme la durée finale biaise systématiquement l'estimation vers le bas — d'où l'existence de méthodes dédiées comme Kaplan-Meier ou Cox."},
+{"q": "Que produit une décomposition d'une série en tendance, saisonnalité et résidu ?", "choix": ["Un modèle prédictif complet", "Une lecture des composantes, qui guide le choix du modèle et révèle les anomalies", "Une série stationnaire garantie", "Une réduction du nombre de variables"], "bonne": 1, "explication": "C'est un outil de diagnostic avant tout : voir la tendance, la période de la saisonnalité, et un résidu qui ne devrait plus contenir de structure. Un résidu encore autocorrélé signale qu'il reste de l'information à modéliser — et un pic isolé dans le résidu est souvent une anomalie réelle."},
+{"q": "Quand une détection de rupture est-elle préférable à une détection d'anomalie ponctuelle ?", "choix": ["Quand on cherche des valeurs isolées extrêmes", "Quand c'est le régime lui-même qui change durablement", "Quand la série est stationnaire", "Quand les données sont peu nombreuses"], "bonne": 1, "explication": "Un pic isolé est une anomalie ponctuelle ; un changement de niveau ou de variance qui persiste est une rupture. Les confondre conduit soit à alerter cent fois après un changement légitime, soit à ne jamais détecter une dérive lente — deux échecs opposés de surveillance."},
+{"q": "À quoi sert une analyse spectrale sur un signal ?", "choix": ["À identifier les périodicités présentes, y compris invisibles à l'œil", "À supprimer le bruit gaussien", "À rendre la série stationnaire", "À estimer la tendance de long terme"], "bonne": 0, "explication": "La transformée de Fourier décompose le signal en fréquences : un pic à une fréquence donnée révèle une périodicité, même noyée dans le bruit ou superposée à d'autres. C'est ce qui permet de découvrir une saisonnalité inattendue — hebdomadaire, mensuelle — avant de la modéliser explicitement."}
+]      ;</script>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div class="course-nav">
+    <a href="project7-m16.html" class="btn btn-secondary">← Module 16 : Deep learning</a>
+    <a href="project7-m18.html" class="btn btn-primary">Module 18 : Données non tabulaires →</a>
+    <a href="project7.html" class="btn btn-ghost">Sommaire</a>
+  </div>
+  <div class="project-meta"><span class="tag">ARIMA</span><span class="tag">Prévision</span><span class="tag">Kalman</span><span class="tag">FFT</span><span class="tag">Survie</span><span class="tag">Fiabilité</span></div>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-fr"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-fr").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Accueil</a>
+        <a href="cv.html">CV</a>
+        <a href="projects.html">Projets</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════ ENGLISH ════════ -->
+<div id="project7-m17-content-en" style="display:none">
+<div class="container project-page">
+  <a href="project7.html" class="project-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back to the course index</a>
+  <div class="project-page-header">
+    <div class="section-label">Data science &amp; ML course · Module 17</div>
+    <h1>Time series, signals and time-to-event data</h1>
+  </div>
+
+  <div class="project-content course-content">
+    <div class="warning-block">
+      <strong>This module is written in French.</strong> The course is my own study material, so it is authored in French only. Switch the language selector to <strong>FR</strong> to read it; the summary below tells you what it covers.
+    </div>
+
+    <h2>What this module covers</h2>
+    <ul>
+      <li>What temporal dependence breaks: effective sample size, non-stationarity, ordering and horizon — and the first question, whether this is forecasting at all.</li>
+      <li>STL decomposition, stationarity testing with ADF and KPSS together, differencing, ACF and PACF.</li>
+      <li>Exponential smoothing (ETS / Holt-Winters) and ARIMA/SARIMAX, and the cases where classical statistics still beat machine learning.</li>
+      <li>The ML approach: strictly past lag and rolling features, recursive vs direct multi-horizon strategies, time-aware validation with a gap — and the leakage trap that silently invalidates forecasting projects.</li>
+      <li>Deep learning models (N-BEATS, DeepAR, Temporal Fusion Transformer) and time-series foundation models.</li>
+      <li>Probabilistic forecasting: pinball loss, CRPS, MASE, and always benchmarking against the naive forecast.</li>
+      <li>State-space models and the Kalman filter (predict/update, EKF, UKF, particle filters) for real-time estimation of hidden states.</li>
+      <li>Change-point detection and temporal anomaly detection, including the multiple-testing issue on streaming alerts.</li>
+      <li>Spectral analysis: FFT and Welch, spectrograms as CNN inputs, band-pass filtering, aliasing and leakage, wavelets.</li>
+      <li>Time-to-event data: censoring, Kaplan-Meier, log-rank, Cox proportional hazards, Weibull/AFT models and the bathtub curve — plus how remaining-useful-life prediction combines the whole module.</li>
+    </ul>
+
+    <h2>Course outline</h2>
+      <ol>
+        <li><a href="project7-m01.html">Modern Python: typing, decorators, iterators and tooling</a></li>
+        <li><a href="project7-m02.html">Concurrency in Python: the GIL, threads, processes, asyncio</a></li>
+        <li><a href="project7-m03.html">Numerical toolbox: NumPy, pandas, polars, Dask</a></li>
+        <li><a href="project7-m04.html">SQL and databases</a></li>
+        <li><a href="project7-m05.html">Docker, Compose and Kubernetes</a></li>
+        <li><a href="project7-m06.html">Serving a model: FastAPI, Pydantic, Jinja</a></li>
+        <li><a href="project7-m07.html">Data engineering: formats, pipelines and streams</a></li>
+        <li><a href="project7-m08.html">Math for ML: optimisation, linear algebra, SVD and PCA</a></li>
+        <li><a href="project7-m09.html">Inferential statistics: estimate, test, decide</a></li>
+        <li><a href="project7-m10.html">Probability, Bayesian inference and uncertainty quantification</a></li>
+        <li><a href="project7-m11.html">Causal inference: measuring the effect of an action</a></li>
+        <li><a href="project7-m12.html">Data science in practice: from problem to dataset</a></li>
+        <li><a href="project7-m13.html">Learning with few labels</a></li>
+        <li><a href="project7-m14.html">Classical machine learning</a></li>
+        <li><a href="project7-m15.html">Learning theory: why generalisation happens</a></li>
+        <li><a href="project7-m16.html">Deep learning</a></li>
+        <li><strong>Time series, signals and time-to-event data</strong></li>
+        <li><a href="project7-m18.html">Non-tabular data: text, images, audio, graphs</a></li>
+        <li><a href="project7-m19.html">Gaussian processes and Bayesian optimisation</a></li>
+        <li><a href="project7-m20.html">Reinforcement learning</a></li>
+        <li><a href="project7-m21.html">Machine learning for simulation and engineering</a></li>
+        <li><a href="project7-m22.html">LLMs, embeddings, RAG and adaptation</a></li>
+        <li><a href="project7-m23.html">Search, ranking and recommendation</a></li>
+        <li><a href="project7-m24.html">From scores to decisions</a></li>
+        <li><a href="project7-m25.html">Scaling up: GPUs, distributed training, performance</a></li>
+        <li><a href="project7-m26.html">MLOps: taking a model to production</a></li>
+        <li><a href="project7-m27.html">Fairness, robustness, privacy and security</a></li>
+        <li><a href="project7-m28.html">End-to-end project: property listings, from scraping to price prediction</a></li>
+      </ol>
+  </div>
+
+  <hr class="divider">
+  <a href="project7.html" class="btn btn-secondary">Course index</a>
+  <a href="projects.html" class="btn btn-ghost">All projects</a>
+</div>
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">© <span id="year-en"></span> Nils Malmberg</span>
+      <script>document.getElementById("year-en").textContent = new Date().getFullYear();</script>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="cv.html">Resume</a>
+        <a href="projects.html">Projects</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</main>
+<script src="script.js"></script>
+<script src="quiz.js"></script>
+</body></html>

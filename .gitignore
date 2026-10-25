@@ -1,1 +1,4 @@
 .htaccess
+
+# PDF du cours : généré en local par scripts/build-pdf.sh, jamais versionné
+media/projets/project7/cours-data-science-ml.pdf
