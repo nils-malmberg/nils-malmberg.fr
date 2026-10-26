@@ -413,12 +413,27 @@ header {
 .project-page-header h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; margin-bottom: var(--space-3); }
 .project-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 
-.project-content { max-width: var(--content-default); }
+/* Une seule colonne de 800 px, comme le cours : texte, blocs de code,
+   encadrés et accordéons s'arrêtent tous au même bord droit */
+.project-content { max-width: 800px; }
 .project-content h2 { font-size: var(--text-lg); font-weight: 700; margin: var(--space-10) 0 var(--space-3); color: var(--color-text); }
 .project-content h3 { font-size: var(--text-base); font-weight: 700; margin: var(--space-6) 0 var(--space-2); color: var(--color-primary); }
-.project-content p { font-size: var(--text-base); color: var(--color-text-muted); line-height: 1.8; margin-bottom: var(--space-4); max-width: 72ch; }
+.project-content p { font-size: var(--text-base); color: var(--color-text-muted); line-height: 1.8; margin-bottom: var(--space-4); max-width: 100%; }
 .project-content ul, .project-content ol { margin: var(--space-4) 0 var(--space-4) var(--space-5); }
-.project-content li { font-size: var(--text-base); color: var(--color-text-muted); margin-bottom: var(--space-2); line-height: 1.7; }
+.project-content li { font-size: var(--text-base); color: var(--color-text-muted); margin-bottom: var(--space-2); line-height: 1.7; max-width: 100%; }
+
+/* Texte justifié, avec césure pour éviter les grands blancs sur téléphone
+   (la césure suit l'attribut lang, mis à jour par changeLanguage) */
+.project-content p, .project-content li,
+.cv-content p, .cv-content li,
+.about-card p, .project-card-body p {
+  text-align: justify;
+  hyphens: auto; -webkit-hyphens: auto;
+}
+.project-content .tuto-toc li, .project-content .code-label { text-align: left; }
+
+/* Formules MathJax trop larges pour l'écran : elles défilent, la page non */
+mjx-container[display="true"] { display: block; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 .project-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
 .project-content a:hover { color: var(--color-primary-hover); }
 
@@ -579,6 +594,27 @@ footer {
   .container--wide {
     padding-inline: var(--space-6);
   }
+}
+
+/* ── Téléphone ── */
+@media (max-width: 768px) {
+  /* le bouton menu passe à droite, après le thème et la langue */
+  .header-controls { margin-left: auto; }
+  .burger { order: 3; }
+}
+@media (max-width: 640px) {
+  .project-img img, .project-img.wide img { max-width: 100%; }
+  /* les schémas gardent une taille lisible et défilent horizontalement */
+  .agent-diagram { -webkit-overflow-scrolling: touch; }
+  .agent-diagram svg { min-width: 520px; }
+  .agent-diagram figcaption::after { content: " (faire glisser pour voir tout le schéma)"; }
+  :root:lang(en) .agent-diagram figcaption::after { content: " (swipe to see the whole diagram)"; }
+  .project-content ul, .project-content ol { margin-left: var(--space-4); }
+}
+/* écran tactile : le bouton « copier » reste visible, on lui laisse
+   une bande en haut du bloc pour qu'il ne cache pas la première ligne */
+@media (hover: none) {
+  .course-content .code-wrap .code-block, .copy-code .code-wrap .code-block { padding-top: calc(var(--space-4) + 26px); }
 }
 
 /* ── Cours data science & ML (project7*) ── */
