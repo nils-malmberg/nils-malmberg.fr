@@ -54,6 +54,8 @@
         <li><a href="#tuto-ollama">Déployer Ollama + OpenWebUI sur le NAS (stack Docker complète)</a></li>
         <li><a href="#tuto-nvidia">Corriger les packages UGOS pour accéder au GPU Nvidia dans Docker</a></li>
         <li><a href="#tuto-opencode">Déployer OpenCode sur le NAS (en construction)</a></li>
+        <li><a href="#tuto-llamacpp">Faire tourner un modèle de 35B sur 6 Go de VRAM (MoE, Ollama vs llama.cpp)</a></li>
+        <li><a href="#tuto-openclaw">Un agent IA sur le NAS, piloté depuis Telegram (OpenClaw)</a></li>
       </ol>
     </div>
     
@@ -458,13 +460,447 @@ docker rmi nvidia/cuda:12.8.0-base-ubuntu22.04</pre></div>
 
     </div>
 
+
+    <h2 id="tuto-llamacpp">Tuto 5 — Faire tourner un modèle de 35B sur 6 Go de VRAM (MoE, Ollama vs llama.cpp)</h2>
+    <p>Avec 6 Go de VRAM, un petit modèle dense comme <code>qwen3.5:4b</code> tient entièrement sur la carte et répond vite (environ 39 tokens/s), mais ses capacités restent limitées. Pour aller plus loin sans changer de GPU, je me suis tourné vers un modèle <strong>MoE</strong> (<em>Mixture of Experts</em>) : <strong>Qwen3.6 35B-A3B</strong>. Il compte 35 milliards de paramètres au total, mais n'en active qu'environ 3 milliards pour chaque token généré.</p>
+    <p>En quantification Q4, le modèle pèse environ 21 Go : il ne tient pas dans la VRAM et se répartit entre le GPU et les 64 Go de RAM du NAS. Pour un modèle dense, ce serait rédhibitoire : tous les paramètres sont relus à chaque token et la RAM devient le goulot d'étranglement. Un MoE ne lit que les experts actifs, ce qui garde une vitesse correcte même quand la majorité du modèle est en RAM.</p>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">1</span>
+        <span class="tuto-card-title">Premier essai avec Ollama</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Le plus simple est de passer par la stack du tuto 2 :</p>
+        <div class="code-block"><pre>docker exec -it ollama ollama pull qwen3.6:35b-a3b-q4_K_M</pre></div>
+        <p>Premiers résultats, mesurés dans Open WebUI : environ <strong>14 tokens/s</strong> en génération, ce qui est tout à fait utilisable, mais seulement <strong>158 tokens/s</strong> pour la lecture du prompt et 65 secondes de chargement au premier message. La lecture du prompt est le vrai point faible : dès que l'on donne un long fichier ou un long historique, l'attente avant le premier mot devient importante.</p>
+        <div class="warning-block"><strong>La RAM « Cache » dans UGOS :</strong> après le chargement, le moniteur de ressources affichait 50 Go en « Cache » et seulement 5 Go « Restant ». Pas d'inquiétude : c'est le cache disque de Linux (ici, en grande partie le fichier du modèle), libéré dès qu'un programme en a besoin. La colonne <code>available</code> de <code>free -h</code> donne la mémoire réellement disponible.</div>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">2</span>
+        <span class="tuto-card-title">Déployer llama.cpp (llama-server) avec Docker</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p><a href="https://github.com/ggml-org/llama.cpp" target="_blank">llama.cpp</a> est le moteur sur lequel repose Ollama. Utilisé directement, il donne accès à des réglages qu'Ollama ne propose pas, en particulier <code>--n-cpu-moe</code> : on place tout le modèle sur le GPU, puis on renvoie en RAM uniquement les experts d'un certain nombre de couches. L'attention et le cache de contexte restent sur la carte, et ce sont justement eux qui servent à lire le prompt.</p>
+        <div class="code-block"><pre>mkdir -p /volume1/docker/llama-cpp/models
+cd /volume1/docker/llama-cpp
+vim docker-compose.yml</pre></div>
+        <div class="code-label">docker-compose.yml</div>
+        <div class="code-block"><pre>services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/root/.cache/huggingface
+    command: &gt;
+      -hf unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_XL
+      --host 0.0.0.0 --port 8080
+      --load-mode none
+      --no-mmproj -np 1
+      -ngl 99 --n-cpu-moe 36
+      -b 2048 -ub 2048
+      -t 6
+      -c 32768 --jinja
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped</pre></div>
+        <p>Les options :</p>
+        <ul>
+          <li><code>-hf</code> : télécharge le modèle depuis Hugging Face au premier démarrage (environ 21 Go), dans le dossier <code>./models</code> monté sur <code>/root/.cache/huggingface</code>.</li>
+          <li><code>--load-mode none</code> : copie réellement les experts en RAM au lieu de lire le fichier à travers le cache disque. C'est llama.cpp lui-même qui le recommande dans ses logs.</li>
+          <li><code>--no-mmproj</code> : ne charge pas l'encodeur d'images du modèle, qui réclamait 861 Mo de VRAM que la carte n'avait plus.</li>
+          <li><code>-np 1</code> : une seule requête traitée à la fois (voir l'étape 5).</li>
+          <li><code>-ngl 99 --n-cpu-moe 36</code> : tout le modèle sur le GPU, sauf les experts de 36 couches, renvoyés en RAM.</li>
+          <li><code>-b 2048 -ub 2048</code> : lit le prompt par paquets de 2 048 tokens. Les experts stockés en RAM doivent être transférés vers le GPU à chaque paquet, et le slot PCIe 4.0 x4 du NAS plafonne à environ 8 Go/s : des paquets plus gros signifient moins de transferts. Avec ce réglage, la lecture du prompt est passée de 132 à 343 tokens/s.</li>
+          <li><code>-t 6</code> : 6 threads CPU (voir l'étape 3).</li>
+          <li><code>-c 32768 --jinja</code> : contexte de 32K tokens, et format de conversation propre au modèle.</li>
+        </ul>
+        <div class="code-block"><pre>docker compose up -d
+docker logs -f llama-server</pre></div>
+        <p>Le serveur est prêt quand les logs affichent <code>listening on http://0.0.0.0:8080</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">3</span>
+        <span class="tuto-card-title">Trouver les bons réglages avec llama-bench</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>L'i5-1235U compte 2 cœurs performants et 8 cœurs économes : le bon nombre de threads ne se devine pas. llama.cpp fournit un outil de benchmark, inclus dans l'image <code>full-cuda</code>, qui teste toutes les combinaisons d'un coup. Il faut d'abord arrêter <code>llama-server</code> pour libérer la VRAM :</p>
+        <div class="code-block"><pre>docker compose stop
+docker run --rm --gpus all \
+  -v /volume1/docker/llama-cpp/models:/root/.cache/huggingface \
+  ghcr.io/ggml-org/llama.cpp:full-cuda --bench \
+  -m /root/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/&lt;hash&gt;/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
+  -ngl 99 -ncmoe 36,38 -t 4,6,8,10 -p 512 -n 128</pre></div>
+        <p>Résultats sur mon NAS (<code>pp512</code> : lecture d'un prompt de 512 tokens ; <code>tg128</code> : génération de 128 tokens) :</p>
+        <div class="code-block"><pre>n_cpu_moe  threads  pp512 (tok/s)  tg128 (tok/s)
+       36        4          202,8           13,7
+       36        6          201,3           15,8
+       36        8          197,4           15,8
+       36       10          198,6           14,7
+       38        4          193,3           13,2
+       38        6          191,1           15,2
+       38        8          193,5           15,1
+       38       10          192,4           14,1</pre></div>
+        <p>Au-delà de 8 threads, les cœurs économes ralentissent l'ensemble. 6 threads donnent la même vitesse que 8 en chargeant moins le CPU. Passer de 38 à 36 couches d'experts en RAM ne rapporte que 0,6 token/s, et descendre plus bas fait déborder la VRAM. Le meilleur réglage est donc <code>--n-cpu-moe 36 -t 6</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">4</span>
+        <span class="tuto-card-title">Les pièges rencontrés</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <ul>
+          <li><strong>Manque de VRAM au démarrage</strong> (<code>cudaMalloc failed: out of memory</code>) : avec <code>--n-cpu-moe 32</code>, les poids seuls occupaient déjà 5,85 Go. Il faut laisser de la place au cache de contexte et aux buffers de calcul, qui grossissent avec <code>-ub 2048</code>.</li>
+          <li><strong>Le réglage automatique désactivé</strong> : la ligne <code>failed to fit params ... n_gpu_layers already set by user</code> indique que llama.cpp sait répartir le modèle seul, mais uniquement si l'on ne fixe pas <code>-ngl</code>. Dans mon cas, les valeurs trouvées au benchmark ont donné de meilleurs résultats que ce réglage automatique.</li>
+          <li><strong>L'encodeur d'images</strong> : Qwen3.6 est multimodal, et <code>-hf</code> charge aussi sa partie vision, d'où un nouveau manque de VRAM. Solution : <code>--no-mmproj</code>, ou <code>--no-mmproj-offload</code> pour la garder sur le CPU.</li>
+          <li><strong>Le mauvais dossier de cache</strong> : le modèle se télécharge dans <code>/root/.cache/huggingface</code>. Avec un volume monté ailleurs, les 21 Go restent à l'intérieur du conteneur et sont retéléchargés à chaque recréation. Pour récupérer un modèle déjà téléchargé : <code>docker cp llama-server:/root/.cache/huggingface/. ./models/</code>.</li>
+          <li><strong>Un seul moteur à la fois sur le GPU</strong> : une fois llama-server chargé, la VRAM est pleine à 98 % et Ollama ne peut plus charger de modèle (erreur de mémoire). Il faut arrêter l'un pour utiliser l'autre.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">5</span>
+        <span class="tuto-card-title">Brancher llama-server dans Open WebUI et alléger les requêtes</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>llama-server expose une API compatible OpenAI. Dans Open WebUI : <strong>Panneau d'administration → Paramètres → Connexions → API OpenAI</strong>, ajouter l'URL <code>http://&lt;ip_nas&gt;:8080/v1</code> avec une clé quelconque (par exemple <code>none</code>). Le modèle apparaît alors dans la liste, à côté de ceux d'Ollama.</p>
+        <p>Lors des premiers tests, une question d'une ligne envoyait pourtant <strong>plus de 7 000 tokens</strong> de prompt : les outils intégrés d'Open WebUI (notes, saisie utilisateur, affichage de fichiers…) ajoutent leurs descriptions à chaque requête, et le modèle s'en servait sans raison, avec des appels ratés. J'ai donc créé un modèle personnalisé réservé à la discussion (<strong>Espace de travail → Modèles</strong>) :</p>
+        <ul>
+          <li><strong>Outils intégrés</strong> : désactivés ;</li>
+          <li><strong>Vision</strong> : désactivée, puisque le serveur tourne sans encodeur d'images ;</li>
+          <li><strong>Interpréteur de code</strong> : désactivé, car il n'exécute que du Python et ajoute des instructions au prompt ;</li>
+          <li><strong>Fichier dans le contexte</strong> : activé, pour que le modèle lise en entier les fichiers qu'on lui envoie.</li>
+        </ul>
+        <p>Résultat : le prompt d'une question simple est passé de plus de 7 000 tokens à une trentaine.</p>
+        <p>Deuxième levier, le mode réflexion. Pour « la suite de Fibonacci en Rust avec un graphique », le modèle générait 5 555 tokens, soit 7 minutes, dont l'essentiel en réflexion. Dans <strong>Model controls</strong>, j'ai ajouté un menu « Thinking » avec deux options, Off par défaut :</p>
+        <div class="code-block"><pre>Option   Paramètre               Valeur
+On       chat_template_kwargs    {"enable_thinking": true}
+Off      chat_template_kwargs    {"enable_thinking": false}</pre></div>
+        <p>Pour un modèle servi par Ollama, le paramètre s'appelle <code>think</code> (valeurs <code>true</code> / <code>false</code>). Sans réflexion, une réponse équivalente tient en 1 300 à 1 800 tokens, soit environ 2 minutes.</p>
+        <p>Enfin, pourquoi <code>-np 1</code> : avec 4 slots, le serveur traitait en parallèle la réponse en cours et les requêtes de fond d'Open WebUI (génération du titre, des tags), qui se partageaient la bande passante de la RAM. La génération tombait à 9,3 tokens/s ; avec un seul slot, elle remonte à 15,4.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">6</span>
+        <span class="tuto-card-title">Bilan : Ollama ou llama.cpp ?</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-block"><pre>                               Ollama (départ)    llama.cpp (final)
+Génération                     14 tok/s           15,4 tok/s
+Lecture d'un long prompt       158 tok/s          343 tok/s
+Prompt d'une question simple   ~2 000 tokens      ~30 tokens
+Réflexion                      toujours active    au choix</pre></div>
+        <p>En appliquant les mêmes réglages côté Ollama (outils désactivés, <code>think</code> à false, contexte de 32K, 6 threads), j'obtiens 14,5 tokens/s : sur une question courte, l'essentiel du gain vient donc de la configuration d'Open WebUI, pas du moteur. L'avantage net de llama.cpp, c'est une <strong>lecture du prompt deux fois plus rapide</strong>, qui compte dès que l'on donne des fichiers à lire ou que l'on utilise un agent. Ollama reste plus simple et permet de changer de modèle en un clic.</p>
+        <p>Dernier point utile, le cache de prompt : au deuxième message d'une conversation, llama-server a réutilisé 1 848 tokens sur 1 891 et n'a lu que les nouveaux. La réponse a démarré en 1,3 seconde.</p>
+      </div>
+    </div>
+
+
+    <h2 id="tuto-openclaw">Tuto 6 — Un agent IA sur le NAS, piloté depuis Telegram (OpenClaw)</h2>
+    <p><a href="https://github.com/openclaw/openclaw" target="_blank">OpenClaw</a> est un agent IA auto-hébergé. Contrairement à Open WebUI, qui se contente de discuter, il peut <strong>agir</strong> : lire et écrire des fichiers, exécuter des commandes, planifier des tâches. On lui parle depuis une messagerie (Telegram, Discord, Slack, WhatsApp). C'est un peu un Claude Code que l'on pilote depuis son téléphone, sans avoir à se connecter au VPN.</p>
+    <p>OpenClaw n'est pas un moteur : c'est un <em>harness</em>, le programme qui entoure le modèle et le fait tourner en boucle avec des outils. Il faut lui fournir un LLM, ici le Qwen3.6 35B-A3B du tuto 5, servi par Ollama.</p>
+
+    <figure class="agent-diagram">
+      <svg viewBox="0 0 760 250" role="img" aria-label="Architecture : Telegram, OpenClaw, Ollama et les dossiers du NAS">
+        <defs>
+          <marker id="ah-oc-fr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrow-head" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="10" y="100" width="130" height="60" rx="8"/>
+        <text class="label-strong" x="75" y="126" text-anchor="middle">Téléphone</text>
+        <text class="label-muted" x="75" y="146" text-anchor="middle">app Telegram</text>
+        <rect class="box" x="185" y="100" width="130" height="60" rx="8"/>
+        <text class="label-strong" x="250" y="126" text-anchor="middle">Serveurs</text>
+        <text class="label-muted" x="250" y="146" text-anchor="middle">Telegram</text>
+        <rect class="box-harness" x="355" y="15" width="395" height="225" rx="10"/>
+        <text class="label-title" x="372" y="40">NAS (RÉSEAU LOCAL)</text>
+        <rect class="box-loop" x="375" y="100" width="150" height="60" rx="8"/>
+        <text class="label-strong" x="450" y="126" text-anchor="middle">OpenClaw</text>
+        <text class="label-muted" x="450" y="146" text-anchor="middle">conteneur Docker</text>
+        <rect class="box-llm" x="580" y="55" width="150" height="60" rx="8"/>
+        <text class="label-strong" x="655" y="81" text-anchor="middle">Ollama</text>
+        <text class="label-muted mono" x="655" y="101" text-anchor="middle">qwen3.6-agent</text>
+        <rect class="box" x="580" y="150" width="150" height="60" rx="8"/>
+        <text class="label mono" x="655" y="176" text-anchor="middle">workspace/</text>
+        <text class="label mono" x="655" y="196" text-anchor="middle">share/</text>
+        <line class="edge" x1="140" y1="130" x2="185" y2="130" marker-start="url(#ah-oc-fr)" marker-end="url(#ah-oc-fr)"/>
+        <line class="edge" x1="375" y1="130" x2="315" y2="130" marker-end="url(#ah-oc-fr)"/>
+        <text class="label-muted" x="348" y="185" text-anchor="end">connexion</text>
+        <text class="label-muted" x="348" y="200" text-anchor="end">sortante</text>
+        <line class="edge" x1="525" y1="118" x2="580" y2="90" marker-end="url(#ah-oc-fr)"/>
+        <line class="edge dashed" x1="525" y1="142" x2="580" y2="175" marker-end="url(#ah-oc-fr)"/>
+      </svg>
+      <figcaption>OpenClaw se connecte lui-même à Telegram : aucun port n'est ouvert sur la box. Il n'a accès qu'à deux dossiers dédiés.</figcaption>
+    </figure>
+
+    <p>En contrepartie, les messages transitent par les serveurs de Telegram, et les conversations avec un bot ne sont pas chiffrées de bout en bout : je n'y envoie rien de sensible. Pour accéder à Open WebUI à distance, je continue d'utiliser le VPN du tuto 1.</p>
+    <div class="warning-block"><strong>Sécurité.</strong> Un agent qui lit des messages et peut exécuter des commandes sur le NAS est une cible idéale pour l'injection de prompt : un fichier ou un message piégé peut lui faire faire autre chose que ce qui était demandé. Je ne lui donne accès qu'à deux dossiers dédiés, le bot ne répond qu'à mon compte, et je n'installe aucune extension (<em>skill</em>) tierce sans l'avoir lue.</div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">1</span>
+        <span class="tuto-card-title">Préparer Ollama pour un agent</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Arrêter d'abord llama-server (tuto 5) pour libérer la VRAM :</p>
+        <div class="code-block"><pre>docker stop llama-server</pre></div>
+        <p>Un agent envoie de très gros prompts : instructions, descriptions d'outils, historique. Ollama utilise par défaut un contexte court, et tronque le prompt sans prévenir quand il le dépasse. On crée donc une variante du modèle avec ses propres réglages :</p>
+        <div class="code-block"><pre>docker exec -it ollama sh -c 'printf "FROM qwen3.6:35b-a3b-q4_K_M\nPARAMETER num_ctx 32768\nPARAMETER num_thread 6\nPARAMETER temperature 0.6\nPARAMETER presence_penalty 0\n" &gt; /tmp/Modelfile &amp;&amp; ollama create qwen3.6-agent -f /tmp/Modelfile'
+
+docker exec ollama ollama show qwen3.6-agent --parameters</pre></div>
+        <ul>
+          <li><code>num_ctx 32768</code> : contexte de 32K tokens ;</li>
+          <li><code>num_thread 6</code> : le meilleur réglage trouvé au tuto 5 ;</li>
+          <li><code>temperature 0.6</code> et <code>presence_penalty 0</code> : les réglages recommandés par Qwen pour le code. Une pénalité de présence pousse le modèle à éviter les répétitions, ce qui le gêne quand il doit réutiliser les mêmes noms de variables.</li>
+        </ul>
+        <div class="warning-block"><strong>Pourquoi ne pas le faire dans Open WebUI ?</strong> Les modèles personnalisés d'Open WebUI n'existent que dans Open WebUI, qui ajoute leurs réglages aux requêtes qu'il envoie. OpenClaw s'adresse directement à Ollama : la variante doit donc exister dans Ollama.</div>
+        <p>Ensuite, dans le <code>docker-compose.yml</code> du tuto 2, ajouter deux variables d'environnement au service <code>ollama</code> :</p>
+        <div class="code-block"><pre>    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=1</pre></div>
+        <ul>
+          <li><code>OLLAMA_KEEP_ALIVE=-1</code> : le modèle reste chargé en mémoire. Sinon, chaque tâche commence par une minute de chargement ;</li>
+          <li><code>OLLAMA_NUM_PARALLEL=1</code> : une requête à la fois, l'équivalent de <code>-np 1</code> dans llama.cpp.</li>
+        </ul>
+        <div class="code-block"><pre>cd /volume1/docker/ai-stack
+docker compose up -d
+docker exec ollama env | grep OLLAMA
+curl http://&lt;ip_nas&gt;:11434/api/tags</pre></div>
+        <p>OpenClaw tourne dans son propre conteneur : pour lui, <code>localhost</code> désigne ce conteneur et non le NAS. Il faut donc passer par l'adresse IP locale du NAS, et vérifier que <code>qwen3.6-agent</code> apparaît bien dans la réponse de <code>curl</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">2</span>
+        <span class="tuto-card-title">Installer OpenClaw depuis le centre d'applications UGOS</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>OpenClaw est disponible dans le centre d'applications d'UGOS (l'installation prend une dizaine de minutes). Avant de la lancer, créer deux dossiers vides, <code>/volume1/docker/openclaw/workspace</code> et <code>/volume1/docker/openclaw/share</code>. L'assistant d'installation demande trois choses :</p>
+        <ul>
+          <li><strong>Chemin de l'espace de travail</strong> : <code>openclaw/workspace</code>, monté dans le conteneur sur <code>/root/.openclaw/workspace</code>. C'est le dossier de l'agent : il y écrit son code, ses fichiers temporaires et ses fichiers de mémoire.</li>
+          <li><strong>Chemin d'accès au fichier</strong> : <code>openclaw/share</code>, monté dans le conteneur au même chemin que sur le NAS (<code>/volume1/docker/openclaw/share</code>). C'est le seul dossier existant qu'il peut lire et modifier. Je n'y dépose que les fichiers sur lesquels je veux le faire travailler, et surtout pas mes Documents ou mes Médias. Ce dossier ne doit pas se trouver dans l'espace de travail.</li>
+          <li><strong>Jeton de passerelle</strong> : le mot de passe de l'interface web d'OpenClaw. Le générer avec <code>openssl rand -hex 32</code> et le conserver dans un gestionnaire de mots de passe.</li>
+        </ul>
+        <p>Une fois l'installation terminée, Ugreen fournit une console d'administration (Overview, Model Providers, Channels, Logs) dans laquelle se fait toute la configuration.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">3</span>
+        <span class="tuto-card-title">Brancher le modèle (Model Providers)</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Dans <strong>Model Providers → Add provider</strong>, choisir <em>Ollama</em>, puis :</p>
+        <ul>
+          <li><strong>Base URL</strong> : <code>http://&lt;ip_nas&gt;:11434</code>, et non <code>localhost</code> ;</li>
+          <li><strong>API protocol</strong> : Ollama ;</li>
+          <li><strong>API Key</strong> : <code>ollama</code>. Ollama n'en a pas besoin mais le champ est obligatoire. Attention, le navigateur peut le préremplir avec un mot de passe enregistré ;</li>
+          <li><strong>Model list</strong> : supprimer les modèles d'exemple (llama3.1, qwen2.5) et ajouter <code>qwen3.6-agent</code>.</li>
+        </ul>
+        <p>Pour le modèle :</p>
+        <ul>
+          <li><strong>Context window</strong> : <code>32768</code>. Avec le protocole Ollama, OpenClaw peut transmettre cette valeur à chaque requête : la laisser à 131 072, comme dans les exemples, écraserait le réglage de la variante ;</li>
+          <li><strong>Max output tokens</strong> : <code>8192</code>, pour que les réponses avec réflexion ne soient pas coupées ;</li>
+          <li><strong>Reasoning model</strong> : coché, puisque Qwen3.6 réfléchit avant de répondre ;</li>
+          <li><strong>Coûts</strong> : 0, le modèle tourne en local.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">4</span>
+        <span class="tuto-card-title">Créer le bot Telegram et l'appairer</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>J'ai choisi Telegram : le bot est un compte séparé, créé en deux minutes, qui passe par l'API officielle sans lier son propre compte. Avec WhatsApp, au contraire, OpenClaw se connecte comme appareil lié à votre propre compte, par une méthode non officielle.</p>
+        <ol>
+          <li>Créer un compte Telegram si besoin. Dans <em>Paramètres → Confidentialité et sécurité → Numéro de téléphone</em>, je conseille de choisir « Personne » pour la visibilité du numéro.</li>
+          <li>Ouvrir <strong>@BotFather</strong> (celui qui porte le badge bleu de vérification), envoyer <code>/newbot</code>, choisir un nom d'affichage, puis un nom d'utilisateur se terminant par <code>bot</code>. BotFather renvoie un <strong>jeton</strong> (<code>7123456789:AAH…</code>) à garder secret ; en cas de fuite, <code>/revoke</code> en génère un nouveau.</li>
+          <li>Dans la console OpenClaw, <strong>Channels</strong> : activer le plugin Telegram, puis <strong>Add channel</strong>, coller le jeton et garder <strong>DM Policy</strong> sur <code>pairing</code>.</li>
+          <li>Envoyer un premier message au bot : il répond avec un <strong>code d'appairage</strong> et ignore tout le reste tant que ce code n'a pas été approuvé.</li>
+        </ol>
+        <div class="code-block"><pre>docker ps --format '{{.Names}}' | grep -i claw
+docker exec -it openclaw-gateway-1 openclaw pairing approve telegram &lt;CODE&gt;</pre></div>
+        <p>Avec le mode <code>pairing</code>, personne ne peut donner d'ordres au bot sans mon accord, même en connaissant son nom. Ne jamais choisir <code>open</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">5</span>
+        <span class="tuto-card-title">Les erreurs rencontrées</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p><strong>« No API key found for provider "openai" »</strong> : le fournisseur Ollama était bien ajouté, mais l'agent utilisait toujours OpenAI par défaut.</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw models list
+docker exec -it openclaw-gateway-1 openclaw models set ollama/qwen3.6-agent
+docker restart openclaw-gateway-1</pre></div>
+        <p><strong>« Request timed out before a response was generated »</strong>, systématiquement au bout d'une minute. Les logs d'Ollama donnent l'explication : le prompt système d'OpenClaw, avec les descriptions de ses outils, fait environ <strong>13 000 tokens</strong>. À environ 150 tokens/s, il faut près de 85 secondes au modèle pour le lire avant d'écrire le premier mot.</p>
+        <p>Le délai suggéré par le message d'erreur (<code>agents.defaults.timeoutSeconds</code>) ne suffit pas : la version installée par UGOS (2026.3.31) a un second délai, de 60 secondes par défaut, pour l'attente du premier token. Il faut augmenter les deux :</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw config set agents.defaults.timeoutSeconds 600
+docker exec -it openclaw-gateway-1 openclaw config set agents.defaults.llm.idleTimeoutSeconds 600
+docker restart openclaw-gateway-1</pre></div>
+        <div class="warning-block"><strong>Astuce :</strong> pendant les tests, envoyer un seul message et attendre. Avec une requête à la fois, chaque nouveau message s'ajoute à la file d'attente. Pour éviter la minute de chargement, on peut aussi précharger le modèle :<br><code>curl http://&lt;ip_nas&gt;:11434/api/generate -d '{"model":"qwen3.6-agent","keep_alive":-1}'</code></div>
+        <p><strong>« Exec approval is required, but no interactive approval client is currently available »</strong>, puis <em>« Je ne trouve pas le fichier »</em>. J'avais demandé de résumer un fichier déposé dans le dossier partagé, mais l'agent ne savait pas où ce dossier était monté : il a tenté un <code>find</code> sur tout <code>/root</code>. Les commandes shell exigent une approbation, et aucun moyen d'approuver n'étant configuré, la demande a expiré et la commande a été refusée. C'est le comportement attendu : ce garde-fou empêche l'agent de fouiller le système.</p>
+        <p>La solution est de lui donner le chemin exact. Pour voir où chaque dossier est monté dans le conteneur :</p>
+        <div class="code-block"><pre>docker inspect openclaw-gateway-1 --format '{{range .Mounts}}{{.Source}} -&gt; {{.Destination}}{{"\n"}}{{end}}'</pre></div>
+        <div class="code-block"><pre>/volume1/docker/openclaw/workspace -&gt; /root/.openclaw/workspace
+/volume1/docker/openclaw/share -&gt; /volume1/docker/openclaw/share</pre></div>
+        <p>Puis on l'indique à l'agent, une fois pour toutes :</p>
+        <div class="code-block"><pre>Le dossier partagé est /volume1/docker/openclaw/share. Note ce chemin dans tes fichiers de mémoire.</pre></div>
+        <p>Avec le chemin exact, il lit les fichiers avec son outil de lecture, sans passer par le shell, donc sans demande d'approbation. Pour autoriser malgré tout certaines commandes shell, avec une confirmation à chaque fois, voir l'étape 7 (et la <a href="https://docs.openclaw.ai/tools/exec-approvals/index.html" target="_blank">documentation des approbations</a>).</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">6</span>
+        <span class="tuto-card-title">Premier contact : identité et règles de l'agent</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Au premier message, OpenClaw lance une étape d'accueil : il demande son nom, sa nature, son style et un emoji, puis enregistre le tout dans des fichiers Markdown de son espace de travail (<code>IDENTITY.md</code>, <code>USER.md</code>, <code>SOUL.md</code>…). Ces fichiers lui servent de mémoire : il les relit à chaque session. J'ai répondu en un seul message pour limiter les allers-retours :</p>
+        <div class="code-block"><pre>Appelle-toi Atlas, assistant technique pour mon NAS, spécialiste en IT/IA/LLM/Tech, style direct et concis, emoji 🛰️</pre></div>
+        <p>Puis j'ai fixé ses règles de comportement, qu'il a enregistrées dans <code>SOUL.md</code> :</p>
+        <div class="code-block"><pre>- Réponses courtes et directes, en français.
+- Pas de tableaux Markdown, Telegram ne les affiche pas : utilise des listes.
+- Demande-moi toujours confirmation avant de supprimer un fichier
+  ou d'exécuter une commande qui modifie le système.
+- Ne travaille que dans ton espace de travail et dans le dossier partagé.</pre></div>
+        <p>Deux remarques :</p>
+        <ul>
+          <li>L'agent a annoncé « C'est fait » alors qu'une de ses modifications de <code>SOUL.md</code> avait échoué. Les modèles de cette taille affirment souvent avoir réussi une action ratée : il faut <strong>vérifier le fichier</strong> soi-même (ici, tout y était).</li>
+          <li>Ces règles aident, mais ne constituent pas une vraie protection : l'agent peut réécrire ses propres fichiers. Si on lui donne un jour accès à des contenus extérieurs (pages web, mails), on peut protéger le fichier en écriture : <code>chmod 444 &lt;chemin&gt;/openclaw/workspace/SOUL.md</code>.</li>
+        </ul>
+        <p>À la fin de l'accueil, il propose de supprimer <code>BOOTSTRAP.md</code>, qui ne sert plus. Bon signe : il a demandé confirmation avant de le faire.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">7</span>
+        <span class="tuto-card-title">Autoriser les commandes shell, avec confirmation dans Telegram</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Par défaut, chaque commande shell doit être approuvée, mais aucun moyen d'approuver n'est configuré : les commandes expirent et sont refusées. On peut se désigner comme <strong>approbateur</strong> : chaque commande arrive alors dans Telegram, en clair, avec des boutons pour l'autoriser ou la refuser. L'approbateur se désigne par son identifiant Telegram numérique (celui affiché par la commande d'appairage, « Approved telegram sender … ») : avoir le droit d'écrire au bot ne suffit pas.</p>
+        <p>Sauvegarder d'abord la configuration (le dossier <code>/root/.openclaw</code> du conteneur correspond à ce dossier du NAS) :</p>
+        <div class="code-block"><pre>cp /volume1/@appstore/com.ugreen.docker.openclaw/config/openclaw.json \
+   /volume1/@appstore/com.ugreen.docker.openclaw/config/openclaw.json.bak</pre></div>
+        <p>Puis activer les approbations, en remplaçant <code>TON_ID</code> par son identifiant Telegram :</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw config set channels.telegram.execApprovals.enabled true
+docker exec -it openclaw-gateway-1 openclaw config set channels.telegram.execApprovals.approvers '[TON_ID]'
+docker exec -it openclaw-gateway-1 openclaw config set channels.telegram.capabilities.inlineButtons dm
+
+docker exec -it openclaw-gateway-1 openclaw config get channels.telegram
+docker restart openclaw-gateway-1</pre></div>
+        <ul>
+          <li><code>execApprovals.approvers</code> : la liste des approbateurs. Dans le résultat de <code>config get</code>, elle doit apparaître comme une liste contenant un nombre, et non comme un texte entre guillemets ;</li>
+          <li><code>capabilities.inlineButtons dm</code> : autorise les boutons dans les messages privés, indispensables pour approuver d'un simple appui.</li>
+        </ul>
+        <p>Pour tester, je demande à Atlas : <em>« Exécute <code>ls -la /volume1/docker/openclaw/share</code> »</em>. Le bot répond avec un message « Approval required » qui affiche la commande, le dossier dans lequel elle s'exécutera et le délai d'expiration (30 minutes), suivi de trois boutons :</p>
+        <ul>
+          <li><strong>Allow Once</strong> : autorise cette commande une seule fois. C'est le choix par défaut ;</li>
+          <li><strong>Allow Always</strong> : ajoute la commande à une liste d'autorisations permanentes, que l'agent pourra relancer sans demander. Je le réserve aux commandes en lecture seule que je vois passer souvent, jamais à une commande qui supprime, déplace ou télécharge quelque chose ;</li>
+          <li><strong>Deny</strong> : refuse la commande.</li>
+        </ul>
+        <p>Les mêmes choix existent sous forme de commandes à taper (<code>/approve &lt;id&gt; allow-once</code>, <code>allow-always</code> ou <code>deny</code>). Répondre simplement « oui » dans la conversation ne compte pas comme une approbation.</p>
+        <div class="warning-block"><strong>À savoir :</strong> la ligne « Host: gateway » indique que les commandes s'exécutent dans le conteneur d'OpenClaw, en root, et non directement sur le système du NAS. Elles n'atteignent que les dossiers montés dans ce conteneur. C'est une protection de plus, mais pas une garantie absolue : la vraie sécurité reste de <strong>lire chaque commande</strong> avant de l'approuver, et de refuser tout ce qui sort de <code>workspace</code> et <code>share</code>.</div>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">8</span>
+        <span class="tuto-card-title">Couper l'accès à Internet de l'agent</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Le modèle lui-même n'a jamais accès à Internet : Ollama se contente de produire du texte. Ce qui peut sortir sur Internet, c'est OpenClaw, à travers ses outils. Les logs le montrent dès les premiers échanges : <code>web_search: no provider configured ... falling back to keyless provider "duckduckgo"</code>. La recherche web est active par défaut, sans clé, via DuckDuckGo. Or une page web est la source la plus probable d'injection de prompt.</p>
+        <p>Trois portes mènent à Internet :</p>
+        <ul>
+          <li><code>web_search</code> et <code>web_fetch</code> (groupe <code>group:web</code>) : chercher et lire des pages web ;</li>
+          <li><code>browser</code> (groupe <code>group:ui</code>) : un navigateur piloté par l'agent ;</li>
+          <li>les commandes shell comme <code>curl</code> ou <code>wget</code>, déjà soumises à approbation depuis l'étape 7.</li>
+        </ul>
+        <p>On ne peut pas couper le réseau du conteneur lui-même : OpenClaw en a besoin pour parler à Telegram. On interdit donc les outils, après avoir sauvegardé la configuration :</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw config set tools.deny '["group:web","browser"]'
+docker exec -it openclaw-gateway-1 openclaw config set tools.web.search.enabled false
+docker exec -it openclaw-gateway-1 openclaw config set tools.web.fetch.enabled false
+docker restart openclaw-gateway-1
+
+docker exec -it openclaw-gateway-1 openclaw config get tools</pre></div>
+        <p>L'interdiction (<code>tools.deny</code>) l'emporte sur toute autorisation. Je vérifie avec <code>config get</code> après le redémarrage, car le gestionnaire d'Ugreen réécrit une partie de la configuration à chaque démarrage (<code>Syncing configuration from environment variables...</code> dans les logs).</p>
+        <p>Pour tester, je demande à Atlas : <em>« Recherche sur le web la dernière version d'Ollama »</em>. Il n'a plus d'outil web… et tente aussitôt de contourner avec une commande shell :</p>
+        <div class="code-block"><pre>curl -s https://api.github.com/repos/ollama/ollama/releases/latest | grep -o '"tag_name": *"[^"]*"' | head -1</pre></div>
+        <p>C'est l'approbation de l'étape 7 qui l'arrête : je refuse avec <strong>Deny</strong>, sans jamais utiliser <strong>Allow Always</strong> pour <code>curl</code> ou <code>wget</code>. Pour qu'il cesse d'essayer, j'ai ajouté cette règle directement dans <code>SOUL.md</code> :</p>
+        <div class="code-block"><pre>- Tu n'as pas accès à Internet. N'utilise jamais curl, wget ou tout autre moyen
+  de contacter un site externe. Si une information nécessite Internet, dis-le-moi.</pre></div>
+        <p>Au final, trois niveaux de protection : les outils web désactivés, une consigne qui incite l'agent à ne plus essayer (qu'il peut ne pas respecter), et l'approbation de chaque commande shell, qui reste la vraie barrière. Interdire un outil ne suffit pas tant que le shell est disponible. Bonus : chaque outil retiré enlève sa description du prompt système, ce qui accélère un peu les réponses.</p>
+        <div class="warning-block"><strong>Attention aux logs :</strong> au démarrage, les logs du conteneur affichent un jeton en clair (<code>--token …</code>). Il faut le masquer avant de partager des logs. Si c'est le jeton de passerelle choisi à l'installation, UGOS ne permet de le changer qu'en réinitialisant l'application : il faut alors refaire la configuration de ce tuto (les dossiers <code>workspace</code> et <code>share</code>, et donc la mémoire de l'agent, sont conservés).</div>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">9</span>
+        <span class="tuto-card-title">Performances et pistes d'amélioration</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>Sur cette configuration, la première réponse arrive en un peu plus d'une minute, et une tâche avec plusieurs appels d'outils (écrire des fichiers puis répondre) prend environ 4 minutes. C'est nettement plus lent qu'Open WebUI, pour deux raisons : le prompt passe d'une trentaine de tokens à environ 13 000, et chaque appel d'outil relance le modèle. L'usage est donc plutôt asynchrone : on envoie une demande depuis Telegram et on revient voir le résultat plus tard.</p>
+        <p>Pistes pour accélérer :</p>
+        <ol>
+          <li>Brancher OpenClaw sur llama-server (tuto 5) plutôt que sur Ollama : la lecture du prompt y est deux fois plus rapide, et c'est exactement ce qui limite un agent.</li>
+          <li>Vérifier que le cache de prompt fonctionne d'un tour à l'autre (<code>docker logs ollama | grep cached</code>). Si tout le prompt est relu à chaque tour, c'est ce qui coûte le plus cher.</li>
+          <li>Réduire encore le prompt système en désactivant les autres outils inutiles (les outils web le sont déjà depuis l'étape 8).</li>
+          <li>Désactiver la réflexion, au prix d'actions moins fiables.</li>
+        </ol>
+        <p>Pour comprendre plus en détail le fonctionnement d'un agent (boucle, outils, contexte, sécurité), voir le <a href="project8.html">projet 8</a>, dans lequel je construis un agent de code à la main.</p>
+      </div>
+    </div>
+
 </div>
 
   <a href="projects.html" class="btn btn-secondary">Retour</a>
   <br><br>
   <div class="project-meta">
     <span class="tag">NAS</span><span class="tag">Linux</span><span class="tag">Docker</span>
-    <span class="tag">Ollama</span><span class="tag">LLM</span><span class="tag">en cours</span>
+    <span class="tag">Ollama</span><span class="tag">llama.cpp</span><span class="tag">LLM</span><span class="tag">OpenClaw</span><span class="tag">IA agentique</span><span class="tag">en cours</span>
   </div>
 </div>
   <footer>
@@ -497,9 +933,11 @@ docker rmi nvidia/cuda:12.8.0-base-ubuntu22.04</pre></div>
       <h4>📋 Available Tutorials</h4>
       <ol>
         <li><a href="#tuto-vpn">Remote Access to the NAS</a></li>
-        <li><a href="#tuto-ollama">DDeploy Ollama + OpenWebUI on the NAS (complete Docker stack)</a></li>
+        <li><a href="#tuto-ollama">Deploy Ollama + OpenWebUI on the NAS (complete Docker stack)</a></li>
         <li><a href="#tuto-nvidia">Fix UGOS packages to access Nvidia GPU in Docker</a></li>
-        <li><a href="#tuto-opencode">DDeploy OpenCode on the NAS (under construction)</a></li>
+        <li><a href="#tuto-opencode">Deploy OpenCode on the NAS (under construction)</a></li>
+        <li><a href="#tuto-llamacpp-en">Running a 35B model on 6 GB of VRAM (MoE, Ollama vs llama.cpp)</a></li>
+        <li><a href="#tuto-openclaw-en">An AI agent on the NAS, driven from Telegram (OpenClaw)</a></li>
       </ol>
     </div>
     
@@ -902,13 +1340,447 @@ docker rmi nvidia/cuda:12.8.0-base-ubuntu22.04</pre></div>
 
     </div>
 
+
+    <h2 id="tuto-llamacpp-en">Tuto 5 — Running a 35B model on 6 GB of VRAM (MoE, Ollama vs llama.cpp)</h2>
+    <p>With 6 GB of VRAM, a small dense model such as <code>qwen3.5:4b</code> fits entirely on the card and answers quickly (about 39 tokens/s), but its capabilities remain limited. To go further without changing GPU, I turned to an <strong>MoE</strong> (<em>Mixture of Experts</em>) model: <strong>Qwen3.6 35B-A3B</strong>. It has 35 billion parameters in total, but only activates about 3 billion for each generated token.</p>
+    <p>With Q4 quantization, the model weighs about 21 GB: it does not fit in VRAM and is split between the GPU and the NAS's 64 GB of RAM. For a dense model this would be a deal-breaker, since every parameter is read again for each token and RAM becomes the bottleneck. An MoE only reads the active experts, which keeps a decent speed even when most of the model sits in RAM.</p>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">1</span>
+        <span class="tuto-card-title">First attempt with Ollama</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>The simplest option is to use the stack from tutorial 2:</p>
+        <div class="code-block"><pre>docker exec -it ollama ollama pull qwen3.6:35b-a3b-q4_K_M</pre></div>
+        <p>First results, measured in Open WebUI: about <strong>14 tokens/s</strong> for generation, which is perfectly usable, but only <strong>158 tokens/s</strong> for prompt reading and 65 seconds of loading on the first message. Prompt reading is the real weak point: as soon as you provide a long file or a long history, the wait before the first word becomes significant.</p>
+        <div class="warning-block"><strong>"Cache" RAM in UGOS:</strong> after loading, the resource monitor showed 50 GB as "Cache" and only 5 GB "Remaining". No need to worry: this is the Linux disk cache (here, mostly the model file), released as soon as a program needs it. The <code>available</code> column of <code>free -h</code> gives the memory that is actually available.</div>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">2</span>
+        <span class="tuto-card-title">Deploy llama.cpp (llama-server) with Docker</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p><a href="https://github.com/ggml-org/llama.cpp" target="_blank">llama.cpp</a> is the engine Ollama is built on. Used directly, it gives access to settings Ollama does not offer, in particular <code>--n-cpu-moe</code>: the whole model is placed on the GPU, then only the experts of a given number of layers are sent back to RAM. Attention and the context cache stay on the card, and they are precisely what is used to read the prompt.</p>
+        <div class="code-block"><pre>mkdir -p /volume1/docker/llama-cpp/models
+cd /volume1/docker/llama-cpp
+vim docker-compose.yml</pre></div>
+        <div class="code-label">docker-compose.yml</div>
+        <div class="code-block"><pre>services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/root/.cache/huggingface
+    command: &gt;
+      -hf unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_XL
+      --host 0.0.0.0 --port 8080
+      --load-mode none
+      --no-mmproj -np 1
+      -ngl 99 --n-cpu-moe 36
+      -b 2048 -ub 2048
+      -t 6
+      -c 32768 --jinja
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped</pre></div>
+        <p>The options:</p>
+        <ul>
+          <li><code>-hf</code>: downloads the model from Hugging Face on first start (about 21 GB), into the <code>./models</code> folder mounted on <code>/root/.cache/huggingface</code>.</li>
+          <li><code>--load-mode none</code>: actually copies the experts into RAM instead of reading the file through the disk cache. llama.cpp itself recommends it in its logs.</li>
+          <li><code>--no-mmproj</code>: does not load the model's image encoder, which needed 861 MB of VRAM the card no longer had.</li>
+          <li><code>-np 1</code>: a single request processed at a time (see step 5).</li>
+          <li><code>-ngl 99 --n-cpu-moe 36</code>: the whole model on the GPU, except the experts of 36 layers, sent back to RAM.</li>
+          <li><code>-b 2048 -ub 2048</code>: reads the prompt in batches of 2,048 tokens. Experts stored in RAM must be transferred to the GPU for each batch, and the NAS's PCIe 4.0 x4 slot tops out at about 8 GB/s: bigger batches mean fewer transfers. With this setting, prompt reading went from 132 to 343 tokens/s.</li>
+          <li><code>-t 6</code>: 6 CPU threads (see step 3).</li>
+          <li><code>-c 32768 --jinja</code>: a 32K-token context, and the model's own chat format.</li>
+        </ul>
+        <div class="code-block"><pre>docker compose up -d
+docker logs -f llama-server</pre></div>
+        <p>The server is ready when the logs show <code>listening on http://0.0.0.0:8080</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">3</span>
+        <span class="tuto-card-title">Find the right settings with llama-bench</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>The i5-1235U has 2 performance cores and 8 efficiency cores: the right number of threads cannot be guessed. llama.cpp provides a benchmark tool, included in the <code>full-cuda</code> image, which tests every combination at once. First stop <code>llama-server</code> to free the VRAM:</p>
+        <div class="code-block"><pre>docker compose stop
+docker run --rm --gpus all \
+  -v /volume1/docker/llama-cpp/models:/root/.cache/huggingface \
+  ghcr.io/ggml-org/llama.cpp:full-cuda --bench \
+  -m /root/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/&lt;hash&gt;/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
+  -ngl 99 -ncmoe 36,38 -t 4,6,8,10 -p 512 -n 128</pre></div>
+        <p>Results on my NAS (<code>pp512</code>: reading a 512-token prompt; <code>tg128</code>: generating 128 tokens):</p>
+        <div class="code-block"><pre>n_cpu_moe  threads  pp512 (tok/s)  tg128 (tok/s)
+       36        4          202.8           13.7
+       36        6          201.3           15.8
+       36        8          197.4           15.8
+       36       10          198.6           14.7
+       38        4          193.3           13.2
+       38        6          191.1           15.2
+       38        8          193.5           15.1
+       38       10          192.4           14.1</pre></div>
+        <p>Beyond 8 threads, the efficiency cores slow everything down. 6 threads give the same speed as 8 while loading the CPU less. Going from 38 to 36 layers of experts in RAM only gains 0.6 token/s, and going lower overflows the VRAM. The best setting is therefore <code>--n-cpu-moe 36 -t 6</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">4</span>
+        <span class="tuto-card-title">Pitfalls I ran into</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <ul>
+          <li><strong>Out of VRAM at startup</strong> (<code>cudaMalloc failed: out of memory</code>): with <code>--n-cpu-moe 32</code>, the weights alone already took 5.85 GB. You need to leave room for the context cache and the compute buffers, which grow with <code>-ub 2048</code>.</li>
+          <li><strong>Automatic fitting disabled</strong>: the line <code>failed to fit params ... n_gpu_layers already set by user</code> shows that llama.cpp can split the model on its own, but only if <code>-ngl</code> is not set. In my case, the values found with the benchmark gave better results than this automatic fitting.</li>
+          <li><strong>The image encoder</strong>: Qwen3.6 is multimodal, and <code>-hf</code> also loads its vision part, causing another VRAM shortage. Fix: <code>--no-mmproj</code>, or <code>--no-mmproj-offload</code> to keep it on the CPU.</li>
+          <li><strong>The wrong cache folder</strong>: the model is downloaded into <code>/root/.cache/huggingface</code>. With a volume mounted elsewhere, the 21 GB stay inside the container and are downloaded again every time it is recreated. To recover an already downloaded model: <code>docker cp llama-server:/root/.cache/huggingface/. ./models/</code>.</li>
+          <li><strong>Only one engine at a time on the GPU</strong>: once llama-server is loaded, the VRAM is 98% full and Ollama can no longer load a model (memory error). You have to stop one to use the other.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">5</span>
+        <span class="tuto-card-title">Connect llama-server to Open WebUI and lighten requests</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>llama-server exposes an OpenAI-compatible API. In Open WebUI: <strong>Admin Panel → Settings → Connections → OpenAI API</strong>, add the URL <code>http://&lt;ip_nas&gt;:8080/v1</code> with any key (for example <code>none</code>). The model then shows up in the list, next to the Ollama ones.</p>
+        <p>During the first tests, a one-line question still sent <strong>more than 7,000 tokens</strong> of prompt: Open WebUI's built-in tools (notes, user input, file display…) add their descriptions to every request, and the model used them for no reason, with failed calls. So I created a custom model dedicated to chatting (<strong>Workspace → Models</strong>):</p>
+        <ul>
+          <li><strong>Built-in tools</strong>: disabled;</li>
+          <li><strong>Vision</strong>: disabled, since the server runs without the image encoder;</li>
+          <li><strong>Code interpreter</strong>: disabled, as it only runs Python and adds instructions to the prompt;</li>
+          <li><strong>File in context</strong>: enabled, so the model reads uploaded files in full.</li>
+        </ul>
+        <p>Result: the prompt for a simple question dropped from more than 7,000 tokens to about thirty.</p>
+        <p>Second lever, thinking mode. For "the Fibonacci sequence in Rust with a plot", the model generated 5,555 tokens, i.e. 7 minutes, mostly spent thinking. In <strong>Model controls</strong>, I added a "Thinking" menu with two options, Off by default:</p>
+        <div class="code-block"><pre>Option   Parameter               Value
+On       chat_template_kwargs    {"enable_thinking": true}
+Off      chat_template_kwargs    {"enable_thinking": false}</pre></div>
+        <p>For a model served by Ollama, the parameter is called <code>think</code> (values <code>true</code> / <code>false</code>). Without thinking, an equivalent answer takes 1,300 to 1,800 tokens, i.e. about 2 minutes.</p>
+        <p>Finally, why <code>-np 1</code>: with 4 slots, the server processed the current answer in parallel with Open WebUI's background requests (title and tag generation), which shared the RAM bandwidth. Generation dropped to 9.3 tokens/s; with a single slot, it goes back up to 15.4.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">6</span>
+        <span class="tuto-card-title">Verdict: Ollama or llama.cpp?</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <div class="code-block"><pre>                               Ollama (start)     llama.cpp (final)
+Generation                     14 tok/s           15.4 tok/s
+Reading a long prompt          158 tok/s          343 tok/s
+Prompt for a simple question   ~2,000 tokens      ~30 tokens
+Thinking                       always on          optional</pre></div>
+        <p>Applying the same settings on the Ollama side (tools disabled, <code>think</code> set to false, 32K context, 6 threads), I get 14.5 tokens/s: on a short question, most of the gain therefore comes from the Open WebUI configuration, not from the engine. llama.cpp's clear advantage is <strong>prompt reading twice as fast</strong>, which matters as soon as you give it files to read or use an agent. Ollama remains simpler and lets you switch models in one click.</p>
+        <p>One last useful point, the prompt cache: on the second message of a conversation, llama-server reused 1,848 of 1,891 tokens and only read the new ones. The answer started in 1.3 seconds.</p>
+      </div>
+    </div>
+
+
+    <h2 id="tuto-openclaw-en">Tuto 6 — An AI agent on the NAS, driven from Telegram (OpenClaw)</h2>
+    <p><a href="https://github.com/openclaw/openclaw" target="_blank">OpenClaw</a> is a self-hosted AI agent. Unlike Open WebUI, which only chats, it can <strong>act</strong>: read and write files, run commands, schedule tasks. You talk to it from a messaging app (Telegram, Discord, Slack, WhatsApp). It is a bit like a Claude Code you drive from your phone, without having to connect to the VPN.</p>
+    <p>OpenClaw is not an engine: it is a <em>harness</em>, the program that wraps the model and runs it in a loop with tools. It needs an LLM, here the Qwen3.6 35B-A3B from tutorial 5, served by Ollama.</p>
+
+    <figure class="agent-diagram">
+      <svg viewBox="0 0 760 250" role="img" aria-label="Architecture: Telegram, OpenClaw, Ollama and the NAS folders">
+        <defs>
+          <marker id="ah-oc-en" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrow-head" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="10" y="100" width="130" height="60" rx="8"/>
+        <text class="label-strong" x="75" y="126" text-anchor="middle">Phone</text>
+        <text class="label-muted" x="75" y="146" text-anchor="middle">Telegram app</text>
+        <rect class="box" x="185" y="100" width="130" height="60" rx="8"/>
+        <text class="label-strong" x="250" y="126" text-anchor="middle">Telegram</text>
+        <text class="label-muted" x="250" y="146" text-anchor="middle">servers</text>
+        <rect class="box-harness" x="355" y="15" width="395" height="225" rx="10"/>
+        <text class="label-title" x="372" y="40">NAS (LOCAL NETWORK)</text>
+        <rect class="box-loop" x="375" y="100" width="150" height="60" rx="8"/>
+        <text class="label-strong" x="450" y="126" text-anchor="middle">OpenClaw</text>
+        <text class="label-muted" x="450" y="146" text-anchor="middle">Docker container</text>
+        <rect class="box-llm" x="580" y="55" width="150" height="60" rx="8"/>
+        <text class="label-strong" x="655" y="81" text-anchor="middle">Ollama</text>
+        <text class="label-muted mono" x="655" y="101" text-anchor="middle">qwen3.6-agent</text>
+        <rect class="box" x="580" y="150" width="150" height="60" rx="8"/>
+        <text class="label mono" x="655" y="176" text-anchor="middle">workspace/</text>
+        <text class="label mono" x="655" y="196" text-anchor="middle">share/</text>
+        <line class="edge" x1="140" y1="130" x2="185" y2="130" marker-start="url(#ah-oc-en)" marker-end="url(#ah-oc-en)"/>
+        <line class="edge" x1="375" y1="130" x2="315" y2="130" marker-end="url(#ah-oc-en)"/>
+        <text class="label-muted" x="348" y="185" text-anchor="end">outbound</text>
+        <text class="label-muted" x="348" y="200" text-anchor="end">connection</text>
+        <line class="edge" x1="525" y1="118" x2="580" y2="90" marker-end="url(#ah-oc-en)"/>
+        <line class="edge dashed" x1="525" y1="142" x2="580" y2="175" marker-end="url(#ah-oc-en)"/>
+      </svg>
+      <figcaption>OpenClaw connects to Telegram itself: no port is opened on the router. It only has access to two dedicated folders.</figcaption>
+    </figure>
+
+    <p>On the other hand, messages go through Telegram's servers, and conversations with a bot are not end-to-end encrypted: I never send anything sensitive there. To reach Open WebUI remotely, I keep using the VPN from tutorial 1.</p>
+    <div class="warning-block"><strong>Security.</strong> An agent that reads messages and can run commands on the NAS is an ideal target for prompt injection: a booby-trapped file or message can make it do something other than what was asked. I only give it access to two dedicated folders, the bot only answers my account, and I never install a third-party extension (<em>skill</em>) without reading it first.</div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">1</span>
+        <span class="tuto-card-title">Prepare Ollama for an agent</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>First stop llama-server (tutorial 5) to free the VRAM:</p>
+        <div class="code-block"><pre>docker stop llama-server</pre></div>
+        <p>An agent sends very large prompts: instructions, tool descriptions, history. Ollama uses a short context by default, and silently truncates the prompt when it is exceeded. So we create a variant of the model with its own settings:</p>
+        <div class="code-block"><pre>docker exec -it ollama sh -c 'printf "FROM qwen3.6:35b-a3b-q4_K_M\nPARAMETER num_ctx 32768\nPARAMETER num_thread 6\nPARAMETER temperature 0.6\nPARAMETER presence_penalty 0\n" &gt; /tmp/Modelfile &amp;&amp; ollama create qwen3.6-agent -f /tmp/Modelfile'
+
+docker exec ollama ollama show qwen3.6-agent --parameters</pre></div>
+        <ul>
+          <li><code>num_ctx 32768</code>: a 32K-token context;</li>
+          <li><code>num_thread 6</code>: the best setting found in tutorial 5;</li>
+          <li><code>temperature 0.6</code> and <code>presence_penalty 0</code>: the settings Qwen recommends for code. A presence penalty pushes the model to avoid repetition, which gets in the way when it needs to reuse the same variable names.</li>
+        </ul>
+        <div class="warning-block"><strong>Why not do this in Open WebUI?</strong> Open WebUI's custom models only exist within Open WebUI, which adds their settings to the requests it sends. OpenClaw talks to Ollama directly, so the variant has to exist in Ollama itself.</div>
+        <p>Then, in the <code>docker-compose.yml</code> from tutorial 2, add two environment variables to the <code>ollama</code> service:</p>
+        <div class="code-block"><pre>    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=1</pre></div>
+        <ul>
+          <li><code>OLLAMA_KEEP_ALIVE=-1</code>: the model stays loaded in memory. Otherwise, every task starts with a minute of loading;</li>
+          <li><code>OLLAMA_NUM_PARALLEL=1</code>: one request at a time, the equivalent of <code>-np 1</code> in llama.cpp.</li>
+        </ul>
+        <div class="code-block"><pre>cd /volume1/docker/ai-stack
+docker compose up -d
+docker exec ollama env | grep OLLAMA
+curl http://&lt;ip_nas&gt;:11434/api/tags</pre></div>
+        <p>OpenClaw runs in its own container: for it, <code>localhost</code> means that container, not the NAS. You therefore have to use the NAS's local IP address, and check that <code>qwen3.6-agent</code> appears in the <code>curl</code> response.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">2</span>
+        <span class="tuto-card-title">Install OpenClaw from the UGOS app center</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>OpenClaw is available in the UGOS app center (installation takes about ten minutes). Before starting it, create two empty folders, <code>/volume1/docker/openclaw/workspace</code> and <code>/volume1/docker/openclaw/share</code>. The installation wizard asks for three things:</p>
+        <ul>
+          <li><strong>Workspace path</strong>: <code>openclaw/workspace</code>, mounted in the container at <code>/root/.openclaw/workspace</code>. This is the agent's folder: it writes its code, temporary files and memory files there.</li>
+          <li><strong>File access path</strong>: <code>openclaw/share</code>, mounted in the container at the same path as on the NAS (<code>/volume1/docker/openclaw/share</code>). This is the only existing folder it can read and modify. I only drop in the files I want it to work on, and certainly not my Documents or Media. This folder must not be inside the workspace.</li>
+          <li><strong>Gateway token</strong>: the password for OpenClaw's web interface. Generate it with <code>openssl rand -hex 32</code> and keep it in a password manager.</li>
+        </ul>
+        <p>Once installed, Ugreen provides an admin console (Overview, Model Providers, Channels, Logs) where all the configuration takes place.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">3</span>
+        <span class="tuto-card-title">Connect the model (Model Providers)</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>In <strong>Model Providers → Add provider</strong>, choose <em>Ollama</em>, then:</p>
+        <ul>
+          <li><strong>Base URL</strong>: <code>http://&lt;ip_nas&gt;:11434</code>, not <code>localhost</code>;</li>
+          <li><strong>API protocol</strong>: Ollama;</li>
+          <li><strong>API Key</strong>: <code>ollama</code>. Ollama does not need one but the field is mandatory. Beware: the browser may prefill it with a saved password;</li>
+          <li><strong>Model list</strong>: delete the example models (llama3.1, qwen2.5) and add <code>qwen3.6-agent</code>.</li>
+        </ul>
+        <p>For the model:</p>
+        <ul>
+          <li><strong>Context window</strong>: <code>32768</code>. With the Ollama protocol, OpenClaw may pass this value with every request: leaving it at 131,072, as in the examples, would override the variant's setting;</li>
+          <li><strong>Max output tokens</strong>: <code>8192</code>, so that answers with thinking are not cut off;</li>
+          <li><strong>Reasoning model</strong>: checked, since Qwen3.6 thinks before answering;</li>
+          <li><strong>Costs</strong>: 0, the model runs locally.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">4</span>
+        <span class="tuto-card-title">Create the Telegram bot and pair it</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>I chose Telegram: the bot is a separate account, created in two minutes, that uses the official API without linking your own account. With WhatsApp, by contrast, OpenClaw connects as a linked device to your own account, through an unofficial method.</p>
+        <ol>
+          <li>Create a Telegram account if needed. In <em>Settings → Privacy and Security → Phone Number</em>, I recommend setting the number's visibility to "Nobody".</li>
+          <li>Open <strong>@BotFather</strong> (the one with the blue verification badge), send <code>/newbot</code>, choose a display name, then a username ending in <code>bot</code>. BotFather returns a <strong>token</strong> (<code>7123456789:AAH…</code>) to keep secret; if it leaks, <code>/revoke</code> generates a new one.</li>
+          <li>In the OpenClaw console, <strong>Channels</strong>: enable the Telegram plugin, then <strong>Add channel</strong>, paste the token and keep <strong>DM Policy</strong> on <code>pairing</code>.</li>
+          <li>Send a first message to the bot: it replies with a <strong>pairing code</strong> and ignores everything else until that code has been approved.</li>
+        </ol>
+        <div class="code-block"><pre>docker ps --format '{{.Names}}' | grep -i claw
+docker exec -it openclaw-gateway-1 openclaw pairing approve telegram &lt;CODE&gt;</pre></div>
+        <p>With <code>pairing</code> mode, nobody can give the bot orders without my approval, even if they know its name. Never choose <code>open</code>.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">5</span>
+        <span class="tuto-card-title">Errors I ran into</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p><strong>"No API key found for provider "openai""</strong>: the Ollama provider had been added, but the agent was still using OpenAI by default.</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw models list
+docker exec -it openclaw-gateway-1 openclaw models set ollama/qwen3.6-agent
+docker restart openclaw-gateway-1</pre></div>
+        <p><strong>"Request timed out before a response was generated"</strong>, always after one minute. Ollama's logs explain why: OpenClaw's system prompt, with its tool descriptions, is about <strong>13,000 tokens</strong>. At about 150 tokens/s, the model needs nearly 85 seconds to read it before writing the first word.</p>
+        <p>The timeout suggested by the error message (<code>agents.defaults.timeoutSeconds</code>) is not enough: the version installed by UGOS (2026.3.31) has a second timeout, 60 seconds by default, for the wait before the first token. Both need to be raised:</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw config set agents.defaults.timeoutSeconds 600
+docker exec -it openclaw-gateway-1 openclaw config set agents.defaults.llm.idleTimeoutSeconds 600
+docker restart openclaw-gateway-1</pre></div>
+        <div class="warning-block"><strong>Tip:</strong> while testing, send a single message and wait. With one request at a time, each new message joins the queue. To avoid the minute of loading, you can also preload the model:<br><code>curl http://&lt;ip_nas&gt;:11434/api/generate -d '{"model":"qwen3.6-agent","keep_alive":-1}'</code></div>
+        <p><strong>"Exec approval is required, but no interactive approval client is currently available"</strong>, followed by <em>"I can't find the file"</em>. I had asked it to summarize a file dropped in the shared folder, but the agent did not know where that folder was mounted: it tried a <code>find</code> over the whole of <code>/root</code>. Shell commands require approval, and since no approval method was configured, the request timed out and the command was denied. This is the expected behaviour: this safeguard stops the agent from searching through the system.</p>
+        <p>The fix is to give it the exact path. To see where each folder is mounted in the container:</p>
+        <div class="code-block"><pre>docker inspect openclaw-gateway-1 --format '{{range .Mounts}}{{.Source}} -&gt; {{.Destination}}{{"\n"}}{{end}}'</pre></div>
+        <div class="code-block"><pre>/volume1/docker/openclaw/workspace -&gt; /root/.openclaw/workspace
+/volume1/docker/openclaw/share -&gt; /volume1/docker/openclaw/share</pre></div>
+        <p>Then tell the agent, once and for all:</p>
+        <div class="code-block"><pre>The shared folder is /volume1/docker/openclaw/share. Write this path down in your memory files.</pre></div>
+        <p>With the exact path, it reads files with its file-reading tool, without going through the shell, so no approval is needed. To still allow some shell commands, with a confirmation each time, see step 7 (and the <a href="https://docs.openclaw.ai/tools/exec-approvals/index.html" target="_blank">approvals documentation</a>).</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">6</span>
+        <span class="tuto-card-title">First contact: the agent's identity and rules</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>On the first message, OpenClaw starts an onboarding step: it asks for its name, nature, style and an emoji, then saves everything in Markdown files in its workspace (<code>IDENTITY.md</code>, <code>USER.md</code>, <code>SOUL.md</code>…). These files act as its memory: it reads them again at every session. I answered in a single message to limit back-and-forth:</p>
+        <div class="code-block"><pre>Call yourself Atlas, technical assistant for my NAS, IT/AI/LLM/Tech specialist, direct and concise style, emoji 🛰️</pre></div>
+        <p>Then I set its behaviour rules, which it saved in <code>SOUL.md</code>:</p>
+        <div class="code-block"><pre>- Short, direct answers, in French.
+- No Markdown tables, Telegram does not display them: use lists.
+- Always ask me for confirmation before deleting a file
+  or running a command that modifies the system.
+- Only work in your workspace and in the shared folder.</pre></div>
+        <p>Two remarks:</p>
+        <ul>
+          <li>The agent announced "Done" even though one of its edits to <code>SOUL.md</code> had failed. Models of this size often claim to have succeeded at a failed action: you have to <strong>check the file</strong> yourself (here, everything was there).</li>
+          <li>These rules help, but they are not real protection: the agent can rewrite its own files. If you ever give it access to external content (web pages, emails), you can make the file read-only: <code>chmod 444 &lt;path&gt;/openclaw/workspace/SOUL.md</code>.</li>
+        </ul>
+        <p>At the end of onboarding, it offers to delete <code>BOOTSTRAP.md</code>, which is no longer needed. A good sign: it asked for confirmation before doing so.</p>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">7</span>
+        <span class="tuto-card-title">Allow shell commands, with confirmation in Telegram</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>By default, every shell command must be approved, but no approval method is configured: commands time out and are denied. You can make yourself an <strong>approver</strong>: each command then arrives in Telegram, in plain text, with buttons to allow or deny it. The approver is identified by their numeric Telegram ID (the one shown by the pairing command, "Approved telegram sender …"): being allowed to message the bot is not enough.</p>
+        <p>First back up the configuration (the container's <code>/root/.openclaw</code> folder maps to this folder on the NAS):</p>
+        <div class="code-block"><pre>cp /volume1/@appstore/com.ugreen.docker.openclaw/config/openclaw.json \
+   /volume1/@appstore/com.ugreen.docker.openclaw/config/openclaw.json.bak</pre></div>
+        <p>Then enable approvals, replacing <code>YOUR_ID</code> with your Telegram ID:</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw config set channels.telegram.execApprovals.enabled true
+docker exec -it openclaw-gateway-1 openclaw config set channels.telegram.execApprovals.approvers '[YOUR_ID]'
+docker exec -it openclaw-gateway-1 openclaw config set channels.telegram.capabilities.inlineButtons dm
+
+docker exec -it openclaw-gateway-1 openclaw config get channels.telegram
+docker restart openclaw-gateway-1</pre></div>
+        <ul>
+          <li><code>execApprovals.approvers</code>: the list of approvers. In the output of <code>config get</code>, it must appear as a list containing a number, not as quoted text;</li>
+          <li><code>capabilities.inlineButtons dm</code>: allows buttons in private messages, needed to approve with a single tap.</li>
+        </ul>
+        <p>To test it, I ask Atlas: <em>"Run <code>ls -la /volume1/docker/openclaw/share</code>"</em>. The bot replies with an "Approval required" message showing the command, the folder it will run in and the expiry time (30 minutes), followed by three buttons:</p>
+        <ul>
+          <li><strong>Allow Once</strong>: allows this command a single time. This is the default choice;</li>
+          <li><strong>Allow Always</strong>: adds the command to a permanent allowlist, so the agent can run it again without asking. I only use it for read-only commands I see often, never for a command that deletes, moves or downloads something;</li>
+          <li><strong>Deny</strong>: refuses the command.</li>
+        </ul>
+        <p>The same choices exist as commands to type (<code>/approve &lt;id&gt; allow-once</code>, <code>allow-always</code> or <code>deny</code>). Simply replying "yes" in the conversation does not count as an approval.</p>
+        <div class="warning-block"><strong>Good to know:</strong> the "Host: gateway" line means commands run inside OpenClaw's container, as root, not directly on the NAS system. They can only reach the folders mounted in that container. This is an extra layer of protection, but not an absolute guarantee: the real safeguard is still to <strong>read every command</strong> before approving it, and to deny anything that goes beyond <code>workspace</code> and <code>share</code>.</div>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">8</span>
+        <span class="tuto-card-title">Cut the agent off from the Internet</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>The model itself never has Internet access: Ollama only produces text. What can reach the Internet is OpenClaw, through its tools. The logs show it from the very first exchanges: <code>web_search: no provider configured ... falling back to keyless provider "duckduckgo"</code>. Web search is enabled by default, without a key, through DuckDuckGo. And a web page is the most likely source of prompt injection.</p>
+        <p>Three doors lead to the Internet:</p>
+        <ul>
+          <li><code>web_search</code> and <code>web_fetch</code> (group <code>group:web</code>): searching and reading web pages;</li>
+          <li><code>browser</code> (group <code>group:ui</code>): a browser driven by the agent;</li>
+          <li>shell commands such as <code>curl</code> or <code>wget</code>, already subject to approval since step 7.</li>
+        </ul>
+        <p>The container's network itself cannot be cut: OpenClaw needs it to talk to Telegram. So the tools are denied instead, after backing up the configuration:</p>
+        <div class="code-block"><pre>docker exec -it openclaw-gateway-1 openclaw config set tools.deny '["group:web","browser"]'
+docker exec -it openclaw-gateway-1 openclaw config set tools.web.search.enabled false
+docker exec -it openclaw-gateway-1 openclaw config set tools.web.fetch.enabled false
+docker restart openclaw-gateway-1
+
+docker exec -it openclaw-gateway-1 openclaw config get tools</pre></div>
+        <p>A denial (<code>tools.deny</code>) always wins over any permission. I check with <code>config get</code> after the restart, because Ugreen's manager rewrites part of the configuration on every start (<code>Syncing configuration from environment variables...</code> in the logs).</p>
+        <p>To test it, I ask Atlas: <em>"Search the web for the latest version of Ollama"</em>. It no longer has a web tool… and immediately tries to get around it with a shell command:</p>
+        <div class="code-block"><pre>curl -s https://api.github.com/repos/ollama/ollama/releases/latest | grep -o '"tag_name": *"[^"]*"' | head -1</pre></div>
+        <p>The approval from step 7 stops it: I refuse with <strong>Deny</strong>, and never use <strong>Allow Always</strong> for <code>curl</code> or <code>wget</code>. To make it stop trying, I added this rule directly to <code>SOUL.md</code>:</p>
+        <div class="code-block"><pre>- You have no Internet access. Never use curl, wget or any other way
+  to contact an external site. If something requires the Internet, tell me.</pre></div>
+        <p>In the end, three layers of protection: web tools disabled, an instruction that discourages the agent from trying (which it may not follow), and the approval of every shell command, which remains the real barrier. Denying a tool is not enough as long as the shell is available. Bonus: each removed tool takes its description out of the system prompt, which makes answers slightly faster.</p>
+        <div class="warning-block"><strong>Watch the logs:</strong> on startup, the container logs print a token in clear text (<code>--token …</code>). Mask it before sharing logs. If it is the gateway token chosen at installation, UGOS only lets you change it by resetting the app: you then have to redo the configuration from this tutorial (the <code>workspace</code> and <code>share</code> folders, and therefore the agent's memory, are kept).</div>
+      </div>
+    </div>
+
+    <div class="tuto-card">
+      <div class="tuto-card-header">
+        <span class="step-num">9</span>
+        <span class="tuto-card-title">Performance and ways to improve it</span>
+        <svg class="tuto-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="tuto-card-body">
+        <p>On this setup, the first answer arrives in a little over a minute, and a task with several tool calls (writing files, then answering) takes about 4 minutes. This is much slower than Open WebUI, for two reasons: the prompt goes from about thirty tokens to about 13,000, and each tool call runs the model again. Usage is therefore rather asynchronous: you send a request from Telegram and come back for the result later.</p>
+        <p>Ways to speed it up:</p>
+        <ol>
+          <li>Connect OpenClaw to llama-server (tutorial 5) instead of Ollama: prompt reading is twice as fast there, and that is exactly what limits an agent.</li>
+          <li>Check that the prompt cache works from one turn to the next (<code>docker logs ollama | grep cached</code>). If the whole prompt is read again at every turn, that is what costs the most.</li>
+          <li>Shrink the system prompt further by disabling other unneeded tools (web tools are already disabled since step 8).</li>
+          <li>Disable thinking, at the cost of less reliable actions.</li>
+        </ol>
+        <p>To understand how an agent works in more detail (loop, tools, context, security), see <a href="project8.html">project 8</a>, where I build a coding agent by hand.</p>
+      </div>
+    </div>
+
 </div>
 
   <a href="projects.html" class="btn btn-secondary">Return</a>
   <br><br>
   <div class="project-meta">
     <span class="tag">NAS</span><span class="tag">Linux</span><span class="tag">Docker</span>
-    <span class="tag">Ollama</span><span class="tag">LLM</span><span class="tag">in progress</span>
+    <span class="tag">Ollama</span><span class="tag">llama.cpp</span><span class="tag">LLM</span><span class="tag">OpenClaw</span><span class="tag">Agentic AI</span><span class="tag">in progress</span>
   </div>
 </div>
   <footer>
